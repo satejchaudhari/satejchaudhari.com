@@ -3,14 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to the Log — Satej Chaudhari</title>
-  <meta name="description" content="How this site works and how to add new writeups and posts.">
+
+  <!-- 1. CHANGE THE TITLE BELOW -->
+  <title>Post Title Goes Here — Satej Chaudhari</title>
+  <meta name="description" content="One-line summary of this post for search engines.">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- note the ../ — posts live one folder below the site root -->
   <link rel="stylesheet" href="../assets/css/style.css">
 </head>
 <body>
@@ -35,49 +39,53 @@
   </header>
 
   <main class="wrap post">
+    <!-- 2. CHANGE THIS LINK to ../writeups.html if this post's type is "writeup" -->
     <a class="post-back" href="../blog.html">&larr; back to blog</a>
 
     <article>
       <header class="post-header">
+        <!-- 3. CHANGE THE TAG (free text, matches a value used in posts.js, e.g. RECON / WEB / AD / NOTES) -->
         <span class="tag">NOTES</span>
-        <h1 class="post-title">Welcome to the Log</h1>
+
+        <!-- 4. CHANGE THE TITLE -->
+        <h1 class="post-title">Post Title Goes Here</h1>
+
         <p class="post-meta">
+          <!-- 5. CHANGE THE DATE -->
           <time datetime="2026-07-02">2026-07-02</time>
-          <span>&middot; 2 min read</span>
+          <span>&middot; 5 min read</span>
         </p>
       </header>
 
+      <!-- 6. WRITE YOUR POST BELOW. Everything inside post-body is styled automatically:
+           headings, paragraphs, lists, code blocks, tables, blockquotes, and images. -->
       <div class="post-body">
 
         <p>
-          This is the first entry. It exists mainly to show you the format —
-          copy <code>posts/post-template.html</code> for every new post.
+          Start writing here. This paragraph is a placeholder — replace it with your intro.
         </p>
 
-        <h2>How the site is organized</h2>
-        <p>The homepage has three sections: <strong>About</strong>, a preview of the latest <strong>writeups</strong>, and a preview of the latest <strong>blog</strong> posts. Each preview links out to its own full page:</p>
-        <ul>
-          <li><code>writeups.html</code> — longer, structured research and CTF walkthroughs</li>
-          <li><code>blog.html</code> — shorter posts, field notes, and TILs</li>
-          <li><code>toolkit.html</code> — a categorized list of tools, meant to be useful to anyone, not just me</li>
-        </ul>
+        <h2>A section heading</h2>
+        <p>
+          Section headings (<code>&lt;h2&gt;</code>) get a divider line above them automatically,
+          which is what breaks a long writeup into readable chunks.
+        </p>
 
-        <h2>How to add a new writeup or post</h2>
-        <p>Three steps, no build tools:</p>
-        <ol>
-          <li>Copy <code>posts/post-template.html</code>, rename it, and write your content inside the <code>post-body</code> div.</li>
-          <li>Open <code>assets/js/posts.js</code> and add one entry to the <code>POSTS</code> array at the top — set <code>type</code> to <code>"writeup"</code> or <code>"blog"</code> depending on which page it should appear on.</li>
-          <li>Save and refresh. It appears on the homepage preview and on its full list page automatically.</li>
-        </ol>
-
-        <h2>Adding images</h2>
-        <p>Put the image file in <code>assets/img/</code>, then reference it with an <code>&lt;img&gt;</code> tag. A figure with a caption looks like this:</p>
+        <!-- HOW TO ADD AN IMAGE:
+             1. Put the image file in assets/img/ (e.g. assets/img/your-post-name/screenshot.png)
+             2. Reference it below with a path starting ../assets/img/...
+             3. The figcaption is optional — delete it if you don't need a caption. -->
         <figure>
-          <img src="../assets/img/example/placeholder.png" alt="Placeholder screenshot">
-          <figcaption>Example of a captioned image — swap this file for a real screenshot.</figcaption>
+          <img src="../assets/img/example/placeholder.png" alt="Describe what the image shows">
+          <figcaption>Optional caption explaining the screenshot above.</figcaption>
         </figure>
 
-        <h2>Code blocks</h2>
+        <p>
+          You can also drop an image without a caption, just a plain tag:
+        </p>
+        <img src="../assets/img/example/placeholder.png" alt="Describe what the image shows">
+
+        <h2>Code example</h2>
         <p>Fenced code renders in a dark panel automatically:</p>
         <pre><code>import requests
 
@@ -85,12 +93,14 @@ def check_target(url):
     r = requests.get(url, timeout=5)
     return r.status_code == 200</code></pre>
 
-        <h2>Adding a tool to the toolkit</h2>
-        <p>Open <code>assets/js/toolkit.js</code> and add an entry to the right category (or add a new category). The page — including the search box — rebuilds itself from that file.</p>
-
+        <h2>A note or warning</h2>
         <blockquote>
-          Delete this post whenever you're ready, or leave it as your first real entry.
+          Use a blockquote for callouts, caveats, or anything you want visually set apart from the main text.
         </blockquote>
+
+        <p>
+          Wrap up the post here.
+        </p>
 
       </div>
     </article>
@@ -107,5 +117,6 @@ def check_target(url):
     </div>
   </footer>
 
+  <script src="../assets/js/main.js"></script>
 </body>
 </html>

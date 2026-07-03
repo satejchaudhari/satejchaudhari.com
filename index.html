@@ -3,42 +3,122 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>0x1n1t — security writeups log</title>
-  <meta name="description" content="Writeups, notes, and teaching material on cybersecurity — vulnerability assessment, network security, compliance, and hands-on red teaming.">
+  <title>Satej Chaudhari — Security Researcher</title>
+  <meta name="description" content="Satej Chaudhari — security researcher and red teamer. Writeups, field notes, and a toolkit covering vulnerability assessment, network security, and red teaming.">
+  <link rel="canonical" href="https://satejchaudhari.com/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Satej Chaudhari — Security Researcher">
+  <meta property="og:description" content="Writeups, field notes, and a toolkit covering vulnerability assessment, network security, and red teaming.">
+  <meta property="og:url" content="https://satejchaudhari.com/">
+  <meta name="twitter:card" content="summary">
+
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
 
   <header class="site-header">
-    <div class="wrap">
-      <p class="prompt">
-        <span class="user">root@blog</span>:<span class="path">~</span><span class="cmd">$ whoami</span><span class="cursor"></span>
-      </p>
-      <h1 class="site-title"><a href="index.html">0x1n1t<span class="dot">_</span></a></h1>
-      <p class="site-tagline">notes from the field — vuln assessment, network security &amp; red teaming</p>
+    <div class="wrap-wide">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
       <nav class="site-nav">
-        <a href="index.html">writeups</a>
-        <a href="https://github.com/yourusername" target="_blank" rel="noopener">github</a>
+        <a href="index.html" class="current">Home</a>
+        <a href="writeups.html">Writeups</a>
+        <a href="blog.html">Blog</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
       </nav>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
     </div>
   </header>
 
-  <main class="wrap log">
-    <p class="log-heading">$ ls -la writeups/ &nbsp;// <span id="entry-count">0</span> entries</p>
+  <main>
 
-    <div class="filter-bar" id="filter-bar"><!-- built automatically by main.js --></div>
+    <section class="hero wrap-wide">
+      <p class="hero-kicker">security researcher &amp; red teamer</p>
+      <h1 class="hero-title">Breaking things down to understand how they hold up<span class="accent">.</span></h1>
+      <p class="hero-lede">
+        I write up vulnerability research, red team notes, and network security findings —
+        and keep a running toolkit of what I actually use, in case it saves someone else time.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="writeups.html">Read the writeups</a>
+        <a class="btn btn-ghost" href="toolkit.html">Browse the toolkit</a>
+      </div>
+    </section>
 
-    <div id="log-list"><!-- populated automatically by main.js from assets/js/posts.js --></div>
+    <section class="section wrap-wide" id="about">
+      <p class="eyebrow">About</p>
+      <h2 class="section-title">Who's writing this</h2>
+      <div class="about-body" style="margin-top: 20px;">
+        <p>
+          I'm a security researcher focused on <strong>vulnerability assessment</strong>,
+          <strong>network security</strong>, and hands-on <strong>red teaming</strong>. Most of
+          what ends up here started as notes I took while working through a target, a lab, or a
+          CTF — cleaned up enough to be useful to someone else running into the same problem.
+        </p>
+        <p>
+          This site is deliberately simple: no build step, no tracking, just writeups, field
+          notes, and a toolkit page I keep updated with what's actually in my kit.
+        </p>
+      </div>
+      <div class="focus-tags">
+        <span class="focus-tag">Vulnerability Assessment</span>
+        <span class="focus-tag">Network Security</span>
+        <span class="focus-tag">Red Teaming</span>
+        <span class="focus-tag">Active Directory</span>
+        <span class="focus-tag">Web Application Security</span>
+      </div>
+      <div class="social-row">
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener">GitHub</a>
+        <a href="www.linkedin.com/in/satej-chaudhari-39852921a" target="_blank" rel="noopener">LinkedIn</a>
+        <a href="mailto:you@satejchaudhari.com">Email</a>
+      </div>
+    </section>
+
+    <section class="section wrap-wide" id="writeups">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Writeups</p>
+          <h2 class="section-title">Latest writeups</h2>
+        </div>
+        <a class="section-link" href="writeups.html">View all writeups →</a>
+      </div>
+      <div id="writeups-preview" class="preview-list"><!-- populated by main.js --></div>
+    </section>
+
+    <section class="section wrap-wide" id="blog">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Blog</p>
+          <h2 class="section-title">Latest posts</h2>
+        </div>
+        <a class="section-link" href="blog.html">View all posts →</a>
+      </div>
+      <div id="blog-preview" class="preview-list"><!-- populated by main.js --></div>
+    </section>
+
   </main>
 
   <footer class="site-footer">
-    <div class="wrap">
-      <p>&copy; 2026 0x1n1t &middot; hosted on cloudflare pages</p>
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="writeups.html">Writeups</a>
+        <a href="blog.html">Blog</a>
+        <a href="toolkit.html">Toolkit</a>
+      </div>
     </div>
   </footer>
 
