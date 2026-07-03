@@ -13,7 +13,6 @@
      { category: "Category Name", tools: [ ... ] }
 
 */
-
 var TOOLKIT = [
   {
     category: "Recon & OSINT",
@@ -69,6 +68,12 @@ var TOOLKIT = [
       { name: "GTFOBins", url: "https://gtfobins.github.io/", description: "Unix binaries usable to bypass local security restrictions." },
       { name: "HackTricks", url: "https://book.hacktricks.wiki/", description: "Sprawling, community-maintained pentesting reference wiki." },
       { name: "MITRE ATT&CK", url: "https://attack.mitre.org/", description: "Knowledge base of adversary tactics and techniques." }
+    ]
+  },
+  {
+    category: "Active Directory",
+    tools: [
+      { name: "Bloodhound", url: "https://github.com/SpecterOps/BloodHound/releases/tag/v9.3.0", description: "The wordlist collection every fuzzing tool eventually points at." }
     ]
   }
 ];
