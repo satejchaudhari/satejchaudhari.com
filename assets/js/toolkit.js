@@ -12,8 +12,6 @@
   Add a new object to the top-level array:
      { category: "Category Name", tools: [ ... ] }
 
-  Double-check every URL before publishing — this page is meant to be a
-  reliable jumping-off point, broken or stale links undermine that.
 */
 
 var TOOLKIT = [
