@@ -22,7 +22,7 @@
     readTime    - optional, e.g. "6 min read" (leave "" to hide it)
 */
 
-const POSTS = [
+var POSTS = [
   {
     title: "Welcome to the Log",
     url: "posts/2026-07-02-welcome-to-the-log.html",
