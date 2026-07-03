@@ -16,7 +16,7 @@
   reliable jumping-off point, broken or stale links undermine that.
 */
 
-const TOOLKIT = [
+var TOOLKIT = [
   {
     category: "Recon & OSINT",
     tools: [
