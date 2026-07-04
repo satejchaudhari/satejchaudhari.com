@@ -388,6 +388,14 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 .toolkit-search::placeholder { color: var(--muted-2); }
 .toolkit-search:focus { border-color: var(--accent-border); outline: none; }
 
+.search-status {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--muted-2);
+  margin: -20px 0 24px;
+  min-height: 1em;
+}
+
 .toolkit-category { margin-bottom: 40px; }
 .toolkit-category:last-child { margin-bottom: 0; }
 
@@ -410,28 +418,83 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 }
 
 .tool-card {
-  display: block;
+  display: flex;
+  flex-direction: column;
   padding: 16px 18px;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--surface);
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-.tool-card:hover { border-color: var(--accent-border); background: var(--surface-2); transform: translateY(-1px); text-decoration: none; }
+.tool-card:hover { border-color: var(--accent-border); background: var(--surface-2); }
 
 .tool-card-name {
   font-weight: 600;
   font-size: 0.95rem;
   color: var(--text);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   margin-bottom: 5px;
 }
-.tool-card-name svg { flex-shrink: 0; color: var(--muted-2); }
-.tool-card:hover .tool-card-name { color: var(--accent); }
-.tool-card-desc { font-size: 0.84rem; color: var(--muted); margin: 0; line-height: 1.5; }
+.tool-card-desc { font-size: 0.84rem; color: var(--muted); margin: 0 0 14px; line-height: 1.5; flex-grow: 1; }
+
+/* two-button row on each tool card */
+.tool-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.tool-btn:hover { text-decoration: none; }
+.tool-btn-primary {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+.tool-btn-primary:hover { background: var(--accent); color: #1a1206; }
+.tool-btn-secondary {
+  color: var(--muted);
+  background: transparent;
+}
+.tool-btn-secondary:hover { color: var(--text); border-color: var(--accent-border); background: var(--surface-2); }
+.tool-btn svg { flex-shrink: 0; }
+
+/* ===========================================================
+   Tool detail page (tool-detail.html)
+=========================================================== */
+.tool-detail-brief {
+  max-width: 62ch;
+  color: var(--muted);
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.tool-detail-brief p { margin: 0; }
+
+.tool-detail-commands {
+  margin-top: 36px;
+  padding-bottom: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.command-block { max-width: 62ch; }
+.command-label {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.command-block pre { margin: 0; }
 
 /* ===========================================================
    Post page
