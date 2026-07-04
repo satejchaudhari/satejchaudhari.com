@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toolkit — Satej Chaudhari</title>
+  <meta name="description" content="A curated, categorized toolkit of security tools — recon, web, network, exploitation, forensics, and references.">
+  <link rel="canonical" href="https://satejchaudhari.com/toolkit.html">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Toolkit — Satej Chaudhari">
+  <meta property="og:description" content="A curated, categorized toolkit of security tools — recon, web, network, exploitation, forensics, and references.">
+  <meta property="og:url" content="https://satejchaudhari.com/toolkit.html">
+  <meta name="twitter:card" content="summary">
+
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="writeups.html">Writeups</a>
+        <a href="blog.html">Blog</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html" class="current">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <div class="page-head wrap-wide">
+      <p class="eyebrow">Toolkit</p>
+      <h1 class="page-title">A master security toolkit</h1>
+      <p class="page-lede">
+        <span id="tool-count">0</span> tools I actually use or reference, organized by category.
+        Built to be a jumping-off point for anyone — not just me.
+      </p>
+    </div>
+
+    <div class="page-body wrap-wide">
+      <input
+        type="text"
+        id="toolkit-search"
+        class="toolkit-search"
+        placeholder="Search tools by name or purpose…"
+        aria-label="Search toolkit"
+      >
+      <div id="toolkit-list"><!-- populated automatically by toolkit-main.js from assets/js/toolkit.js --></div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="writeups.html">Writeups</a>
+        <a href="blog.html">Blog</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/toolkit.js"></script>
+  <script src="assets/js/toolkit-main.js"></script>
+  <script src="assets/js/main.js"></script>
+</body>
+</html>
