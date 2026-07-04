@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The CIA Triad — Satej Chaudhari</title>
+  <meta name="description" content="Confidentiality, Integrity, and Availability — the three properties nearly every security control is ultimately protecting.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">FUNDAMENTALS</span>
+        <h1 class="post-title">The CIA Triad</h1>
+        <p class="post-meta">
+          <time datetime="2026-07-04">2026-07-04</time>
+          <span>&middot; 4 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          The CIA Triad — <strong>Confidentiality</strong>, <strong>Integrity</strong>, and
+          <strong>Availability</strong> — is the model most security controls, policies, and
+          findings ultimately trace back to. When you're writing up a finding and trying to
+          explain <em>why it matters</em>, one of these three is usually the answer.
+        </p>
+
+        <h2>Confidentiality</h2>
+        <p>
+          Information is only accessible to those authorized to see it. Controls that protect
+          confidentiality include encryption at rest and in transit, access controls, and
+          least-privilege permissions. A finding like "internal file share readable by all
+          domain users" is a confidentiality issue — the data isn't corrupted or unavailable,
+          it's just visible to people who shouldn't see it.
+        </p>
+
+        <h2>Integrity</h2>
+        <p>
+          Data and systems remain accurate and unaltered except by authorized action. Hashing,
+          digital signatures, and change-control processes all exist to protect integrity. A
+          finding like "no file integrity monitoring on production configs" is an integrity
+          concern — someone could alter a config without anyone noticing.
+        </p>
+
+        <h2>Availability</h2>
+        <p>
+          Systems and data are accessible when needed by authorized users. This is what
+          backups, redundancy, and DDoS protection are protecting against. A finding like
+          "single point of failure on the authentication server" is an availability issue —
+          nothing is being stolen or altered, but a failure takes down access for everyone.
+        </p>
+
+        <h2>Why it's worth knowing cold</h2>
+        <blockquote>
+          Framing a finding in terms of C, I, or A (sometimes more than one at once) is what
+          turns "this seems bad" into a clear statement of business risk — which is usually
+          what actually gets a finding prioritized and fixed.
+        </blockquote>
+
+        <p>
+          Most modern frameworks (CIS, NIST, ISO 27001) map their controls back to one or more
+          of these three properties, even when it's not stated explicitly — it's worth getting
+          in the habit of asking "which one of these does this control actually protect?"
+          whenever you're evaluating a benchmark item.
+        </p>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
