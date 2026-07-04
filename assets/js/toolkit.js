@@ -31,20 +31,84 @@ var TOOLKIT = [
     category: "Recon & OSINT",
     tools: [
       {
-        id: "nmap",
-        name: "Nmap",
-        url: "https://nmap.org/",
-        description: "Network discovery and port scanning.",
-        brief: "The standard network scanner for host discovery, port scanning, service/version detection, and OS fingerprinting. Almost always the first tool run against a new target.",
-        commands: [
-          { label: "Quick scan of the most common ports", cmd: "nmap -F 10.10.10.10" },
-          { label: "Full TCP port scan", cmd: "nmap -p- 10.10.10.10" },
-          { label: "Service/version detection with default scripts", cmd: "nmap -sV -sC 10.10.10.10" },
-          { label: "Fast, aggressive OS + version scan", cmd: "nmap -A -T4 10.10.10.10" },
-          { label: "UDP scan of top ports (slow — narrow it down first)", cmd: "nmap -sU --top-ports 20 10.10.10.10" },
-          { label: "Output in all formats for later parsing", cmd: "nmap -oA scan_results 10.10.10.10" }
-        ]
-      },
+  id: "nmap",
+  name: "Nmap",
+  url: "https://nmap.org/",
+  description: "Network discovery, host enumeration, service detection, OS fingerprinting, and port scanning.",
+  brief: "Nmap is the industry-standard network scanner used for host discovery, port enumeration, service/version detection, operating system fingerprinting, firewall analysis, and NSE scripting.",
+
+  commands: [
+    /* Host Discovery */
+    { label: "Ping Scan (Host Discovery Only)", cmd: "nmap -sn 10.10.10.0/24" },
+    { label: "Treat All Hosts As Online", cmd: "nmap -Pn 10.10.10.0/24" },
+    { label: "Disable DNS Resolution", cmd: "nmap -n 10.10.10.0/24" },
+    { label: "Always Resolve DNS", cmd: "nmap -R 10.10.10.0/24" },
+    { label: "ICMP Echo Request Ping", cmd: "nmap -PE 10.10.10.10" },
+    { label: "ICMP Timestamp Request Ping", cmd: "nmap -PP 10.10.10.10" },
+    { label: "ICMP Netmask Request Ping", cmd: "nmap -PM 10.10.10.10" },
+    { label: "TCP SYN Ping", cmd: "nmap -PS22,80,443 10.10.10.10" },
+    { label: "TCP ACK Ping", cmd: "nmap -PA80,443 10.10.10.10" },
+    { label: "UDP Ping", cmd: "nmap -PU53,161 10.10.10.10" },
+    { label: "SCTP INIT Ping", cmd: "nmap -PY 10.10.10.10" },
+    { label: "Disable ARP Ping", cmd: "nmap --disable-arp-ping 10.10.10.10" },
+
+    /* Port Scanning */
+    { label: "Scan Specific Ports", cmd: "nmap -p22,80,443 10.10.10.10" },
+    { label: "Fast Scan", cmd: "nmap -F 10.10.10.10" },
+    { label: "Top 100 Ports", cmd: "nmap --top-ports 100 10.10.10.10" },
+    { label: "Full Port Scan", cmd: "nmap -p- 10.10.10.10" },
+
+    /* Scan Techniques */
+    { label: "TCP SYN Scan", cmd: "sudo nmap -sS 10.10.10.10" },
+    { label: "TCP Connect Scan", cmd: "nmap -sT 10.10.10.10" },
+    { label: "TCP ACK Scan", cmd: "nmap -sA 10.10.10.10" },
+    { label: "UDP Scan", cmd: "sudo nmap -sU 10.10.10.10" },
+    { label: "TCP Null Scan", cmd: "nmap -sN 10.10.10.10" },
+    { label: "TCP FIN Scan", cmd: "nmap -sF 10.10.10.10" },
+    { label: "TCP Xmas Scan", cmd: "nmap -sX 10.10.10.10" },
+    { label: "TCP Window Scan", cmd: "nmap -sW 10.10.10.10" },
+    { label: "TCP Maimon Scan", cmd: "nmap -sM 10.10.10.10" },
+    { label: "Idle Scan", cmd: "nmap -sI zombie_host 10.10.10.10" },
+
+    /* Service & OS Detection */
+    { label: "Service Version Detection", cmd: "nmap -sV 10.10.10.10" },
+    { label: "OS Detection", cmd: "sudo nmap -O 10.10.10.10" },
+    { label: "Aggressive Scan", cmd: "sudo nmap -A 10.10.10.10" },
+    { label: "Aggressive OS Guessing", cmd: "sudo nmap -O --osscan-guess 10.10.10.10" },
+
+    /* NSE */
+    { label: "Default NSE Scripts", cmd: "nmap -sC 10.10.10.10" },
+    { label: "HTTP Enumeration Scripts", cmd: "nmap --script http* 10.10.10.10" },
+    { label: "SMB Enumeration Scripts", cmd: "nmap --script smb* 10.10.10.10" },
+    { label: "Vulnerability Scan", cmd: "nmap --script vuln 10.10.10.10" },
+
+    /* Evasion */
+    { label: "Fragment Packets", cmd: "sudo nmap -f 10.10.10.10" },
+    { label: "Use Random Decoys", cmd: "sudo nmap -D RND:5 10.10.10.10" },
+    { label: "Spoof Source IP", cmd: "sudo nmap -S 192.168.1.50 10.10.10.10" },
+    { label: "Use Source Port 53", cmd: "sudo nmap -g 53 10.10.10.10" },
+    { label: "Append Random Data", cmd: "sudo nmap --data-length 50 10.10.10.10" },
+    { label: "Spoof MAC Address", cmd: "sudo nmap --spoof-mac 0 10.10.10.10" },
+
+    /* Output */
+    { label: "Normal Output", cmd: "nmap -oN scan.nmap 10.10.10.10" },
+    { label: "XML Output", cmd: "nmap -oX scan.xml 10.10.10.10" },
+    { label: "Grepable Output", cmd: "nmap -oG scan.gnmap 10.10.10.10" },
+    { label: "All Output Formats", cmd: "nmap -oA scan_results 10.10.10.10" },
+
+    /* Performance */
+    { label: "Aggressive Timing", cmd: "nmap -T4 10.10.10.10" },
+    { label: "Maximum Speed", cmd: "nmap -T5 10.10.10.10" },
+    { label: "Set Minimum Rate", cmd: "nmap --min-rate 1000 10.10.10.10" },
+    { label: "Limit Rate", cmd: "nmap --max-rate 500 10.10.10.10" },
+
+    /* Practical */
+    { label: "Fast Quick Scan", cmd: "sudo nmap -T4 -F --min-rate 300 -n -Pn 10.10.10.0/24" },
+    { label: "Stealthy Evasion Scan", cmd: "sudo nmap -sS -T1 -n -Pn -f -D RND:5 --data-length 50 -g 53 10.10.10.5" },
+    { label: "HTB Initial Enumeration", cmd: "sudo nmap -p- --min-rate 1000 -T4 10.10.10.10" },
+    { label: "Detailed Follow-Up Scan", cmd: "sudo nmap -sC -sV -p <ports> 10.10.10.10" }
+  ]
+},
       {
         id: "amass",
         name: "Amass",
