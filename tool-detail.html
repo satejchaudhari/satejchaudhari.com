@@ -3,16 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Toolkit — Satej Chaudhari</title>
-  <meta name="description" content="A curated, categorized toolkit of security tools — recon, web, network, exploitation, forensics, and references.">
-  <link rel="canonical" href="https://satejchaudhari.com/toolkit.html">
-
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Satej Chaudhari">
-  <meta property="og:title" content="Toolkit — Satej Chaudhari">
-  <meta property="og:description" content="A curated, categorized toolkit of security tools — recon, web, network, exploitation, forensics, and references.">
-  <meta property="og:url" content="https://satejchaudhari.com/toolkit.html">
-  <meta name="twitter:card" content="summary">
+  <title>Tool — Satej Chaudhari</title>
+  <meta name="description" content="Commands and reference notes for a toolkit entry.">
 
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
 
@@ -45,24 +37,8 @@
   </header>
 
   <main>
-    <div class="page-head wrap-wide">
-      <p class="eyebrow">Toolkit</p>
-      <h1 class="page-title">A master security toolkit</h1>
-      <p class="page-lede">
-        <span id="tool-count">0</span> tools I actually use or reference, organized by category.
-        Built to be a jumping-off point for anyone — not just me.
-      </p>
-    </div>
-
-    <div class="page-body wrap-wide">
-      <input
-        type="text"
-        id="toolkit-search"
-        class="toolkit-search"
-        placeholder="Search tools by name or purpose…"
-        aria-label="Search toolkit"
-      >
-      <div id="toolkit-list"><!-- populated automatically by toolkit-main.js from assets/js/toolkit.js --></div>
+    <div class="page-head wrap-wide" id="tool-detail-root">
+      <!-- populated automatically by tool-detail.js based on ?tool= in the URL -->
     </div>
   </main>
 
@@ -80,7 +56,6 @@
   </footer>
 
   <script src="assets/js/toolkit.js"></script>
-  <script src="assets/js/toolkit-main.js"></script>
-  <script src="assets/js/main.js"></script>
+  <script src="assets/js/tool-detail.js"></script>
 </body>
 </html>

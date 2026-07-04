@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Toolkit — Satej Chaudhari</title>
-  <meta name="description" content="A curated, categorized toolkit of security tools — recon, web, network, exploitation, forensics, and references.">
-  <link rel="canonical" href="https://satejchaudhari.com/toolkit.html">
+  <title>Theory — Satej Chaudhari</title>
+  <meta name="description" content="Reference notes on security fundamentals, concepts, and theory by Satej Chaudhari.">
+  <link rel="canonical" href="https://satejchaudhari.com/theory.html">
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Satej Chaudhari">
-  <meta property="og:title" content="Toolkit — Satej Chaudhari">
-  <meta property="og:description" content="A curated, categorized toolkit of security tools — recon, web, network, exploitation, forensics, and references.">
-  <meta property="og:url" content="https://satejchaudhari.com/toolkit.html">
+  <meta property="og:title" content="Theory — Satej Chaudhari">
+  <meta property="og:description" content="Reference notes on security fundamentals, concepts, and theory.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory.html">
   <meta name="twitter:card" content="summary">
 
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
@@ -34,8 +34,8 @@
         <a href="index.html">Home</a>
         <a href="writeups.html">Writeups</a>
         <a href="blog.html">Blog</a>
-        <a href="theory.html">Theory</a>
-        <a href="toolkit.html" class="current">Toolkit</a>
+        <a href="theory.html" class="current">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
         <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
       </nav>
       <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
@@ -46,23 +46,23 @@
 
   <main>
     <div class="page-head wrap-wide">
-      <p class="eyebrow">Toolkit</p>
-      <h1 class="page-title">A master security toolkit</h1>
-      <p class="page-lede">
-        <span id="tool-count">0</span> tools I actually use or reference, organized by category.
-        Built to be a jumping-off point for anyone — not just me.
-      </p>
+      <p class="eyebrow">Theory</p>
+      <h1 class="page-title">Security fundamentals &amp; concepts</h1>
+      <p class="page-lede">Reference notes on the theory behind the practice — <span id="entry-count">0</span> topics so far.</p>
     </div>
 
     <div class="page-body wrap-wide">
       <input
         type="text"
-        id="toolkit-search"
+        id="theory-search"
         class="toolkit-search"
-        placeholder="Search tools by name or purpose…"
-        aria-label="Search toolkit"
+        placeholder="Search topics — including the full text of each page…"
+        aria-label="Search theory topics"
       >
-      <div id="toolkit-list"><!-- populated automatically by toolkit-main.js from assets/js/toolkit.js --></div>
+      <p id="theory-search-status" class="search-status"></p>
+
+      <div class="filter-bar" id="filter-bar"><!-- built automatically by theory-main.js --></div>
+      <div id="log-list" class="entry-list"><!-- populated automatically by theory-main.js from assets/js/theory.js --></div>
     </div>
   </main>
 
@@ -79,8 +79,7 @@
     </div>
   </footer>
 
-  <script src="assets/js/toolkit.js"></script>
-  <script src="assets/js/toolkit-main.js"></script>
-  <script src="assets/js/main.js"></script>
+  <script src="assets/js/theory.js"></script>
+  <script src="assets/js/theory-main.js"></script>
 </body>
 </html>
