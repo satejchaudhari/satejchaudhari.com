@@ -58,7 +58,20 @@ pre {
   overflow-x: auto;
   font-size: 0.86em;
   line-height: 1.6;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--surface);
 }
+pre::-webkit-scrollbar { height: 8px; }
+pre::-webkit-scrollbar-track { background: var(--surface); border-radius: 8px; }
+pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+pre::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
+
+/* dark scrollbar page-wide, not just inside code blocks */
+html { scrollbar-width: thin; scrollbar-color: var(--border) var(--bg); }
+::-webkit-scrollbar { width: 10px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
 code {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -472,7 +485,6 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
    Tool detail page (tool-detail.html)
 =========================================================== */
 .tool-detail-brief {
-  max-width: 62ch;
   color: var(--muted);
   margin-top: 20px;
   padding-top: 20px;
@@ -487,7 +499,6 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   flex-direction: column;
   gap: 18px;
 }
-.command-block { max-width: 62ch; }
 .command-label {
   font-family: var(--mono);
   font-size: 0.78rem;
@@ -495,6 +506,163 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   margin: 0 0 8px;
 }
 .command-block pre { margin: 0; }
+
+/* Sectioned tool-detail layout: a sticky quick-nav to jump between
+   titled sections, each section holding either a reference table
+   (flags/scripts/options) or a set of ready-to-run example commands.
+   Both feed the same live filter (see tool-detail.js). */
+
+.tool-detail-quicknav {
+  position: sticky;
+  top: 64px; /* sits right under the sticky site header */
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 0;
+  margin-top: 4px;
+  background: rgba(11, 13, 16, 0.92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.tool-detail-quicknav a {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.tool-detail-quicknav a:hover { color: var(--text); border-color: var(--accent-border); background: var(--accent-soft); }
+
+.tool-detail-sections { margin-top: 8px; padding-bottom: 80px; }
+
+.tool-detail-section {
+  margin-top: 40px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+  scroll-margin-top: 130px; /* clears the sticky header + quick-nav when jumped to */
+}
+.tool-detail-section.is-hidden { display: none; }
+
+.tool-detail-section-title {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin: 0 0 16px;
+  scroll-margin-top: 130px;
+}
+
+/* Reference tables: rounded card, mono uppercase header, first column
+   (the flag/script/term) picked out in accent mono so it scans fast
+   down a long list; hairline row dividers instead of a full grid. */
+.tool-detail-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.tool-detail-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.tool-detail-table thead th {
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tool-detail-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.12s ease; }
+.tool-detail-table tbody tr:last-child { border-bottom: none; }
+.tool-detail-table tbody tr:hover { background: var(--surface-2); }
+.tool-detail-table tbody tr.is-hidden { display: none; }
+.tool-detail-table tbody td { padding: 10px 16px; vertical-align: top; color: var(--muted); line-height: 1.55; }
+.tool-detail-table tbody td:first-child {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* Commands nested inside a titled section shouldn't repeat the
+   top-level spacing meant for a standalone command list */
+.tool-detail-section .tool-detail-commands { margin-top: 0; padding-bottom: 0; }
+.tool-detail-commands .command-block.is-hidden { display: none; }
+
+/* Collapsible sections: every reference section below Overview/Quick
+   Reference is a <details> so a dense page stays scannable — click a
+   heading to collapse what you don't need right now. The existing
+   .tool-detail-section rule above already gives these the right
+   spacing/border/scroll-margin regardless of tag; this just adds the
+   summary interaction styling and a custom chevron. */
+summary.tool-detail-section-title {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  user-select: none;
+}
+summary.tool-detail-section-title::-webkit-details-marker { display: none; }
+summary.tool-detail-section-title::marker { content: ""; }
+summary.tool-detail-section-title::after {
+  content: "";
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--muted-2);
+  border-bottom: 2px solid var(--muted-2);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+  margin-right: 2px;
+}
+details[open] > summary.tool-detail-section-title::after { transform: rotate(-135deg); }
+summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
+
+/* Notes & Tips — plain bullet list, no code styling, so it visually
+   reads as guidance rather than reference material */
+.tool-detail-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tool-detail-notes li {
+  position: relative;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+.tool-detail-notes li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.6em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.tool-detail-notes li.is-hidden { display: none; }
+
+/* Quick-nav chips hide/show in step with search results */
+.tool-detail-quicknav a.is-hidden { display: none; }
+
+/* Empty search-result state on a tool detail page */
+#tool-detail-empty { margin-top: 24px; }
 
 /* ===========================================================
    Post page
