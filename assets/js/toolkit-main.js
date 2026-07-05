@@ -4,8 +4,8 @@
 
   Each tool card gets:
     - a "Visit site" button/link → tool.url (opens in a new tab)
-    - a "Commands" button → tool-detail.html?tool=<tool.id>
-      (only shown if the tool has both an `id` and a non-empty `commands` array)
+    - a "Full guide" button → tool-detail.html?tool=<tool.id>
+      (only shown if the tool has an `id` and at least one non-empty section)
 
   You never need to edit this file — edit toolkit.js instead.
 */
@@ -73,12 +73,17 @@
         visitBtn.innerHTML = `Visit site ${externalIcon}`;
         actions.appendChild(visitBtn);
 
-        const hasCommands = tool.id && Array.isArray(tool.commands) && tool.commands.length > 0;
-        if (hasCommands) {
+        const hasGuide = tool.id && Array.isArray(tool.sections) &&
+          tool.sections.some(sec =>
+            (Array.isArray(sec.rows) && sec.rows.length > 0) ||
+            (Array.isArray(sec.commands) && sec.commands.length > 0) ||
+            (Array.isArray(sec.items) && sec.items.length > 0)
+          );
+        if (hasGuide) {
           const cmdBtn = document.createElement("a");
           cmdBtn.className = "tool-btn tool-btn-secondary";
           cmdBtn.href = `tool-detail.html?tool=${encodeURIComponent(tool.id)}`;
-          cmdBtn.innerHTML = `Commands ${terminalIcon}`;
+          cmdBtn.innerHTML = `Full guide ${terminalIcon}`;
           actions.appendChild(cmdBtn);
         }
 
