@@ -3,8 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tool — Satej Chaudhari</title>
-  <meta name="description" content="Commands and reference notes for a toolkit entry.">
+  <title>Vulns &amp; Misconfigs — Satej Chaudhari</title>
+  <meta name="description" content="A categorized field reference of common vulnerabilities and misconfigurations — XSS, SSTI, SSRF, IDOR, Kerberoasting, RBCD, AD CS, missing SMB signing, and more — each with detection, exploitation, and remediation.">
+  <link rel="canonical" href="https://satejchaudhari.com/vulns.html">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Vulns &amp; Misconfigs — Satej Chaudhari">
+  <meta property="og:description" content="A categorized reference of common vulnerabilities and misconfigurations, with detection, exploitation, and remediation for each.">
+  <meta property="og:url" content="https://satejchaudhari.com/vulns.html">
+  <meta name="twitter:card" content="summary">
 
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
 
@@ -27,8 +35,8 @@
         <a href="writeups.html">Writeups</a>
         <a href="blog.html">Blog</a>
         <a href="theory.html">Theory</a>
-<a href="toolkit.html" class="current">Toolkit</a>
-        <a href="vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="vulns.html" class="current">Vulns &amp; Misconfigs</a>
         <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
       </nav>
       <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
@@ -38,8 +46,25 @@
   </header>
 
   <main>
-    <div class="page-head wrap" id="tool-detail-root">
-      <!-- populated automatically by tool-detail.js based on ?tool= in the URL -->
+    <div class="page-head wrap-wide">
+      <p class="eyebrow">Vulns &amp; Misconfigs</p>
+      <h1 class="page-title">Vulnerabilities &amp; misconfigurations</h1>
+      <p class="page-lede">
+        <span id="vuln-count">0</span> common vulnerabilities and misconfigurations, categorized —
+        each with an overview, key payloads or indicators, and sections on how it works,
+        how to find it, how it's exploited, its impact, and how to fix it.
+      </p>
+    </div>
+
+    <div class="page-body wrap-wide">
+      <input
+        type="text"
+        id="vulns-search"
+        class="toolkit-search"
+        placeholder="Search by name, category, or description…"
+        aria-label="Search vulnerabilities"
+      >
+      <div id="vulns-list"><!-- populated automatically by vulns-main.js from assets/js/vulns.js --></div>
     </div>
   </main>
 
@@ -50,15 +75,15 @@
         <a href="writeups.html">Writeups</a>
         <a href="blog.html">Blog</a>
         <a href="theory.html">Theory</a>
-<a href="toolkit.html">Toolkit</a>
+        <a href="toolkit.html">Toolkit</a>
         <a href="vulns.html">Vulns &amp; Misconfigs</a>
         <a href="disclaimer.html">Disclaimer</a>
       </div>
     </div>
   </footer>
 
-  <script src="assets/js/toolkit.js"></script>
-  <script src="assets/js/tool-detail.js"></script>
+  <script src="assets/js/vulns.js"></script>
+  <script src="assets/js/vulns-main.js"></script>
   <script src="assets/js/main.js"></script>
 </body>
 </html>
