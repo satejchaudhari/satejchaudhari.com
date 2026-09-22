@@ -227,4 +227,49 @@
       }
     });
   }
+
+  /* ---------- scroll-spy: highlight the quick-nav chip for the section
+     currently in view, and keep it visible in the horizontal strip ---------- */
+  (function setupScrollSpy() {
+    const quicknav = root.querySelector(".tool-detail-quicknav");
+    if (!quicknav) return;
+    const items = Array.prototype.slice.call(quicknav.querySelectorAll("a[data-jump]"))
+      .map(link => ({ link: link, section: document.getElementById(link.dataset.jump) }))
+      .filter(x => x.section);
+    if (items.length === 0) return;
+
+    let activeId = null;
+    let ticking = false;
+
+    function update() {
+      ticking = false;
+      const line = quicknav.getBoundingClientRect().bottom + 14;
+      let current = null;
+      items.forEach(it => {
+        if (it.link.classList.contains("is-hidden")) return;
+        if (it.section.getBoundingClientRect().top <= line) current = it;
+      });
+      if (!current) {
+        current = items.find(it => !it.link.classList.contains("is-hidden")) || null;
+      }
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+        for (let i = items.length - 1; i >= 0; i--) {
+          if (!items[i].link.classList.contains("is-hidden")) { current = items[i]; break; }
+        }
+      }
+      if (!current || current.section.id === activeId) return;
+      activeId = current.section.id;
+      items.forEach(it => it.link.classList.toggle("is-active", it === current));
+      const cl = current.link;
+      const target = cl.offsetLeft - (quicknav.clientWidth - cl.offsetWidth) / 2;
+      quicknav.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+    }
+
+    function onScroll() {
+      if (!ticking) { ticking = true; requestAnimationFrame(update); }
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    update();
+  })();
 })();

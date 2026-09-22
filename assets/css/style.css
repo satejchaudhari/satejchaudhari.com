@@ -612,6 +612,8 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 .tool-detail-quicknav a:hover { color: var(--text); border-color: var(--accent-border); background: var(--accent-soft); }
+/* scroll-spy: the section currently in view */
+.tool-detail-quicknav a.is-active { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); font-weight: 600; }
 
 .tool-detail-sections { margin-top: 8px; padding-bottom: 80px; }
 
