@@ -4358,9 +4358,18 @@ var TOOLKIT = [
               ["-w <wordlist>", "Wordlist"],
               ["-x <exts>", "Extensions to append"],
               ["-d <n>", "Maximum recursion depth (default 4; 1 disables recursion)"],
-              ["-t <n>", "Concurrent threads"],
-              ["-r", "Follow redirects"],
+              ["-t <n>", "Concurrent threads (default 50)"],
+              ["-r", "Follow redirects and keep scanning the redirected URL"],
               ["-k", "Skip TLS verification"],
+              ["-o <file>", "Write results to a file"],
+              ["-m <method>", "HTTP method to use (default GET; e.g. POST)"],
+              ["-H <header>", "Add a custom header (repeatable) — e.g. Authorization"],
+              ["-b <cookie>", "Send a cookie with every request (authenticated scans)"],
+              ["-a <ua> / -A", "Set a custom User-Agent, or -A for a random one per request"],
+              ["-f", "Append a slash to each word to find directories behind redirects"],
+              ["-T <secs>", "Per-request timeout (default 7s)"],
+              ["--burp", "Route every request through Burp (127.0.0.1:8080)"],
+              ["--stdin", "Read target URLs from stdin (scan a list)"],
               ["--resume-from <file>", "Resume a previously interrupted scan"]
             ]
           },
@@ -4393,9 +4402,12 @@ var TOOLKIT = [
             title: "Common Workflows",
             type: "commands",
             commands: [
-              { label: "Recursive discovery with sane limits", cmd: "feroxbuster -u https://target.com \\\n  -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt \\\n  -x php,html,txt -d 2 -t 100 -o ferox.txt" },
-              { label: "Tame a noisy target", cmd: "# find the catch-all size, filter it, and auto-tune to rate limits\nferoxbuster -u https://target.com -w list.txt -S 0 --auto-tune" },
-              { label: "Resume after interruption", cmd: "# feroxbuster writes state; pick up where it stopped\nferoxbuster --resume-from ferox.state" }
+              { label: "1. First pass — recursive discovery with sane limits", cmd: "feroxbuster -u https://target.com \\\n  -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt \\\n  -x php,html,txt -d 2 -t 100 -o ferox.txt\n# default wordlist is raft-medium-directories.txt; -d 2 stops a recursion explosion" },
+              { label: "2. Tame a noisy / catch-all target", cmd: "# a soft-404 returns 200 for everything — find its size and filter it out\nferoxbuster -u https://target.com -w list.txt --silent          # observe the constant size\nferoxbuster -u https://target.com -w list.txt -S 285 --auto-tune  # filter it, back off on rate limits" },
+              { label: "3. Authenticated scan (cookies + headers)", cmd: "feroxbuster -u https://target.com -b 'PHPSESSID=t54ij15l5d51i2tc7j1k1tu4p4' \\\n  -H 'Authorization: Bearer <token>' -H 'Content-Type: application/x-www-form-urlencoded'\n# reach content only visible to a logged-in user" },
+              { label: "4. Non-GET methods + Burp routing", cmd: "feroxbuster -u https://target.com -m POST                 # brute-force POST endpoints\nferoxbuster -u https://target.com -A --burp -q            # random UA, proxied through Burp for review" },
+              { label: "5. Scan a list of targets from stdin", cmd: "cat targets.txt | feroxbuster --stdin -q -x php,txt -o multi.txt\n# one feroxbuster run across many hosts" },
+              { label: "6. Resume after interruption", cmd: "# feroxbuster saves a .state file on Ctrl-C; pick up where it stopped\nferoxbuster --resume-from ferox-http_target-1723370176.state -q" }
             ]
           },
           {
