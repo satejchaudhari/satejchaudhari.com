@@ -637,7 +637,8 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 .tool-detail-table-wrap {
   border: 1px solid var(--border);
   border-radius: 10px;
-  overflow: hidden;
+  overflow-x: auto;              /* wide tables scroll instead of clipping on mobile */
+  -webkit-overflow-scrolling: touch;
   background: var(--surface);
 }
 .tool-detail-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
@@ -853,15 +854,41 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
     background: var(--bg);
     border-bottom: 1px solid var(--border);
     flex-direction: column;
-    padding: 8px 24px 16px;
+    padding: 8px 18px 16px;
     gap: 2px;
   }
-  .hero { padding: 56px 0 48px; }
-  .section { padding: 52px 0; }
+  .site-nav.open a { padding: 11px 12px; font-size: 0.95rem; }
+  .site-nav.open a.nav-external { margin-left: 0; }
+
+  .hero { padding: 52px 0 44px; }
+  .section { padding: 48px 0; }
   .tool-grid { grid-template-columns: 1fr; }
+  .home-grid { grid-template-columns: 1fr; }
+
+  /* wide tables scroll horizontally instead of overflowing the page */
+  .post-body table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tool-detail-table { font-size: 0.82rem; }
+  .tool-detail-table thead th, .tool-detail-table tbody td { padding: 9px 12px; }
+
+  /* keep the quick-nav / sticky bits from crowding on small screens */
+  .tool-detail-quicknav { padding: 12px 0; gap: 6px; }
+
+  /* larger, comfier tap targets for filter chips and sidebar items */
+  .filter-btn { padding: 8px 13px; }
+  .catalog-nav-item { padding: 9px 12px; }
+  .section-head { gap: 10px; }
 }
 @media (max-width: 480px) {
-  .wrap, .wrap-wide { padding: 0 18px; }
+  .wrap, .wrap-wide { padding: 0 16px; }
+  .hero { padding: 44px 0 36px; }
+  .section { padding: 40px 0; }
+  .page-head { padding: 40px 0 28px; }
+  .post { padding: 40px 0 64px; }
+  .btn { padding: 11px 16px; }
+  .hero-actions { gap: 10px; }
+  .hero-actions .btn { flex: 1 1 auto; justify-content: center; }
+  /* the decorative dotted texture can crowd tight screens */
+  .page-head::after { display: none; }
 }
 @media (max-width: 360px) {
   .brand-name { display: none; }
