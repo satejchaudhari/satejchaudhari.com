@@ -92,9 +92,6 @@
           using Kerberos, which looks entirely normal.
         </p>
 
-        <pre><code>Rubeus.exe asktgt /user:jdoe /rc4:&lt;nthash&gt; /ptt
-getTGT.py corp.local/jdoe -hashes :&lt;nthash&gt;</code></pre>
-
         <h2>Pass-the-Ticket</h2>
 
         <p>
@@ -104,11 +101,6 @@ getTGT.py corp.local/jdoe -hashes :&lt;nthash&gt;</code></pre>
           the proof. Steal a Domain Admin's cached TGT from a workstation and you are that
           admin until the ticket expires.
         </p>
-
-        <pre><code># extract tickets, then reuse one
-Rubeus.exe dump /nowrap
-Rubeus.exe ptt /ticket:&lt;base64&gt;
-# Impacket: export KRB5CCNAME=stolen.ccache and use -k -no-pass</code></pre>
 
         <h2>Silver Ticket</h2>
 
@@ -126,9 +118,6 @@ Rubeus.exe ptt /ticket:&lt;base64&gt;
           <li><strong>Stealth:</strong> very high — because the KDC is never contacted, there is no ticket-request event on the DC at all.</li>
           <li><strong>Source of the key:</strong> a Silver Ticket for a <em>machine account</em> only needs that computer's key, which you get by compromising the host — no DA required.</li>
         </ul>
-
-        <pre><code>ticketer.py -nthash &lt;service_hash&gt; -domain-sid &lt;sid&gt; -domain corp.local \
-  -spn cifs/srv01.corp.local Administrator</code></pre>
 
         <h2>Golden Ticket</h2>
 
@@ -151,9 +140,6 @@ Rubeus.exe ptt /ticket:&lt;base64&gt;
             <tr><td>Danger</td><td>The definitive persistence mechanism — a Golden Ticket is why <code>krbtgt</code> theft means the domain must be considered permanently compromised until remediated</td></tr>
           </tbody>
         </table>
-
-        <pre><code>ticketer.py -nthash &lt;krbtgt_hash&gt; -domain-sid &lt;sid&gt; -domain corp.local Administrator
-# then pass-the-ticket and act as a fabricated Domain Admin</code></pre>
 
         <blockquote>
           Rotating the <code>krbtgt</code> password is required <strong>twice</strong>, with
@@ -201,9 +187,10 @@ Rubeus.exe ptt /ticket:&lt;base64&gt;
           key material first — which is why credential protection and
           <a href="2026-08-18-dcsync.html">controlling who can DCSync</a> matter so much, and
           why <code>krbtgt</code> theft is treated as total domain compromise. The forging
-          tools are in the<a href="../toolkit.html">Toolkit</a>
- <a href="../vulns.html">Vulns &amp; Misconfigs</a> (Impacket's ticketer,
-          Rubeus, Mimikatz).
+          tools are in the <a href="../toolkit.html">Toolkit</a> (Impacket's ticketer, Rubeus,
+          Mimikatz), and the step-by-step commands for each of these attacks live in the
+          <a href="../vulns.html">Vulns &amp; Misconfigs</a> section under
+          <em>Kerberos Ticket Attacks</em>.
         </p>
       </div>
     </article>

