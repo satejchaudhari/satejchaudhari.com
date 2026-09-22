@@ -20,6 +20,14 @@
 
 var THEORY = [
   {
+    title: "Windows Credential Storage",
+    url: "theory/2026-08-18-windows-credential-storage.html",
+    date: "2026-09-22",
+    tag: "AD",
+    description: "Where Windows keeps secrets and how it protects them \u2014 SAM, LSASS, LSA secrets, NTDS.dit, DPAPI, Kerberos keys \u2014 the mechanism behind every credential-access technique.",
+    readTime: "10 min read"
+  },
+  {
     title: "Active Directory Fundamentals",
     url: "theory/2026-08-18-ad-fundamentals.html",
     date: "2026-08-18",
