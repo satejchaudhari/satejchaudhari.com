@@ -505,7 +505,7 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 .tool-card {
   display: flex;
   flex-direction: column;
-  padding: 16px 18px;
+  padding: 13px 18px;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--surface);
@@ -517,9 +517,9 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   font-weight: 600;
   font-size: 0.95rem;
   color: var(--text);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
-.tool-card-desc { font-size: 0.84rem; color: var(--muted); margin: 0 0 14px; line-height: 1.5; flex-grow: 1; }
+.tool-card-desc { font-size: 0.84rem; color: var(--muted); margin: 0 0 11px; line-height: 1.5; flex-grow: 1; }
 
 /* two-button row on each tool card */
 .tool-card-actions {
@@ -1066,8 +1066,8 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(600px 300px at 78% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
-    radial-gradient(500px 260px at 8% 120%, color-mix(in srgb, var(--h-violet) 12%, transparent), transparent 70%);
+    radial-gradient(1000px 520px at 100% -25%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 68%),
+    radial-gradient(680px 360px at -5% 125%, color-mix(in srgb, var(--h-violet) 13%, transparent), transparent 70%);
   pointer-events: none;
   z-index: 0;
 }
@@ -1106,3 +1106,85 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 :root[data-theme="light"] .entry,
 :root[data-theme="light"] .tool-detail-table-wrap { box-shadow: 0 1px 2px rgba(20, 25, 35, 0.04); }
 :root[data-theme="light"] .site-header { box-shadow: 0 1px 0 var(--border); }
+
+/* ===========================================================
+   Home page — resource launchpad + compact about
+=========================================================== */
+/* full-bleed hero: the section spans the viewport so the gradient
+   reaches the edges; an inner .wrap-wide keeps the copy aligned */
+.hero.is-bleed { padding-left: 0; padding-right: 0; }
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 14px;
+}
+
+.home-card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px 20px 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.home-card:hover {
+  border-color: var(--accent-border);
+  background: var(--surface-2);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+.home-card::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0;
+  height: 3px; width: 100%;
+  background: linear-gradient(to right, var(--accent), transparent 78%);
+  opacity: 0.85;
+}
+.home-card-eyebrow {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 4px 0 10px;
+}
+.home-card-title {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.14rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+.home-card:hover .home-card-title { color: var(--accent); }
+.home-card-desc {
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0 0 16px;
+  flex-grow: 1;
+}
+.home-card-cta {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.home-card-cta svg { transition: transform 0.15s ease; }
+.home-card:hover .home-card-cta svg { transform: translateX(3px); }
+
+/* compact about, at the foot of the home page */
+.about-compact {
+  padding: 44px 0 8px;
+  border-top: 1px solid var(--border);
+}
+.about-compact .about-body { font-size: 0.95rem; max-width: 66ch; margin-top: 14px; }
+.about-compact .about-body p { margin: 0 0 12px; }

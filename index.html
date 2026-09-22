@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Satej Chaudhari — Security Researcher</title>
-  <meta name="description" content="Satej Chaudhari — security researcher and red teamer. Writeups, field notes, and a toolkit covering vulnerability assessment, network security, and red teaming.">
+  <title>Satej Chaudhari — Offensive Security Field Reference</title>
+  <meta name="description" content="A working reference for offensive security — vulnerabilities and misconfigurations with real exploitation steps, the theory behind them, a toolkit, and writeups. By Satej Chaudhari.">
   <link rel="canonical" href="https://satejchaudhari.com/">
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Satej Chaudhari">
-  <meta property="og:title" content="Satej Chaudhari — Security Researcher">
-  <meta property="og:description" content="Writeups, field notes, and a toolkit covering vulnerability assessment, network security, and red teaming.">
+  <meta property="og:title" content="Satej Chaudhari — Offensive Security Field Reference">
+  <meta property="og:description" content="Vulnerabilities and misconfigurations with real exploitation steps, the theory behind them, a toolkit, and writeups.">
   <meta property="og:url" content="https://satejchaudhari.com/">
   <meta name="twitter:card" content="summary">
 
@@ -49,7 +49,7 @@
         <a href="writeups.html">Writeups</a>
         <a href="blog.html">Blog</a>
         <a href="theory.html">Theory</a>
-<a href="toolkit.html">Toolkit</a>
+        <a href="toolkit.html">Toolkit</a>
         <a href="vulns.html">Vulns &amp; Misconfigs</a>
         <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
       </nav>
@@ -65,45 +65,60 @@
 
   <main>
 
-    <section class="hero wrap-wide">
-      <p class="hero-kicker">security researcher &amp; red teamer</p>
-      <h1 class="hero-title">Breaking things down to understand how they hold up<span class="accent">.</span></h1>
-      <p class="hero-lede">
-        I write up vulnerability research, red team notes, and network security findings —
-        and keep a running toolkit of what I actually use, in case it saves someone else time.
-      </p>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href="writeups.html">Read the writeups</a>
-        <a class="btn btn-ghost" href="toolkit.html">Browse the toolkit</a>
+    <section class="hero is-bleed">
+      <div class="wrap-wide">
+        <p class="hero-kicker">offensive security &middot; field reference</p>
+        <h1 class="hero-title">Breaking things down to understand how they hold up<span class="accent">.</span></h1>
+        <p class="hero-lede">
+          A working reference for offensive security — vulnerabilities and misconfigurations with
+          real exploitation steps, the theory behind why they work, and the tools to carry them
+          out. Built from the field and kept current.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="vulns.html">Explore Vulns &amp; Misconfigs</a>
+          <a class="btn btn-ghost" href="theory.html">Read the theory</a>
+        </div>
       </div>
     </section>
 
-    <section class="section wrap-wide" id="about">
-      <p class="eyebrow">About</p>
-      <h2 class="section-title">Who's writing this</h2>
-      <div class="about-body" style="margin-top: 20px;">
-        <p>
-          I'm a security researcher focused on <strong>vulnerability assessment</strong>,
-          <strong>network security</strong>, and hands-on <strong>red teaming</strong>. Most of
-          what ends up here started as notes I took while working through a target, a lab, or a
-          CTF — cleaned up enough to be useful to someone else running into the same problem.
-        </p>
-        <p>
-          This site is deliberately simple: no build step, no tracking, just writeups, field
-          notes, and a toolkit page I keep updated with what's actually in my kit.
-        </p>
+    <section class="section wrap-wide" id="explore">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Explore</p>
+          <h2 class="section-title">Everything on the site</h2>
+        </div>
       </div>
-      <div class="focus-tags">
-        <span class="focus-tag">Vulnerability Assessment</span>
-        <span class="focus-tag">Network Security</span>
-        <span class="focus-tag">Red Teaming</span>
-        <span class="focus-tag">Active Directory</span>
-        <span class="focus-tag">Web Application Security</span>
-      </div>
-      <div class="social-row">
-        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener">GitHub</a>
-        <a href="www.linkedin.com/in/satej-chaudhari-39852921a" target="_blank" rel="noopener">LinkedIn</a>
-        <a href="mailto:you@satejchaudhari.com">Email</a>
+      <div class="home-grid">
+        <a class="home-card hue-red" href="vulns.html">
+          <p class="home-card-eyebrow">Vulns &amp; Misconfigs</p>
+          <h3 class="home-card-title">Vulnerabilities &amp; misconfigurations</h3>
+          <p class="home-card-desc">Exploitation walkthroughs, attack chains, tools, and remediation for common weaknesses across the whole attack lifecycle.</p>
+          <span class="home-card-cta">Browse the catalog <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+        </a>
+        <a class="home-card hue-cyan" href="theory.html">
+          <p class="home-card-eyebrow">Theory</p>
+          <h3 class="home-card-title">Security fundamentals &amp; concepts</h3>
+          <p class="home-card-desc">The mechanisms behind the techniques — why and how each class of attack works, grouped by area.</p>
+          <span class="home-card-cta">Read the theory <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+        </a>
+        <a class="home-card hue-violet" href="toolkit.html">
+          <p class="home-card-eyebrow">Toolkit</p>
+          <h3 class="home-card-title">The tools, with commands</h3>
+          <p class="home-card-desc">The tools I actually reach for — each with the flags, commands, and workflows that matter in practice.</p>
+          <span class="home-card-cta">Open the toolkit <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+        </a>
+        <a class="home-card hue-green" href="writeups.html">
+          <p class="home-card-eyebrow">Writeups</p>
+          <h3 class="home-card-title">Full walkthroughs</h3>
+          <p class="home-card-desc">Machines, labs, and engagements worked start to finish — recon, foothold, escalation, and cleanup.</p>
+          <span class="home-card-cta">See the writeups <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+        </a>
+        <a class="home-card hue-amber" href="blog.html">
+          <p class="home-card-eyebrow">Blog</p>
+          <h3 class="home-card-title">Field notes &amp; methodology</h3>
+          <p class="home-card-desc">Shorter posts — methodology, lessons from the field, and the occasional deep dive.</p>
+          <span class="home-card-cta">Read the blog <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+        </a>
       </div>
     </section>
 
@@ -129,6 +144,23 @@
       <div id="blog-preview" class="preview-list"><!-- populated by main.js --></div>
     </section>
 
+    <section class="section wrap-wide about-compact" id="about">
+      <p class="eyebrow">About</p>
+      <div class="about-body">
+        <p>
+          I'm <strong>Satej Chaudhari</strong>, a security researcher focused on vulnerability
+          assessment, network security, and hands-on red teaming. Most of what's here started as
+          notes from a target, a lab, or a CTF — cleaned up enough to be useful to someone running
+          into the same problem. No build step, no tracking, just the reference I wish I'd had.
+        </p>
+      </div>
+      <div class="social-row">
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://www.linkedin.com/in/satej-chaudhari-39852921a" target="_blank" rel="noopener">LinkedIn</a>
+        <a href="mailto:you@satejchaudhari.com">Email</a>
+      </div>
+    </section>
+
   </main>
 
   <footer class="site-footer">
@@ -138,7 +170,7 @@
         <a href="writeups.html">Writeups</a>
         <a href="blog.html">Blog</a>
         <a href="theory.html">Theory</a>
-<a href="toolkit.html">Toolkit</a>
+        <a href="toolkit.html">Toolkit</a>
         <a href="vulns.html">Vulns &amp; Misconfigs</a>
         <a href="disclaimer.html">Disclaimer</a>
       </div>
