@@ -49,35 +49,37 @@
   --catalog-sidebar: 236px;
 }
 
-/* ---- light theme ---- */
+/* ---- light theme ----
+   Solarized-Light base (warm cream, not stark white — easier on the eyes)
+   with Monokai-leaning saturated accents tuned to read on cream. */
 :root[data-theme="light"] {
-  --bg:        #f6f7f9;
-  --surface:   #ffffff;
-  --surface-2: #eef1f5;
-  --border:    #dde1e8;
-  --text:      #191c22;
-  --muted:     #545b68;
-  --muted-2:   #8b93a1;
+  --bg:        #eae3cf;   /* below base2 — muted warm paper, keeps it off-bright */
+  --surface:   #fbf4e0;   /* base3-ish — cards sit a touch lighter than the page */
+  --surface-2: #f0e8d2;   /* hovers / table headers */
+  --border:    #d8cfb4;
+  --text:      #3f4d4f;   /* dark slate — comfortable reading contrast on cream */
+  --muted:     #657b78;
+  --muted-2:   #9a9a86;
 
-  --accent:    #d9791d;
-  --on-accent: #ffffff;
-  --code-fg:   #b45309;
-  --sel-bg:    color-mix(in srgb, var(--accent) 26%, transparent);
-  --sel-fg:    #191c22;
+  --accent:    #cb4b16;   /* solarized orange, warmed toward Monokai */
+  --on-accent: #fbf4e0;
+  --code-fg:   #a13d0f;
+  --sel-bg:    color-mix(in srgb, var(--accent) 22%, transparent);
+  --sel-fg:    #33403f;
 
-  --header-bg: color-mix(in srgb, var(--bg) 82%, transparent);
+  --header-bg: color-mix(in srgb, var(--bg) 84%, transparent);
 
-  /* darker, more saturated hues so colour reads on a light background */
-  --h-red:    #dc2626;
-  --h-orange: #d9791d;
-  --h-amber:  #b45309;
-  --h-green:  #16a34a;
-  --h-teal:   #0d9488;
-  --h-cyan:   #0284c7;
-  --h-blue:   #2563eb;
-  --h-violet: #7c3aed;
-  --h-rose:   #e11d48;
-  --h-slate:  #475569;
+  /* category hues — Monokai-vivid, darkened just enough to read on cream */
+  --h-red:    #d13438;
+  --h-orange: #cb4b16;
+  --h-amber:  #b07a00;   /* solarized dark gold */
+  --h-green:  #6f9a1e;   /* olive-green */
+  --h-teal:   #1f9488;   /* solarized cyan */
+  --h-cyan:   #1d8fb0;
+  --h-blue:   #2277c9;
+  --h-violet: #7d5bd0;   /* Monokai purple, readable */
+  --h-rose:   #c93a76;   /* Monokai pink/magenta */
+  --h-slate:  #5f7079;
 }
 
 /* category hue classes: set --accent, tints follow automatically.
@@ -1101,10 +1103,11 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 }
 .tool-card:hover::after { opacity: 1; }
 
-/* soft shadow on light theme so white cards separate from the page */
+/* warm soft shadow on light theme so cream cards separate from the page */
 :root[data-theme="light"] .tool-card,
 :root[data-theme="light"] .entry,
-:root[data-theme="light"] .tool-detail-table-wrap { box-shadow: 0 1px 2px rgba(20, 25, 35, 0.04); }
+:root[data-theme="light"] .home-card,
+:root[data-theme="light"] .tool-detail-table-wrap { box-shadow: 0 1px 2px rgba(90, 74, 40, 0.10); }
 :root[data-theme="light"] .site-header { box-shadow: 0 1px 0 var(--border); }
 
 /* ===========================================================
