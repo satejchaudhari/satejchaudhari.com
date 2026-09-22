@@ -123,6 +123,7 @@
     if (sec.type === "table") html += renderTable(sec);
     else if (sec.type === "commands") html += renderCommands(sec.commands || []);
     else if (sec.type === "notes") html += renderNotes(sec.items || []);
+    else if (sec.type === "references") html += renderReferences(sec.items || []);
     html += `</details>`;
   });
   html += `</div>`;
@@ -160,6 +161,21 @@
   function renderNotes(items) {
     let out = `<ul class="tool-detail-notes">`;
     items.forEach(item => { out += `<li>${escapeHtml(item)}</li>`; });
+    out += `</ul>`;
+    return out;
+  }
+
+  function renderReferences(items) {
+    let out = `<ul class="tool-detail-notes tool-detail-refs">`;
+    items.forEach(item => {
+      if (typeof item === "string") {
+        out += `<li><a href="${escapeAttr(item)}" target="_blank" rel="noopener">${escapeHtml(item)}</a></li>`;
+      } else {
+        const label = escapeHtml(item.label || item.url || "");
+        const url = escapeAttr(item.url || "#");
+        out += `<li><a href="${url}" target="_blank" rel="noopener">${label}</a></li>`;
+      }
+    });
     out += `</ul>`;
     return out;
   }
