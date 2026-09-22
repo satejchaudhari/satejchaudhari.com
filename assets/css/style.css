@@ -890,8 +890,18 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   .tool-detail-table { font-size: 0.82rem; }
   .tool-detail-table thead th, .tool-detail-table tbody td { padding: 9px 12px; }
 
-  /* keep the quick-nav / sticky bits from crowding on small screens */
-  .tool-detail-quicknav { padding: 12px 0; gap: 6px; }
+  /* quick-jump nav: one horizontally-scrollable row (swipe) instead of
+     wrapping to several tall rows that eat the screen */
+  .tool-detail-quicknav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 0;
+    gap: 6px;
+    scrollbar-width: none;
+  }
+  .tool-detail-quicknav::-webkit-scrollbar { display: none; }
+  .tool-detail-quicknav a { flex: 0 0 auto; white-space: nowrap; }
 
   /* larger, comfier tap targets for filter chips and sidebar items */
   .filter-btn { padding: 8px 13px; }
@@ -1234,7 +1244,7 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 
 /* compact about, at the foot of the home page */
 .about-compact {
-  padding: 44px 0 8px;
+  padding-block: 44px 8px;      /* longhand so .wrap-wide keeps its side gutter */
   border-top: 1px solid var(--border);
 }
 .about-compact .about-body { font-size: 0.95rem; max-width: 66ch; margin-top: 14px; }
