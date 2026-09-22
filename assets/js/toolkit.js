@@ -3200,7 +3200,7 @@ var TOOLKIT = [
             commands: [
               { label: "Address to identity", cmd: "1. Run the address through Epieos\n2. Note the Google display name and photo\n3. Open the Maps review history for location and interest signals\n4. Search the display name and photo against social platforms" },
               { label: "Verify a Hunter.io guess", cmd: "# Hunter.io predicts firstname.lastname@example.com\n# Epieos confirms whether that address is a live Google Workspace account\n# and often returns the display name, closing the loop" },
-              { label: "Phone triage before further work", cmd: "1. Epieos phone lookup for carrier and line type\n2. If VoIP, expect a burner and lower your confidence accordingly\n3. Cross-check with PhoneInfoga for reputation and web mentions" }
+              { label: "Phone triage before further work", cmd: "1. Epieos phone lookup for carrier and line type\n2. If VoIP, expect a burner and lower your confidence accordingly\n3. Cross-check the number against messaging apps and search engines manually" }
             ]
           },
           {
@@ -3211,90 +3211,6 @@ var TOOLKIT = [
               "Google Maps review history is the most commonly overlooked exposure in this whole category — people do not realise those reviews are public and geolocated.",
               "This returns data about a real, identifiable person. Justify each lookup against your scope, and do not collect what you do not need.",
               "Results shift as Google changes its privacy defaults. An empty result today does not mean the account does not exist."
-            ]
-          }
-        ]
-      },
-      {
-        id: "phoneinfoga",
-        name: "PhoneInfoga",
-        url: "https://github.com/sundowndev/phoneinfoga",
-        description: "Phone number reconnaissance — carrier, line type, reputation, and footprint.",
-        brief: "PhoneInfoga scans an international phone number and gathers what is publicly known about it: country and carrier from the numbering plan, line type, reputation from scanner services, and web footprint via generated search-engine queries.\n\nIt is a framework rather than a database — much of its value is in the dork generation, which turns a number into a set of targeted searches across social platforms, directories, and document repositories.",
-        quickReference: [
-          { label: "Scan a number", cmd: "phoneinfoga scan -n \"+911234567890\"" },
-          { label: "Launch the web UI", cmd: "phoneinfoga serve -p 8080" },
-          { label: "Run only specific scanners", cmd: "phoneinfoga scan -n \"+911234567890\" -s local,numverify" },
-          { label: "List available scanners", cmd: "phoneinfoga scanners" },
-          { label: "JSON output", cmd: "phoneinfoga scan -n \"+911234567890\" --json" }
-        ],
-        sections: [
-          {
-            title: "Scanners",
-            type: "table",
-            columns: ["Scanner", "What it provides"],
-            rows: [
-              ["local", "Offline parsing — country, area, carrier hint, and line type from the numbering plan"],
-              ["numverify", "Carrier and line-type validation via the Numverify API (free key)"],
-              ["googlesearch", "Generates targeted dorks across social networks, directories, and document sites"],
-              ["ovh", "Checks whether the number belongs to an OVH telecom range"],
-              ["Custom scanners", "The plugin interface accepts your own scanner implementations"]
-            ]
-          },
-          {
-            title: "Number Formats",
-            type: "table",
-            columns: ["Format", "Notes"],
-            rows: [
-              ["E.164", "+911234567890 — always use this; it is unambiguous and every scanner accepts it"],
-              ["International", "+91 12345 67890 — accepted, spacing is normalised"],
-              ["National", "01234 567890 — ambiguous without a country, avoid"],
-              ["Why it matters", "The local scanner derives everything from the country code; a wrong prefix invalidates the whole scan"]
-            ]
-          },
-          {
-            title: "Output Fields",
-            type: "table",
-            columns: ["Field", "Meaning"],
-            rows: [
-              ["Country / area", "Derived from the numbering plan, not from where the phone currently is"],
-              ["Carrier", "Original carrier of the range; portability means it may no longer be accurate"],
-              ["Line type", "Mobile, fixed line, VoIP, or toll-free — VoIP strongly suggests a temporary number"],
-              ["Valid", "Whether the number is structurally possible in its plan, not whether it is in service"],
-              ["Generated dorks", "Search URLs to run manually — this is where most real findings come from"]
-            ]
-          },
-          {
-            title: "Manual Dork Patterns",
-            type: "table",
-            columns: ["Query", "Purpose"],
-            rows: [
-              ["\"+911234567890\"", "Exact-match the full number anywhere on the web"],
-              ["\"1234567890\" site:facebook.com", "Look for the number on a specific platform"],
-              ["intext:\"1234 567890\"", "Catch alternative spacing conventions"],
-              ["site:pastebin.com \"1234567890\"", "Look for it in leaked or pasted data"],
-              ["filetype:pdf \"1234567890\"", "Find it in published documents such as invoices and directories"],
-              ["Messaging apps", "Add the number to a contact list on a burner account to reveal a public profile photo — intrusive, use only with clear justification"]
-            ]
-          },
-          {
-            title: "Common Workflows",
-            type: "commands",
-            commands: [
-              { label: "Standard scan", cmd: "phoneinfoga scan -n \"+911234567890\"\n# note the line type first — VoIP changes how you interpret everything else" },
-              { label: "Run the web UI for interactive work", cmd: "docker run --rm -it -p 8080:8080 sundowndev/phoneinfoga serve -p 8080\n# open http://localhost:8080" },
-              { label: "Follow the dorks manually", cmd: "phoneinfoga scan -n \"+911234567890\" -s googlesearch\n# open each generated URL — the tool does not execute them for you" },
-              { label: "Cross-reference with other identifiers", cmd: "# a number found alongside an email:\nholehe target@example.com --only-used\nepieos.com phone lookup\n# consistent results across all three is what makes attribution defensible" }
-            ]
-          },
-          {
-            title: "Notes & Tips",
-            type: "notes",
-            items: [
-              "Carrier data reflects the number range, not the current operator. Number portability makes carrier attribution unreliable on its own.",
-              "The generated dorks are the real output. Running the scan without following them up leaves most of the value on the table.",
-              "A VoIP line type is a meaningful finding — it usually indicates a disposable number and lowers confidence in any identity linkage.",
-              "Phone-number research is personal data handling in most jurisdictions. Keep it scoped, documented, and deleted at the end of the engagement."
             ]
           }
         ]
@@ -4888,77 +4804,6 @@ var TOOLKIT = [
         ]
       },
       {
-        id: "nosqlmap",
-        name: "NoSQLMap",
-        url: "https://github.com/codingo/NoSQLMap",
-        description: "Automated NoSQL injection and database attacks, primarily against MongoDB.",
-        brief: "NoSQLMap is the NoSQL counterpart to sqlmap, focused mainly on MongoDB. NoSQL databases do not use SQL, but they are still injectable — through operator injection (smuggling in query operators like $ne, $gt, $regex), JavaScript injection in server-side evaluation, and authentication bypasses. NoSQLMap automates discovering and exploiting these, plus enumerating and attacking exposed MongoDB instances directly.\n\nIt fills a gap sqlmap does not cover, and NoSQL injection is common precisely because developers who have learned to parameterise SQL often do not realise their NoSQL queries are just as vulnerable.",
-        quickReference: [
-          { label: "Interactive mode", cmd: "python nosqlmap.py" },
-          { label: "The classic auth-bypass payload", cmd: "username[$ne]=x&password[$ne]=x" },
-          { label: "JSON operator injection", cmd: "{\"username\": {\"$ne\": null}, \"password\": {\"$ne\": null}}" },
-          { label: "Regex username extraction", cmd: "username[$regex]=^admin&password[$ne]=x" }
-        ],
-        sections: [
-          {
-            title: "Attack Types",
-            type: "table",
-            columns: ["Type", "Description"],
-            rows: [
-              ["Operator injection", "Inject MongoDB operators ($ne, $gt, $regex, $where) to alter query logic"],
-              ["Authentication bypass", "$ne / $gt operators make a login query always true"],
-              ["Blind data extraction", "$regex character-by-character extraction of values like passwords"],
-              ["JavaScript injection", "Inject into $where or mapReduce where server-side JS is evaluated"],
-              ["Direct MongoDB attacks", "Enumerate and dump an exposed, unauthenticated MongoDB instance"]
-            ]
-          },
-          {
-            title: "Key Operators Abused",
-            type: "table",
-            columns: ["Operator", "Effect"],
-            rows: [
-              ["$ne", "Not equal — 'password not equal to x' is true for any real password"],
-              ["$gt / $lt", "Greater/less than — another always-true trick"],
-              ["$regex", "Pattern match — extract values one character at a time (blind)"],
-              ["$where", "Evaluate a JavaScript expression server-side — the dangerous one"],
-              ["$exists", "Test whether a field exists"],
-              ["$in", "Match any value in a list"]
-            ]
-          },
-          {
-            title: "Injection Contexts",
-            type: "table",
-            columns: ["Context", "How to inject"],
-            rows: [
-              ["URL parameters", "param[$ne]=x — PHP/Express parse bracket notation into nested objects"],
-              ["JSON body", "{\"field\": {\"$ne\": null}} — inject the operator as a nested object"],
-              ["Form-encoded", "field[$ne]=x in the POST body"],
-              ["Why it works", "The app passes user input straight into the query object without sanitising operators"]
-            ]
-          },
-          {
-            title: "Common Workflows",
-            type: "commands",
-            commands: [
-              { label: "Manual auth bypass first", cmd: "# in Burp, change the login body from:\n#   {\"user\":\"admin\",\"pass\":\"x\"}\n# to:\n#   {\"user\":\"admin\",\"pass\":{\"$ne\":\"x\"}}\n# a successful login confirms NoSQL injection" },
-              { label: "Blind extraction with regex", cmd: "# brute-force each character of a secret:\n#   pass[$regex]=^a  ... ^b ... until the response changes\n# NoSQLMap automates this character walk" },
-              { label: "Attack an exposed instance", cmd: "# if MongoDB (27017) is reachable and unauthenticated,\n# enumerate and dump databases directly rather than via the app" }
-            ]
-          },
-          {
-            title: "Notes & Tips",
-            type: "notes",
-            items: [
-              "The $ne authentication bypass is the canonical NoSQL injection — try it by hand in Burp before reaching for automation; it is often a one-request win.",
-              "Bracket notation (param[$ne]=x) works because Express and PHP parse it into a nested object the query then trusts.",
-              "$where and mapReduce evaluate server-side JavaScript — those are the paths from injection to code execution, so prioritise finding them.",
-              "The tool can be finicky and its upkeep is intermittent; the manual techniques it embodies are the durable knowledge.",
-              "An exposed, unauthenticated MongoDB on 27017 is a direct-dump situation — check Shodan/Censys findings from recon."
-            ]
-          }
-        ]
-      },
-      {
         id: "dalfox",
         name: "Dalfox",
         url: "https://github.com/hahwul/dalfox",
@@ -5105,81 +4950,6 @@ var TOOLKIT = [
         ]
       },
       {
-        id: "tplmap",
-        name: "tplmap",
-        url: "https://github.com/epinna/tplmap",
-        description: "Detects and exploits Server-Side Template Injection (SSTI) across many engines.",
-        brief: "tplmap automates Server-Side Template Injection — the bug where user input is embedded into a server-side template and evaluated, letting you run template code and, very often, escalate to full command execution. It supports a wide range of engines (Jinja2, Twig, Freemarker, Velocity, Smarty, ERB, and many more), detects which one is in use, and exploits it up to code execution and a shell.\n\nSSTI is increasingly common as apps build responses from templates with user-controlled data, and it is high impact because most template engines expose a path to the underlying OS.",
-        quickReference: [
-          { label: "Test a URL parameter", cmd: "tplmap.py -u \"https://target.com/page?name=John\"" },
-          { label: "Test POST data", cmd: "tplmap.py -u https://target.com/page --data \"name=John\"" },
-          { label: "Get an OS shell", cmd: "tplmap.py -u \"https://target.com/page?name=John\" --os-shell" },
-          { label: "The classic detection probe", cmd: "Inject ${7*7} / {{7*7}} / <%= 7*7 %> and look for 49" }
-        ],
-        sections: [
-          {
-            title: "Detection Basics",
-            type: "table",
-            columns: ["Probe", "Engine hint"],
-            rows: [
-              ["{{7*7}} -> 49", "Jinja2, Twig (curly-brace engines)"],
-              ["${7*7} -> 49", "Freemarker, Velocity (dollar-brace)"],
-              ["<%= 7*7 %> -> 49", "ERB (Ruby)"],
-              ["{7*7} -> 49", "Smarty and similar"],
-              ["#{7*7} -> 49", "Some Ruby/others"],
-              ["Polyglot", "${{<%[%'\"}}%\\ — a probe that errors or reflects across many engines"]
-            ]
-          },
-          {
-            title: "Key Options",
-            type: "table",
-            columns: ["Flag", "Description"],
-            rows: [
-              ["-u <url>", "Target URL"],
-              ["--data <string>", "POST data to test"],
-              ["-e <engine>", "Force a specific template engine"],
-              ["--os-cmd <cmd>", "Run a single OS command"],
-              ["--os-shell", "Interactive OS shell"],
-              ["--upload / --download", "File transfer through the injection"],
-              ["--reverse-shell <host> <port>", "Trigger a reverse shell"],
-              ["-H / --cookie", "Headers and session"]
-            ]
-          },
-          {
-            title: "Why SSTI Escalates to RCE",
-            type: "table",
-            columns: ["Concept", "Description"],
-            rows: [
-              ["Templates evaluate code", "The engine is a small language interpreter running server-side"],
-              ["Object/sandbox escape", "Jinja2/Twig sandbox escapes reach Python/PHP internals and then os.system"],
-              ["Built-in exec paths", "Freemarker/Velocity expose classes that run OS commands directly"],
-              ["Data exposure minimum", "Even without RCE, SSTI leaks config, secrets, and internal objects"],
-              ["tplmap's job", "Fingerprint the engine and walk the known escape chain to a shell"]
-            ]
-          },
-          {
-            title: "Common Workflows",
-            type: "commands",
-            commands: [
-              { label: "Confirm by hand, then automate", cmd: "# inject {{7*7}} (and ${7*7}, <%= 7*7 %>) in each reflected field\n# a rendered 49 confirms SSTI, then:\ntplmap.py -u \"https://target.com/greet?name=John\"" },
-              { label: "Escalate to command execution", cmd: "tplmap.py -u \"https://target.com/greet?name=John\" --os-cmd id\n# then --os-shell for interactive access (scope permitting)" },
-              { label: "Force the engine if detection is noisy", cmd: "tplmap.py -u \"...\" -e jinja2 --os-shell" }
-            ]
-          },
-          {
-            title: "Notes & Tips",
-            type: "notes",
-            items: [
-              "Confirm SSTI manually first with math probes ({{7*7}}, ${7*7}, <%= 7*7 %>) — a rendered 49 is unambiguous and tells you the engine family.",
-              "SSTI is not just data disclosure; most engines have a documented escape to OS command execution, so treat it as potential RCE.",
-              "tplmap is Python 2 and lightly maintained; if it fails, the manual escape payloads for the detected engine are well documented (e.g. PayloadsAllTheThings).",
-              "Distinguish SSTI from plain XSS: {{7*7}} rendering as 49 is server-side evaluation, not client-side reflection.",
-              "As always, stop at a proof (id/whoami) unless full exploitation is explicitly in scope."
-            ]
-          }
-        ]
-      },
-      {
         id: "ysoserial",
         name: "ysoserial",
         url: "https://github.com/frohoff/ysoserial",
@@ -5321,6 +5091,153 @@ var TOOLKIT = [
               "A weak HMAC secret is the most common real-world win: crack it offline, then you can forge any claim you like.",
               "Tampering claims only works if the signature check is broken or bypassed — changing 'role':'admin' means nothing against proper verification.",
               "The -M at mode against a live endpoint with a canary value is the fastest way to learn which forged tokens the server actually accepts."
+            ]
+          }
+        ]
+      },
+      {
+        id: "sstimap",
+        name: "SSTImap",
+        url: "https://github.com/vladko312/SSTImap",
+        description: "Detects and exploits Server-Side Template Injection to code execution — the maintained successor to tplmap.",
+        brief: "SSTImap is an actively maintained, Python 3 tool for Server-Side Template Injection — the bug where user input is embedded into a server-side template and evaluated, letting you run template code and, very often, escalate to full command execution. It is the modern successor to the long-abandoned tplmap: same idea, rewritten and kept current, with support for a wide range of engines (Jinja2, Twig, Freemarker, Velocity, Smarty, Mako, ERB, and more).\n\nSSTI is common wherever apps build responses from templates with user-controlled data, and it is high impact because most template engines expose a documented path to the underlying OS.",
+        quickReference: [
+          { label: "Test a URL parameter", cmd: "python3 sstimap.py -u \"https://target.com/page?name=John\"" },
+          { label: "Test POST data", cmd: "python3 sstimap.py -u https://target.com/page -d \"name=John\"" },
+          { label: "Get an OS shell", cmd: "python3 sstimap.py -u \"https://target.com/page?name=John\" --os-shell" },
+          { label: "The classic detection probe", cmd: "Inject ${7*7} / {{7*7}} / <%= 7*7 %> and look for 49" }
+        ],
+        sections: [
+          {
+            title: "Detection Basics",
+            type: "table",
+            columns: ["Probe", "Engine hint"],
+            rows: [
+              ["{{7*7}} -> 49", "Jinja2, Twig (curly-brace engines)"],
+              ["${7*7} -> 49", "Freemarker, Velocity (dollar-brace)"],
+              ["<%= 7*7 %> -> 49", "ERB (Ruby)"],
+              ["{7*7} -> 49", "Smarty and similar"],
+              ["#{7*7} -> 49", "Some Ruby / others"],
+              ["Polyglot", "${{<%[%'\"}}%\\ — a probe that errors or reflects across many engines"]
+            ]
+          },
+          {
+            title: "Key Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-u <url>", "Target URL"],
+              ["-d <data>", "POST data to test"],
+              ["-e <engine>", "Force a specific template engine"],
+              ["-p <param>", "Test only a specific parameter"],
+              ["-H / -c", "Custom headers and cookies (authenticated testing)"],
+              ["--os-cmd <cmd>", "Run a single OS command"],
+              ["--os-shell", "Interactive OS shell"],
+              ["--upload / --download", "Transfer files through the injection"],
+              ["-X / --crawl", "Crawl the target to find injectable parameters"]
+            ]
+          },
+          {
+            title: "Why SSTI Escalates to RCE",
+            type: "table",
+            columns: ["Concept", "Description"],
+            rows: [
+              ["Templates evaluate code", "The engine is a small language interpreter running server-side"],
+              ["Object / sandbox escape", "Jinja2 / Twig sandbox escapes reach Python / PHP internals and then os.system"],
+              ["Built-in exec paths", "Freemarker / Velocity expose classes that run OS commands directly"],
+              ["Data exposure minimum", "Even without RCE, SSTI leaks config, secrets, and internal objects"],
+              ["SSTImap's job", "Fingerprint the engine and walk the known escape chain to a shell"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Confirm by hand, then automate", cmd: "# inject {{7*7}} (and ${7*7}, <%= 7*7 %>) in each reflected field\n# a rendered 49 confirms SSTI, then:\npython3 sstimap.py -u \"https://target.com/greet?name=John\"" },
+              { label: "Escalate to command execution", cmd: "python3 sstimap.py -u \"https://target.com/greet?name=John\" --os-cmd id\n# then --os-shell for interactive access (scope permitting)" },
+              { label: "Crawl then test", cmd: "python3 sstimap.py -u https://target.com --crawl 2 --forms\n# discovers parameters/forms and tests each for SSTI" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Confirm SSTI manually first with math probes ({{7*7}}, ${7*7}, <%= 7*7 %>) — a rendered 49 is unambiguous and names the engine family.",
+              "SSTI is not just data disclosure; most engines have a documented escape to OS command execution, so treat it as potential RCE.",
+              "SSTImap is the maintained Python 3 replacement for tplmap — prefer it; the old tplmap is Python 2 and abandoned.",
+              "Distinguish SSTI from plain XSS: {{7*7}} rendering as 49 is server-side evaluation, not client-side reflection.",
+              "Stop at a proof (id / whoami) unless full exploitation is explicitly in scope; PayloadsAllTheThings documents the manual escapes per engine if the tool struggles."
+            ]
+          }
+        ]
+      },
+      {
+        id: "nosqli",
+        name: "nosqli",
+        url: "https://github.com/Charlie-belmer/nosqli",
+        description: "Fast, maintained NoSQL injection scanner focused on MongoDB.",
+        brief: "nosqli is a Go-based scanner for NoSQL injection, focused on MongoDB. NoSQL databases do not use SQL, but they are still injectable — through operator injection (smuggling in query operators like $ne, $gt, $regex), authentication bypasses, and boolean/error-based extraction. nosqli automates detecting and confirming these, and it is actively maintained and simple to run, which is why it is the reliable choice over the older, finicky NoSQLMap.\n\nNoSQL injection is common precisely because developers who have learned to parameterise SQL often do not realise their NoSQL queries are just as vulnerable to operator smuggling.",
+        quickReference: [
+          { label: "Scan a URL for NoSQLi", cmd: "nosqli scan -t \"https://target.com/search?q=test\"" },
+          { label: "Scan a POST request", cmd: "nosqli scan -t https://target.com/login -r POST -d '{\"user\":\"a\",\"pass\":\"b\"}'" },
+          { label: "The classic auth-bypass payload", cmd: "username[$ne]=x&password[$ne]=x" },
+          { label: "JSON operator injection", cmd: "{\"username\": {\"$ne\": null}, \"password\": {\"$ne\": null}}" }
+        ],
+        sections: [
+          {
+            title: "Attack Types",
+            type: "table",
+            columns: ["Type", "Description"],
+            rows: [
+              ["Operator injection", "Inject MongoDB operators ($ne, $gt, $regex, $where) to alter query logic"],
+              ["Authentication bypass", "$ne / $gt operators make a login query always true"],
+              ["Boolean / error-based", "Infer data from response differences when output is not reflected"],
+              ["Blind extraction", "$regex character-by-character extraction of values like passwords"],
+              ["JavaScript injection", "Inject into $where or mapReduce where server-side JS is evaluated"]
+            ]
+          },
+          {
+            title: "Key Operators Abused",
+            type: "table",
+            columns: ["Operator", "Effect"],
+            rows: [
+              ["$ne", "Not equal — 'password not equal to x' is true for any real password"],
+              ["$gt / $lt", "Greater / less than — another always-true trick"],
+              ["$regex", "Pattern match — extract values one character at a time (blind)"],
+              ["$where", "Evaluate a JavaScript expression server-side — the dangerous one"],
+              ["$exists", "Test whether a field exists"],
+              ["$in", "Match any value in a list"]
+            ]
+          },
+          {
+            title: "Injection Contexts",
+            type: "table",
+            columns: ["Context", "How to inject"],
+            rows: [
+              ["URL parameters", "param[$ne]=x — PHP / Express parse bracket notation into nested objects"],
+              ["JSON body", "{\"field\": {\"$ne\": null}} — inject the operator as a nested object"],
+              ["Form-encoded", "field[$ne]=x in the POST body"],
+              ["Why it works", "The app passes user input straight into the query object without sanitising operators"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Manual auth bypass first", cmd: "# in Burp, change the login body from:\n#   {\"user\":\"admin\",\"pass\":\"x\"}\n# to:\n#   {\"user\":\"admin\",\"pass\":{\"$ne\":\"x\"}}\n# a successful login confirms NoSQL injection" },
+              { label: "Automated scan of an endpoint", cmd: "nosqli scan -t \"https://target.com/search?q=test\"\n# confirms injectable parameters and the working operator" },
+              { label: "Blind extraction with regex", cmd: "# brute-force each character of a secret:\n#   pass[$regex]=^a  ... ^b ... until the response changes\n# automate the character walk once a $regex injection is confirmed" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "The $ne authentication bypass is the canonical NoSQL injection — try it by hand in Burp before automating; it is often a one-request win.",
+              "Bracket notation (param[$ne]=x) works because Express and PHP parse it into a nested object the query then trusts.",
+              "$where and mapReduce evaluate server-side JavaScript — those are the paths from injection to code execution, so prioritise finding them.",
+              "nosqli is the maintained, reliable choice for NoSQL injection; the older NoSQLMap is finicky and intermittently maintained.",
+              "An exposed, unauthenticated MongoDB on 27017 (from Shodan / Censys recon) is a direct-dump situation — no injection needed."
             ]
           }
         ]
