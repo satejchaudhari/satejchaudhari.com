@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows Access Tokens &amp; UAC — Satej Chaudhari</title>
+  <meta name="description" content="How Windows decides what a process may do — access tokens, integrity levels, privileges, and why User Account Control is a convenience boundary rather than a security boundary.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">Windows Access Tokens &amp; UAC</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-09-22">2026-09-22</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Windows privilege escalation makes sense only once you understand how Windows
+          decides what a process is allowed to do. That decision is carried by an
+          <strong>access token</strong>, shaped by <strong>integrity levels</strong> and
+          <strong>privileges</strong>, and moderated at the surface by
+          <strong>User Account Control</strong>. This page is the general mechanism; the
+          specific attacks — UAC bypass, service misconfigurations, token impersonation —
+          live in the <a href="../vulns.html">Vulns &amp; Misconfigs</a> section under
+          <em>Privilege Escalation</em>.
+        </p>
+
+        <h2>The access token</h2>
+
+        <p>
+          When a user logs on, Windows builds an <strong>access token</strong> that every
+          process they start carries. The token is the answer to "who is this, and what may
+          it do." It contains the user's SID, the SIDs of every group they belong to, an
+          <em>integrity level</em>, and a list of <em>privileges</em>. Every time a process
+          touches a securable object, Windows compares the token against the object's ACL.
+        </p>
+
+        <p>
+          Two token types matter for attacks. A <strong>primary token</strong> is attached to
+          a process. An <strong>impersonation token</strong> lets a thread temporarily act as
+          another identity — the legitimate mechanism a server uses to do work "as" a
+          connecting client, and the mechanism the Potato attacks abuse.
+        </p>
+
+        <h2>Integrity levels</h2>
+
+        <p>
+          Every token (and every securable object) has a mandatory <strong>integrity
+          level</strong>, a coarse trust band that sits <em>above</em> normal permissions —
+          a lower-integrity process cannot write to a higher-integrity object even if the
+          DACL would otherwise allow it.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Level</th><th>Who runs here</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>System</td><td>SYSTEM and core OS services — the goal of local escalation</td></tr>
+            <tr><td>High</td><td>Elevated (UAC-approved) administrator processes</td></tr>
+            <tr><td>Medium</td><td>Standard user processes — including an admin who has <em>not</em> elevated</td></tr>
+            <tr><td>Low</td><td>Sandboxed processes (e.g. browser renderers)</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          The key insight for escalation: an administrator logged in normally runs at
+          <strong>Medium</strong> integrity with a <em>filtered</em> token. They are an admin
+          on paper but cannot perform admin actions until a process is elevated to
+          <strong>High</strong>. Getting from Medium to High without a prompt is exactly what
+          a UAC bypass does; getting to System is what service abuse and token impersonation
+          do.
+        </blockquote>
+
+        <h2>Privileges</h2>
+
+        <p>
+          Beyond group membership, a token holds named <strong>privileges</strong> — specific
+          rights that are dangerous enough to be listed individually. Several are escalation
+          primitives in their own right, which is why <code>whoami /priv</code> is one of the
+          first commands run on a new host.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Privilege</th><th>Why it matters</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>SeImpersonatePrivilege</td><td>Impersonate a token you receive — the basis of the Potato attacks (service account → SYSTEM)</td></tr>
+            <tr><td>SeAssignPrimaryTokenPrivilege</td><td>Assign a primary token to a new process — similar escalation potential</td></tr>
+            <tr><td>SeDebugPrivilege</td><td>Open any process — read LSASS memory, inject code</td></tr>
+            <tr><td>SeBackupPrivilege / SeRestorePrivilege</td><td>Read/write any file regardless of DACL — dump the SAM, overwrite binaries</td></tr>
+            <tr><td>SeTakeOwnershipPrivilege</td><td>Take ownership of any object, then rewrite its ACL</td></tr>
+            <tr><td>SeLoadDriverPrivilege</td><td>Load a driver — kernel-level code execution</td></tr>
+          </tbody>
+        </table>
+
+        <h2>What UAC actually is</h2>
+
+        <p>
+          User Account Control exists because, before it, everyone ran as administrator all
+          the time and malware inherited that power. UAC splits an administrator into two
+          tokens: a filtered <strong>medium</strong>-integrity token for everyday use and a
+          full <strong>high</strong>-integrity token that is only attached when the user
+          explicitly consents to elevation (the "Do you want to allow this app to make
+          changes?" prompt).
+        </p>
+
+        <p>
+          Crucially, Microsoft is explicit that <strong>UAC is not a security
+          boundary</strong>. It is a convenience feature to encourage running with least
+          privilege — not a wall that is guaranteed to stop a determined local attacker. That
+          single sentence explains why UAC bypasses are numerous and unpatched.
+        </p>
+
+        <h3>Auto-elevation — the reason bypasses exist</h3>
+
+        <p>
+          To avoid prompting users constantly, Windows lets certain signed Microsoft binaries
+          <strong>auto-elevate</strong>: they receive a high-integrity token with no prompt.
+          The elevation service (via <code>RAiLaunchAdminProcess</code>) checks the binary's
+          manifest (<code>autoElevate=true</code>), its signature, and its path. Bypasses work
+          by finding an auto-elevating binary that then does something attacker-influenceable:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Weakness</th><th>How a bypass uses it</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Reads a handler from HKCU</td><td>A medium process writes the key; the elevated binary runs the attacker's command (fodhelper, eventvwr, sdclt)</td></tr>
+            <tr><td>Loads a DLL from a writable path</td><td>Drop a malicious DLL the elevated binary loads (DLL hijack)</td></tr>
+            <tr><td>Path-normalization trust check</td><td>A "mock" trusted directory (trailing space) satisfies the check while pointing elsewhere</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The escalation landscape</h2>
+
+        <p>
+          Put together, the token model explains every local-escalation route:
+        </p>
+
+        <ul>
+          <li><strong>Medium → High (same admin user):</strong> abuse an auto-elevating binary — a <a href="../vulns.html">UAC bypass</a>.</li>
+          <li><strong>Standard user → SYSTEM:</strong> find something that runs as SYSTEM and that you can influence — a weak service, an unquoted path, a writable binary, or <code>AlwaysInstallElevated</code>.</li>
+          <li><strong>Service account → SYSTEM:</strong> if the token holds <code>SeImpersonatePrivilege</code>, coerce and impersonate a SYSTEM token (the Potato family).</li>
+          <li><strong>Any → more:</strong> a dangerous privilege (SeDebug, SeBackup, SeLoadDriver) is often a direct primitive on its own.</li>
+        </ul>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          Windows authorises on a token: an identity, an integrity level, and a set of
+          privileges, checked against every object's ACL. UAC is a usability layer over that
+          model — it filters an admin's token by default and hands back the full one only on
+          consent, but it is explicitly not a security boundary, which is why auto-elevating
+          binaries can be turned into silent escalations. Read a host's exposure by reading
+          its tokens: <code>whoami /groups</code> for integrity, <code>whoami /priv</code> for
+          the dangerous privileges, and the service/registry ACLs for what a low-priv user can
+          influence. The concrete techniques are in the
+          <a href="../vulns.html">Vulns &amp; Misconfigs</a> section.
+        </p>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

