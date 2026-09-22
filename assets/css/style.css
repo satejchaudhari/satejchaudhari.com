@@ -315,7 +315,7 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 /* ===========================================================
    About section (home)
 =========================================================== */
-.section { padding: 72px 0; border-bottom: 1px solid var(--border); }
+.section { padding-block: 72px; border-bottom: 1px solid var(--border); }
 .section:last-of-type { border-bottom: none; }
 
 .section-head {
@@ -742,7 +742,7 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 /* ===========================================================
    Post page
 =========================================================== */
-.post { padding: 56px 0 96px; }
+.post { padding-block: 56px 96px; }
 .post-back {
   display: inline-flex;
   align-items: center;
@@ -812,7 +812,7 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 /* ===========================================================
    Page header (writeups / blog / toolkit list pages)
 =========================================================== */
-.page-head { padding: 56px 0 40px; }
+.page-head { padding-block: 56px 40px; }
 .page-title {
   font-family: var(--display);
   font-weight: 600;
@@ -845,6 +845,8 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 @media (max-width: 680px) {
   .site-nav { display: none; }
   .nav-toggle { display: flex; }
+
+  /* full-width, left-aligned dropdown menu — proper mobile nav */
   .site-nav.open {
     display: flex;
     position: absolute;
@@ -853,15 +855,33 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
     right: 0;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
     flex-direction: column;
-    padding: 8px 18px 16px;
+    align-items: stretch;
+    padding: 10px 16px 14px;
     gap: 2px;
   }
-  .site-nav.open a { padding: 11px 12px; font-size: 0.95rem; }
-  .site-nav.open a.nav-external { margin-left: 0; }
+  .site-nav.open a {
+    display: block;
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 1rem;
+    border-radius: 8px;
+    color: var(--text);
+  }
+  .site-nav.open a:hover { background: var(--surface); }
+  .site-nav.open a.current { color: var(--accent); background: var(--accent-soft); }
+  .site-nav.open a.nav-external {
+    border: none;
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
 
-  .hero { padding: 52px 0 44px; }
-  .section { padding: 48px 0; }
+  .hero { padding-block: 52px 44px; }
+  .section { padding-block: 46px; }
+  .page-head { padding-block: 44px 30px; }
+  .post { padding-block: 44px 72px; }
   .tool-grid { grid-template-columns: 1fr; }
   .home-grid { grid-template-columns: 1fr; }
 
@@ -877,13 +897,14 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   .filter-btn { padding: 8px 13px; }
   .catalog-nav-item { padding: 9px 12px; }
   .section-head { gap: 10px; }
+  .section-head .section-link { font-size: 0.84rem; }
 }
 @media (max-width: 480px) {
-  .wrap, .wrap-wide { padding: 0 16px; }
-  .hero { padding: 44px 0 36px; }
-  .section { padding: 40px 0; }
-  .page-head { padding: 40px 0 28px; }
-  .post { padding: 40px 0 64px; }
+  .wrap, .wrap-wide { padding: 0 18px; }
+  .hero { padding-block: 44px 36px; }
+  .section { padding-block: 40px; }
+  .page-head { padding-block: 38px 26px; }
+  .post { padding-block: 38px 64px; }
   .btn { padding: 11px 16px; }
   .hero-actions { gap: 10px; }
   .hero-actions .btn { flex: 1 1 auto; justify-content: center; }
