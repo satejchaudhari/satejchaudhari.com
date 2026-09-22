@@ -5,6 +5,7 @@
    JetBrains Mono is reserved for labels/meta/code only.
 =========================================================== */
 :root {
+  /* ---- dark theme (default) ---- */
   --bg:        #0b0d10;
   --surface:   #12151a;
   --surface-2: #171b21;
@@ -12,17 +13,88 @@
   --text:      #e9eaec;
   --muted:     #8b909b;
   --muted-2:   #5c616c;
-  --accent:    #ff9d4d;
-  --accent-soft: rgba(255, 157, 77, 0.1);
-  --accent-border: rgba(255, 157, 77, 0.35);
+
+  --accent:    #ff9d4d;   /* brand accent — sections may locally override --accent */
+  --on-accent: #17140d;   /* text that sits on top of a solid accent fill */
+  --code-fg:   #ffcda0;
+  --sel-bg:    var(--accent);
+  --sel-fg:    #1a1206;
+
+  /* tints derive from whatever --accent currently is, so a category
+     hue class only needs to set --accent and everything recolours */
+  --accent-soft:   color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 38%, transparent);
+
+  /* header/overlay backgrounds, tokenised so light mode can override */
+  --header-bg: color-mix(in srgb, var(--bg) 86%, transparent);
+
+  /* category hue palette (dark-tuned) */
+  --h-red:    #ff6b6b;
+  --h-orange: #ff9d4d;
+  --h-amber:  #ffd166;
+  --h-green:  #4ade80;
+  --h-teal:   #2dd4bf;
+  --h-cyan:   #38bdf8;
+  --h-blue:   #60a5fa;
+  --h-violet: #a78bfa;
+  --h-rose:   #fb7185;
+  --h-slate:  #94a3b8;
 
   --display: "Space Grotesk", "Inter", -apple-system, sans-serif;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --maxw: 780px;
-  --maxw-wide: 900px;
+  --maxw-wide: 1080px;
+  --catalog-sidebar: 236px;
 }
+
+/* ---- light theme ---- */
+:root[data-theme="light"] {
+  --bg:        #f6f7f9;
+  --surface:   #ffffff;
+  --surface-2: #eef1f5;
+  --border:    #dde1e8;
+  --text:      #191c22;
+  --muted:     #545b68;
+  --muted-2:   #8b93a1;
+
+  --accent:    #d9791d;
+  --on-accent: #ffffff;
+  --code-fg:   #b45309;
+  --sel-bg:    color-mix(in srgb, var(--accent) 26%, transparent);
+  --sel-fg:    #191c22;
+
+  --header-bg: color-mix(in srgb, var(--bg) 82%, transparent);
+
+  /* darker, more saturated hues so colour reads on a light background */
+  --h-red:    #dc2626;
+  --h-orange: #d9791d;
+  --h-amber:  #b45309;
+  --h-green:  #16a34a;
+  --h-teal:   #0d9488;
+  --h-cyan:   #0284c7;
+  --h-blue:   #2563eb;
+  --h-violet: #7c3aed;
+  --h-rose:   #e11d48;
+  --h-slate:  #475569;
+}
+
+/* category hue classes: set --accent, tints follow automatically.
+   Applied to a Vulns category / Theory group / sidebar item subtree. */
+.hue-red    { --accent: var(--h-red); }
+.hue-orange { --accent: var(--h-orange); }
+.hue-amber  { --accent: var(--h-amber); }
+.hue-green  { --accent: var(--h-green); }
+.hue-teal   { --accent: var(--h-teal); }
+.hue-cyan   { --accent: var(--h-cyan); }
+.hue-blue   { --accent: var(--h-blue); }
+.hue-violet { --accent: var(--h-violet); }
+.hue-rose   { --accent: var(--h-rose); }
+.hue-slate  { --accent: var(--h-slate); }
+
+html { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -78,11 +150,11 @@ code {
   border-radius: 4px;
   padding: 0.15em 0.42em;
   font-size: 0.87em;
-  color: #ffcda0;
+  color: var(--code-fg);
 }
 pre code { background: none; border: none; padding: 0; color: inherit; }
 
-::selection { background: var(--accent); color: #1a1206; }
+::selection { background: var(--sel-bg); color: var(--sel-fg); }
 
 .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
 .wrap-wide { max-width: var(--maxw-wide); margin: 0 auto; padding: 0 24px; }
@@ -94,7 +166,7 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  background: rgba(11, 13, 16, 0.86);
+  background: var(--header-bg);
   backdrop-filter: blur(10px);
   z-index: 20;
 }
@@ -233,8 +305,8 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   gap: 8px;
 }
 .btn:hover { transform: translateY(-1px); text-decoration: none; }
-.btn-primary { background: var(--accent); color: #1a1206; border-color: var(--accent); }
-.btn-primary:hover { background: #ffaf6b; }
+.btn-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn-primary:hover { background: color-mix(in srgb, var(--accent) 82%, #fff); }
 .btn-ghost { color: var(--text); }
 .btn-ghost:hover { border-color: var(--accent-border); background: var(--surface); }
 
@@ -473,7 +545,7 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   border-color: var(--accent-border);
   color: var(--accent);
 }
-.tool-btn-primary:hover { background: var(--accent); color: #1a1206; }
+.tool-btn-primary:hover { background: var(--accent); color: var(--on-accent); }
 .tool-btn-secondary {
   color: var(--muted);
   background: transparent;
@@ -521,7 +593,7 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   gap: 8px;
   padding: 16px 0;
   margin-top: 4px;
-  background: rgba(11, 13, 16, 0.92);
+  background: var(--header-bg);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
 }
@@ -810,8 +882,227 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   white-space: nowrap;
   flex-shrink: 0;
 }
-.sev-critical { color: #ff6b6b; border-color: rgba(255,107,107,0.4); background: rgba(255,107,107,0.09); }
-.sev-high     { color: #ff9d4d; border-color: rgba(255,157,77,0.4);  background: rgba(255,157,77,0.09); }
-.sev-medium   { color: #ffd166; border-color: rgba(255,209,102,0.4); background: rgba(255,209,102,0.09); }
-.sev-low      { color: #6cc4ff; border-color: rgba(108,196,255,0.4); background: rgba(108,196,255,0.09); }
+.sev-critical { color: var(--h-red);   border-color: color-mix(in srgb, var(--h-red) 40%, transparent);   background: color-mix(in srgb, var(--h-red) 10%, transparent); }
+.sev-high     { color: var(--h-orange);border-color: color-mix(in srgb, var(--h-orange) 40%, transparent);background: color-mix(in srgb, var(--h-orange) 10%, transparent); }
+.sev-medium   { color: var(--h-amber); border-color: color-mix(in srgb, var(--h-amber) 40%, transparent); background: color-mix(in srgb, var(--h-amber) 10%, transparent); }
+.sev-low      { color: var(--h-blue);  border-color: color-mix(in srgb, var(--h-blue) 40%, transparent);  background: color-mix(in srgb, var(--h-blue) 10%, transparent); }
 .sev-info     { color: var(--muted); }
+
+/* ===========================================================
+   Theme toggle button (in the nav)
+=========================================================== */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  margin-left: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); }
+.theme-toggle svg { width: 17px; height: 17px; }
+/* show the correct glyph per theme */
+.theme-toggle .icon-sun  { display: none; }
+.theme-toggle .icon-moon { display: block; }
+:root[data-theme="light"] .theme-toggle .icon-sun  { display: block; }
+:root[data-theme="light"] .theme-toggle .icon-moon { display: none; }
+
+/* ===========================================================
+   Catalog layout — sticky category sidebar + main column.
+   Used by Theory and Vulns to scale to hundreds of entries.
+=========================================================== */
+.catalog {
+  display: grid;
+  grid-template-columns: var(--catalog-sidebar) minmax(0, 1fr);
+  gap: 36px;
+  align-items: start;
+  padding-bottom: 96px;
+}
+
+.catalog-sidebar {
+  position: sticky;
+  top: 84px;
+  align-self: start;
+  max-height: calc(100vh - 104px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  padding-right: 4px;
+}
+
+.catalog-search {
+  width: 100%;
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 11px 14px 11px 36px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%238b909b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 12px center;
+}
+.catalog-search::placeholder { color: var(--muted-2); }
+.catalog-search:focus { border-color: var(--accent-border); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.catalog-nav-label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  margin: 22px 0 10px;
+}
+
+.catalog-nav { display: flex; flex-direction: column; gap: 2px; }
+.catalog-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  font-family: var(--sans);
+  font-size: 0.86rem;
+  color: var(--muted);
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.13s ease, background 0.13s ease;
+}
+.catalog-nav-item:hover { color: var(--text); background: var(--surface); }
+.catalog-nav-item.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.catalog-nav-item .dot {
+  width: 8px; height: 8px; flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.catalog-nav-item .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catalog-nav-item .count {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted-2);
+  flex-shrink: 0;
+}
+.catalog-nav-item.active .count { color: var(--accent); }
+
+.catalog-filter-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+.catalog-main { min-width: 0; }
+.catalog-count {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--muted-2);
+  margin: 0 0 20px;
+  min-height: 1em;
+}
+
+/* Category group header with a coloured accent bar */
+.cat-group { margin-bottom: 44px; scroll-margin-top: 88px; }
+.cat-group:last-child { margin-bottom: 0; }
+.cat-group-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.cat-group-bar { width: 4px; height: 20px; border-radius: 3px; background: var(--accent); flex-shrink: 0; }
+.cat-group-title {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.12rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin: 0;
+}
+.cat-group-count {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted-2);
+  margin-left: auto;
+}
+
+/* mobile: collapse sidebar to a horizontal scroll strip above content */
+@media (max-width: 860px) {
+  .catalog { grid-template-columns: 1fr; gap: 20px; }
+  .catalog-sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+  .catalog-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .catalog-nav-item { width: auto; border: 1px solid var(--border); }
+  .catalog-nav-label { margin-top: 16px; }
+}
+
+/* ===========================================================
+   Artistic depth — subtle, serious. Gradient hero glow,
+   layered surface sheen on cards.
+=========================================================== */
+.hero {
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(600px 300px at 78% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+    radial-gradient(500px 260px at 8% 120%, color-mix(in srgb, var(--h-violet) 12%, transparent), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+.hero > * { position: relative; z-index: 1; }
+
+/* faint dotted texture behind page heads for a touch of craft */
+.page-head { position: relative; }
+.page-head::after {
+  content: "";
+  position: absolute;
+  right: 0; top: 18px; bottom: 18px;
+  width: 40%;
+  background-image: radial-gradient(color-mix(in srgb, var(--accent) 22%, transparent) 1px, transparent 1px);
+  background-size: 16px 16px;
+  -webkit-mask-image: linear-gradient(to left, #000, transparent);
+  mask-image: linear-gradient(to left, #000, transparent);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* cards get a hairline top sheen so the grid feels less flat */
+.tool-card { position: relative; }
+.tool-card::after {
+  content: "";
+  position: absolute;
+  left: 16px; right: 16px; top: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, color-mix(in srgb, var(--accent) 32%, transparent), transparent);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.tool-card:hover::after { opacity: 1; }
+
+/* soft shadow on light theme so white cards separate from the page */
+:root[data-theme="light"] .tool-card,
+:root[data-theme="light"] .entry,
+:root[data-theme="light"] .tool-detail-table-wrap { box-shadow: 0 1px 2px rgba(20, 25, 35, 0.04); }
+:root[data-theme="light"] .site-header { box-shadow: 0 1px 0 var(--border); }

@@ -13,10 +13,12 @@
 (function () {
   const posts = Array.isArray(window.POSTS) ? window.POSTS : [];
 
-  /* ---------- mobile nav ---------- */
+  /* ---------- mobile nav (guarded so an inline handler and this file
+     never double-bind and cancel each other out) ---------- */
   const toggle = document.querySelector(".nav-toggle");
   const nav = document.querySelector(".site-nav");
-  if (toggle && nav) {
+  if (toggle && nav && !toggle.dataset.bound) {
+    toggle.dataset.bound = "1";
     toggle.addEventListener("click", () => {
       const open = nav.classList.toggle("open");
       toggle.setAttribute("aria-expanded", open ? "true" : "false");

@@ -1,73 +1,66 @@
 /*
-  Renders assets/js/theory.js (window.THEORY) into theory.html's
-  filter bar and entry list, plus a search box that matches against
-  each topic's title, tag, description, AND the full text of the
-  actual page content (fetched in the background).
+  Renders assets/js/theory.js (window.THEORY) into theory.html as a
+  scalable catalog: a sticky category (tag) sidebar with live counts +
+  search on the left, and the topics grouped by category on the right.
 
-  NOTE: the full-content search requires the site to be served over
-  http(s) — it fetches each topic's html file via the Fetch API, which
-  browsers block when a page is opened directly from disk (file://).
-  Every other feature on the site still works fine offline; only this
-  search needs the real server (GitHub Pages / Cloudflare Pages, etc).
+  Built to stay fast at hundreds of pages: search matches title + tag +
+  description only (instant, no network). The previous version fetched
+  the full text of every page on load to power full-text search — that
+  does not scale past a few dozen pages, so it was removed. If full-text
+  search is wanted later, generate a static search-index.json at build
+  time and load that single file instead.
 
   You never need to edit this file — edit theory.js instead.
 */
 
 (function () {
-  const listEl = document.getElementById("log-list");
-  const filterBarEl = document.getElementById("filter-bar");
+  const listEl = document.getElementById("theory-list");
+  const navEl = document.getElementById("theory-nav");
   const countEl = document.getElementById("entry-count");
+  const shownEl = document.getElementById("theory-shown");
   const searchEl = document.getElementById("theory-search");
-  const searchStatusEl = document.getElementById("theory-search-status");
   if (!listEl) return;
 
   const topics = Array.isArray(window.THEORY) ? window.THEORY : [];
   if (countEl) countEl.textContent = topics.length;
 
-  let activeTag = "ALL";
-  let query = "";
+  const HUES = ["hue-cyan","hue-violet","hue-teal","hue-amber","hue-rose","hue-green","hue-blue","hue-orange","hue-slate","hue-red"];
+  const UNTAGGED = "General";
 
-  // searchIndex[url] = lowercase string of title + tag + description + full page text
-  const searchIndex = {};
-
+  // stable category order (first appearance), plus a hue per category
+  const catOrder = [];
   topics.forEach(t => {
-    searchIndex[t.url] = [t.title, t.tag, t.description].filter(Boolean).join(" ").toLowerCase();
+    const c = (t.tag || UNTAGGED).trim() || UNTAGGED;
+    if (!catOrder.includes(c)) catOrder.push(c);
+  });
+  const hueOf = {};
+  catOrder.forEach((c, i) => { hueOf[c] = HUES[i % HUES.length]; });
+
+  const searchIndex = {};
+  topics.forEach((t, i) => {
+    searchIndex[i] = [t.title, t.tag, t.description].filter(Boolean).join(" ").toLowerCase();
   });
 
-  /* ---------- background fetch: pull in full page text for each topic ---------- */
-  function indexFullContent() {
-    if (!window.fetch) return; // very old browser, silently skip — metadata search still works
+  let activeCat = "ALL";
+  let query = "";
 
-    let remaining = topics.length;
-    if (remaining === 0) return;
-    if (searchStatusEl) searchStatusEl.textContent = "Indexing page content…";
+  function escapeHtml(str) {
+    const d = document.createElement("div");
+    d.textContent = str == null ? "" : str;
+    return d.innerHTML;
+  }
 
-    topics.forEach(topic => {
-      fetch(topic.url)
-        .then(res => (res.ok ? res.text() : Promise.reject()))
-        .then(html => {
-          const doc = new DOMParser().parseFromString(html, "text/html");
-          const body = doc.querySelector(".post-body");
-          const text = body ? body.textContent : "";
-          searchIndex[topic.url] += " " + text.toLowerCase().replace(/\s+/g, " ");
-        })
-        .catch(() => {
-          // page couldn't be fetched (offline preview, moved file, etc.) —
-          // that topic just falls back to title/tag/description matching only
-        })
-        .finally(() => {
-          remaining -= 1;
-          if (remaining === 0 && searchStatusEl) {
-            searchStatusEl.textContent = "";
-          }
-          // re-render if the person is actively searching, so results
-          // improve as content finishes indexing in the background
-          if (query) render();
-        });
+  function visibleTopics() {
+    const q = query.trim().toLowerCase();
+    return topics.filter((t, i) => {
+      const cat = (t.tag || UNTAGGED).trim() || UNTAGGED;
+      const matchesCat = activeCat === "ALL" || cat === activeCat;
+      const matchesQuery = !q || (searchIndex[i] || "").includes(q);
+      return matchesCat && matchesQuery;
     });
   }
 
-  /* ---------- card builder ---------- */
+  /* ---------- entry card ---------- */
   function buildEntry(topic) {
     const a = document.createElement("a");
     a.className = "entry";
@@ -75,17 +68,16 @@
 
     const meta = document.createElement("div");
     meta.className = "entry-meta";
-
-    const time = document.createElement("time");
-    time.textContent = topic.date || "";
-    meta.appendChild(time);
-
+    if (topic.date) {
+      const time = document.createElement("time");
+      time.textContent = topic.date;
+      meta.appendChild(time);
+    }
     if (topic.readTime) {
       const rt = document.createElement("span");
       rt.textContent = "· " + topic.readTime;
       meta.appendChild(rt);
     }
-
     if (topic.tag) {
       const tag = document.createElement("span");
       tag.className = "tag";
@@ -107,68 +99,112 @@
     return a;
   }
 
-  /* ---------- combined filter: tag chip + search query ---------- */
-  function render() {
+  /* ---------- main column: grouped by category ---------- */
+  function renderList() {
     listEl.innerHTML = "";
+    const vis = visibleTopics();
 
-    const q = query.trim().toLowerCase();
+    if (shownEl) shownEl.textContent =
+      vis.length === topics.length ? `${topics.length} topics`
+      : `${vis.length} of ${topics.length} topics`;
 
-    const visible = topics.filter(topic => {
-      const matchesTag = activeTag === "ALL" || (topic.tag || "").toUpperCase() === activeTag;
-      const matchesQuery = !q || (searchIndex[topic.url] || "").includes(q);
-      return matchesTag && matchesQuery;
-    });
-
-    if (visible.length === 0) {
+    if (vis.length === 0) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
-      empty.textContent = q
-        ? "// no topics match \"" + query.trim() + "\""
-        : "// no topics match this filter yet";
+      empty.textContent = query.trim()
+        ? '// no topics match "' + query.trim() + '"'
+        : "// nothing here yet";
       listEl.appendChild(empty);
       return;
     }
 
-    visible.forEach(topic => listEl.appendChild(buildEntry(topic)));
-  }
+    // group visible topics by category, preserving global order
+    const groups = {};
+    vis.forEach(t => {
+      const c = (t.tag || UNTAGGED).trim() || UNTAGGED;
+      (groups[c] = groups[c] || []).push(t);
+    });
 
-  /* ---------- tag filter chips ---------- */
-  function buildFilters() {
-    if (!filterBarEl) return;
-    const tags = Array.from(new Set(topics.map(t => (t.tag || "").toUpperCase()).filter(Boolean)));
+    catOrder.filter(c => groups[c]).forEach(cat => {
+      const group = document.createElement("section");
+      group.className = "cat-group " + hueOf[cat];
+      group.id = "cat-" + slug(cat);
 
-    filterBarEl.innerHTML = "";
-    const allBtn = document.createElement("button");
-    allBtn.className = "filter-btn active";
-    allBtn.textContent = "ALL";
-    allBtn.addEventListener("click", () => setActiveTag("ALL", allBtn));
-    filterBarEl.appendChild(allBtn);
+      const head = document.createElement("div");
+      head.className = "cat-group-head";
+      head.innerHTML =
+        `<span class="cat-group-bar"></span>` +
+        `<h2 class="cat-group-title">${escapeHtml(cat)}</h2>` +
+        `<span class="cat-group-count">${groups[cat].length}</span>`;
+      group.appendChild(head);
 
-    tags.forEach(tag => {
-      const btn = document.createElement("button");
-      btn.className = "filter-btn";
-      btn.textContent = tag;
-      btn.addEventListener("click", () => setActiveTag(tag, btn));
-      filterBarEl.appendChild(btn);
+      const wrap = document.createElement("div");
+      wrap.className = "entry-list";
+      groups[cat].forEach(t => wrap.appendChild(buildEntry(t)));
+      group.appendChild(wrap);
+
+      listEl.appendChild(group);
     });
   }
 
-  function setActiveTag(tag, btnEl) {
-    activeTag = tag;
-    filterBarEl.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-    btnEl.classList.add("active");
-    render();
+  /* ---------- sidebar ---------- */
+  function countFor(cat) {
+    const q = query.trim().toLowerCase();
+    return topics.filter((t, i) => {
+      const c = (t.tag || UNTAGGED).trim() || UNTAGGED;
+      const okCat = cat === "ALL" || c === cat;
+      const okQ = !q || (searchIndex[i] || "").includes(q);
+      return okCat && okQ;
+    }).length;
   }
 
-  /* ---------- search input ---------- */
+  function buildNav() {
+    if (!navEl) return;
+    navEl.innerHTML = "";
+
+    const mk = (cat, label, hue) => {
+      const b = document.createElement("button");
+      b.className = "catalog-nav-item" + (hue ? " " + hue : "") + (activeCat === cat ? " active" : "");
+      b.dataset.cat = cat;
+      b.innerHTML =
+        `<span class="dot"></span>` +
+        `<span class="label">${escapeHtml(label)}</span>` +
+        `<span class="count">${countFor(cat)}</span>`;
+      b.addEventListener("click", () => {
+        activeCat = cat;
+        navEl.querySelectorAll(".catalog-nav-item").forEach(x => x.classList.remove("active"));
+        b.classList.add("active");
+        renderList();
+        listEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return b;
+    };
+
+    navEl.appendChild(mk("ALL", "All topics", ""));
+    catOrder.forEach(cat => navEl.appendChild(mk(cat, cat, hueOf[cat])));
+  }
+
+  function refreshNavCounts() {
+    if (!navEl) return;
+    navEl.querySelectorAll(".catalog-nav-item").forEach(item => {
+      const c = item.dataset.cat;
+      const el = item.querySelector(".count");
+      if (el) el.textContent = countFor(c);
+    });
+  }
+
+  function slug(s) {
+    return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+
   if (searchEl) {
-    searchEl.addEventListener("input", (e) => {
+    searchEl.addEventListener("input", e => {
       query = e.target.value;
-      render();
+      refreshNavCounts();
+      renderList();
     });
   }
 
-  buildFilters();
-  render();
-  indexFullContent();
+  buildNav();
+  renderList();
 })();
