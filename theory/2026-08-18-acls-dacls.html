@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACLs and DACLs in Active Directory — Satej Chaudhari</title>
+  <meta name="description" content="How access to AD objects is controlled by security descriptors, and how dangerous rights like GenericAll, WriteDACL, and GenericWrite become privilege-escalation paths.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">ACLs and DACLs in Active Directory</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          Underneath every object in Active Directory is a permission list that decides who
+          can do what to it. These <strong>Access Control Lists</strong> are the quiet engine
+          of most modern AD attack paths — not because ACLs are a flaw, but because in a large
+          domain there are millions of them, they are edited by many hands over many years,
+          and a single misconfigured entry can create a chain that ends at Domain Admin.
+          BloodHound exists largely to find these chains.
+        </p>
+
+        <h2>Security descriptors, DACLs, and ACEs</h2>
+
+        <p>
+          Every object carries a <strong>security descriptor</strong> (stored in the
+          <code>ntSecurityDescriptor</code> <a href="2026-08-18-ldap.html">attribute</a>). It
+          has two parts that matter here:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Part</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>DACL (Discretionary ACL)</td><td>The list of who is allowed or denied which permissions — the part attackers care about</td></tr>
+            <tr><td>SACL (System ACL)</td><td>The list of what gets audited/logged — the defender's part</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          A DACL is made of <strong>ACEs (Access Control Entries)</strong>. Each ACE ties a
+          <em>principal</em> (a SID) to a <em>right</em> (read, write, reset password, full
+          control) over the object. When Windows decides whether you can act on an object, it
+          walks the DACL looking for ACEs that apply to you or your groups.
+        </p>
+
+        <h2>The rights that create attack paths</h2>
+
+        <p>
+          Not all rights are equal. A handful are "dangerous" because they can be turned into
+          control of the principal they apply to:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Right</th><th>What it lets you do</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>GenericAll</td><td>Full control — do anything below, including reset the password outright</td></tr>
+            <tr><td>GenericWrite</td><td>Write most attributes — add an SPN (targeted Kerberoast), set logon script, write msDS-KeyCredentialLink</td></tr>
+            <tr><td>WriteDACL</td><td>Rewrite the object's DACL — grant yourself GenericAll, then do anything</td></tr>
+            <tr><td>WriteOwner</td><td>Make yourself the owner — the owner can always rewrite the DACL</td></tr>
+            <tr><td>ForceChangePassword</td><td>Reset the account's password without knowing the current one</td></tr>
+            <tr><td>AddMember</td><td>Add members to a group — add yourself to a privileged group</td></tr>
+            <tr><td>AllExtendedRights</td><td>Includes password reset and, on the domain object, the DCSync rights</td></tr>
+          </tbody>
+        </table>
+
+        <h2>How a right becomes compromise</h2>
+
+        <p>
+          The pattern is always "I have right X over object Y, therefore I can control Y."
+          A few concrete conversions:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>You have…</th><th>You can…</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>ForceChangePassword over a user</td><td>Reset their password and log in as them</td></tr>
+            <tr><td>GenericWrite over a user</td><td>Add an SPN and <a href="2026-08-18-kerberoasting.html">Kerberoast</a> them, or write a <a href="2026-08-18-adcs.html">Shadow Credential</a></td></tr>
+            <tr><td>GenericAll over a group</td><td>Add yourself to it — instant privilege if the group is privileged</td></tr>
+            <tr><td>GenericAll / GenericWrite over a computer</td><td>Configure <a href="2026-08-18-delegation.html">RBCD</a> to impersonate anyone to it</td></tr>
+            <tr><td>WriteDACL over any object</td><td>Grant yourself GenericAll, then use any of the above</td></tr>
+            <tr><td>WriteOwner over any object</td><td>Take ownership, rewrite the DACL, then as above</td></tr>
+            <tr><td>DS-Replication rights over the domain</td><td><a href="2026-08-18-dcsync.html">DCSync</a> — pull every hash in the domain</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          The important insight is <strong>chaining</strong>. You rarely have a right directly
+          over Domain Admins. Instead you have GenericWrite over a service account, which lets
+          you Kerberoast it, which cracks to a password, which happens to have WriteDACL over a
+          group, which contains a user who can reset a helpdesk account, which… BloodHound
+          draws exactly these multi-hop chains, and any single weak ACE can be the first link.
+        </blockquote>
+
+        <h2>Why these misconfigurations exist</h2>
+
+        <ul>
+          <li><strong>Delegation of administration.</strong> "Let the helpdesk reset passwords in this OU" is a legitimate need met by granting ForceChangePassword — and it is easy to grant too broadly.</li>
+          <li><strong>Application installers.</strong> Software setup routines grant themselves rights over objects and never clean up.</li>
+          <li><strong>Copy-paste permissions.</strong> An admin grants a working set of rights by cloning an existing object's ACL, propagating whatever was wrong with the original.</li>
+          <li><strong>Nested groups.</strong> A right granted to a broad group silently applies to everyone nested inside it.</li>
+          <li><strong>Age.</strong> ACLs accumulate for decades and are almost never audited or removed.</li>
+        </ul>
+
+        <h2>AdminSDHolder and adminCount</h2>
+
+        <p>
+          A related mechanism worth knowing. AD protects privileged accounts by periodically
+          stamping their ACLs from a template object called <strong>AdminSDHolder</strong>, and
+          marking them with <code>adminCount=1</code>. If an attacker can modify AdminSDHolder
+          itself, the malicious ACE gets propagated to every protected account automatically —
+          a persistence technique. Conversely, <code>adminCount=1</code> on an account is a
+          quick flag that it is (or was) privileged and worth attention.
+        </p>
+
+        <h2>Finding and abusing ACLs</h2>
+
+        <pre><code># BloodHound is the primary tool — it computes the paths
+# Collect, then run "Shortest Path to Domain Admins" and the
+# outbound-control queries from any owned principal.
+
+# PowerView, for targeted checks
+Get-ObjectAcl -Identity "Domain Admins" -ResolveGUIDs |
+  ? { $_.ActiveDirectoryRights -match "GenericAll|WriteDacl|WriteOwner" }
+
+# bloodyAD / Impacket to actually abuse a found right
+bloodyAD -u jdoe -p pass -d corp.local add groupMember "Helpdesk Admins" jdoe
+bloodyAD -u jdoe -p pass -d corp.local set password targetuser 'NewPass123!'</code></pre>
+
+        <h2>Detection and defence</h2>
+
+        <table>
+          <thead>
+            <tr><th>Control</th><th>Effect</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Regular ACL audits with BloodHound</td><td>Run the same analysis attackers do, and remediate the paths — the single most effective measure</td></tr>
+            <tr><td>Least privilege on delegation</td><td>Grant the narrowest right over the smallest scope; avoid GenericAll where a specific right suffices</td></tr>
+            <tr><td>Monitor DACL modifications (event 5136)</td><td>Changes to sensitive objects' ACLs are high-signal</td></tr>
+            <tr><td>Watch AdminSDHolder</td><td>Any change to it, or unexpected adminCount=1 accounts, warrants investigation</td></tr>
+            <tr><td>Tiered administration</td><td>Prevents a low-tier ACL win from reaching high-tier accounts</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          ACLs are where AD's flexibility becomes its risk. Every object's DACL is a set of
+          "who can do what to me" rules, and a small set of rights — GenericAll, GenericWrite,
+          WriteDACL, WriteOwner, ForceChangePassword — convert directly into control of the
+          object they sit on. Attacks chain these single rights into long paths that end at
+          Domain Admin, which is precisely what BloodHound is built to reveal. The defence is
+          to run that same analysis yourself and prune the dangerous edges. The abuse tooling
+          (BloodHound, PowerView, bloodyAD, Impacket) is in the
+          <a href="../toolkit.html">Toolkit</a>, and the specific payoffs are covered on the
+          <a href="2026-08-18-kerberoasting.html">Kerberoasting</a>,
+          <a href="2026-08-18-delegation.html">Delegation</a>, and
+          <a href="2026-08-18-dcsync.html">DCSync</a> pages.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

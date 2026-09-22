@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NTLM Authentication — Satej Chaudhari</title>
+  <meta name="description" content="The NTLM challenge-response protocol, NetNTLM vs the NT hash, pass-the-hash, and why NTLM relay and cracking remain central to AD attacks.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">NTLM Authentication</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          NTLM is the authentication protocol Kerberos was meant to replace, and it is
+          still everywhere. Windows falls back to it whenever Kerberos cannot be used — when
+          a host is reached by IP instead of hostname, when there is no SPN, in workgroup
+          settings, and in countless legacy corners. Because it never fully went away, the
+          attacks built on it — pass-the-hash, cracking, and relay — remain some of the
+          most reliable techniques against Active Directory.
+        </p>
+
+        <h2>Two different things called "NTLM"</h2>
+
+        <p>
+          The single biggest source of confusion in this area is that "NTLM hash" can mean
+          two completely different values. Getting this distinction right is essential,
+          because it determines which attack is even possible.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Value</th><th>What it is</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>NT hash</td><td>The MD4 hash of the user's password. Stored in the SAM (local) or NTDS.dit (domain). It is a <em>password equivalent</em> — this is what pass-the-hash uses</td></tr>
+            <tr><td>NetNTLM (v1/v2)</td><td>A <em>challenge-response</em> value produced during an authentication exchange, derived from the NT hash plus a server challenge. This is what Responder captures — you crack it or relay it, you cannot replay it</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          The rule that follows from this: an <strong>NT hash</strong> can be passed
+          directly (pass-the-hash). A <strong>NetNTLM</strong> hash cannot — it is
+          challenge-response, tied to one exchange, so your only options are to crack it
+          offline or relay it live to another service. Mixing these up is the classic
+          beginner error.
+        </blockquote>
+
+        <h2>The NTLM challenge-response flow</h2>
+
+        <p>
+          When a client authenticates to a server over NTLM, three messages pass between
+          them:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Message</th><th>Contents</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>NEGOTIATE (Type 1)</td><td>Client to server — announces NTLM support and capabilities</td></tr>
+            <tr><td>CHALLENGE (Type 2)</td><td>Server to client — a random nonce (the challenge) the client must respond to</td></tr>
+            <tr><td>AUTHENTICATE (Type 3)</td><td>Client to server — the response, computed from the NT hash and the challenge, plus the username and domain</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          The server then verifies the response. In a domain, it forwards it to a domain
+          controller (via the Netlogon secure channel) which holds the user's NT hash and
+          can confirm the maths. The password itself is never transmitted, and neither is
+          the NT hash directly — only a value derived from it and the challenge.
+        </p>
+
+        <h2>Pass-the-Hash</h2>
+
+        <p>
+          Here is the design flaw that makes NTLM so productive. The protocol proves the
+          client knows the <em>NT hash</em>, not the password. But the NT hash is not
+          salted and does not change unless the password changes — so if you steal the NT
+          hash, you can authenticate as that user without ever knowing or cracking their
+          password. You simply feed the hash to the same maths the legitimate client would.
+        </p>
+
+        <pre><code># the NT hash IS the credential
+netexec smb 10.10.10.0/24 -u Administrator -H &lt;nthash&gt;
+psexec.py -hashes :&lt;nthash&gt; Administrator@10.10.10.10
+evil-winrm -i 10.10.10.10 -u Administrator -H &lt;nthash&gt;</code></pre>
+
+        <p>
+          NT hashes are harvested from LSASS memory (Mimikatz), the local SAM, or the domain
+          NTDS.dit. Once you have one for a privileged account, pass-the-hash gives you that
+          account's access everywhere NTLM is accepted — no cracking required.
+        </p>
+
+        <h2>Cracking NetNTLM</h2>
+
+        <p>
+          When you capture a NetNTLM hash — typically from
+          <a href="2026-08-18-coercion-ntlm-relay.html">Responder poisoning</a> — you cannot
+          pass it. You crack it offline:
+        </p>
+
+        <pre><code>hashcat -m 5600 netntlmv2.txt rockyou.txt   # NetNTLMv2
+hashcat -m 5500 netntlmv1.txt rockyou.txt   # NetNTLMv1</code></pre>
+
+        <table>
+          <thead>
+            <tr><th>Version</th><th>Security</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>NetNTLMv1</td><td>Weak. Can be downgraded/converted toward the NT hash via known DES weaknesses — treat any v1 as near-broken</td></tr>
+            <tr><td>NetNTLMv2</td><td>Stronger, includes client and server challenges and a timestamp. Only as strong as the password behind it — a weak password still cracks quickly</td></tr>
+          </tbody>
+        </table>
+
+        <h2>NTLM Relay</h2>
+
+        <p>
+          If you cannot crack a captured NetNTLM hash, you can often use it anyway — while
+          it is still valid — by <strong>relaying</strong> it. Instead of trying to verify
+          the authentication yourself, you forward it, in real time, to a different service
+          that will accept it. Because the relayed authentication carries the victim's
+          identity, you act as the victim on the target.
+        </p>
+
+        <p>
+          This is significant enough to have its own page:
+          <a href="2026-08-18-coercion-ntlm-relay.html">Coercion &amp; NTLM Relay</a>. The
+          short version is that relay works wherever a protection is missing — SMB signing
+          off, LDAP channel binding off, or EPA not enforced on AD CS web enrolment — and
+          the defences against it are exactly those three controls.
+        </p>
+
+        <h2>Why NTLM refuses to die</h2>
+
+        <table>
+          <thead>
+            <tr><th>Reason</th><th>Consequence</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Kerberos needs an SPN and a hostname</td><td>Any access by raw IP falls back to NTLM automatically</td></tr>
+            <tr><td>Legacy applications hardcode it</td><td>Old software and appliances never learned Kerberos</td></tr>
+            <tr><td>The NT hash is unsalted and static</td><td>Pass-the-hash works indefinitely until the password changes</td></tr>
+            <tr><td>Backwards compatibility is sacred</td><td>Disabling NTLM outright breaks things, so most orgs never do</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Defences worth knowing</h2>
+
+        <ul>
+          <li><strong>SMB signing</strong> — cryptographically signs SMB sessions, breaking SMB relay. The single most effective control against relaying.</li>
+          <li><strong>LDAP channel binding and signing</strong> — the equivalent protection for LDAP, closing the RBCD and Shadow Credential relay paths.</li>
+          <li><strong>Disable NTLMv1</strong> — removes the weakest challenge-response variant entirely.</li>
+          <li><strong>Credential Guard</strong> — isolates NT hashes from LSASS so they cannot be dumped, undercutting pass-the-hash at the source.</li>
+          <li><strong>Restrict NTLM</strong> — Group Policy can audit and then block NTLM in stages, the long road to removing it.</li>
+        </ul>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          NTLM gives an attacker two distinct primitives from one protocol. The static,
+          unsalted <strong>NT hash</strong> is a password equivalent you can pass directly,
+          which is why credential dumping is so valuable. The <strong>NetNTLM</strong>
+          challenge-response you capture on the wire is crack-or-relay material, which is why
+          Responder and ntlmrelayx are internal-network staples. Keep the two straight and
+          the entire family of NTLM attacks organises itself cleanly — see
+          <a href="2026-08-18-coercion-ntlm-relay.html">Coercion &amp; NTLM Relay</a> for
+          the relay chain and the <a href="../toolkit.html">Toolkit</a> for the tools.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

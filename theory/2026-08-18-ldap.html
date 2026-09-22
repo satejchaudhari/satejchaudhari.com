@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LDAP and the AD Database — Satej Chaudhari</title>
+  <meta name="description" content="How Active Directory stores everything as LDAP objects and attributes — the schema, distinguished names, search filters, and the attributes that matter to an attacker.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">LDAP and the AD Database</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          Everything in Active Directory — every user, computer, group, policy, and trust —
+          is an entry in a database, and that database is exposed over
+          <strong>LDAP</strong> (Lightweight Directory Access Protocol). When you enumerate
+          a domain, you are running LDAP queries. When an attack reads whether an account is
+          Kerberoastable, or writes a Shadow Credential, it is reading or writing an LDAP
+          attribute. Understanding LDAP is understanding how AD stores and exposes the very
+          things attacks target.
+        </p>
+
+        <h2>The directory as a tree</h2>
+
+        <p>
+          LDAP data is a hierarchy. At the top is the domain, and beneath it are containers
+          and organizational units holding objects. Every object sits at a path, and that
+          path is its <strong>Distinguished Name (DN)</strong>, read from the object up to
+          the root:
+        </p>
+
+        <pre><code>CN=John Doe,OU=Staff,OU=London,DC=corp,DC=target,DC=local</code></pre>
+
+        <table>
+          <thead>
+            <tr><th>Component</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>CN (Common Name)</td><td>The object's own name</td></tr>
+            <tr><td>OU (Organizational Unit)</td><td>A container used for structure, policy, and delegation</td></tr>
+            <tr><td>DC (Domain Component)</td><td>A piece of the domain name; the DCs together name the domain root</td></tr>
+            <tr><td>RDN (Relative DN)</td><td>The leftmost component — the object's name relative to its parent</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Objects, classes, and the schema</h2>
+
+        <p>
+          Every object is an instance of an <strong>object class</strong> (user, computer,
+          group, organizationalUnit…) defined in the <strong>schema</strong>. The schema is
+          the master template that says which attributes an object of each class may have.
+          It is forest-wide and rarely changes, which is why Schema Admins membership is a
+          red flag — modifying the schema affects every domain in the forest.
+        </p>
+
+        <p>
+          An object is really just a bag of <strong>attributes</strong>, and the attributes
+          are where the security-relevant information lives. Reading them is enumeration;
+          writing them is, in many cases, the attack.
+        </p>
+
+        <h2>The attributes that matter</h2>
+
+        <table>
+          <thead>
+            <tr><th>Attribute</th><th>Why an attacker cares</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>sAMAccountName</td><td>The logon name — the account identifier you spray, roast, and authenticate as</td></tr>
+            <tr><td>userAccountControl (UAC)</td><td>A bitfield of account flags — pre-auth disabled, delegation trust, disabled, password-not-required, and more</td></tr>
+            <tr><td>servicePrincipalName (SPN)</td><td>Present means the account is <a href="2026-08-18-kerberoasting.html">Kerberoastable</a></td></tr>
+            <tr><td>memberOf / member</td><td>Group membership — the basis of privilege and of nested-group analysis</td></tr>
+            <tr><td>adminCount</td><td>Set to 1 on accounts that are or were privileged (protected by AdminSDHolder)</td></tr>
+            <tr><td>msDS-AllowedToDelegateTo</td><td>Constrained delegation targets — see <a href="2026-08-18-delegation.html">Delegation</a></td></tr>
+            <tr><td>msDS-AllowedToActOnBehalfOfOtherIdentity</td><td>Resource-based constrained delegation (RBCD) config</td></tr>
+            <tr><td>msDS-KeyCredentialLink</td><td>Where a <a href="2026-08-18-adcs.html">Shadow Credential</a> is written</td></tr>
+            <tr><td>ms-MCS-AdmPwd</td><td>The LAPS local-admin password, in cleartext to anyone with the read right</td></tr>
+            <tr><td>description / info</td><td>Free-text fields that regularly contain passwords</td></tr>
+            <tr><td>ntSecurityDescriptor</td><td>The object's ACL — who can do what to it (see <a href="2026-08-18-acls-dacls.html">ACLs &amp; DACLs</a>)</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Search filters</h2>
+
+        <p>
+          LDAP queries use a parenthesised, prefix-notation filter language. It looks odd at
+          first but is simple once you see the pattern: the operator comes before its
+          operands.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Filter</th><th>Matches</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>(objectClass=user)</code></td><td>All user objects</td></tr>
+            <tr><td><code>(&amp;(objectClass=user)(servicePrincipalName=*))</code></td><td>Users that have an SPN — Kerberoastable accounts</td></tr>
+            <tr><td><code>(userAccountControl:1.2.840.113556.1.4.803:=4194304)</code></td><td>Accounts with pre-auth disabled (AS-REP roastable)</td></tr>
+            <tr><td><code>(userAccountControl:1.2.840.113556.1.4.803:=524288)</code></td><td>Accounts trusted for delegation</td></tr>
+            <tr><td><code>(adminCount=1)</code></td><td>Protected / privileged accounts</td></tr>
+            <tr><td><code>(&amp;(objectClass=user)(description=*pass*))</code></td><td>Passwords hiding in description fields</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          The strange <code>1.2.840.113556.1.4.803</code> is the OID for a bitwise-AND
+          matching rule — it means "this specific bit in userAccountControl is set". Those
+          UAC bit filters express most of the interesting security questions ("is pre-auth
+          off?", "is this account trusted for delegation?"), which is why they appear
+          throughout the tooling.
+        </p>
+
+        <h2>Why any user can read so much</h2>
+
+        <p>
+          By default, the <strong>Authenticated Users</strong> group has read access to the
+          overwhelming majority of the directory. This is deliberate — applications, logon
+          scripts, address books, and Windows itself rely on being able to look things up.
+          The consequence is that a single low-privilege credential is enough to enumerate
+          users, groups, computers, SPNs, delegation settings, and ACLs across the domain.
+        </p>
+
+        <blockquote>
+          This is why the OSINT-to-foothold transition is so sharp on an internal
+          engagement: the moment you hold one valid domain credential, LDAP hands you a
+          near-complete map of the domain. Enumeration is not an exploit; it is the
+          designed read access, which is exactly why tools like
+          <a href="../toolkit.html">ldapdomaindump, windapsearch, and BloodHound</a> are so
+          productive.
+        </blockquote>
+
+        <h2>LDAP transport and its security relevance</h2>
+
+        <table>
+          <thead>
+            <tr><th>Form</th><th>Port / note</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>LDAP</td><td>389 — plaintext; queries and simple-bind credentials are exposed on the wire</td></tr>
+            <tr><td>LDAPS</td><td>636 — LDAP over TLS</td></tr>
+            <tr><td>Global Catalog</td><td>3268 / 3269 — the forest-wide partial index, for cross-domain searches</td></tr>
+            <tr><td>Channel binding / signing</td><td>When enforced, blocks LDAP relay; when off, enables RBCD and Shadow Credential relays</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          The write side is where LDAP stops being enumeration and becomes attack. Adding an
+          SPN to an account, writing msDS-KeyCredentialLink, or setting the RBCD attribute
+          are all LDAP writes — and whether you can perform them is decided by the object's
+          ACL, which is itself just another attribute. That is the bridge to
+          <a href="2026-08-18-acls-dacls.html">ACLs &amp; DACLs</a>.
+        </p>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          LDAP is the lens through which the entire directory is read and written. Objects
+          are bags of attributes; attributes hold the security-relevant facts; filters let
+          you ask precise questions; and default read access means one credential exposes
+          almost everything. Every enumeration tool is an LDAP query wrapped for
+          convenience, and several of the highest-impact attacks are single LDAP writes to
+          the right attribute. Learn the attributes in the table above and most of the AD
+          attack surface becomes legible on sight.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

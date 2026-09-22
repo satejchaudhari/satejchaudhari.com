@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AS-REP Roasting — Satej Chaudhari</title>
+  <meta name="description" content="Abusing Kerberos pre-authentication being disabled to obtain crackable AS-REP material for an account without any credentials.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">AS-REP Roasting</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 7 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          AS-REP roasting is the sibling of <a href="2026-08-18-kerberoasting.html">Kerberoasting</a>,
+          and in one important way it is even better: it can require <em>no credentials at
+          all</em>. It exploits accounts that have Kerberos pre-authentication disabled,
+          turning the very first step of the <a href="2026-08-18-kerberos.html">Kerberos</a>
+          exchange into a source of crackable password material.
+        </p>
+
+        <h2>The pre-authentication mechanism</h2>
+
+        <p>
+          Normally, when a client sends an AS-REQ to request a TGT, it includes a
+          <strong>timestamp encrypted with the user's own key</strong> (derived from their
+          password). This is <em>pre-authentication</em>: it proves the requester knows the
+          password before the KDC will issue anything. If the encrypted timestamp does not
+          decrypt cleanly, the KDC refuses.
+        </p>
+
+        <p>
+          Pre-auth exists precisely to prevent what comes next. Without it, anyone can
+          request an AS-REP for an account, and the KDC will happily return a response that
+          contains material encrypted with that account's key — handing an attacker
+          crackable ciphertext for an account whose password they do not know.
+        </p>
+
+        <h2>The vulnerable flag</h2>
+
+        <p>
+          An account is roastable when the <code>DONT_REQ_PREAUTH</code> flag is set in its
+          <code>userAccountControl</code> attribute (bit value 4194304). When set, the KDC
+          skips the pre-auth check for that account.
+        </p>
+
+        <pre><code># LDAP filter for pre-auth-disabled accounts
+(userAccountControl:1.2.840.113556.1.4.803:=4194304)</code></pre>
+
+        <p>
+          Why would anyone disable pre-auth? Almost always for a legacy application or
+          appliance that could not perform the pre-auth exchange, so an administrator turned
+          it off "temporarily" and never turned it back on. Each such account is a standing
+          invitation.
+        </p>
+
+        <h2>How the attack works</h2>
+
+        <table>
+          <thead>
+            <tr><th>Step</th><th>What happens</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1. Find the accounts</td><td>Query LDAP for the <code>DONT_REQ_PREAUTH</code> flag — or, with no creds, guess usernames</td></tr>
+            <tr><td>2. Request an AS-REP</td><td>Send an AS-REQ for the account; because pre-auth is off, the KDC returns an AS-REP</td></tr>
+            <tr><td>3. Extract the ciphertext</td><td>Part of the AS-REP is encrypted with the account's password-derived key</td></tr>
+            <tr><td>4. Crack offline</td><td>Guess passwords, derive keys, test against the ciphertext — all offline</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The credential-less angle</h2>
+
+        <p>
+          With a valid domain credential you query LDAP directly for the roastable accounts.
+          But the AS-REQ in step 2 does not itself require authentication — so if you have a
+          <em>list of usernames</em> (from OSINT, document metadata, or a naming convention),
+          you can attempt an AS-REP request for each one and roast any that happen to have
+          pre-auth disabled, without ever authenticating to the domain.
+        </p>
+
+        <pre><code># With credentials — enumerate then roast
+GetNPUsers.py corp.local/jdoe:Passw0rd -dc-ip 10.10.10.10 -request \
+  -outputfile asrep.hash
+
+# WITHOUT credentials — just a username list
+GetNPUsers.py corp.local/ -dc-ip 10.10.10.10 -usersfile users.txt \
+  -no-pass -outputfile asrep.hash
+
+# Rubeus from a domain host
+Rubeus.exe asreproast /outfile:asrep.hash
+
+# Crack it
+hashcat -m 18200 asrep.hash /usr/share/wordlists/rockyou.txt</code></pre>
+
+        <p>
+          Hashcat mode <strong>18200</strong> is the AS-REP (Kerberos 5 AS-REP etype 23)
+          mode. As with Kerberoasting, RC4 material cracks fast.
+        </p>
+
+        <blockquote>
+          This is why AS-REP roasting pairs so naturally with
+          <a href="../toolkit.html">Kerbrute</a> username enumeration: Kerbrute quietly
+          confirms which usernames exist, and every confirmed name is a candidate for a
+          no-password AS-REP attempt. The two together can produce a crackable hash from
+          nothing but a domain name and a naming convention.
+        </blockquote>
+
+        <h2>Targeted AS-REP roasting</h2>
+
+        <p>
+          As with Kerberoasting, write access changes the game. If you have
+          <code>GenericWrite</code> or <code>GenericAll</code> over an account (an
+          <a href="2026-08-18-acls-dacls.html">ACL</a> finding), you can flip the
+          <code>DONT_REQ_PREAUTH</code> flag on yourself, roast the account, and flip it
+          back — manufacturing a roastable target on demand.
+        </p>
+
+        <h2>Detection and defence</h2>
+
+        <table>
+          <thead>
+            <tr><th>Control</th><th>Effect</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Never disable pre-authentication</td><td>The root fix — audit for <code>DONT_REQ_PREAUTH</code> and clear it wherever it appears</td></tr>
+            <tr><td>Strong passwords on any exception</td><td>If an account genuinely must have pre-auth off, a long random password makes the AS-REP uncrackable</td></tr>
+            <tr><td>Monitor event 4768 with pre-auth type 0</td><td>An AS-REQ without pre-auth data for such an account is the signal</td></tr>
+            <tr><td>Honeypot account</td><td>A decoy with pre-auth disabled and a strong password — any AS-REP request for it is malicious</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          AS-REP roasting is a small, sharp technique: one legacy flag on one account, and
+          the first step of Kerberos becomes an offline password-cracking oracle — sometimes
+          without a single credential. It is quick to check for, quick to exploit, and its
+          fix is a one-attribute cleanup. On an engagement it is worth running the moment you
+          can query LDAP, and worth attempting against a username list even before you can.
+          See <a href="2026-08-18-kerberoasting.html">Kerberoasting</a> for the closely
+          related SPN-based attack and the <a href="2026-08-18-kerberos.html">Kerberos</a>
+          page for the exchange it abuses.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DCSync — Satej Chaudhari</title>
+  <meta name="description" content="How the directory replication protocol is abused to extract any account's password hashes — including krbtgt — from a domain controller without touching the DC's disk.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">DCSync</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 8 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          DCSync is the technique that turns "I have the right privileges" into "I have every
+          password hash in the domain." It does not exploit a bug — it uses the legitimate
+          protocol that domain controllers use to replicate the directory between themselves.
+          If you can convince a DC that you are another DC asking to replicate, it will hand you
+          any account's secrets, including the one that matters most: <code>krbtgt</code>.
+        </p>
+
+        <h2>The replication protocol it abuses</h2>
+
+        <p>
+          Domain controllers keep their copies of the directory in sync using the
+          <strong>Directory Replication Service Remote Protocol (MS-DRSR)</strong>, specifically
+          the <code>DRSGetNCChanges</code> call. When one DC needs updates from another, it asks
+          for the changed objects — and account objects include their secret attributes (password
+          hashes, Kerberos keys). This is normal, necessary behaviour: DCs must replicate password
+          data so any of them can authenticate any user.
+        </p>
+
+        <p>
+          DCSync simply makes that request from a machine that is <em>not</em> a domain
+          controller. The target DC does not verify that the requester is really a DC — it checks
+          only that the requester has the necessary <em>replication rights</em>. If you hold those
+          rights, the DC replies with the secrets, exactly as it would to a peer.
+        </p>
+
+        <h2>The rights that permit it</h2>
+
+        <p>
+          DCSync requires specific extended rights on the <em>domain object</em>:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Right</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>DS-Replication-Get-Changes</td><td>Replicate standard directory data</td></tr>
+            <tr><td>DS-Replication-Get-Changes-All</td><td>Replicate <em>secret</em> attributes — the one that yields hashes</td></tr>
+            <tr><td>DS-Replication-Get-Changes-In-Filtered-Set</td><td>Sometimes needed depending on configuration</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          By default these belong to Domain Admins, Enterprise Admins, and domain controllers.
+          But they are just <a href="2026-08-18-acls-dacls.html">ACEs on the domain object</a>,
+          so anyone who can write that DACL — or who has been granted these rights directly — can
+          DCSync without being a full admin. That is a common BloodHound finding: a non-admin
+          principal that happens to hold replication rights is a straight line to the whole domain.
+        </p>
+
+        <blockquote>
+          This is why granting DCSync rights is so sensitive. It looks like a narrow, technical
+          permission, but it is functionally equivalent to Domain Admin, because it lets you pull
+          the <code>krbtgt</code> hash and forge <a href="2026-08-18-ticket-attacks.html">Golden
+          Tickets</a> at will.
+        </blockquote>
+
+        <h2>What you extract</h2>
+
+        <table>
+          <thead>
+            <tr><th>Target</th><th>Why it matters</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>krbtgt hash</td><td>The key that signs every TGT — enables Golden Tickets and permanent domain persistence</td></tr>
+            <tr><td>Domain Admin hashes</td><td>Direct pass-the-hash / overpass-the-hash to full control</td></tr>
+            <tr><td>All user hashes</td><td>The complete credential set for offline cracking and lateral movement</td></tr>
+            <tr><td>Machine account hashes</td><td>Enable Silver Tickets and further attacks</td></tr>
+            <tr><td>Trust keys</td><td>The inter-domain keys used to cross <a href="2026-08-18-trusts.html">trusts</a></td></tr>
+          </tbody>
+        </table>
+
+        <h2>The commands</h2>
+
+        <pre><code># Impacket — dump everything via replication
+secretsdump.py -just-dc corp.local/admin:Passw0rd@dc01
+# just the krbtgt account
+secretsdump.py -just-dc-user krbtgt corp.local/admin:Passw0rd@dc01
+
+# NetExec
+netexec smb dc01 -u admin -p Passw0rd --ntds
+
+# Mimikatz (from a Windows host with the rights)
+lsadump::dcsync /domain:corp.local /user:krbtgt</code></pre>
+
+        <p>
+          Note what these do <em>not</em> do: they never log in to the DC interactively, never
+          run code on it, and never touch <code>NTDS.dit</code> on disk. The whole operation is a
+          legitimate-looking replication request over the network, which is what makes DCSync both
+          powerful and relatively quiet compared to dumping the database file directly.
+        </p>
+
+        <h2>DCShadow — the write-side cousin</h2>
+
+        <p>
+          Worth a mention. Where DCSync <em>reads</em> via replication, <strong>DCShadow</strong>
+          <em>writes</em> via replication: it registers a rogue domain controller long enough to
+          push malicious changes (like adding a SID to a group, or setting an attribute) that then
+          replicate to the real DCs as if legitimate. It is a stealthy persistence and
+          manipulation technique built on the same protocol trust.
+        </p>
+
+        <h2>Detection and defence</h2>
+
+        <table>
+          <thead>
+            <tr><th>Control</th><th>Effect</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Audit replication rights on the domain object</td><td>Only DCs and top-tier admins should hold Get-Changes-All; anything else is a finding</td></tr>
+            <tr><td>Monitor DRSGetNCChanges from non-DCs</td><td>A replication request from an IP that is not a domain controller is the primary signal</td></tr>
+            <tr><td>Rotate krbtgt twice after any DA compromise</td><td>Invalidates Golden Tickets that a DCSync of krbtgt would enable</td></tr>
+            <tr><td>Tier-0 protection</td><td>Keep the accounts that legitimately hold replication rights off lower-tier systems</td></tr>
+            <tr><td>Alert on new/unknown DC objects</td><td>Catches DCShadow's rogue-DC registration</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          DCSync is the payoff step of most domain compromises: once you hold replication rights —
+          whether by becoming Domain Admin, or by finding a non-admin principal that was granted
+          them via an ACL — you ask a domain controller to replicate secrets to you and it
+          complies, because that is its job. The prize is the <code>krbtgt</code> key, which
+          converts a one-time compromise into durable, forgeable control of the domain. Treat
+          replication rights as equivalent to Domain Admin, monitor for replication from
+          non-DCs, and rotate <code>krbtgt</code> properly after any incident. The tools are in
+          the <a href="../toolkit.html">Toolkit</a> (Impacket secretsdump, NetExec, Mimikatz), and
+          what you do with the <code>krbtgt</code> hash afterward is on the
+          <a href="2026-08-18-ticket-attacks.html">Ticket Attacks</a> page.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

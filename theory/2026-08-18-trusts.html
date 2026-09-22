@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Domain and Forest Trusts — Satej Chaudhari</title>
+  <meta name="description" content="How trust relationships link domains and forests, transitivity, SID history and SID filtering, and how trusts are abused to move laterally across boundaries.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">Domain and Forest Trusts</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          Organisations rarely have just one domain. Mergers, acquisitions, geographic
+          separation, and administrative boundaries all lead to multiple domains and forests
+          that need to share access. <strong>Trusts</strong> are the relationships that let a
+          principal in one domain authenticate to resources in another. They are essential
+          plumbing — and they are also the roads an attacker uses to move from a domain they
+          own into one they do not.
+        </p>
+
+        <h2>What a trust actually is</h2>
+
+        <p>
+          A trust is an agreement that lets one domain's authentication authority vouch for its
+          users to another domain. When domain A trusts domain B, users from B can be granted
+          access to resources in A. The trust is backed by a shared inter-domain key, and
+          <a href="2026-08-18-kerberos.html">Kerberos</a> uses it to issue
+          <strong>referral tickets</strong> that carry a user across the boundary.
+        </p>
+
+        <h2>The dimensions of a trust</h2>
+
+        <table>
+          <thead>
+            <tr><th>Property</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Direction</td><td>One-way (A trusts B, so B's users can access A) or two-way (both). Trust flows opposite to access</td></tr>
+            <tr><td>Transitivity</td><td>Transitive trusts extend through the chain — if A trusts B and B trusts C, A effectively trusts C</td></tr>
+            <tr><td>Intra-forest</td><td>Trusts between domains in the same forest — automatic, two-way, and transitive</td></tr>
+            <tr><td>External</td><td>A trust to a domain in another forest — non-transitive by default</td></tr>
+            <tr><td>Forest trust</td><td>A trust between two forest roots; transitive within each forest's domains</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          The direction trips people up: <em>trust flows opposite to access</em>. If domain A
+          "trusts" domain B, it is B's users who gain access to A's resources. When you read a
+          trust relationship, ask "whose users can reach whose resources?" rather than following
+          the arrow literally.
+        </blockquote>
+
+        <h2>The forest is the security boundary</h2>
+
+        <p>
+          This is the single most important fact about trusts, and it is worth repeating from
+          the <a href="2026-08-18-ad-fundamentals.html">fundamentals</a> page. Inside a forest,
+          all domains trust each other automatically, transitively, and two-way, and they share
+          the schema and configuration partitions. That means compromising <em>any</em> domain
+          in a forest generally leads to compromising the whole forest — most directly via the
+          Enterprise Admins group or by abusing the trust key between a child and the forest
+          root.
+        </p>
+
+        <p>
+          A separate <em>forest</em>, with only an external or forest trust, is a genuine
+          boundary — but only if it is configured with the protections below. A separate
+          <em>domain</em> in the same forest is not a boundary at all.
+        </p>
+
+        <h2>SID history and SID filtering</h2>
+
+        <p>
+          The classic cross-boundary attack turns on two features. When a user moves between
+          domains (say during a migration), their old SID can be preserved in the
+          <strong>SID history</strong> attribute so they keep their old access. Windows honours
+          SID history when making access decisions.
+        </p>
+
+        <p>
+          The abuse: if you can write SID history — or forge a ticket that includes it — you can
+          insert the SID of a privileged group from the <em>target</em> domain (e.g. the target's
+          Domain Admins or Enterprise Admins) into a principal you control. When that principal
+          crosses the trust, the target treats it as a member of that privileged group.
+        </p>
+
+        <p>
+          <strong>SID filtering</strong> is the defence: it strips SIDs from outside the trusted
+          domain out of tickets crossing the boundary, so an injected foreign privileged SID is
+          discarded. Intra-forest trusts do <em>not</em> apply SID filtering by default (they are
+          meant to be a single trust zone), which is again why the forest, not the domain, is the
+          real boundary. External and forest trusts should have it enabled — and when they do not,
+          the cross-forest path opens up.
+        </p>
+
+        <h2>Cross-boundary attack paths</h2>
+
+        <table>
+          <thead>
+            <tr><th>Scenario</th><th>Technique</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Child domain → forest root</td><td>Forge an inter-realm ticket with the trust key and inject the root's Enterprise Admins SID (intra-forest, no SID filtering)</td></tr>
+            <tr><td>Extract the trust key</td><td><a href="2026-08-18-dcsync.html">DCSync</a> the trust account (<code>&lt;domain&gt;$</code>) to get the inter-domain key</td></tr>
+            <tr><td>Cross external trust with weak filtering</td><td>Inject a foreign privileged SID via SID history if filtering is disabled</td></tr>
+            <tr><td>Foreign group membership</td><td>Users/groups from a trusted domain that have been granted rights in the target — legitimate but often over-broad</td></tr>
+            <tr><td>Kerberoast across a trust</td><td>Request service tickets for SPNs in a trusted domain and crack them locally</td></tr>
+          </tbody>
+        </table>
+
+        <pre><code># enumerate trusts
+netexec ldap dc01 -u jdoe -p pass -M enum_trusts
+# PowerView
+Get-DomainTrust -Domain corp.local
+# BloodHound maps trusts and cross-domain ACL/group edges visually
+
+# child-to-parent via trust key + SID history (conceptual)
+ticketer.py -nthash &lt;trust_key&gt; -domain-sid &lt;child_sid&gt; \
+  -extra-sid &lt;root_sid&gt;-519 -domain child.corp.local Administrator</code></pre>
+
+        <h2>Detection and defence</h2>
+
+        <table>
+          <thead>
+            <tr><th>Control</th><th>Effect</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Enable SID filtering on external/forest trusts</td><td>Discards injected foreign SIDs — the core cross-forest defence</td></tr>
+            <tr><td>Enable selective authentication</td><td>Requires explicit per-resource grants for cross-trust access rather than blanket authenticated-users access</td></tr>
+            <tr><td>Audit SID history</td><td>Legitimate only during migrations; lingering or unexpected SID history is a finding</td></tr>
+            <tr><td>Minimise and review trusts</td><td>Remove trusts that are no longer needed; each one is an attack surface</td></tr>
+            <tr><td>Treat the forest as one blast radius</td><td>Do not rely on domain separation for isolation; use separate forests for genuinely separate security zones</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          Trusts let identity cross domain and forest boundaries, and attackers ride them in the
+          same direction access flows. Within a forest there is effectively no boundary at all —
+          own one domain and the forest is reachable, because intra-forest trusts are automatic,
+          transitive, and unfiltered. Across forests, the boundary holds only when SID filtering
+          and selective authentication are configured; where they are not, SID history injection
+          and trust-key forgery carry privilege across. Map trusts early with BloodHound or
+          PowerView, understand which are intra-forest versus external, and remember that the
+          forest is the unit of compromise. The key-extraction step relies on
+          <a href="2026-08-18-dcsync.html">DCSync</a>, and the ticket forging on
+          <a href="2026-08-18-ticket-attacks.html">ticket attacks</a>.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

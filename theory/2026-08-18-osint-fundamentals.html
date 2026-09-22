@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSINT Fundamentals — Satej Chaudhari</title>
+  <meta name="description" content="What open source intelligence actually is, the intelligence cycle it follows, the passive/active boundary, source reliability, and the legal and ethical constraints that apply to it.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">RECON</span>
+
+        <h1 class="post-title">OSINT Fundamentals</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 8 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Open Source Intelligence is the practice of producing intelligence from
+          publicly available information. Two words in that sentence do most of the work.
+          <em>Public</em> means legally accessible without circumventing a control — not
+          merely "obtainable". <em>Intelligence</em> means processed and analysed, not
+          collected. A folder of scraped data is not intelligence, however large it is.
+        </p>
+
+        <p>
+          In offensive security, OSINT is the phase that precedes any interaction with a
+          target. It exists because an organisation's externally visible footprint is
+          almost always larger than the organisation believes, and because that gap
+          between what they think they expose and what they actually expose is where
+          engagements succeed.
+        </p>
+
+        <h2>Information is not intelligence</h2>
+
+        <p>
+          The distinction matters more than it sounds:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Term</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Data</td><td>Raw, unprocessed values — a list of resolved IP addresses</td></tr>
+            <tr><td>Information</td><td>Data with context — those IPs, mapped to hostnames and open ports</td></tr>
+            <tr><td>Intelligence</td><td>Information that has been analysed to answer a question — "this staging host is the weakest externally reachable entry point, and here is why"</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          Most OSINT work that disappoints stops at the second row. The tools produce
+          information efficiently; only the analyst produces intelligence.
+        </p>
+
+        <h2>The intelligence cycle</h2>
+
+        <p>
+          Borrowed from formal intelligence practice, and worth following literally
+          because it enforces the two steps that get skipped:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Stage</th><th>What happens</th><th>Failure mode if skipped</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Direction</td><td>Define the question the collection must answer</td><td>Aimless collection; volume mistaken for value</td></tr>
+            <tr><td>Collection</td><td>Gather from selected sources</td><td>—</td></tr>
+            <tr><td>Processing</td><td>Normalise, deduplicate, resolve into a queryable form</td><td>Findings buried in inconsistent raw output</td></tr>
+            <tr><td>Analysis</td><td>Correlate across sources, discard noise, draw conclusions</td><td>A list of facts with no meaning attached</td></tr>
+            <tr><td>Dissemination</td><td>Report in a form the reader can act on</td><td>Correct work that changes nothing</td></tr>
+            <tr><td>Feedback</td><td>New questions from analysis drive the next round</td><td>Single-pass collection that misses the obvious follow-up</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The passive/active boundary</h2>
+
+        <p>
+          This is the single most important operational concept in OSINT, and the one
+          most often blurred by tooling.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Category</th><th>Definition</th><th>Examples</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Passive</td><td>No packet reaches the target's infrastructure; you query third-party datasets</td><td>Certificate transparency logs, Shodan, Censys, web archives, search engines, WHOIS, breach indexes</td></tr>
+            <tr><td>Semi-passive</td><td>Traffic that looks like normal use and reaches the target indirectly</td><td>Recursive DNS resolution, loading the public website in a browser</td></tr>
+            <tr><td>Active</td><td>Direct, non-normal interaction with the target</td><td>Port scanning, DNS brute forcing, directory fuzzing, SMTP address verification</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          The reason to care is that these carry different authorisation requirements and
+          different detection profiles. A single flag moves a tool across the line —
+          <code>amass enum -passive</code> and <code>amass enum -active</code> differ by
+          one word and by whether the client's DNS logs record you. Knowing which mode you
+          are in at every moment is a basic professional competence, not a detail.
+        </p>
+
+        <blockquote>
+          A useful test: if the target switched off every one of their systems right now,
+          would this command still return results? If yes, it is passive.
+        </blockquote>
+
+        <h2>Source categories</h2>
+
+        <table>
+          <thead>
+            <tr><th>Category</th><th>Typical sources</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Infrastructure</td><td>DNS, WHOIS, certificate transparency, BGP/ASN registries, internet-wide scan indexes</td></tr>
+            <tr><td>Content</td><td>Search engines, web archives, public code repositories, document metadata</td></tr>
+            <tr><td>Human</td><td>Professional networks, company sites, conference material, job listings, press</td></tr>
+            <tr><td>Corporate</td><td>Company registries, filings, trademark databases, acquisition announcements</td></tr>
+            <tr><td>Exposure</td><td>Breach indexes, paste sites, leaked credential notifications</td></tr>
+            <tr><td>Geospatial</td><td>Satellite and street imagery, mapping data, geotagged media</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Source reliability</h2>
+
+        <p>
+          Not all public information is equally trustworthy, and treating it as though it
+          were is how a report gets challenged. The NATO admiralty grading system is a
+          reasonable mental model: rate the <em>source</em> and the <em>content</em>
+          separately.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Question</th><th>Why it matters</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Is this primary or derived?</td><td>A certificate transparency log is primary. An aggregator repeating it is derived and may be stale</td></tr>
+            <tr><td>When was it collected?</td><td>All OSINT is a snapshot. A Shodan record may be weeks old; an archived page may be years old</td></tr>
+            <tr><td>Is it self-reported?</td><td>A location on a social profile is a claim, not a fact. So is document metadata, which is trivially forged</td></tr>
+            <tr><td>Is it corroborated?</td><td>One source is a lead. Two independent sources is a finding</td></tr>
+            <tr><td>Could it be deliberate?</td><td>Mature organisations seed canary records and honeypot hosts specifically to detect reconnaissance</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Legal and ethical constraints</h2>
+
+        <p>
+          "Publicly accessible" and "lawful to collect" are different tests, and the second
+          is the one that matters.
+        </p>
+
+        <ul>
+          <li><strong>Authorisation is not optional.</strong> Even passive research against a named organisation should sit inside a signed engagement. Passive activity that later informs an intrusion is part of that intrusion.</li>
+          <li><strong>Personal data has a legal regime.</strong> GDPR, India's DPDP Act, and equivalents require a lawful basis for processing. Public availability is not a lawful basis. Necessity for a legitimate, documented purpose can be.</li>
+          <li><strong>Minimise deliberately.</strong> Collect only what answers a stated requirement. Special categories — health, religion, politics, sexuality, trade union membership — should not be collected at all in a security assessment.</li>
+          <li><strong>Accessing is not the same as finding.</strong> Discovering an exposed database is a finding. Reading its contents is unauthorised access, whatever the file permissions say.</li>
+          <li><strong>Stolen data stays stolen.</strong> Breach corpora containing plaintext credentials are the proceeds of a crime. Counting exposure is legitimate; sourcing the passwords is not.</li>
+          <li><strong>Retention has an end date.</strong> Your working data describes exactly how to attack your client. Encrypt it, and destroy it on the schedule written into the engagement.</li>
+        </ul>
+
+        <blockquote>
+          A practical heuristic: if you would be uncomfortable justifying a specific lookup
+          to the person it concerns, with the sentence "this was necessary to assess my
+          client's risk", then it was not necessary.
+        </blockquote>
+
+        <h2>Why organisations lose this fight</h2>
+
+        <p>
+          OSINT works because of structural asymmetries that are hard for a defender to
+          close:
+        </p>
+
+        <ul>
+          <li><strong>Certificate transparency is mandatory.</strong> Every publicly trusted certificate is published by design. Internal-sounding hostnames leak as a consequence of doing TLS correctly.</li>
+          <li><strong>Archives are permanent.</strong> Removing a page removes it from the live site, not from the record.</li>
+          <li><strong>Asset inventories decay.</strong> Cloud resources are created faster than they are catalogued, and nobody decommissions a staging environment on schedule.</li>
+          <li><strong>Metadata is invisible to its authors.</strong> Nobody sees the author field before publishing a PDF.</li>
+          <li><strong>Employees have a professional incentive to be visible.</strong> A detailed LinkedIn profile is good for a career and good for an attacker.</li>
+          <li><strong>Reconnaissance is largely undetectable.</strong> Reading a third-party dataset generates no log entry anywhere in the target's estate.</li>
+        </ul>
+
+        <h2>What good looks like</h2>
+
+        <p>
+          A competent OSINT phase is characterised less by the tools used than by four
+          properties: a stated question driving every collection step, multiple independent
+          sources behind every material finding, a source and date attached to every claim,
+          and an analysis section that says what the findings <em>mean</em> rather than
+          restating them.
+        </p>
+
+        <p>
+          For the operational version of all of this — the phase-by-phase workflow, the
+          actual commands, and how the outputs chain together — see
+          <a href="../posts/2026-08-18-osint-methodology.html">OSINT From a Single Domain:
+          A Red Team Methodology</a>. Tool-level reference for every tool involved is in
+          the <a href="../toolkit.html">Toolkit</a>.
+        </p>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

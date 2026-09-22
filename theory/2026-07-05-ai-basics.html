@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI, Machine Learning, and Deep Learning Basics — Satej Chaudhari</title>
+  <meta name="description" content="A concise introduction to Artificial Intelligence, Machine Learning, and Deep Learning, including core concepts, learning types, and modern AI systems.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AI</span>
+
+        <h1 class="post-title">AI, Machine Learning, and Deep Learning Basics</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-07-05">2026-07-05</time>
+          <span>&middot; 5 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Artificial Intelligence (AI), Machine Learning (ML), and Deep Learning (DL) are often
+          used interchangeably, but they describe different layers of the same field.
+          Understanding how they relate provides the foundation for modern AI systems,
+          including tools like ChatGPT, Copilot, image generators, recommendation engines,
+          and autonomous systems.
+        </p>
+
+        <h2>Artificial Intelligence (AI)</h2>
+
+        <p>
+          Artificial Intelligence is the broad field of building systems capable of performing
+          tasks that normally require human intelligence. These tasks include reasoning,
+          learning, decision-making, language understanding, perception, and problem solving.
+        </p>
+
+        <p>
+          AI is not a single technology. Instead, it is an umbrella term covering many
+          approaches and disciplines such as:
+        </p>
+
+        <ul>
+          <li>Natural Language Processing (NLP)</li>
+          <li>Computer Vision</li>
+          <li>Robotics</li>
+          <li>Expert Systems</li>
+          <li>Machine Learning</li>
+        </ul>
+
+        <p>
+          Modern AI is primarily focused on augmenting human capabilities by automating
+          repetitive work, analyzing large datasets, and supporting decision-making.
+        </p>
+
+        <h2>Machine Learning (ML)</h2>
+
+        <p>
+          Machine Learning is a subset of AI that allows systems to learn patterns from data
+          instead of relying solely on manually programmed rules.
+        </p>
+
+        <p>
+          Rather than explicitly telling a computer every possible scenario, an ML model is
+          trained using examples and learns relationships within the data. Once trained, the
+          model can make predictions or decisions on previously unseen inputs.
+        </p>
+
+        <p>
+          Example:
+        </p>
+
+        <blockquote>
+          Instead of writing rules to identify whether an image contains a cat or dog,
+          thousands of labeled images are provided to a model, which learns the visual
+          differences automatically.
+        </blockquote>
+
+        <h2>Types of Machine Learning</h2>
+
+        <h3>Supervised Learning</h3>
+
+        <p>
+          The model learns using labeled data where the correct answer is already known.
+        </p>
+
+        <ul>
+          <li>Spam detection</li>
+          <li>Malware classification</li>
+          <li>Fraud detection</li>
+          <li>Image recognition</li>
+        </ul>
+
+        <h3>Unsupervised Learning</h3>
+
+        <p>
+          The model receives unlabeled data and attempts to identify patterns or relationships
+          on its own.
+        </p>
+
+        <ul>
+          <li>Customer segmentation</li>
+          <li>Anomaly detection</li>
+          <li>Behavior analysis</li>
+          <li>Data clustering</li>
+        </ul>
+
+        <h3>Reinforcement Learning</h3>
+
+        <p>
+          The model learns through trial and error. Actions that lead to positive outcomes are
+          rewarded, while poor decisions are penalized.
+        </p>
+
+        <ul>
+          <li>Game-playing agents</li>
+          <li>Robotics</li>
+          <li>Autonomous vehicles</li>
+        </ul>
+
+        <h2>Deep Learning (DL)</h2>
+
+        <p>
+          Deep Learning is a specialized subset of Machine Learning that uses large neural
+          networks containing many layers. These networks automatically learn increasingly
+          complex representations from data.
+        </p>
+
+        <p>
+          Deep Learning became practical due to large datasets, powerful GPUs, and advances
+          in neural network architectures.
+        </p>
+
+        <p>
+          Compared to traditional ML, Deep Learning excels when working with:
+        </p>
+
+        <ul>
+          <li>Images</li>
+          <li>Video</li>
+          <li>Speech</li>
+          <li>Natural language</li>
+          <li>Large unstructured datasets</li>
+        </ul>
+
+        <h2>Common Neural Network Types</h2>
+
+        <h3>CNNs (Convolutional Neural Networks)</h3>
+
+        <p>
+          Optimized for image and video analysis. CNNs identify patterns such as edges,
+          shapes, textures, and eventually complete objects.
+        </p>
+
+        <h3>RNNs (Recurrent Neural Networks)</h3>
+
+        <p>
+          Designed for sequential data such as text, time-series information, and speech.
+          Modern systems have largely replaced RNNs with transformers.
+        </p>
+
+        <h3>Transformers</h3>
+
+        <p>
+          The architecture powering most modern generative AI systems. Transformers use
+          attention mechanisms to understand relationships between words, tokens, images,
+          and other forms of data.
+        </p>
+
+        <p>
+          Large Language Models (LLMs) such as ChatGPT are built using transformer-based
+          architectures.
+        </p>
+
+        <h2>The Relationship Between AI, ML, and DL</h2>
+
+        <p>
+          The easiest way to think about these terms is as nested categories:
+        </p>
+
+        <pre><code>Artificial Intelligence (AI)
+└── Machine Learning (ML)
+    └── Deep Learning (DL)</code></pre>
+
+        <p>
+          AI is the overall goal of creating intelligent systems. Machine Learning provides
+          a method for learning from data, while Deep Learning uses large neural networks
+          to solve particularly complex problems.
+        </p>
+
+        <h2>Why It Matters</h2>
+
+        <blockquote>
+          Nearly every modern AI system — from chatbots and recommendation engines to
+          autonomous vehicles and threat detection platforms — is built on Machine Learning,
+          with many state-of-the-art systems using Deep Learning and transformer models.
+        </blockquote>
+
+        <p>
+          Understanding the distinction between AI, ML, and DL is important because these
+          terms describe different levels of the technology stack. AI is the objective,
+          ML is the learning approach, and DL is one of the most powerful implementations
+          of that approach used today.
+        </p>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

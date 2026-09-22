@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kerberoasting — Satej Chaudhari</title>
+  <meta name="description" content="How Kerberoasting works — requesting service tickets for SPN accounts and cracking them offline to recover service account passwords, plus detection and defence.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">Kerberoasting</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          Kerberoasting is one of the most reliable privilege-escalation techniques in
+          Active Directory, and it works because of a normal, expected feature of
+          <a href="2026-08-18-kerberos.html">Kerberos</a>: any authenticated user can
+          request a service ticket for any service. The catch is that the ticket is
+          encrypted with the service account's password-derived key — so requesting one and
+          cracking it offline recovers that account's password. No exploit, no elevated
+          privilege, just the protocol used from an unintended angle.
+        </p>
+
+        <h2>The prerequisite: Service Principal Names</h2>
+
+        <p>
+          A <strong>Service Principal Name (SPN)</strong> is a string that maps a service to
+          the account that runs it, e.g. <code>MSSQLSvc/db01.corp.local:1433</code> owned by
+          <code>svc_sql</code>. Kerberos needs SPNs so a client can ask for a ticket to a
+          named service. Any account with an SPN set is, by definition, a candidate for
+          roasting.
+        </p>
+
+        <p>
+          The accounts that carry SPNs are <strong>service accounts</strong> — the accounts
+          that run SQL, IIS app pools, scheduled jobs, and line-of-business software. Two
+          things make them attractive targets:
+        </p>
+
+        <ul>
+          <li>Their passwords are often old, set once at deployment and never rotated, because rotating them risks breaking the service.</li>
+          <li>They are frequently over-privileged — granted local admin, or even Domain Admin, "to make it work".</li>
+        </ul>
+
+        <blockquote>
+          The worst case, and a common one, is a service account that is a member of Domain
+          Admins with a weak password set in 2019. Kerberoasting turns that into full domain
+          compromise from any authenticated user — which is why it is often the fastest path
+          on an engagement.
+        </blockquote>
+
+        <h2>How the attack works, step by step</h2>
+
+        <table>
+          <thead>
+            <tr><th>Step</th><th>What happens</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1. Enumerate SPNs</td><td>Query LDAP for accounts with <code>servicePrincipalName=*</code> — the roastable set</td></tr>
+            <tr><td>2. Request tickets</td><td>Send a normal TGS-REQ for each SPN; the KDC returns a service ticket (TGS-REP)</td></tr>
+            <tr><td>3. Extract the ciphertext</td><td>The ticket's encrypted portion is encrypted with the service account's key</td></tr>
+            <tr><td>4. Crack offline</td><td>Guess passwords, derive the key, and test it against the ciphertext — entirely offline</td></tr>
+            <tr><td>5. Authenticate</td><td>On a hit, log in as the service account with the recovered password</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          Only step 2 touches the network, and it is indistinguishable from legitimate
+          Kerberos activity — a user requesting a service ticket is the most normal thing on
+          the domain. The cracking in step 4 happens on your own machine and generates no
+          traffic at all.
+        </p>
+
+        <h2>The commands</h2>
+
+        <pre><code># Impacket — from Linux, with any domain credential
+GetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:Passw0rd \
+  -outputfile kerberoast.hash
+
+# Rubeus — from a domain-joined Windows host
+Rubeus.exe kerberoast /outfile:kerberoast.hash
+
+# NetExec
+netexec ldap 10.10.10.10 -u jdoe -p Passw0rd --kerberoasting kerberoast.hash
+
+# Crack it
+hashcat -m 13100 kerberoast.hash /usr/share/wordlists/rockyou.txt</code></pre>
+
+        <p>
+          Hashcat mode <strong>13100</strong> is the Kerberoast (TGS-REP) mode. The tools
+          request RC4-encrypted tickets where possible, because RC4 (etype 23) cracks far
+          faster than AES.
+        </p>
+
+        <h2>Why the encryption type matters so much</h2>
+
+        <table>
+          <thead>
+            <tr><th>Ticket etype</th><th>Cracking reality</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>RC4 (23)</td><td>Fast. Billions of guesses per second on commodity GPUs — a weak or medium password falls quickly</td></tr>
+            <tr><td>AES256 (18)</td><td>Far slower due to the key-derivation function; roasting yield drops sharply, and only weak passwords remain practical</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          A domain that enforces AES-only Kerberos removes most of the roasting risk — not
+          by stopping the ticket request, but by making the resulting material impractical
+          to crack unless the password is genuinely weak. Attackers still try, because
+          service-account passwords are disproportionately weak.
+        </p>
+
+        <h2>Targeted Kerberoasting</h2>
+
+        <p>
+          A variant worth knowing: if you have write access to an account (via an
+          <a href="2026-08-18-acls-dacls.html">ACL</a>), you can <em>add</em> an SPN to it,
+          roast it, then remove the SPN. This turns any writable account into a roastable
+          one on demand, and it is a common BloodHound-identified path.
+        </p>
+
+        <pre><code># add an SPN, roast, clean up
+bloodyAD -u jdoe -p pass -d corp.local set object svc_target servicePrincipalName -v "fake/svc"
+GetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:pass
+bloodyAD -u jdoe -p pass -d corp.local set object svc_target servicePrincipalName -v ""</code></pre>
+
+        <h2>Detection and defence</h2>
+
+        <table>
+          <thead>
+            <tr><th>Control</th><th>Effect</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Strong service-account passwords (25+ random chars)</td><td>Makes offline cracking infeasible even with RC4 tickets — the single best defence</td></tr>
+            <tr><td>Group Managed Service Accounts (gMSA)</td><td>The DC manages a 120+ character password automatically; effectively uncrackable</td></tr>
+            <tr><td>AES-only Kerberos</td><td>Removes the fast RC4 cracking path</td></tr>
+            <tr><td>Least privilege for service accounts</td><td>Limits the blast radius when one is cracked</td></tr>
+            <tr><td>Monitor event 4769</td><td>A burst of TGS requests, especially for RC4, from one account is the detection signal</td></tr>
+            <tr><td>Honeypot SPN accounts</td><td>A decoy account with an SPN and no real use — any ticket request for it is malicious</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          Kerberoasting is not a vulnerability in Kerberos; it is the intended behaviour of
+          the TGS exchange meeting the reality of weak, over-privileged, never-rotated
+          service accounts. The request is invisible against normal traffic and the cracking
+          is offline and silent. The defence is entirely on the account side — long random
+          passwords or gMSAs — which is why finding a roastable admin account with a weak
+          password remains one of the highest-value single findings in an internal
+          engagement. The tooling is in the <a href="../toolkit.html">Toolkit</a>
+          (Impacket, Rubeus, NetExec); the protocol background is on the
+          <a href="2026-08-18-kerberos.html">Kerberos</a> page.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

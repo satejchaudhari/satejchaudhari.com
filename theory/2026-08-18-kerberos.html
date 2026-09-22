@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kerberos Authentication — Satej Chaudhari</title>
+  <meta name="description" content="How Kerberos works in Active Directory — the AS, TGS, and service ticket exchanges, the KDC, PAC, and where each step becomes an attack surface.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">Kerberos Authentication</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 12 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          Kerberos is the default authentication protocol in Active Directory, and it is
+          the one that matters most offensively — Kerberoasting, AS-REP roasting,
+          delegation abuse, and every ticket-forging attack are all abuses of some step in
+          its exchange. Understanding the protocol flow is not optional background; it is
+          the thing that tells you why each of those attacks is possible and what the tools
+          are actually doing.
+        </p>
+
+        <h2>The core idea</h2>
+
+        <p>
+          Kerberos exists to solve one problem: let a user prove who they are to many
+          services without sending their password to any of them, and without each service
+          having to check with a central authority every time. It does this with
+          <strong>tickets</strong> — time-limited, encrypted proofs of identity issued by a
+          trusted third party.
+        </p>
+
+        <p>
+          That trusted third party is the <strong>Key Distribution Center (KDC)</strong>,
+          which runs on every domain controller. It has two logical halves: the
+          <strong>Authentication Service (AS)</strong>, which proves you are you, and the
+          <strong>Ticket Granting Service (TGS)</strong>, which grants you access to
+          specific services. The whole model rests on one assumption: the KDC knows the
+          secret key (derived from the password) of every principal in the domain.
+        </p>
+
+        <h2>The three exchanges</h2>
+
+        <p>
+          A Kerberos login is three request/response pairs. Keep the actors straight:
+          the <em>client</em> (the user), the <em>KDC</em> (the DC), and the
+          <em>service</em> (whatever the user wants to reach).
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Exchange</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>AS-REQ / AS-REP</td><td>The user authenticates to the KDC and receives a Ticket Granting Ticket (TGT)</td></tr>
+            <tr><td>TGS-REQ / TGS-REP</td><td>The user presents the TGT to ask for a ticket to a specific service</td></tr>
+            <tr><td>AP-REQ / AP-REP</td><td>The user presents the service ticket to the service itself and is granted access</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Step 1 — AS-REQ / AS-REP (getting the TGT)</h3>
+
+        <p>
+          The client sends an AS-REQ to the KDC. Crucially, it includes a
+          <strong>pre-authentication</strong> component: a timestamp encrypted with the
+          user's own key (derived from their password). The KDC decrypts it with its copy
+          of that key; if the timestamp comes out sensible, the user has proven they know
+          the password without the password ever being sent.
+        </p>
+
+        <p>
+          The KDC responds with two things: a <strong>TGT</strong>, encrypted with the
+          secret key of the special <code>krbtgt</code> account (which only the KDC knows),
+          and a <strong>session key</strong> for the user, encrypted with the user's own
+          key. The user can read their session key but cannot read the TGT — it is opaque
+          to them, which is the point.
+        </p>
+
+        <blockquote>
+          Two attacks live in this one step. If pre-authentication is <em>disabled</em> for
+          an account, anyone can request an AS-REP for it and receive material encrypted
+          with that account's key — crackable offline. That is
+          <a href="2026-08-18-asrep-roasting.html">AS-REP roasting</a>. And because the
+          TGT is encrypted with the <code>krbtgt</code> key, anyone who steals that key can
+          forge TGTs for anyone, forever — the <a href="2026-08-18-ticket-attacks.html">Golden
+          Ticket</a>.
+        </blockquote>
+
+        <h3>Step 2 — TGS-REQ / TGS-REP (getting a service ticket)</h3>
+
+        <p>
+          Now the user wants to reach a service — say the file share on
+          <code>SRV01</code>. They send a TGS-REQ to the KDC, presenting their TGT as proof
+          of identity and naming the service they want via its
+          <strong>Service Principal Name (SPN)</strong>, e.g. <code>cifs/srv01.corp.local</code>.
+        </p>
+
+        <p>
+          The KDC validates the TGT (it can, because it holds the <code>krbtgt</code> key),
+          then issues a <strong>service ticket</strong> encrypted with the secret key of
+          the <em>service account</em> that owns that SPN. The user cannot read this ticket
+          either — it is meant for the service.
+        </p>
+
+        <blockquote>
+          This step is the mechanism behind
+          <a href="2026-08-18-kerberoasting.html">Kerberoasting</a>. Any authenticated user
+          can request a service ticket for any SPN. That ticket is encrypted with the
+          service account's password-derived key — so an attacker requests tickets for
+          service accounts and cracks them offline to recover the passwords. No special
+          privilege required; it is a normal, expected TGS-REQ.
+        </blockquote>
+
+        <h3>Step 3 — AP-REQ / AP-REP (using the ticket)</h3>
+
+        <p>
+          Finally the user presents the service ticket directly to the service. The service
+          decrypts it with its own key — which it knows, because the ticket was encrypted
+          for it — reads the user's identity and authorisation data from inside, and grants
+          access. The KDC is not involved at all in this step, which is exactly the
+          efficiency Kerberos was designed for.
+        </p>
+
+        <h2>The PAC — where authorisation lives</h2>
+
+        <p>
+          Inside every ticket is a <strong>Privilege Attribute Certificate (PAC)</strong>.
+          This is the structure that carries <em>authorisation</em> data: the user's SID,
+          the SIDs of every group they belong to, and related claims. Authentication proves
+          who you are; the PAC states what you are allowed to do.
+        </p>
+
+        <p>
+          The PAC is signed by the KDC so a service can trust it without asking the DC.
+          This is powerful and dangerous in equal measure — a forged ticket with a forged
+          PAC that claims Domain Admin membership will be honoured by any service that
+          trusts the signature, which is the heart of Golden and Silver ticket attacks.
+        </p>
+
+        <h2>Encryption types matter</h2>
+
+        <p>
+          Kerberos tickets can be encrypted with different algorithms, and the choice
+          directly affects how crackable a roasted ticket is:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Etype</th><th>Relevance</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>RC4 (etype 23)</td><td>Legacy, derived directly from the NT hash. Fast to crack — attackers explicitly request it for roasting</td></tr>
+            <tr><td>AES128 / AES256 (etype 17/18)</td><td>Modern default. Much slower to crack; roasting yield drops sharply when only AES is available</td></tr>
+            <tr><td>DES (etype 1/3)</td><td>Obsolete and broken; should never appear, but occasionally does on ancient configs</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          Tools like Rubeus and Impacket will request RC4 tickets when possible precisely
+          because they crack orders of magnitude faster than AES. A domain that enforces
+          AES-only removes a large amount of roasting value.
+        </p>
+
+        <h2>Where each attack attaches</h2>
+
+        <table>
+          <thead>
+            <tr><th>Attack</th><th>Step it abuses</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>AS-REP roasting</td><td>AS-REP, when pre-auth is disabled</td></tr>
+            <tr><td>Kerberoasting</td><td>TGS-REP, cracking the service account key</td></tr>
+            <tr><td>Golden Ticket</td><td>Forging a TGT with the stolen <code>krbtgt</code> key</td></tr>
+            <tr><td>Silver Ticket</td><td>Forging a service ticket with a stolen service account key</td></tr>
+            <tr><td>Pass-the-Ticket</td><td>Reusing a stolen TGT or service ticket directly</td></tr>
+            <tr><td>Overpass-the-Hash</td><td>Using an NT hash to request a legitimate TGT</td></tr>
+            <tr><td>Delegation abuse</td><td>The rules governing how services request tickets on a user's behalf</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          Kerberos is elegant, and its elegance is the attack surface. Tickets are reusable
+          proof, so stealing them beats attacking passwords. Service tickets are encrypted
+          with service-account keys, so requesting them hands you crackable material. The
+          <code>krbtgt</code> key underwrites the entire domain, so stealing it is total and
+          durable compromise. And the PAC lets a signed ticket assert privilege that
+          services accept without question.
+        </p>
+
+        <p>
+          When you run <a href="../toolkit.html">Rubeus, Impacket, or NetExec</a> against
+          Kerberos, you are not exploiting a flaw — you are participating in the protocol
+          exactly as designed, from a position it did not anticipate. The specific attacks
+          each have their own page: <a href="2026-08-18-kerberoasting.html">Kerberoasting</a>,
+          <a href="2026-08-18-asrep-roasting.html">AS-REP Roasting</a>,
+          <a href="2026-08-18-delegation.html">Delegation</a>, and
+          <a href="2026-08-18-ticket-attacks.html">Ticket Attacks</a>.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

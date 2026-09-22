@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kerberos Ticket Attacks — Satej Chaudhari</title>
+  <meta name="description" content="Golden, Silver, and Diamond tickets, pass-the-ticket, and overpass-the-hash — forging and reusing Kerberos tickets once key material is stolen.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">Kerberos Ticket Attacks</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          Once you have stolen the right key material, you stop asking Kerberos for tickets
+          and start forging them. Ticket attacks are the endgame techniques of Active
+          Directory: they turn a stolen hash or key into durable, high-privilege access that
+          is hard to detect and, in the worst case, survives password resets. They all build
+          directly on the <a href="2026-08-18-kerberos.html">Kerberos</a> exchange, so read
+          that first if the AS/TGS/PAC vocabulary is not familiar.
+        </p>
+
+        <h2>The family at a glance</h2>
+
+        <table>
+          <thead>
+            <tr><th>Attack</th><th>Key you need</th><th>What you get</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Overpass-the-Hash</td><td>A user's NT hash</td><td>A legitimate TGT for that user</td></tr>
+            <tr><td>Pass-the-Ticket</td><td>A stolen TGT or service ticket</td><td>Reuse of that ticket's access</td></tr>
+            <tr><td>Silver Ticket</td><td>A service account's key</td><td>A forged service ticket for that one service</td></tr>
+            <tr><td>Golden Ticket</td><td>The <code>krbtgt</code> key</td><td>Forged TGTs for anyone — domain-wide</td></tr>
+            <tr><td>Diamond Ticket</td><td>The <code>krbtgt</code> key</td><td>A modified real TGT — stealthier than Golden</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Overpass-the-Hash (pass-the-key)</h2>
+
+        <p>
+          The bridge from NTLM to Kerberos. A user's key for Kerberos is derived from their
+          password — and for RC4, that key <em>is</em> the NT hash. So if you have the NT
+          hash, you can perform a legitimate AS-REQ and receive a real TGT, without knowing
+          the password. This is cleaner than pass-the-hash because from that point on you are
+          using Kerberos, which looks entirely normal.
+        </p>
+
+        <pre><code>Rubeus.exe asktgt /user:jdoe /rc4:&lt;nthash&gt; /ptt
+getTGT.py corp.local/jdoe -hashes :&lt;nthash&gt;</code></pre>
+
+        <h2>Pass-the-Ticket</h2>
+
+        <p>
+          Kerberos tickets are just data, cached in memory (and extractable). If you steal a
+          TGT or service ticket from a compromised host, you can inject it into your own
+          session and use it directly — no key material needed, because the ticket is already
+          the proof. Steal a Domain Admin's cached TGT from a workstation and you are that
+          admin until the ticket expires.
+        </p>
+
+        <pre><code># extract tickets, then reuse one
+Rubeus.exe dump /nowrap
+Rubeus.exe ptt /ticket:&lt;base64&gt;
+# Impacket: export KRB5CCNAME=stolen.ccache and use -k -no-pass</code></pre>
+
+        <h2>Silver Ticket</h2>
+
+        <p>
+          A <strong>Silver Ticket</strong> is a forged <em>service ticket</em>. Recall from
+          the <a href="2026-08-18-kerberos.html">Kerberos</a> page that a service ticket is
+          encrypted with the service account's key, and the service decrypts and trusts it
+          on its own — the KDC is not consulted at the AP-REQ step. So if you have the
+          service account's key (its NT hash or AES key), you can forge a service ticket for
+          that service, with any PAC you like, and the service will accept it.
+        </p>
+
+        <ul>
+          <li><strong>Scope:</strong> limited to the one service whose key you hold (e.g. CIFS on one host, or MSSQL on one server).</li>
+          <li><strong>Stealth:</strong> very high — because the KDC is never contacted, there is no ticket-request event on the DC at all.</li>
+          <li><strong>Source of the key:</strong> a Silver Ticket for a <em>machine account</em> only needs that computer's key, which you get by compromising the host — no DA required.</li>
+        </ul>
+
+        <pre><code>ticketer.py -nthash &lt;service_hash&gt; -domain-sid &lt;sid&gt; -domain corp.local \
+  -spn cifs/srv01.corp.local Administrator</code></pre>
+
+        <h2>Golden Ticket</h2>
+
+        <p>
+          The <code>krbtgt</code> account's key encrypts every TGT in the domain. That is the
+          root of trust for the entire Kerberos system. If you steal the
+          <code>krbtgt</code> key — obtainable via <a href="2026-08-18-dcsync.html">DCSync</a>
+          once you have domain-level access — you can forge a <strong>Golden Ticket</strong>:
+          a TGT for any user, with any group membership in its PAC, that the KDC will accept
+          as genuine because it is signed with the key only the KDC is supposed to have.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Property</th><th>Detail</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Scope</td><td>The entire domain — forge a TGT for anyone, including non-existent admins</td></tr>
+            <tr><td>Persistence</td><td>Survives password resets of the impersonated user; only rotating <code>krbtgt</code> (twice) invalidates it</td></tr>
+            <tr><td>Danger</td><td>The definitive persistence mechanism — a Golden Ticket is why <code>krbtgt</code> theft means the domain must be considered permanently compromised until remediated</td></tr>
+          </tbody>
+        </table>
+
+        <pre><code>ticketer.py -nthash &lt;krbtgt_hash&gt; -domain-sid &lt;sid&gt; -domain corp.local Administrator
+# then pass-the-ticket and act as a fabricated Domain Admin</code></pre>
+
+        <blockquote>
+          Rotating the <code>krbtgt</code> password is required <strong>twice</strong>, with
+          a replication interval between, because AD keeps the current and previous key valid
+          to avoid breaking in-flight tickets. A single reset leaves the old key — and any
+          Golden Tickets — still working.
+        </blockquote>
+
+        <h2>Diamond Ticket</h2>
+
+        <p>
+          A <strong>Diamond Ticket</strong> is the stealthier evolution of the Golden Ticket.
+          Instead of forging a TGT from scratch (which can be detected by tickets that were
+          never requested from the KDC), you request a <em>real</em> TGT normally, then
+          decrypt it with the stolen <code>krbtgt</code> key, modify the PAC (to add
+          privileged group SIDs), and re-encrypt it. The result is a ticket that has a
+          matching legitimate request event on the DC — far harder to spot than a Golden
+          Ticket that corresponds to no request at all.
+        </p>
+
+        <h2>Detection and defence</h2>
+
+        <table>
+          <thead>
+            <tr><th>Control</th><th>Effect</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Protect the <code>krbtgt</code> key</td><td>It is the domain's root of trust — guard DCs, and rotate it twice after any suspected compromise</td></tr>
+            <tr><td>Tier-0 isolation</td><td>Keep DA/DC credentials off ordinary workstations so TGTs cannot be stolen by pass-the-ticket</td></tr>
+            <tr><td>Short ticket lifetimes</td><td>Limits the window a stolen ticket is useful</td></tr>
+            <tr><td>Monitor anomalous PACs / ticket lifetimes</td><td>Forged tickets often have telltale long lifetimes or impossible group claims</td></tr>
+            <tr><td>Watch for tickets without a matching 4768/4769</td><td>A Golden/Silver ticket used with no corresponding request event on the DC is a strong signal</td></tr>
+            <tr><td>Credential Guard</td><td>Makes extracting the key material from LSASS much harder in the first place</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          These attacks form a ladder of stolen trust. An NT hash gets you a legitimate
+          ticket (overpass-the-hash). A stolen ticket gets you its owner's access
+          (pass-the-ticket). A service key lets you forge tickets for that service, silently
+          (Silver). The <code>krbtgt</code> key lets you forge tickets for the entire domain,
+          durably (Golden), and do it stealthily (Diamond). Every rung depends on stealing
+          key material first — which is why credential protection and
+          <a href="2026-08-18-dcsync.html">controlling who can DCSync</a> matter so much, and
+          why <code>krbtgt</code> theft is treated as total domain compromise. The forging
+          tools are in the <a href="../toolkit.html">Toolkit</a> (Impacket's ticketer,
+          Rubeus, Mimikatz).
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

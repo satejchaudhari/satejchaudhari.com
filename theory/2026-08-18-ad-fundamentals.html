@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Active Directory Fundamentals — Satej Chaudhari</title>
+  <meta name="description" content="What Active Directory actually is — the directory, domains, forests, objects, security identifiers, authentication, and why the whole structure is a single trust boundary attackers work to own.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+
+        <h1 class="post-title">Active Directory Fundamentals</h1>
+
+        <p class="post-meta">
+          <time datetime="2026-08-18">2026-08-18</time>
+          <span>&middot; 11 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+        <p>
+          Active Directory is the identity and management backbone of almost every
+          corporate Windows network. It is the system that decides who a user is, what
+          they are allowed to touch, and how thousands of machines agree on those answers
+          without asking each other every time. Understanding its structure is the
+          prerequisite for everything else in this section, because every AD attack is
+          ultimately about abusing a feature of this design rather than a software bug.
+        </p>
+
+        <h2>What a directory service is</h2>
+
+        <p>
+          At its core, Active Directory is a database — a hierarchical one — that stores
+          information about the objects on a network and makes that information queryable.
+          A user, a computer, a group, a printer, a policy: each is an object with a set
+          of attributes. The database is exposed over <a href="2026-08-18-ldap.html">LDAP</a>
+          for queries and defended by <a href="2026-08-18-kerberos.html">Kerberos</a> and
+          <a href="2026-08-18-ntlm.html">NTLM</a> for authentication.
+        </p>
+
+        <p>
+          The service that runs all of this is the <strong>Domain Controller (DC)</strong>.
+          Every domain has at least one, usually several, and they replicate the database
+          between themselves so any DC can answer any question. Compromising a DC means
+          compromising the database — which is why every attack path in this section is,
+          in the end, a path to a domain controller.
+        </p>
+
+        <h2>The structural units</h2>
+
+        <table>
+          <thead>
+            <tr><th>Unit</th><th>What it is</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Domain</td><td>The core administrative and security boundary — a group of objects sharing one database, one policy set, and one authentication authority (e.g. <code>corp.target.local</code>)</td></tr>
+            <tr><td>Tree</td><td>One or more domains sharing a contiguous namespace, linked by automatic parent-child trusts</td></tr>
+            <tr><td>Forest</td><td>The outermost boundary — one or more trees. The forest, not the domain, is the true security boundary</td></tr>
+            <tr><td>Organizational Unit (OU)</td><td>A container inside a domain for grouping objects so policy and delegation can be applied to them</td></tr>
+            <tr><td>Site</td><td>A representation of physical network topology, used to steer replication and authentication traffic efficiently</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          The single most important sentence in AD security: <strong>the forest is the
+          security boundary, not the domain.</strong> If you own one domain in a forest,
+          you can almost always reach every other domain in that forest, because they
+          share the schema and the configuration partition and trust the same authority.
+          A "we'll just put the sensitive systems in a separate domain" design does not
+          contain a breach.
+        </blockquote>
+
+        <h2>Objects and their identifiers</h2>
+
+        <p>
+          Every object has two identity numbers that matter to an attacker:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Identifier</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>SID (Security Identifier)</td><td>The unique, immutable ID of a security principal. Windows makes access decisions on SIDs, never on names. Format: <code>S-1-5-21-&lt;domain&gt;-&lt;RID&gt;</code></td></tr>
+            <tr><td>RID (Relative Identifier)</td><td>The last portion of a SID, unique within the domain. Well-known RIDs are constant: <code>500</code> is the built-in Administrator, <code>512</code> is Domain Admins</td></tr>
+            <tr><td>GUID</td><td>A globally unique ID that never changes even if the object is renamed or moved</td></tr>
+            <tr><td>DN (Distinguished Name)</td><td>The object's full path in the directory, e.g. <code>CN=John Doe,OU=Staff,DC=corp,DC=target,DC=local</code></td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          The SID/RID relationship is why RID cycling works for enumeration: if you learn
+          the domain SID, you can walk RIDs (1000, 1001, 1002…) to enumerate every account
+          even when direct listing is blocked, because the SID prefix is shared and only
+          the RID changes.
+        </p>
+
+        <h2>Security principals and groups</h2>
+
+        <p>
+          A <strong>security principal</strong> is anything that can authenticate and be
+          granted access: users, computers, and groups. Yes — computers are principals.
+          Every domain-joined machine has a <strong>machine account</strong> (shown with a
+          trailing <code>$</code>, e.g. <code>WKSTN01$</code>) with its own password that
+          rotates automatically. Machine accounts authenticate, hold privileges, and can
+          be abused exactly like user accounts, which is the basis of coercion and
+          delegation attacks.
+        </p>
+
+        <p>
+          Groups nest, and nesting is where privilege hides. The groups that matter most:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Group</th><th>Why it matters</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Domain Admins</td><td>Full control of the domain. The usual objective</td></tr>
+            <tr><td>Enterprise Admins</td><td>Full control of the entire forest — every domain in it</td></tr>
+            <tr><td>Schema Admins</td><td>Can modify the schema itself; forest-wide and rarely needed, so membership is suspicious</td></tr>
+            <tr><td>Administrators (built-in)</td><td>Local and, on a DC, effectively domain-level control</td></tr>
+            <tr><td>Account / Backup / Server Operators</td><td>Delegated privileges that frequently provide a path to full compromise</td></tr>
+            <tr><td>DnsAdmins</td><td>Historically abusable for code execution on a DC via a malicious DLL</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          Nested membership is the trap. A user in "IT Support" which is a member of
+          "Workstation Admins" which is a member of "Server Operators" is effectively
+          privileged, and reading the top-level Domain Admins list will never reveal it.
+          This is precisely the reasoning <a href="../toolkit.html">BloodHound</a> automates.
+        </blockquote>
+
+        <h2>The global catalog and partitions</h2>
+
+        <p>
+          The AD database is split into <strong>naming partitions</strong>: the
+          <em>domain</em> partition (users, computers, groups), the <em>configuration</em>
+          partition (forest-wide topology, replicated to every DC in the forest), and the
+          <em>schema</em> partition (the definitions of every object and attribute type).
+          The <strong>Global Catalog</strong> is a partial, forest-wide index that lets any
+          principal search across all domains — which is convenient for users and equally
+          convenient for an attacker enumerating a forest from a single foothold.
+        </p>
+
+        <h2>How authentication flows</h2>
+
+        <p>
+          When a user logs in, the workstation authenticates them to a DC using Kerberos
+          (the default) or NTLM (the fallback). The DC issues proof of identity, and from
+          then on the user presents that proof to access resources rather than re-entering
+          a password. Two protocols, two theory pages:
+        </p>
+
+        <ul>
+          <li><a href="2026-08-18-kerberos.html">Kerberos</a> — the modern, ticket-based default. Almost every high-impact AD attack (Kerberoasting, delegation abuse, ticket forgery) targets some part of its exchange.</li>
+          <li><a href="2026-08-18-ntlm.html">NTLM</a> — the older challenge-response fallback. Still everywhere, and the basis of pass-the-hash and relay attacks.</li>
+        </ul>
+
+        <h2>Why Active Directory is so attackable</h2>
+
+        <p>
+          AD is not insecure because it is badly built. It is attackable because of
+          deliberate design choices that trade security for the usability a large
+          organisation needs:
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Design choice</th><th>Consequence for an attacker</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Any user can read most of the directory</td><td>A single low-privilege credential enumerates users, groups, computers, ACLs, and policies</td></tr>
+            <tr><td>Backwards compatibility is preserved for decades</td><td>NTLM, legacy Kerberos encryption, and old protocol behaviours remain enabled and abusable</td></tr>
+            <tr><td>Delegation lets services act on users' behalf</td><td>A convenience feature that becomes impersonation when misconfigured</td></tr>
+            <tr><td>Trust is transitive within a forest</td><td>Access to one part of the forest tends to reach the whole forest</td></tr>
+            <tr><td>Rights are granted via editable ACLs</td><td>A single mis-set permission on one object can create a path to Domain Admin</td></tr>
+            <tr><td>Credentials are cached on endpoints</td><td>Compromising one workstation yields the secrets of everyone who logged into it</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          Every other page in this section is a specific instance of one of these rows.
+          Kerberoasting abuses readable service accounts. Delegation abuse exploits the
+          impersonation feature. DCSync uses the replication trust between DCs. The
+          fundamentals are the vocabulary; the attacks are the sentences.
+        </p>
+
+        <h2>The mental model to carry forward</h2>
+
+        <p>
+          Hold three ideas. First, <strong>everything is an object with attributes</strong>,
+          and access is decided on SIDs and the permissions attached to those objects —
+          so reading and writing attributes is the whole game. Second,
+          <strong>the DC holds the database and the forest is the boundary</strong>, so
+          every path leads there. Third, <strong>authentication produces reusable proof</strong>
+          — tickets and hashes — and stealing or forging that proof is more productive than
+          attacking passwords directly.
+        </p>
+
+        <p>
+          With those in place, the tooling in the <a href="../toolkit.html">Toolkit</a>
+          stops looking like a random collection of scripts and starts looking like what
+          it is: a set of instruments for reading, writing, and forging the objects and
+          proofs this page just described.
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

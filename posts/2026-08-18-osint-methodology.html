@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>OSINT From a Single Domain: A Red Team Methodology — Satej Chaudhari</title>
+  <meta name="description" content="A complete, phase-by-phase OSINT methodology for an authorised red team engagement that starts with nothing but a domain name — scoping, passive infrastructure mapping, people enumeration, credential exposure, correlation, and reporting.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap-wide">
+    <a class="brand" href="../index.html">
+      <span class="brand-mark">SC</span>
+      <span class="brand-name">Satej Chaudhari</span>
+    </a>
+
+    <nav class="site-nav">
+      <a href="../index.html">Home</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../blog.html">Blog</a>
+      <a href="../theory.html">Theory</a>
+      <a href="../toolkit.html">Toolkit</a>
+      <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+    </nav>
+
+    <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap post">
+  <a class="post-back" href="../blog.html">&larr; back to blog</a>
+
+  <article>
+    <header class="post-header">
+      <span class="tag">RECON</span>
+
+      <h1 class="post-title">
+        OSINT From a Single Domain: A Red Team Methodology
+      </h1>
+
+      <p class="post-meta">
+        <time datetime="2026-08-18">2026-08-18</time>
+        <span>&middot; 40 min read</span>
+      </p>
+    </header>
+
+    <div class="post-body">
+
+      <p>
+        The scenario is the one you actually get handed on a red team engagement.
+        A signed statement of work, a scope document, and one line of useful input:
+        a domain name. No IP ranges, no employee list, no architecture diagram.
+        Everything else you are expected to find yourself, without touching a single
+        system you have not yet been cleared to touch.
+      </p>
+
+      <p>
+        This post is the methodology I follow for that situation. It is deliberately
+        phase-ordered, because OSINT done as a pile of disconnected tool runs produces
+        a pile of disconnected findings. Done as a pipeline, where each phase's output
+        is the next phase's input, one domain reliably becomes an attack surface map,
+        a staff roster, a credential exposure assessment, and a ranked list of the
+        places an attacker would actually start.
+      </p>
+
+      <p>
+        Throughout I use <code>&lt;target.com&gt;</code> as a placeholder. Substitute your
+        authorised scope. Every tool mentioned has a full reference page in the
+        <a href="../toolkit.html">Toolkit</a> if you want the flag-level detail.
+      </p>
+
+      <h2>Before anything: the authorisation boundary</h2>
+
+      <p>
+        OSINT feels safe. You are reading public sources, so the instinct is that
+        nothing you do can be out of scope. That instinct is wrong twice over, and
+        both mistakes end engagements.
+      </p>
+
+      <p>
+        The first is the <strong>passive/active boundary</strong>. Querying crt.sh for
+        certificates is passive — you are reading a public log. Resolving those hostnames
+        sends DNS queries. Requesting them over HTTP sends packets to the client's
+        infrastructure. Those are three different activities with three different
+        authorisation requirements, and tools blur the line constantly. Amass will happily
+        move from passive collection to active resolution based on one flag.
+      </p>
+
+      <p>
+        The second is <strong>third-party scope</strong>. Your scope document names
+        <code>&lt;target.com&gt;</code>. During enumeration you will find assets in a
+        cloud tenant, a SaaS platform, a managed hosting provider, and an acquired
+        subsidiary with its own domain. Almost none of those are covered by an agreement
+        signed by your client alone.
+      </p>
+
+      <blockquote>
+        Write down, before you start, the exact answer to three questions: which domains
+        and IP ranges am I allowed to interact with, what counts as interaction, and who
+        do I call when I find something that is clearly the client's but is not in the
+        scope document. If you cannot answer all three, you are not ready to start.
+      </blockquote>
+
+      <h3>The scope checklist</h3>
+
+      <table>
+        <thead>
+          <tr><th>Item</th><th>What you need on paper</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Authorisation</td><td>Signed SOW or engagement letter naming the client entity and the testing window</td></tr>
+          <tr><td>In-scope domains</td><td>Explicit list, and whether subdomains and newly discovered domains are automatically included</td></tr>
+          <tr><td>In-scope IP ranges</td><td>Ranges the client owns; cloud assets need separate provider notification in some cases</td></tr>
+          <tr><td>Out of scope</td><td>Named exclusions — production payment systems, third-party SaaS, subsidiaries</td></tr>
+          <tr><td>Passive vs active</td><td>Whether the OSINT phase is passive-only, and when active testing is authorised to begin</td></tr>
+          <tr><td>People in scope</td><td>Whether employee-level research is authorised and to what depth — this has legal weight under GDPR/DPDP</td></tr>
+          <tr><td>Data handling</td><td>Where findings are stored, encrypted, and when they must be destroyed</td></tr>
+          <tr><td>Escalation contact</td><td>A named human, reachable, for critical findings and scope questions</td></tr>
+          <tr><td>Deconfliction</td><td>A way for the blue team to check whether an alert is you — usually a source IP list lodged with the client</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Personal data is not free real estate</h3>
+
+      <p>
+        A large part of this methodology involves real, identifiable people — their names,
+        addresses, phone numbers, and breach history. Under GDPR, India's DPDP Act, and
+        most equivalent regimes, collecting that data requires a lawful basis, and
+        "it was on the internet" is not one.
+      </p>
+
+      <p>
+        Practical rules that keep you on the right side of this: collect only what serves
+        a stated engagement objective, never collect from categories irrelevant to the
+        assessment (health, dating, political, religious), store it encrypted, and destroy
+        it when the engagement closes. Write the destruction date into the SOW. If you
+        would be uncomfortable showing a specific lookup to the person it concerns
+        alongside the sentence "this was necessary to assess my client's risk", do not run it.
+      </p>
+
+      <h2>How to think about the process</h2>
+
+      <p>
+        The intelligence cycle is the model worth borrowing here, because it forces
+        the two steps people skip:
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>Stage</th><th>In practice</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Direction</td><td>What question are we answering? "Map the external attack surface" and "find a phishing pretext" produce different collection plans</td></tr>
+          <tr><td>Collection</td><td>Running the tools — the part everyone thinks OSINT is</td></tr>
+          <tr><td>Processing</td><td>Normalising, deduplicating, and resolving raw output into something queryable</td></tr>
+          <tr><td>Analysis</td><td>Correlating across sources, discarding noise, and deciding what the findings <em>mean</em></td></tr>
+          <tr><td>Dissemination</td><td>Reporting in a form the reader can act on</td></tr>
+          <tr><td>Feedback</td><td>New questions from the analysis feed the next collection round</td></tr>
+        </tbody>
+      </table>
+
+      <p>
+        Direction and analysis are the ones that get skipped, and skipping them is why
+        an OSINT deliverable can be four hundred subdomains long and still say nothing.
+        Before the first command, write your collection requirements down. Mine usually
+        look like this:
+      </p>
+
+      <ul>
+        <li>What is the complete externally reachable footprint, including assets the client has forgotten?</li>
+        <li>Which of those are the weakest entry points, and why?</li>
+        <li>Who works here, what is the email format, and who has elevated access?</li>
+        <li>What credentials belonging to this organisation are already public?</li>
+        <li>What would a convincing phishing pretext look like, built only from public information?</li>
+      </ul>
+
+      <p>
+        Every command below exists to answer one of those. If a tool run does not map
+        to a requirement, it is a hobby, not an engagement.
+      </p>
+
+      <h2>Phase 0 — Workspace and discipline</h2>
+
+      <p>
+        Set this up before collecting anything. The difference between an engagement you
+        can write up in a day and one that takes a week is almost entirely whether the
+        raw data was organised on the way in.
+      </p>
+
+      <pre><code>ENGAGEMENT=client-2026-08
+TARGET=target.com
+
+mkdir -p ~/engagements/$ENGAGEMENT/{00-scope,01-domains,02-subdomains,03-infra,04-content,05-people,06-creds,07-analysis,evidence,logs}
+cd ~/engagements/$ENGAGEMENT
+
+# Record the scope so it is impossible to drift without noticing
+cp /path/to/signed-sow.pdf 00-scope/
+echo "$TARGET" &gt; 00-scope/in-scope-domains.txt
+
+# Log every command with a timestamp — you will need this for the report,
+# and for proving what you did and when if anything is ever disputed
+script -a logs/session-$(date +%Y%m%d).log</code></pre>
+
+      <p>
+        A few disciplines that pay for themselves every time:
+      </p>
+
+      <ul>
+        <li><strong>One directory per engagement, never shared.</strong> Mixing clients in one Amass graph or one results folder is how scope violations happen by accident.</li>
+        <li><strong>Timestamp everything.</strong> OSINT data is a snapshot. A subdomain list without a date is worthless in three months, and the client <em>will</em> ask when you saw something.</li>
+        <li><strong>Keep raw output separate from analysis.</strong> Never edit the raw file. Derive from it.</li>
+        <li><strong>Record the source of every finding.</strong> "Found in a certificate transparency log on 2026-08-18" is a citation. "Found on the internet" is not, and it is the first thing a client challenges.</li>
+        <li><strong>Encrypt the directory at rest.</strong> You are accumulating a document that describes exactly how to attack your client.</li>
+      </ul>
+
+      <h3>OPSEC posture</h3>
+
+      <p>
+        Decide up front how visible you intend to be, because it changes which tools you
+        can use.
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>Posture</th><th>What it means</th><th>Constraints</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Fully passive</td><td>Zero packets to client infrastructure; third-party datasets only</td><td>No DNS resolution, no HTTP requests, no port scanning. crt.sh, Shodan, archives only</td></tr>
+          <tr><td>Low-noise active</td><td>Resolution and normal-looking HTTP requests, rate-limited</td><td>Use a residential or cloud IP you are happy to burn; no brute forcing</td></tr>
+          <tr><td>Full active</td><td>Brute forcing, scanning, content discovery</td><td>Requires explicit authorisation and usually a deconfliction IP list lodged with the blue team</td></tr>
+        </tbody>
+      </table>
+
+      <p>
+        For a red team specifically, the default should be fully passive for as long as
+        possible. The entire value proposition of a red team over a pentest is that you
+        model an adversary who does not announce themselves, and an adversary building a
+        target picture does not start by scanning the perimeter.
+      </p>
+
+      <blockquote>
+        Practical note: run everything from infrastructure that is not attributable to
+        your employer. A client's SOC noticing a burst of DNS queries from your
+        consultancy's office range on day one is an unforced error, and it is one the
+        blue team will legitimately mark as a detection.
+      </blockquote>
+
+      <h2>Phase 1 — Establish the organisation, not just the domain</h2>
+
+      <p>
+        You have one domain. The client owns more than one domain. The first job is to
+        work outward from the name you were given to the <em>organisation</em>, because
+        the forgotten assets — the ones that make a red team engagement — are almost never
+        under the primary domain.
+      </p>
+
+      <h3>1.1 WHOIS and registration data</h3>
+
+      <pre><code>whois $TARGET | tee 01-domains/whois-raw.txt
+
+# The fields worth extracting
+whois $TARGET | grep -iE 'registrar|registrant|admin|tech|name server|creation|expiry|org'</code></pre>
+
+      <p>
+        Modern WHOIS is mostly redacted behind privacy services, so expect the registrant
+        block to be useless. Three things usually survive redaction and are worth having:
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Why it matters</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Nameservers</td><td>Self-hosted NS records are a strong ownership fingerprint — every other domain using them is very likely the same organisation</td></tr>
+          <tr><td>Registrar</td><td>Organisations tend to keep all domains at one registrar; useful as a weak correlation signal</td></tr>
+          <tr><td>Creation date</td><td>Dates the organisation's online presence and helps distinguish the real domain from a typosquat</td></tr>
+          <tr><td>Registrant org</td><td>When present, this is the string you pivot on for every sibling domain</td></tr>
+        </tbody>
+      </table>
+
+      <p>
+        Historical WHOIS is where the value actually is. Domains registered before privacy
+        proxies became standard often have a real name, email, and address in the archive,
+        and <a href="../tool-detail.html?tool=securitytrails">SecurityTrails</a> keeps those
+        snapshots.
+      </p>
+
+      <pre><code>curl -s -H "APIKEY: $ST_KEY" \
+  "https://api.securitytrails.com/v1/history/$TARGET/whois" \
+  | jq '.result.items[] | {contact: .contact, date: .createdDate}' \
+  | tee 01-domains/whois-history.json</code></pre>
+
+      <h3>1.2 Pivot to sibling domains</h3>
+
+      <p>
+        Now take every non-redacted identifier and reverse it. This is the single
+        highest-value step in the whole phase, and it is the one most people skip.
+      </p>
+
+      <pre><code># Reverse WHOIS — every domain registered with the same email or org
+# ViewDNS web UI, or via API:
+curl -s "https://api.viewdns.info/reversewhois/?q=admin@$TARGET&amp;apikey=$VDNS_KEY&amp;output=json" \
+  | jq -r '.response.matches[].domain' | tee 01-domains/siblings-whois.txt
+
+# Reverse NS — every domain on the same nameservers
+curl -s "https://api.viewdns.info/reversens/?ns=ns1.$TARGET&amp;apikey=$VDNS_KEY&amp;output=json" \
+  | jq -r '.response.domains[].domain' | tee 01-domains/siblings-ns.txt
+
+# SecurityTrails DSL does the same thing more precisely
+curl -s -H "APIKEY: $ST_KEY" -X POST \
+  -d '{"filter":{"whois_email":"admin@target.com"}}' \
+  "https://api.securitytrails.com/v1/domains/list" | jq -r '.records[].hostname'</code></pre>
+
+      <p>
+        Full reference for these:
+        <a href="../tool-detail.html?tool=viewdns">ViewDNS</a> and
+        <a href="../tool-detail.html?tool=securitytrails">SecurityTrails</a>.
+      </p>
+
+      <h3>1.3 Map the netblocks and ASNs</h3>
+
+      <p>
+        If the organisation is large enough to own IP space, that space is in scope-adjacent
+        territory and contains assets DNS will never point you at.
+      </p>
+
+      <pre><code># Organisation name to ASNs and netblocks
+amass intel -org "Target Corp" -whois | tee 01-domains/asn-intel.txt
+
+# Everything in a discovered ASN
+amass intel -asn 64500 -dir ./amass-graph | tee 01-domains/asn-64500.txt
+
+# Cross-check against the RIR directly
+whois -h whois.radb.net -- '-i origin AS64500' | grep -E '^route:'</code></pre>
+
+      <p>
+        See <a href="../tool-detail.html?tool=amass">Amass</a> for the full subcommand set.
+      </p>
+
+      <h3>1.4 Corporate structure</h3>
+
+      <p>
+        Free sources that tell you what the organisation actually consists of, which is
+        what tells you which of those sibling domains matter:
+      </p>
+
+      <ul>
+        <li><strong>Company registries</strong> — MCA (India), Companies House (UK), OpenCorporates (aggregated). Gives subsidiaries, directors, and registered addresses.</li>
+        <li><strong>The client's own site</strong> — "About", "Our brands", "Investors", and press releases name acquisitions, which name domains.</li>
+        <li><strong>Job listings</strong> — name the technology stack, the office locations, and often the internal tooling by name.</li>
+        <li><strong>Trademark databases</strong> — brand names that have domains you have not found yet.</li>
+      </ul>
+
+      <blockquote>
+        Acquisitions are the classic red team entry point. A company acquired eighteen
+        months ago still runs its old infrastructure, on its old domain, with its old
+        security posture, now connected to the parent network. It is in scope if the
+        client owns it — confirm that explicitly, then treat it as the priority target
+        it usually is.
+      </blockquote>
+
+      <p><strong>Phase 1 output:</strong> a list of root domains, netblocks, and ASNs
+      belonging to the organisation, each with the evidence that ties it to the client.
+      Get the expanded scope confirmed in writing before you enumerate against it.</p>
+
+      <h2>Phase 2 — Subdomain enumeration</h2>
+
+      <p>
+        Now expand each in-scope root domain into its hostnames. Run several sources,
+        because they disagree substantially, and the union is always larger than the best
+        single source.
+      </p>
+
+      <h3>2.1 Certificate transparency first</h3>
+
+      <p>
+        Free, instant, keyless, and usually the single best source.
+        <a href="../tool-detail.html?tool=crtsh">crt.sh</a> reads the public logs that every
+        publicly trusted certificate must be published to — including the certificates
+        someone issued for <code>vpn-test</code> and <code>jenkins-internal</code>.
+      </p>
+
+      <pre><code>curl -s "https://crt.sh/?q=%25.$TARGET&amp;output=json" \
+  | jq -r '.[].name_value' \
+  | sed 's/\*\.//g' \
+  | tr '[:upper:]' '[:lower:]' \
+  | sort -u &gt; 02-subdomains/crtsh.txt
+
+wc -l 02-subdomains/crtsh.txt</code></pre>
+
+      <h3>2.2 Passive aggregators</h3>
+
+      <pre><code># subfinder — fast, wide, entirely passive
+subfinder -d $TARGET -all -silent &gt; 02-subdomains/subfinder.txt
+
+# Amass passive — slower, different source mix
+amass enum -passive -d $TARGET -dir ./amass-graph -o 02-subdomains/amass.txt
+
+# theHarvester — pulls email addresses at the same time
+theHarvester -d $TARGET -b all -l 1000 -f 02-subdomains/harvester
+
+# Archives — hostnames that existed historically
+gau --subs $TARGET | unfurl domains | sort -u &gt; 02-subdomains/archive.txt</code></pre>
+
+      <p>
+        References:
+        <a href="../tool-detail.html?tool=subfinder">Subfinder</a>,
+        <a href="../tool-detail.html?tool=amass">Amass</a>,
+        <a href="../tool-detail.html?tool=theharvester">theHarvester</a>,
+        <a href="../tool-detail.html?tool=wayback-machine">Wayback Machine</a>.
+      </p>
+
+      <blockquote>
+        Every command above is passive. Nothing has touched the client yet. If your
+        engagement is still in a passive-only window, you can go this far and no further —
+        and you will already have most of the attack surface.
+      </blockquote>
+
+      <h3>2.3 Merge and normalise</h3>
+
+      <pre><code>cat 02-subdomains/*.txt \
+  | grep -E "\.$TARGET$" \
+  | tr '[:upper:]' '[:lower:]' \
+  | sed 's/^\*\.//' \
+  | sort -u &gt; 02-subdomains/all-passive.txt
+
+wc -l 02-subdomains/all-passive.txt
+
+# How much did each source contribute uniquely? Worth knowing for next time.
+for f in crtsh subfinder amass archive; do
+  echo -n "$f unique: "
+  comm -23 &lt;(sort -u 02-subdomains/$f.txt) \
+           &lt;(cat 02-subdomains/*.txt | grep -v "$f" | sort -u) | wc -l
+done</code></pre>
+
+      <h3>2.4 Resolution — the first active step</h3>
+
+      <p>
+        This sends DNS queries. It is the boundary crossing. Make sure you are authorised,
+        and note the time in your log.
+      </p>
+
+      <pre><code># Resolve everything, keep only what exists
+dnsx -l 02-subdomains/all-passive.txt -a -resp -silent \
+  -o 02-subdomains/resolved.txt
+
+# Extract the unique IPs — this is the input to Phase 3
+awk '{print $NF}' 02-subdomains/resolved.txt | tr -d '[]' \
+  | sort -u &gt; 03-infra/ips.txt</code></pre>
+
+      <h3>2.5 Brute force and permutation (active, authorised only)</h3>
+
+      <pre><code># DNS brute force with a decent wordlist
+amass enum -active -brute -d $TARGET \
+  -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt \
+  -rf resolvers.txt -dir ./amass-graph
+
+# Permute known names — dev-, -staging, -uat, numeric increments
+# (if api.target.com exists, api-dev.target.com very often does too)
+amass enum -active -alts -d $TARGET -dir ./amass-graph</code></pre>
+
+      <p>
+        Supply your own resolver list. The default public resolvers rate-limit and silently
+        drop answers, which produces false negatives you will never notice.
+      </p>
+
+      <h3>2.6 Check for subdomain takeover</h3>
+
+      <p>
+        A CNAME pointing at a deprovisioned cloud resource is a full subdomain takeover,
+        and it is a genuinely common finding on any organisation with a few years of
+        cloud history.
+      </p>
+
+      <pre><code># Find dangling CNAMEs
+dnsx -l 02-subdomains/all-passive.txt -cname -resp -silent \
+  | tee 02-subdomains/cnames.txt
+
+# Flag the ones pointing at third-party services
+grep -iE 's3\.amazonaws|azurewebsites|cloudapp|herokuapp|github\.io|\
+netlify|shopify|fastly|zendesk|unbounce|surge\.sh' 02-subdomains/cnames.txt
+
+# Then verify — a CNAME to a service is not a takeover until the
+# target resource is confirmed unclaimed
+subjack -w 02-subdomains/all-passive.txt -t 50 -ssl -v \
+  -o 02-subdomains/takeover.json</code></pre>
+
+      <blockquote>
+        If you find a live takeover, stop and escalate immediately. Do not claim the
+        resource to "prove" it unless your rules of engagement explicitly permit it —
+        claiming it means registering something in your name that serves content on the
+        client's domain, and that is a conversation you want to have <em>before</em> it happens,
+        not after.
+      </blockquote>
+
+      <p><strong>Phase 2 output:</strong> <code>all-passive.txt</code> (every hostname
+      discovered), <code>resolved.txt</code> (what actually exists), <code>ips.txt</code>
+      (unique addresses), and a takeover candidate list.</p>
+
+      <h2>Phase 3 — Infrastructure and service mapping</h2>
+
+      <p>
+        You have hostnames and IPs. Now work out what is actually running, what is
+        exposed, and where the soft edges are — using third-party scan data first, so
+        that most of this stays passive.
+      </p>
+
+      <h3>3.1 Probe the web surface</h3>
+
+      <pre><code>cat 02-subdomains/resolved.txt | awk '{print $1}' \
+  | httpx -silent \
+      -status-code -title -tech-detect -web-server \
+      -content-length -location \
+      -json -o 03-infra/httpx.json
+
+# Readable summary
+jq -r '[.url, (.status_code|tostring), .title, (.tech//[]|join(","))] | @tsv' \
+  03-infra/httpx.json | column -t -s$'\t' | tee 03-infra/web-surface.tsv</code></pre>
+
+      <p>
+        Read this table properly rather than skimming it. What you are looking for:
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>Signal</th><th>Why it matters</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>401 / 403 responses</td><td>Something exists and is protected — often the most interesting hosts on the list</td></tr>
+          <tr><td>Default pages</td><td>"Welcome to nginx", Tomcat, IIS defaults — an unconfigured host nobody owns</td></tr>
+          <tr><td>Titles like "Dashboard", "Login", "Admin"</td><td>Management interfaces, the highest-value web targets</td></tr>
+          <tr><td>Old technology versions</td><td>A version string in a header or generator tag is a patch-level fingerprint</td></tr>
+          <tr><td>Hosts outside the main ASN</td><td>Shadow IT, forgotten cloud accounts, or a third party you need to scope-check</td></tr>
+          <tr><td>Non-standard ports responding</td><td>Things deployed outside the standard change process</td></tr>
+          <tr><td>Wildcard-looking uniformity</td><td>If everything returns the same page, you are looking at a catch-all, not real hosts</td></tr>
+        </tbody>
+      </table>
+
+      <h3>3.2 Query what has already been scanned</h3>
+
+      <p>
+        <a href="../tool-detail.html?tool=shodan">Shodan</a> and
+        <a href="../tool-detail.html?tool=censys">Censys</a> scanned the internet already.
+        Reading their index costs you nothing and tells the client's SOC nothing.
+      </p>
+
+      <pre><code># Everything Shodan knows about the discovered IPs
+for ip in $(cat 03-infra/ips.txt); do
+  shodan host "$ip" 2&gt;/dev/null
+done | tee 03-infra/shodan-hosts.txt
+
+# Organisation-wide view
+shodan search --fields ip_str,port,product,http.title "org:\"Target Corp\"" \
+  | tee 03-infra/shodan-org.txt
+
+# Port distribution across the org — instant shape of the estate
+shodan stats --facets port "org:\"Target Corp\""
+
+# Certificate pivot — finds hosts DNS never revealed
+shodan search --fields ip_str,port "ssl.cert.subject.CN:\"$TARGET\""</code></pre>
+
+      <pre><code># Censys — the stronger certificate index
+censys search "services.tls.certificates.leaf_data.subject_dn: *$TARGET*" \
+  --index-type hosts --pages -1 -f json -o 03-infra/censys.json
+
+# Anything obviously exposed in the discovered netblocks
+censys search "ip: 1.2.3.0/24 and (services.service_name: MONGODB \
+  or services.service_name: ELASTICSEARCH or services.service_name: REDIS)"</code></pre>
+
+      <blockquote>
+        The certificate pivot deserves emphasis. Certificate Subject Alternative Names
+        routinely list internal hostnames that appear in no public DNS record and in no
+        subdomain aggregator. Pivoting from a certificate fingerprint to every host
+        presenting it is how you find the infrastructure the organisation does not
+        realise is visible.
+      </blockquote>
+
+      <h3>3.3 Find the origin behind the CDN</h3>
+
+      <p>
+        If the client sits behind Cloudflare or similar, the WAF is only protecting the
+        traffic that goes through it. If you can reach the origin directly, you bypass
+        every control it provides. Historical DNS is the standard technique.
+      </p>
+
+      <pre><code># Historical A records — often predate the CDN
+curl -s -H "APIKEY: $ST_KEY" \
+  "https://api.securitytrails.com/v1/history/$TARGET/dns/a" \
+  | jq -r '.records[] | "\(.first_seen) \(.last_seen) \(.values[].ip)"' \
+  | tee 03-infra/historical-ips.txt
+
+# Verify a candidate — the IP alone proves nothing,
+# a matching response with the target's Host header proves it
+curl -sk -H "Host: $TARGET" "https://&lt;candidate_ip&gt;/" | head -50</code></pre>
+
+      <p>
+        Other origin-leak routes worth checking: MX records (mail servers are frequently
+        on the origin network and rarely proxied), a <code>dev.</code> or <code>staging.</code>
+        host that was never put behind the CDN, and SPF records that enumerate the
+        organisation's own sending IPs.
+      </p>
+
+      <pre><code>dig +short MX $TARGET
+dig +short TXT $TARGET | grep spf1
+# every ip4: in the SPF record is infrastructure the org controls</code></pre>
+
+      <h3>3.4 Read the DNS records properly</h3>
+
+      <p>
+        TXT records are an under-read goldmine. They map the organisation's entire SaaS
+        supply chain, and DMARC tells you whether you can spoof them.
+      </p>
+
+      <pre><code>dig +short TXT $TARGET
+dig +short TXT _dmarc.$TARGET
+dig +short TXT selector1._domainkey.$TARGET
+dig +short MX $TARGET
+dig +short NS $TARGET</code></pre>
+
+      <table>
+        <thead>
+          <tr><th>Record</th><th>What it tells you</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>v=spf1 include:...</code></td><td>Every third party authorised to send mail as the domain — a ready-made vendor list</td></tr>
+          <tr><td><code>v=DMARC1; p=none</code></td><td>Monitor-only. The domain is spoofable in practice — a direct phishing enabler and a reportable finding</td></tr>
+          <tr><td><code>p=quarantine</code> / <code>p=reject</code></td><td>Enforcement is on; direct spoofing will not land, so plan a lookalike domain instead</td></tr>
+          <tr><td><code>google-site-verification</code></td><td>Google Workspace tenant</td></tr>
+          <tr><td><code>MS=ms########</code></td><td>Microsoft 365 tenant — pivot to tenant enumeration</td></tr>
+          <tr><td>Vendor tokens</td><td>Each one names a SaaS product in use: Atlassian, Zoom, Docusign, Slack, and so on</td></tr>
+          <tr><td>MX provider</td><td>Determines the entire mail attack path — Google, Microsoft, or self-hosted are three different engagements</td></tr>
+        </tbody>
+      </table>
+
+      <p>
+        <a href="../tool-detail.html?tool=dnsdumpster">DNSDumpster</a> renders all of this
+        in one page if you want a fast visual, and its generated domain map is genuinely
+        useful in a report.
+      </p>
+
+      <h3>3.5 Cloud tenant identification</h3>
+
+      <p>
+        If the MX or TXT records point at Microsoft 365, the tenant itself is enumerable
+        from entirely public endpoints:
+      </p>
+
+      <pre><code># Federation and tenant details — public endpoint, no auth
+curl -s "https://login.microsoftonline.com/getuserrealm.srf?login=user@$TARGET&amp;xml=1"
+
+# Tenant ID and all domains attached to the tenant
+curl -s "https://login.microsoftonline.com/$TARGET/.well-known/openid-configuration" | jq .issuer</code></pre>
+
+      <p>
+        The domain list attached to a tenant is valuable — it often includes internal
+        <code>.onmicrosoft.com</code> names and acquired-company domains you had not found.
+      </p>
+
+      <h3>3.6 Cloud storage discovery</h3>
+
+      <pre><code># Bucket names are almost always predictable from the org name
+for n in target target-corp targetcorp target-backup target-assets \
+         target-dev target-prod target-static target-logs; do
+  for suffix in "" -prod -dev -staging -backup -public; do
+    echo "https://${n}${suffix}.s3.amazonaws.com"
+  done
+done | httpx -silent -status-code -mc 200,403
+
+# Same idea via search
+# site:s3.amazonaws.com "target"
+# site:blob.core.windows.net "target"
+# site:storage.googleapis.com "target"</code></pre>
+
+      <blockquote>
+        A 403 is still a finding — it confirms the bucket exists and belongs to someone.
+        A 200 on a bucket listing is a data exposure. Do not download the contents; note
+        the exposure, capture minimal evidence (a directory listing screenshot), and escalate.
+        Exfiltrating client data to prove a point is how a finding becomes an incident.
+      </blockquote>
+
+      <p><strong>Phase 3 output:</strong> a table of live hosts with technology, status,
+      and ownership; exposed services from third-party scan data; candidate origin IPs;
+      the DNS and SaaS picture; and the mail security posture.</p>
+
+      <h2>Phase 4 — Content, documents, and code</h2>
+
+      <p>
+        Infrastructure tells you where the doors are. Content tells you what is behind
+        them, and it is where the actual secrets tend to be.
+      </p>
+
+      <h3>4.1 Search engine reconnaissance</h3>
+
+      <p>
+        <a href="../tool-detail.html?tool=google-dorking">Dorking</a> is entirely passive
+        and remains the best yield-per-minute activity in reconnaissance. Work through a
+        structured sequence rather than improvising.
+      </p>
+
+      <pre><code># Scale and shape of the indexed footprint
+site:target.com
+site:*.target.com -site:www.target.com
+
+# Documents
+site:target.com filetype:pdf OR filetype:docx OR filetype:xlsx OR filetype:pptx
+site:target.com filetype:pdf "confidential" OR "internal use only"
+
+# Configuration and data files
+site:target.com ext:sql OR ext:db OR ext:bak OR ext:log
+site:target.com ext:env OR ext:conf OR ext:ini OR ext:cnf
+site:target.com "index of" backup
+
+# Panels and internal tooling
+site:target.com inurl:admin OR inurl:login OR inurl:portal
+site:target.com inurl:jenkins OR inurl:jira OR inurl:gitlab OR inurl:grafana
+site:target.com inurl:swagger OR inurl:graphql OR inurl:"/api/"
+site:target.com intitle:"index of"
+
+# Third-party leakage
+site:github.com "target.com"
+site:pastebin.com "target.com"
+site:trello.com "target"
+site:docs.google.com "target corp"
+"@target.com" -site:target.com</code></pre>
+
+      <p>
+        Run the same queries on Bing (which supports <code>ip:</code> — Google does not)
+        and Yandex. Index coverage differs enough that each regularly returns what the
+        others missed.
+      </p>
+
+      <h3>4.2 Historical content</h3>
+
+      <p>
+        The <a href="../tool-detail.html?tool=wayback-machine">Wayback Machine</a> has
+        every page and script the site ever served, including the ones deliberately removed.
+        For endpoint discovery it is unmatched.
+      </p>
+
+      <pre><code># Every archived URL
+gau --subs $TARGET | sort -u &gt; 04-content/archive-urls.txt
+waybackurls $TARGET | sort -u &gt;&gt; 04-content/archive-urls.txt
+sort -u -o 04-content/archive-urls.txt 04-content/archive-urls.txt
+
+# Which parameters has this application ever accepted?
+grep '?' 04-content/archive-urls.txt | unfurl keys \
+  | sort | uniq -c | sort -rn | head -40
+
+# Which of these old URLs still respond?
+cat 04-content/archive-urls.txt \
+  | httpx -silent -status-code -mc 200,301,302,401,403 \
+  | tee 04-content/still-live.txt
+
+# Historical robots.txt — the paths they wanted hidden
+curl -s "http://web.archive.org/cdx/search/cdx?url=$TARGET/robots.txt&amp;output=text&amp;fl=timestamp&amp;collapse=digest"</code></pre>
+
+      <p>
+        Archived JavaScript is consistently the richest single source here. Teams strip
+        secrets from current builds and never think about the copies preserved in 2019.
+      </p>
+
+      <pre><code>grep '\.js$' 04-content/archive-urls.txt | sort -u &gt; 04-content/js-urls.txt
+
+while read u; do
+  curl -s "https://web.archive.org/web/2020id_/$u"
+done &lt; 04-content/js-urls.txt &gt; 04-content/archived-js.txt
+
+# Endpoints
+grep -oE '"/[a-zA-Z0-9_/.-]+"' 04-content/archived-js.txt | sort -u
+
+# Candidate secrets
+grep -oiE '(api[_-]?key|secret|token|password|bearer)["\x27:= ]+[a-zA-Z0-9_\-]{16,}' \
+  04-content/archived-js.txt | sort -u</code></pre>
+
+      <h3>4.3 Public code repositories</h3>
+
+      <p>
+        Developers commit credentials. They always have. GitHub is the highest-yield
+        single source for a working credential on most engagements.
+      </p>
+
+      <pre><code># Find the organisation and its members
+# github.com/orgs/&lt;org&gt;/people — often a better staff list than LinkedIn
+
+# Search public code for the domain
+# GitHub code search:
+#   "target.com" password
+#   "target.com" api_key
+#   org:targetcorp filename:.env
+#   "internal.target.com"
+
+# Scan a specific repo's full history — secrets are usually in old commits
+git clone https://github.com/&lt;org&gt;/&lt;repo&gt;
+trufflehog git file://./&lt;repo&gt; --json | tee 04-content/trufflehog.json
+gitleaks detect -s ./&lt;repo&gt; -r 04-content/gitleaks.json</code></pre>
+
+      <blockquote>
+        Personal repositories of identified employees are frequently more productive than
+        the company org, and are also a scope question. An employee's personal GitHub is
+        not the client's asset. Check your rules of engagement before you go there, and
+        if a personal repo leaks a corporate credential, report the credential — not a
+        profile of the individual.
+      </blockquote>
+
+      <h3>4.4 Document metadata</h3>
+
+      <p>
+        Every document the organisation publishes carries its author, the software that
+        made it, and sometimes an internal file path. This is how you learn the internal
+        username format without touching a single system.
+      </p>
+
+      <pre><code># Collect the documents found by dorking
+mkdir -p 04-content/docs
+wget -q -i 04-content/doc-urls.txt -P 04-content/docs/
+
+# Extract the metadata that matters
+exiftool -r -T -filename -Author -Creator -LastModifiedBy -Company \
+  -Software -Producer -CreateDate 04-content/docs/ \
+  | tee 04-content/doc-metadata.tsv
+
+# Unique author values — these are candidate usernames
+exiftool -r -T -Author -LastModifiedBy 04-content/docs/ \
+  | tr '\t' '\n' | grep -v '^-$' | sort -u</code></pre>
+
+      <p>
+        Full reference: <a href="../tool-detail.html?tool=exiftool">ExifTool</a>.
+        What you are mining for:
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>Metadata field</th><th>Operational value</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Author / LastModifiedBy</td><td>Real names and very often the literal AD username (<code>jdoe</code>, <code>john.doe</code>)</td></tr>
+          <tr><td>Company</td><td>Confirms the document's origin, and sometimes names an acquired entity</td></tr>
+          <tr><td>Software / Producer</td><td>Exact Office/Acrobat version — a patch-level fingerprint of the desktop estate</td></tr>
+          <tr><td>Template path</td><td><code>\\fileserver\dept\template.dotx</code> names internal hosts and share names</td></tr>
+          <tr><td>Embedded images</td><td>Keep their own EXIF, occasionally including GPS</td></tr>
+          <tr><td>CreateDate timezone</td><td>Working hours and office location</td></tr>
+        </tbody>
+      </table>
+
+      <p>
+        The username format you extract here is the single most useful artefact of this
+        entire phase. It converts every name you find in Phase 5 into a probable
+        credential identifier.
+      </p>
+
+      <p><strong>Phase 4 output:</strong> exposed files and panels, historical endpoints
+      and parameters, candidate secrets from code and archived JS, the internal username
+      format, and a software version fingerprint.</p>
+
+      <h2>Phase 5 — People</h2>
+
+      <p>
+        Every technical control on the perimeter can be sound, and the engagement still
+        succeeds through a person. This phase builds the roster. It is also the phase with
+        the most legal and ethical weight, so re-read your authorisation before starting it.
+      </p>
+
+      <h3>5.1 Build the staff list</h3>
+
+      <table>
+        <thead>
+          <tr><th>Source</th><th>What it gives you</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>LinkedIn</td><td>The primary source — names, roles, tenure, reporting structure, and the technology people list in their skills</td></tr>
+          <tr><td>The client's own site</td><td>Leadership, press contacts, and the "our team" page</td></tr>
+          <tr><td>Document metadata (Phase 4)</td><td>Names that never appear publicly, plus the username format</td></tr>
+          <tr><td>GitHub org members</td><td>Engineering staff, often with a personal email in commit history</td></tr>
+          <tr><td>Conference talks and papers</td><td>Names senior technical staff and, in the slides, the actual internal architecture</td></tr>
+          <tr><td>Job listings</td><td>The stack, the tooling, the team structure, and the hiring manager</td></tr>
+          <tr><td>Press releases</td><td>Executives, with quotes that give you their voice for a pretext</td></tr>
+        </tbody>
+      </table>
+
+      <p>
+        Prioritise deliberately. You are not building a phone book; you are looking for
+        specific categories:
+      </p>
+
+      <ul>
+        <li><strong>IT and helpdesk</strong> — targets for pretexting, and the people whose credentials have the widest reach.</li>
+        <li><strong>Finance and payroll</strong> — the targets for business email compromise.</li>
+        <li><strong>HR and recruitment</strong> — professionally obliged to open attachments from strangers.</li>
+        <li><strong>New joiners</strong> — visible from LinkedIn start dates, not yet trained, eager to be helpful.</li>
+        <li><strong>Executives</strong> — high privilege, high public visibility, and the identity a pretext impersonates.</li>
+        <li><strong>Engineers</strong> — the ones committing to public repos and answering questions on Stack Overflow with real config snippets.</li>
+      </ul>
+
+      <h3>5.2 Derive and verify the email format</h3>
+
+      <p>
+        You usually already have the format from document metadata. Confirm it against a
+        second source before generating a list from it.
+      </p>
+
+      <pre><code># Hunter.io returns the dominant pattern plus discovered addresses
+curl -s "https://api.hunter.io/v2/domain-search?domain=$TARGET&amp;api_key=$HUNTER_KEY" \
+  | jq '{pattern: .data.pattern, emails: [.data.emails[].value]}' \
+  | tee 05-people/hunter-domain.json
+
+# theHarvester picks up addresses published on third-party sites
+theHarvester -d $TARGET -b all -l 500 -f 05-people/harvester</code></pre>
+
+      <p>
+        Reference: <a href="../tool-detail.html?tool=hunter-io">Hunter.io</a>.
+        Once the pattern is confirmed, generate candidates from the names you collected:
+      </p>
+
+      <pre><code># names.txt holds "John Doe" per line
+while read -r first last; do
+  f=$(echo "$first" | tr '[:upper:]' '[:lower:]')
+  l=$(echo "$last"  | tr '[:upper:]' '[:lower:]')
+  echo "${f}.${l}@$TARGET"
+  echo "${f:0:1}${l}@$TARGET"
+  echo "${f}${l:0:1}@$TARGET"
+  echo "${f}@$TARGET"
+done &lt; 05-people/names.txt | sort -u &gt; 05-people/candidates.txt</code></pre>
+
+      <blockquote>
+        Generating a candidate list is passive. <em>Verifying</em> it against the client's
+        mail server is not — SMTP verification touches their infrastructure and is often
+        logged. Prefer Hunter's verifier or a Microsoft tenant check, and note the
+        activity in your log either way.
+      </blockquote>
+
+      <h3>5.3 Usernames and cross-platform presence</h3>
+
+      <p>
+        For the individuals who matter — the ones you may build a pretext around — map
+        their handle across platforms. People reuse usernames far more than they think.
+      </p>
+
+      <pre><code># Sherlock — fast, clean, ~400 sites
+sherlock &lt;handle&gt; --print-found --csv --folderoutput 05-people/sherlock/
+
+# Maigret — broader, and it extracts profile detail rather than just URLs
+maigret &lt;handle&gt; --top-sites 500 --print-found --html \
+  --folderoutput 05-people/maigret/
+
+# Cross-check hits against WhatsMyName, which validates its detections
+# and produces far fewer false positives</code></pre>
+
+      <p>
+        References:
+        <a href="../tool-detail.html?tool=sherlock">Sherlock</a>,
+        <a href="../tool-detail.html?tool=maigret">Maigret</a>,
+        <a href="../tool-detail.html?tool=whatsmyname">WhatsMyName</a>.
+      </p>
+
+      <p>
+        The variations worth trying for each name: <code>john.doe</code>,
+        <code>johndoe</code>, <code>john_doe</code>, <code>jdoe</code>,
+        <code>johnd</code>, and the localpart of any email you already have — that last
+        one is the highest hit rate by a distance.
+      </p>
+
+      <h3>5.4 Which services are these addresses registered on?</h3>
+
+      <pre><code># holehe — checks 120+ sites for registration, sends no notification
+holehe john.doe@$TARGET --only-used --csv
+
+# Epieos — Google account detail, often returns a real display name,
+# and Maps review history, which people forget is public
+# epieos.com — enter the address</code></pre>
+
+      <p>
+        References:
+        <a href="../tool-detail.html?tool=holehe">Holehe</a>,
+        <a href="../tool-detail.html?tool=epieos">Epieos</a>.
+      </p>
+
+      <p>
+        For an organisation, aggregating this across staff addresses answers a question
+        the client usually cannot answer themselves: which SaaS platforms are their
+        employees actually using with corporate credentials? That is shadow IT, mapped
+        from outside.
+      </p>
+
+      <h3>5.5 Ethical boundaries in this phase</h3>
+
+      <p>
+        This is where an OSINT engagement most easily goes wrong. A few lines I hold:
+      </p>
+
+      <ul>
+        <li>Collect the <strong>professional</strong> footprint. Role, employer, work email, work handle, public technical output. That is what the engagement needs.</li>
+        <li>Do not collect health, dating, religious, or political data. It has no assessment value and holding it is a liability for you and your client.</li>
+        <li>Do not research family members. Ever. The employee is in scope by employment; their spouse is not.</li>
+        <li>Do not interact under a false identity unless social engineering is explicitly authorised in writing, with its own rules of engagement.</li>
+        <li>Report roles and patterns, not individuals, wherever possible. "Twelve staff in finance have addresses in three breach corpora" is the finding. Naming them in the report body rarely adds anything and creates a document nobody wants leaked.</li>
+        <li>Set a destruction date for this data and honour it.</li>
+      </ul>
+
+      <p><strong>Phase 5 output:</strong> a staff list with roles, the confirmed email
+      format, a candidate address list, mapped handles for priority individuals, and a
+      picture of the organisation's SaaS usage.</p>
+
+      <h2>Phase 6 — Credential and breach exposure</h2>
+
+      <p>
+        The question this phase answers: can an attacker log in as someone here without
+        exploiting anything at all? On a depressing number of engagements, the answer is yes.
+      </p>
+
+      <h3>6.1 Breach exposure</h3>
+
+      <pre><code># Domain-wide report — requires verified domain ownership, which the client
+# can grant you. This is the clean, ethical way to size the exposure.
+curl -s -H "hibp-api-key: $HIBP_KEY" \
+  "https://haveibeenpwned.com/api/v3/breacheddomain/$TARGET" \
+  | jq . | tee 06-creds/hibp-domain.json
+
+# Per-address, if you only have individual addresses
+for e in $(cat 05-people/confirmed-emails.txt); do
+  curl -s -H "hibp-api-key: $HIBP_KEY" \
+    "https://haveibeenpwned.com/api/v3/breachedaccount/$e?truncateResponse=false" \
+    | jq -r --arg e "$e" '.[]? | "\($e)\t\(.Name)\t\(.BreachDate)\t\(.DataClasses|join(","))"'
+  sleep 2
+done | tee 06-creds/hibp-accounts.tsv</code></pre>
+
+      <p>
+        Reference: <a href="../tool-detail.html?tool=haveibeenpwned">Have I Been Pwned</a>.
+        What matters when you read the results:
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>Field</th><th>How to interpret it</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>DataClasses includes "Passwords"</td><td>The high-severity case — a credential existed in plaintext or crackable form</td></tr>
+          <tr><td>BreachDate</td><td>Compare against the client's password rotation policy. A 2014 breach may already be remediated</td></tr>
+          <tr><td>Corporate address in a consumer breach</td><td>Staff using work email for personal services — a policy finding as well as a credential one</td></tr>
+          <tr><td>Multiple breaches, one address</td><td>Password reuse is highly likely; prioritise this account</td></tr>
+          <tr><td>IsVerified false</td><td>Treat with caution; the data's authenticity is unconfirmed</td></tr>
+        </tbody>
+      </table>
+
+      <h3>6.2 A word on credential dumps</h3>
+
+      <blockquote>
+        There are commercial services that will return plaintext passwords from breach
+        corpora, and there are places on the internet that will do it for free. Using them
+        means handling stolen credentials belonging to real people, which is a criminal
+        act in most jurisdictions regardless of your engagement letter.
+        <br><br>
+        If credential validation is genuinely required by the engagement, it belongs in
+        the SOW as its own explicitly authorised activity, using a service with a lawful
+        basis and a contract, run against accounts the client has told you about. It is
+        not something you decide to do mid-engagement because a search box was there.
+      </blockquote>
+
+      <p>
+        The defensible version of this finding does not need plaintext passwords at all:
+        "N corporate addresses appear in M breach corpora, of which K included password
+        data, and the organisation does not enforce MFA on the affected service" is a
+        complete, actionable, high-severity finding.
+      </p>
+
+      <h3>6.3 Password policy inference</h3>
+
+      <p>
+        You can often infer the password policy from public sources without touching
+        anything — the self-service password reset page usually states the complexity
+        requirements, and the help documentation states the rotation period. That tells
+        you the shape of a credential-stuffing or spraying wordlist, which is exactly what
+        the next phase of the engagement needs.
+      </p>
+
+      <p><strong>Phase 6 output:</strong> breach exposure counts by severity, affected
+      role categories, the MFA posture where it is externally observable, and the inferred
+      password policy.</p>
+
+      <h2>Phase 7 — Correlation and analysis</h2>
+
+      <p>
+        This is where OSINT stops being collection and becomes intelligence, and it is the
+        phase most people short-change. You now have thousands of data points across seven
+        directories. The deliverable is not those data points.
+      </p>
+
+      <h3>7.1 Normalise everything into one place</h3>
+
+      <pre><code># Master asset table: host, IP, status, title, technology, source, first seen
+jq -r '[.input, .host, (.status_code|tostring), .title,
+        ((.tech//[])|join(";"))] | @tsv' 03-infra/httpx.json \
+  | sort -u &gt; 07-analysis/assets.tsv
+
+# Master people table: name, role, email, handle, breach count
+# (built by hand or with a small script — the structure matters more
+#  than the tooling)</code></pre>
+
+      <p>
+        For anything beyond a small engagement, put it in a graph.
+        <a href="../tool-detail.html?tool=maltego">Maltego</a> exists for exactly this,
+        and <a href="../tool-detail.html?tool=spiderfoot">SpiderFoot</a>'s correlation
+        rules will surface patterns from raw results automatically.
+      </p>
+
+      <pre><code># Amass can export its graph straight into Maltego
+amass viz -maltego -d $TARGET -dir ./amass-graph
+
+# Or run SpiderFoot over the same seed and read its Correlations tab first
+python3 ./sf.py -s $TARGET -t DOMAIN_NAME -u footprint</code></pre>
+
+      <h3>7.2 The questions correlation answers</h3>
+
+      <p>
+        A list of findings is not analysis. Analysis is the answers to these:
+      </p>
+
+      <ul>
+        <li><strong>Which host is both weak and important?</strong> An outdated Jenkins on a forgotten subdomain outranks a hardened marketing site every time.</li>
+        <li><strong>Where do infrastructure and people intersect?</strong> A VPN portal, plus a confirmed email format, plus staff in breach corpora, plus no visible MFA, is not four findings. It is one attack path.</li>
+        <li><strong>What does the organisation not know it has?</strong> Assets outside the main ASN, hosts with expired certificates, subdomains pointing at deprovisioned cloud resources. Nobody owns these, which means nobody patches them.</li>
+        <li><strong>What is the most credible pretext?</strong> Built from the SaaS stack in the TXT records, a real recent event from press releases, and a real internal name from document metadata.</li>
+        <li><strong>Where is the blast radius largest?</strong> Which single compromised identity gives the widest access, based on role and the systems that role implies.</li>
+      </ul>
+
+      <h3>7.3 Build the attack paths</h3>
+
+      <p>
+        Write each one as a narrative chain, because that is the form a client can act on:
+      </p>
+
+      <blockquote>
+        <strong>Path A — Credential stuffing to VPN.</strong>
+        The email format <code>first.last@</code> is confirmed from document metadata and
+        Hunter.io. 47 staff addresses appear in breach corpora, 12 of them in breaches
+        that included password data. <code>vpn.target.com</code> is a Fortinet portal with
+        no visible MFA prompt. No rate limiting is externally observable.
+        <em>Chain:</em> generate addresses from the LinkedIn roster → spray previously
+        breached passwords against the VPN portal → obtain internal network access without
+        exploiting a single vulnerability.
+      </blockquote>
+
+      <blockquote>
+        <strong>Path B — Forgotten staging host.</strong>
+        <code>staging-api.target.com</code> resolves to an IP outside the primary ASN,
+        returns a 200 with a Swagger UI, and Shodan shows port 22 and 5432 also open on
+        the same host. The archived JavaScript from 2021 references an API key parameter
+        that the current build no longer uses but the endpoint still accepts.
+        <em>Chain:</em> enumerate the API through its own documentation → replay the
+        legacy authentication parameter → reach the database directly.
+      </blockquote>
+
+      <h3>7.4 Rank by exploitability, not by count</h3>
+
+      <table>
+        <thead>
+          <tr><th>Priority</th><th>Characteristics</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Critical</td><td>Directly exploitable now: live subdomain takeover, exposed credential in a public repo, open database, unauthenticated admin panel</td></tr>
+          <tr><td>High</td><td>A complete attack chain exists using only public information: credential exposure plus an unprotected authentication surface</td></tr>
+          <tr><td>Medium</td><td>Meaningful exposure requiring an additional step: outdated software with a known CVE, spoofable mail domain, staging host reachable publicly</td></tr>
+          <tr><td>Low</td><td>Information disclosure with no immediate path: internal hostnames in certificates, usernames in document metadata, technology fingerprinting</td></tr>
+          <tr><td>Informational</td><td>Context the client should have: asset inventory gaps, SaaS supply chain, footprint size</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Reporting</h2>
+
+      <p>
+        The report is the product. Everything before this was raw material, and a client
+        who cannot act on your document did not get value from the engagement.
+      </p>
+
+      <h3>Structure that works</h3>
+
+      <ol>
+        <li><strong>Executive summary</strong> — one page, no jargon. What was found, what it means in business terms, what to do first. Assume this is the only page the person signing the remediation budget reads.</li>
+        <li><strong>Scope and methodology</strong> — what was in scope, what was passive versus active, what the time window was, and what you deliberately did not do. This is what makes the assessment reproducible and defensible.</li>
+        <li><strong>Attack surface summary</strong> — the asset inventory, with emphasis on assets the client did not know about. This section alone often justifies the engagement.</li>
+        <li><strong>Findings</strong> — one per issue, ranked, each with: description, evidence, source and collection date, business impact, and specific remediation.</li>
+        <li><strong>Attack paths</strong> — the narrative chains. This is the section that changes behaviour, because it converts a list of issues into a story about how the organisation gets breached.</li>
+        <li><strong>Remediation roadmap</strong> — sequenced, with quick wins separated from structural work.</li>
+        <li><strong>Appendices</strong> — full asset lists, raw data references, tool versions and commands.</li>
+      </ol>
+
+      <h3>Writing individual findings</h3>
+
+      <p>
+        Every finding needs five things. Missing any one of them makes it arguable:
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>Element</th><th>Example</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>What</td><td>"The domain's DMARC policy is set to <code>p=none</code>"</td></tr>
+          <tr><td>Evidence</td><td>The actual record, with the query and the date it was collected</td></tr>
+          <tr><td>Source</td><td>"Public DNS TXT record for <code>_dmarc.target.com</code>, collected 2026-08-18"</td></tr>
+          <tr><td>Impact</td><td>"Any party can send mail appearing to originate from the domain; receiving servers are instructed to take no action"</td></tr>
+          <tr><td>Remediation</td><td>"Move to <code>p=quarantine</code> after a monitoring period, then <code>p=reject</code>. Verify all legitimate senders are in SPF first"</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Handling personal data in the report</h3>
+
+      <p>
+        Report categories and counts, not individuals, wherever the finding survives the
+        abstraction. "Fourteen addresses in the finance department appear in breach corpora
+        containing password data" carries the same operational weight as a named list and
+        creates a far less dangerous document. Where a named example is genuinely necessary,
+        use one, mark it clearly, and say why the abstraction was insufficient.
+      </p>
+
+      <h2>Mistakes that cost engagements</h2>
+
+      <table>
+        <thead>
+          <tr><th>Mistake</th><th>Why it hurts</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Collecting without a question</td><td>Produces a four-hundred-line subdomain list and no findings. Direction before collection, always</td></tr>
+          <tr><td>Trusting a single source</td><td>Sources disagree constantly. crt.sh, subfinder, and Amass each find what the others miss</td></tr>
+          <tr><td>Treating stale data as live</td><td>An archived URL or a Shodan record is a snapshot. Verify before reporting it as current</td></tr>
+          <tr><td>Crossing passive into active unnoticed</td><td>One flag turns Amass from passive to active. Know which mode you are in at all times</td></tr>
+          <tr><td>Scope drift through pivots</td><td>Every pivot risks landing on infrastructure you are not authorised to touch. Re-check ownership at each hop</td></tr>
+          <tr><td>Over-collecting personal data</td><td>Creates legal exposure for you and your client, and adds nothing to the assessment</td></tr>
+          <tr><td>Skipping the analysis phase</td><td>Raw findings are not intelligence. The correlation is the deliverable</td></tr>
+          <tr><td>No source attribution</td><td>The first thing a client challenges is a finding they cannot verify. Cite everything</td></tr>
+          <tr><td>Running everything from one IP</td><td>Rate limits, captchas, and an attributable footprint in the client's logs</td></tr>
+          <tr><td>Forgetting to check your own OPSEC</td><td>Your report is a manual for attacking the client. Encrypt it, transmit it securely, destroy the working data</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Appendix — the sequence in one place</h2>
+
+      <p>
+        The condensed version, in order. Everything above the resolution step is passive.
+      </p>
+
+      <pre><code>ENGAGEMENT=client-2026-08; TARGET=target.com
+mkdir -p ~/engagements/$ENGAGEMENT/{00-scope,01-domains,02-subdomains,03-infra,04-content,05-people,06-creds,07-analysis}
+cd ~/engagements/$ENGAGEMENT
+
+# ---- Phase 1: organisation ----
+whois $TARGET | tee 01-domains/whois.txt
+dig +short NS $TARGET; dig +short MX $TARGET; dig +short TXT $TARGET
+amass intel -org "Target Corp" -whois | tee 01-domains/asn.txt
+# reverse WHOIS / reverse NS via ViewDNS or SecurityTrails -&gt; sibling domains
+
+# ---- Phase 2: subdomains (passive) ----
+curl -s "https://crt.sh/?q=%25.$TARGET&amp;output=json" \
+  | jq -r '.[].name_value' | sed 's/\*\.//g' | sort -u &gt; 02-subdomains/crtsh.txt
+subfinder -d $TARGET -all -silent &gt; 02-subdomains/subfinder.txt
+amass enum -passive -d $TARGET -o 02-subdomains/amass.txt
+gau --subs $TARGET | unfurl domains | sort -u &gt; 02-subdomains/archive.txt
+cat 02-subdomains/*.txt | grep -E "\.$TARGET$" | sort -u &gt; 02-subdomains/all.txt
+
+# ---- Phase 2b: resolution (ACTIVE — authorisation boundary) ----
+dnsx -l 02-subdomains/all.txt -a -resp -silent -o 02-subdomains/resolved.txt
+awk '{print $NF}' 02-subdomains/resolved.txt | tr -d '[]' | sort -u &gt; 03-infra/ips.txt
+dnsx -l 02-subdomains/all.txt -cname -resp -silent &gt; 02-subdomains/cnames.txt
+
+# ---- Phase 3: infrastructure ----
+awk '{print $1}' 02-subdomains/resolved.txt \
+  | httpx -silent -status-code -title -tech-detect -json -o 03-infra/httpx.json
+for ip in $(cat 03-infra/ips.txt); do shodan host "$ip"; done &gt; 03-infra/shodan.txt
+shodan search --fields ip_str,port,product "ssl.cert.subject.CN:\"$TARGET\""
+censys search "services.tls.certificates.leaf_data.subject_dn: *$TARGET*" --index-type hosts
+curl -s -H "APIKEY: $ST_KEY" "https://api.securitytrails.com/v1/history/$TARGET/dns/a" | jq
+
+# ---- Phase 4: content ----
+gau --subs $TARGET | sort -u &gt; 04-content/archive-urls.txt
+grep '\.js$' 04-content/archive-urls.txt | sort -u &gt; 04-content/js-urls.txt
+cat 04-content/archive-urls.txt | httpx -silent -mc 200,401,403 &gt; 04-content/live.txt
+exiftool -r -T -filename -Author -Creator -LastModifiedBy -Software 04-content/docs/ \
+  | tee 04-content/metadata.tsv
+# dorks: filetype:, inurl:admin, site:github.com "target.com", "index of"
+
+# ---- Phase 5: people ----
+curl -s "https://api.hunter.io/v2/domain-search?domain=$TARGET&amp;api_key=$HUNTER_KEY" | jq
+theHarvester -d $TARGET -b all -l 500 -f 05-people/harvester
+sherlock &lt;handle&gt; --print-found --csv --folderoutput 05-people/
+maigret &lt;handle&gt; --top-sites 500 --print-found --html
+holehe &lt;email&gt; --only-used --csv
+
+# ---- Phase 6: credentials ----
+curl -s -H "hibp-api-key: $HIBP_KEY" \
+  "https://haveibeenpwned.com/api/v3/breacheddomain/$TARGET" | jq
+
+# ---- Phase 7: analysis ----
+amass viz -maltego -d $TARGET -dir ./amass-graph
+python3 ./sf.py -s $TARGET -t DOMAIN_NAME -u footprint</code></pre>
+
+      <h2>Closing</h2>
+
+      <p>
+        The thing worth internalising is that the tools are the least interesting part of
+        this. Any of them can be replaced tomorrow and the methodology does not change:
+        establish the organisation, expand to its assets, understand what those assets run,
+        read what it has published, identify who works there, check what is already exposed,
+        and then do the analysis that turns all of it into two or three sentences describing
+        how the organisation actually gets breached.
+      </p>
+
+      <p>
+        The discipline is what makes it professional rather than a hobby — knowing exactly
+        where your authorisation ends, knowing which commands cross a line and when you
+        crossed it, collecting only what serves a stated requirement, citing every finding
+        to a source and a date, and being able to hand the client a document that makes
+        them safer rather than one that just proves you were thorough.
+      </p>
+
+      <p>
+        Tool-level detail for everything referenced here lives in the
+        <a href="../toolkit.html">Toolkit</a>, and the conceptual background is in
+        <a href="../theory/2026-08-18-osint-fundamentals.html">OSINT Fundamentals</a>.
+      </p>
+
+    </div>
+  </article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap-wide">
+    <p>&copy; 2026 Satej Chaudhari</p>
+    <div class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../blog.html">Blog</a>
+      <a href="../theory.html">Theory</a>
+      <a href="../toolkit.html">Toolkit</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/main.js"></script>
+</body>
+</html>
