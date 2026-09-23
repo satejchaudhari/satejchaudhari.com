@@ -417,12 +417,14 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 .entry-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
   font-family: var(--mono);
   font-size: 0.74rem;
   color: var(--muted-2);
   margin-bottom: 10px;
 }
+.entry-meta time, .entry-meta > span { white-space: nowrap; }
 
 .tag {
   display: inline-block;
@@ -880,6 +882,20 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
     font-size: 0.92rem;
   }
 
+  /* group the theme toggle + hamburger together on the right — with the
+     desktop nav hidden, space-between would otherwise strand the toggle
+     in the middle of the header. Pushing the brand with an auto right
+     margin overrides space-between and packs the two buttons at the end. */
+  .brand { margin-right: auto; }
+  .theme-toggle { margin-left: 0; }
+  .nav-toggle { margin-left: 8px; }
+
+  /* smaller headings so they don't dominate a phone screen */
+  .hero-title { font-size: 2rem; line-height: 1.18; }
+  .page-title { font-size: 1.65rem; }
+  .post-title { font-size: 1.5rem; line-height: 1.3; }
+  .section-title { font-size: 1.35rem; }
+
   .hero { padding-block: 52px 44px; }
   .section { padding-block: 46px; }
   .page-head { padding-block: 44px 30px; }
@@ -913,6 +929,10 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 }
 @media (max-width: 480px) {
   .wrap, .wrap-wide { padding: 0 18px; }
+  .hero-title { font-size: 1.8rem; }
+  .page-title { font-size: 1.5rem; }
+  .post-title { font-size: 1.4rem; }
+  .section-title { font-size: 1.25rem; }
   .hero { padding-block: 44px 36px; }
   .section { padding-block: 40px; }
   .page-head { padding-block: 38px 26px; }
