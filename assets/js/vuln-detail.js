@@ -96,11 +96,19 @@
   sections.forEach(sec => navLinks.push({ label: sec.title, id: slugify(sec.title) }));
 
   if (navLinks.length > 0) {
-    html += `<nav class="tool-detail-quicknav" aria-label="Jump to section">`;
+    const collapsedByDefault = navLinks.length > 8;
+    html += `<div class="detail-toc${collapsedByDefault ? " is-collapsed" : ""}"${collapsedByDefault ? ' data-autocollapse="1"' : ""}>`;
+    html += `<button type="button" class="detail-toc-toggle" aria-controls="detail-toc-nav" aria-expanded="${collapsedByDefault ? "false" : "true"}">`;
+    html += `<span class="detail-toc-label">Jump to section</span>`;
+    html += `<span class="detail-toc-count">${navLinks.length}</span>`;
+    html += `<span class="detail-toc-current" aria-hidden="true"></span>`;
+    html += `<svg class="detail-toc-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+    html += `</button>`;
+    html += `<nav id="detail-toc-nav" class="tool-detail-quicknav" aria-label="Jump to section">`;
     navLinks.forEach(l => {
       html += `<a href="#${escapeAttr(l.id)}" data-jump="${escapeAttr(l.id)}">${escapeHtml(l.label)}</a>`;
     });
-    html += `</nav>`;
+    html += `</nav></div>`;
   }
 
   html += `
@@ -180,10 +188,24 @@
     return out;
   }
 
+  /* ---------- collapsible "Jump to section" panel ---------- */
+  const toc = root.querySelector(".detail-toc");
+  const tocToggle = root.querySelector(".detail-toc-toggle");
+  if (toc && tocToggle) {
+    tocToggle.addEventListener("click", () => {
+      const collapsed = toc.classList.toggle("is-collapsed");
+      tocToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    });
+  }
+
   root.querySelectorAll(".tool-detail-quicknav a[data-jump]").forEach(link => {
     link.addEventListener("click", () => {
       const target = document.getElementById(link.dataset.jump);
       if (target && target.tagName === "DETAILS") target.open = true;
+      if (toc && toc.dataset.autocollapse === "1") {
+        toc.classList.add("is-collapsed");
+        if (tocToggle) tocToggle.setAttribute("aria-expanded", "false");
+      }
     });
   });
 
@@ -260,6 +282,10 @@
       if (!current || current.section.id === activeId) return;
       activeId = current.section.id;
       items.forEach(it => it.link.classList.toggle("is-active", it === current));
+      const curLabel = root.querySelector(".detail-toc-current");
+      if (curLabel) curLabel.textContent = current.link.textContent;
+      const tocEl = root.querySelector(".detail-toc");
+      if (tocEl && tocEl.classList.contains("is-collapsed")) return;
       const cl = current.link;
       const target = cl.offsetLeft - (quicknav.clientWidth - cl.offsetWidth) / 2;
       quicknav.scrollTo({ left: Math.max(0, target), behavior: "smooth" });

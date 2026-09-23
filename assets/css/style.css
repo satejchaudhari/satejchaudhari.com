@@ -588,19 +588,68 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
    (flags/scripts/options) or a set of ready-to-run example commands.
    Both feed the same live filter (see tool-detail.js). */
 
-.tool-detail-quicknav {
+/* Collapsible "Jump to section" panel — a compact one-line header that
+   expands into a capped, scrollable list, so a long section list never
+   takes over the viewport. */
+.detail-toc {
   position: sticky;
   top: 64px; /* sits right under the sticky site header */
   z-index: 10;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 16px 0;
   margin-top: 4px;
   background: var(--header-bg);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
 }
+.detail-toc-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+}
+.detail-toc-label { flex: 0 0 auto; font-weight: 600; }
+.detail-toc-count {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.detail-toc-current {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--accent);
+  font-weight: 500;
+  font-size: 0.78rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.detail-toc-chevron { flex: 0 0 auto; margin-left: auto; color: var(--muted); transition: transform 0.2s ease; }
+.detail-toc:not(.is-collapsed) .detail-toc-chevron { transform: rotate(180deg); }
+.detail-toc:not(.is-collapsed) .detail-toc-current { display: none; }
+
+.tool-detail-quicknav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 44vh;
+  overflow-y: auto;
+  padding: 2px 0 16px;
+}
+.detail-toc.is-collapsed .tool-detail-quicknav { display: none; }
 .tool-detail-quicknav a {
   font-family: var(--mono);
   font-size: 0.72rem;
@@ -908,18 +957,18 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   .tool-detail-table { font-size: 0.82rem; }
   .tool-detail-table thead th, .tool-detail-table tbody td { padding: 9px 12px; }
 
-  /* quick-jump nav: one horizontally-scrollable row (swipe) instead of
-     wrapping to several tall rows that eat the screen */
+  /* collapsible jump panel: collapsed by default so it never eats the
+     screen; when opened it wraps into a capped, scrollable list */
+  .detail-toc-toggle { padding: 12px 0; }
   .tool-detail-quicknav {
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    max-height: 50vh;
     -webkit-overflow-scrolling: touch;
-    padding: 10px 0;
-    gap: 6px;
+    padding: 2px 0 14px;
+    gap: 7px;
     scrollbar-width: none;
   }
   .tool-detail-quicknav::-webkit-scrollbar { display: none; }
-  .tool-detail-quicknav a { flex: 0 0 auto; white-space: nowrap; }
+  .tool-detail-quicknav a { padding: 7px 12px; }
 
   /* larger, comfier tap targets for filter chips and sidebar items */
   .filter-btn { padding: 8px 13px; }
