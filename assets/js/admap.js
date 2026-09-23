@@ -1,707 +1,418 @@
 /*
-  AD ATTACK-PATH EXPLORER — data model for ad-map.html
+  AD ATTACK-PATH GRAPH — data for ad-map.html
 
-  An interactive re-imagining of the classic "Pentesting Active Directory"
-  mind map, organised by the attacker's level of access (the map's real
-  through-line) so the next step is always obvious.
+  A directed graph of the Active Directory attack surface. The page draws it
+  as a flow diagram (Cytoscape + dagre) laid out top-to-bottom by access
+  level, so the escalation direction and the chains are visible at a glance.
 
-  STAGES: each has a hue (color-codes the access level) and a list of
-  techniques. TECHNIQUES carry:
-    id     - anchor id (used by next-step links and the URL hash)
-    name   - technique / attack title
-    desc   - one or two sentences: what it is and what it gets you
-    tools  - chips; { n: label, id: toolkit-id | null }  (null = no page yet -> blank link)
-    vuln   - { l: label, id: vuln-id | null } | null      (null id = no page yet -> blank link)
-    next   - follow-on steps; { l: label, to: technique-id | stage-id }
+  MODEL
+    levels[]  access-level bands, low → high (used for the ruler + node rank)
+    cats[]    categories → colour
+    nodes[]   { id, label, lv(level index), cat, desc,
+                tools: [[name, toolkitId|null], …],   // null = no page yet
+                vuln:  [label, vulnId|null] | null,    // null id = no page yet
+                kind:  "entry" | "goal" | null,        // entry = a starting point
+                cve:   "CVE-…" | null }
+    edges[]   [sourceId, targetId, label?]             // the attack flow
 
-  To add a page later, fill the null id with the real toolkit/vuln id.
+  Fill a null id later (a new tool/vuln page) and the link lights up
+  automatically — no page edits needed.
 */
 
 var AD_MAP = {
-  stages: [
-    {
-      id: "stage-nocreds",
-      name: "No credentials",
-      hue: "hue-slate",
-      tag: "Entry point",
-      summary: "You are on the network (or can reach it) but hold no valid domain account. The goal of this stage is a first credential, hash, or relayed authentication.",
-      techniques: [
-        {
-          id: "recon-dc",
-          name: "Find the domain & DCs",
-          desc: "Locate domain controllers and map the estate before touching anything — DNS/SRV records, LDAP ping, SMB, and a light network sweep tell you what is reachable and what the domain is called.",
-          tools: [
-            { n: "nmap", id: null },
-            { n: "NetExec", id: "netexec" },
-            { n: "enum4linux-ng", id: "enum4linux-ng" },
-            { n: "ldapsearch", id: null }
-          ],
-          vuln: null,
-          next: [
-            { l: "Anonymous enumeration", to: "null-session" },
-            { l: "Poisoning & relay", to: "llmnr-poison" }
-          ]
-        },
-        {
-          id: "null-session",
-          name: "Anonymous / guest enumeration",
-          desc: "Null and guest sessions on SMB/LDAP can leak users, groups, password policy and shares with no credentials at all — the fastest route to a user list for spraying or roasting.",
-          tools: [
-            { n: "enum4linux-ng", id: "enum4linux-ng" },
-            { n: "NetExec", id: "netexec" },
-            { n: "ldapdomaindump", id: "ldapdomaindump" },
-            { n: "windapsearch", id: "windapsearch" }
-          ],
-          vuln: { l: "Null / anonymous session", id: "null-session" },
-          next: [
-            { l: "Password spray", to: "password-spray" },
-            { l: "AS-REP roast (no creds)", to: "asrep-nocreds" }
-          ]
-        },
-        {
-          id: "llmnr-poison",
-          name: "LLMNR / NBT-NS / mDNS poisoning",
-          desc: "Answer broadcast name-resolution requests to capture NetNTLM hashes from hosts that mistype a name — crack them offline, or relay them straight on.",
-          tools: [
-            { n: "Responder", id: "responder" },
-            { n: "NetExec", id: "netexec" }
-          ],
-          vuln: { l: "LLMNR / NBT-NS poisoning", id: "llmnr-nbtns" },
-          next: [
-            { l: "Relay the captured auth", to: "ntlm-relay" },
-            { l: "Crack the NetNTLM hash", to: "crack-hashes" }
-          ]
-        },
-        {
-          id: "ipv6-mitm",
-          name: "IPv6 DNS takeover (mitm6)",
-          desc: "Most networks prefer IPv6 but run no IPv6 DNS, so a rogue DHCPv6/DNS server becomes the primary resolver and funnels authentication to you for relaying.",
-          tools: [
-            { n: "mitm6", id: null },
-            { n: "ntlmrelayx", id: "ntlmrelayx" }
-          ],
-          vuln: { l: "NTLM relay", id: "ntlm-relay-vuln" },
-          next: [
-            { l: "Relay to LDAP / SMB", to: "ntlm-relay" }
-          ]
-        },
-        {
-          id: "coerce",
-          name: "Coerce authentication",
-          desc: "Force a machine — often a DC — to authenticate to you over RPC (PetitPotam, PrinterBug, DFSCoerce). The coerced machine account is then relayed or captured.",
-          tools: [
-            { n: "Coercer", id: "coercer" },
-            { n: "ntlmrelayx", id: "ntlmrelayx" }
-          ],
-          vuln: { l: "Authentication coercion", id: "authentication-coercion" },
-          next: [
-            { l: "Relay to AD CS (ESC8)", to: "adcs" },
-            { l: "Relay to LDAP → RBCD", to: "rbcd" },
-            { l: "Capture on unconstrained host", to: "unconstrained" }
-          ]
-        },
-        {
-          id: "ntlm-relay",
-          name: "NTLM relay",
-          desc: "Forward captured/coerced NTLM authentication to a service that does not enforce signing or channel binding — SMB, LDAP(S), or AD CS web enrollment — to act as the victim.",
-          tools: [
-            { n: "ntlmrelayx", id: "ntlmrelayx" },
-            { n: "Responder", id: "responder" },
-            { n: "krbrelayx", id: "krbrelayx" }
-          ],
-          vuln: { l: "NTLM relay", id: "ntlm-relay-vuln" },
-          next: [
-            { l: "SMB signing not enforced", to: "smb-unsigned" },
-            { l: "Write RBCD on the target", to: "rbcd" },
-            { l: "ESC8 → machine cert", to: "adcs" }
-          ]
-        },
-        {
-          id: "smb-unsigned",
-          name: "SMB signing not enforced",
-          desc: "Where SMB signing is off (the default on non-DC hosts), relayed authentication can be delivered to those hosts for code execution or secrets dumping.",
-          tools: [
-            { n: "NetExec", id: "netexec" },
-            { n: "ntlmrelayx", id: "ntlmrelayx" }
-          ],
-          vuln: { l: "SMB signing disabled", id: "smb-signing-disabled" },
-          next: [
-            { l: "Dump SAM / LSA remotely", to: "sam-lsa" }
-          ]
-        },
-        {
-          id: "password-spray",
-          name: "Password spraying",
-          desc: "Try one common password across many accounts (respecting lockout) once you have a user list — a single hit turns 'no creds' into a valid domain user.",
-          tools: [
-            { n: "kerbrute", id: "kerbrute" },
-            { n: "NetExec", id: "netexec" }
-          ],
-          vuln: null,
-          next: [
-            { l: "→ Valid user stage", to: "stage-user" }
-          ]
-        },
-        {
-          id: "asrep-nocreds",
-          name: "AS-REP roasting (no creds)",
-          desc: "Accounts with Kerberos pre-authentication disabled hand out crackable AS-REP material to anyone who asks — sometimes recoverable with just a username list.",
-          tools: [
-            { n: "Rubeus", id: "rubeus" },
-            { n: "Impacket", id: "impacket-suite" }
-          ],
-          vuln: { l: "AS-REP roasting", id: "asrep-roasting-vuln" },
-          next: [
-            { l: "Crack the hash", to: "crack-hashes" }
-          ]
-        },
-        {
-          id: "known-cves",
-          name: "Known unauthenticated CVEs",
-          desc: "Unpatched estates fall to well-known bugs — Zerologon, EternalBlue, ProxyLogon/ProxyShell, PrintNightmare. High-impact but noisy; confirm scope and patch level first.",
-          tools: [
-            { n: "NetExec", id: "netexec" },
-            { n: "Metasploit", id: null },
-            { n: "searchsploit", id: null }
-          ],
-          vuln: null,
-          next: [
-            { l: "→ Domain Admin", to: "stage-da" }
-          ]
-        },
-        {
-          id: "crack-hashes",
-          name: "Crack captured hashes",
-          desc: "Turn NetNTLM / AS-REP / Kerberoast material into cleartext offline with a wordlist or brute force. A cracked password is a valid credential for the next stage.",
-          tools: [
-            { n: "hashcat", id: null },
-            { n: "John the Ripper", id: null }
-          ],
-          vuln: null,
-          next: [
-            { l: "→ Valid user stage", to: "stage-user" }
-          ]
-        }
-      ]
-    },
+  levels: [
+    { id: 0, label: "No credentials" },
+    { id: 1, label: "Valid user (no password)" },
+    { id: 2, label: "Valid credentials" },
+    { id: 3, label: "Host foothold" },
+    { id: 4, label: "Local admin / SYSTEM" },
+    { id: 5, label: "Domain Admin" },
+    { id: 6, label: "Enterprise Admin / Forest" }
+  ],
 
-    {
-      id: "stage-user",
-      name: "Valid domain user",
-      hue: "hue-cyan",
-      tag: "Low-priv foothold",
-      summary: "You hold a valid low-privileged domain account. Enumerate deeply, then look for a mis-set right, a roastable account, a delegation, or a certificate template that lifts you higher.",
-      techniques: [
-        {
-          id: "domain-enum",
-          name: "Domain enumeration",
-          desc: "Map users, groups, ACLs, GPOs, trusts, delegation and attack paths. BloodHound turns that graph into the shortest route to Domain Admin.",
-          tools: [
-            { n: "BloodHound", id: "bloodhound" },
-            { n: "PowerView", id: "powerview" },
-            { n: "StandIn", id: "standin" },
-            { n: "ADSearch", id: "adsearch" },
-            { n: "ldapdomaindump", id: "ldapdomaindump" },
-            { n: "PingCastle", id: "pingcastle" }
-          ],
-          vuln: null,
-          next: [
-            { l: "Kerberoast SPN accounts", to: "kerberoast" },
-            { l: "Abuse an ACL", to: "acl-abuse" },
-            { l: "Find delegation", to: "unconstrained" }
-          ]
-        },
-        {
-          id: "kerberoast",
-          name: "Kerberoasting",
-          desc: "Request service tickets for SPN-bearing accounts and crack them offline — service accounts often have weak, non-expiring passwords and high privilege.",
-          tools: [
-            { n: "Rubeus", id: "rubeus" },
-            { n: "Impacket", id: "impacket-suite" },
-            { n: "NetExec", id: "netexec" }
-          ],
-          vuln: { l: "Kerberoasting", id: "kerberoasting-vuln" },
-          next: [
-            { l: "Crack the TGS", to: "crack-hashes" }
-          ]
-        },
-        {
-          id: "asrep-user",
-          name: "AS-REP roasting",
-          desc: "Enumerate accounts with pre-auth disabled and roast them for crackable material now that you can query the directory as a user.",
-          tools: [
-            { n: "Rubeus", id: "rubeus" },
-            { n: "Impacket", id: "impacket-suite" }
-          ],
-          vuln: { l: "AS-REP roasting", id: "asrep-roasting-vuln" },
-          next: [
-            { l: "Crack the hash", to: "crack-hashes" }
-          ]
-        },
-        {
-          id: "acl-abuse",
-          name: "ACL / ACE abuse",
-          desc: "GenericAll, WriteDACL, WriteOwner, ForceChangePassword or Self-membership over a principal chain straight into control of it — reset a password, add yourself to a group, or write RBCD.",
-          tools: [
-            { n: "bloodyAD", id: "bloodyad" },
-            { n: "PowerView", id: "powerview" },
-            { n: "StandIn", id: "standin" },
-            { n: "ADCollector", id: "adcollector" },
-            { n: "dacledit.py", id: null }
-          ],
-          vuln: { l: "AD ACL abuse", id: "ad-acl-abuse" },
-          next: [
-            { l: "Configure RBCD", to: "rbcd" },
-            { l: "Abuse a writable GPO", to: "gpo-abuse" }
-          ]
-        },
-        {
-          id: "gpo-abuse",
-          name: "GPO abuse",
-          desc: "Write access to a Group Policy Object is mass code execution on every machine it applies to — schedule a task, drop a script, or add a local admin across the OU.",
-          tools: [
-            { n: "PowerView", id: "powerview" },
-            { n: "SharpGPOAbuse", id: null },
-            { n: "pyGPOAbuse", id: null }
-          ],
-          vuln: { l: "AD ACL abuse", id: "ad-acl-abuse" },
-          next: [
-            { l: "→ Local admin", to: "stage-localadmin" }
-          ]
-        },
-        {
-          id: "unconstrained",
-          name: "Unconstrained delegation",
-          desc: "A host trusted for unconstrained delegation caches the TGT of anyone who authenticates to it. Coerce a DC to it and steal the DC's TGT.",
-          tools: [
-            { n: "Rubeus", id: "rubeus" },
-            { n: "Coercer", id: "coercer" },
-            { n: "Impacket", id: "impacket-suite" }
-          ],
-          vuln: { l: "Unconstrained delegation", id: "unconstrained-delegation" },
-          next: [
-            { l: "Coerce the DC", to: "coerce" },
-            { l: "Pass the captured ticket", to: "ptt" }
-          ]
-        },
-        {
-          id: "constrained",
-          name: "Constrained delegation",
-          desc: "An account with msDS-AllowedToDelegateTo can request tickets to the listed services as any user (S4U) — including impersonating a Domain Admin to that service.",
-          tools: [
-            { n: "Rubeus", id: "rubeus" },
-            { n: "Impacket", id: "impacket-suite" }
-          ],
-          vuln: { l: "Constrained delegation", id: "constrained-delegation" },
-          next: [
-            { l: "Pass the ticket", to: "ptt" }
-          ]
-        },
-        {
-          id: "rbcd",
-          name: "Resource-based constrained delegation",
-          desc: "If you can write msDS-AllowedToActOnBehalfOfOtherIdentity on a computer, point it at a machine account you control and S4U to impersonate anyone on it.",
-          tools: [
-            { n: "StandIn", id: "standin" },
-            { n: "Get-RBCD-Threaded", id: "get-rbcd-threaded" },
-            { n: "Rubeus", id: "rubeus" },
-            { n: "bloodyAD", id: "bloodyad" }
-          ],
-          vuln: { l: "Resource-based constrained delegation", id: "rbcd" },
-          next: [
-            { l: "Pass the ticket", to: "ptt" }
-          ]
-        },
-        {
-          id: "adcs",
-          name: "AD CS abuse (ESC1–ESC10)",
-          desc: "Misconfigured certificate templates and CA settings let a low-priv user enroll a certificate as a privileged principal, then authenticate as them (PKINIT).",
-          tools: [
-            { n: "Certipy", id: "certipy" },
-            { n: "Certify", id: "certify" }
-          ],
-          vuln: { l: "AD CS ESC misconfigurations", id: "adcs-esc" },
-          next: [
-            { l: "Pass the certificate", to: "ptt" },
-            { l: "Coerce → ESC8 relay", to: "coerce" }
-          ]
-        },
-        {
-          id: "shadow-creds",
-          name: "Shadow credentials",
-          desc: "With write access to a target's msDS-KeyCredentialLink, add your own key-credential and authenticate as them via PKINIT — no password reset, quieter than most ACL abuses.",
-          tools: [
-            { n: "pyWhisker", id: "pywhisker" },
-            { n: "Certipy", id: "certipy" }
-          ],
-          vuln: { l: "AD CS / key-credential abuse", id: "adcs-esc" },
-          next: [
-            { l: "Pass the certificate", to: "ptt" }
-          ]
-        },
-        {
-          id: "sql-abuse",
-          name: "SQL Server & database links",
-          desc: "Domain SQL servers and their linked-server chains lead to command execution (xp_cmdshell) and often run as a privileged account — crawl the links to a server where you are sysadmin.",
-          tools: [
-            { n: "PowerUpSQL / SharpSQL", id: "powerupsql" },
-            { n: "NetExec", id: "netexec" },
-            { n: "Impacket (mssqlclient)", id: "impacket-suite" }
-          ],
-          vuln: { l: "SQL Server links", id: "sql-server-links" },
-          next: [
-            { l: "Lateral move via MSSQL", to: "lateral" }
-          ]
-        },
-        {
-          id: "sccm-abuse",
-          name: "SCCM / MECM abuse",
-          desc: "Configuration Manager holds network access accounts, can push code to clients, and trusts relayed machine auth — a rich escalation and lateral-movement surface.",
-          tools: [
-            { n: "SharpSCCM", id: null },
-            { n: "NetExec", id: "netexec" }
-          ],
-          vuln: { l: "SCCM abuse", id: "sccm-abuse" },
-          next: [
-            { l: "→ Local admin", to: "stage-localadmin" }
-          ]
-        },
-        {
-          id: "loot-shares",
-          name: "Secrets in shares, GPP & files",
-          desc: "Readable shares, SYSVOL GPP passwords, scripts and config files leak credentials constantly — hunt them across the domain once you can authenticate.",
-          tools: [
-            { n: "Snaffler", id: "snaffler" },
-            { n: "NetExec", id: "netexec" },
-            { n: "DonPAPI", id: "donpapi" }
-          ],
-          vuln: { l: "Stored credential harvesting", id: "stored-cred-harvest" },
-          next: [
-            { l: "→ Local admin", to: "stage-localadmin" }
-          ]
-        }
-      ]
-    },
+  cats: [
+    { id: "recon",   label: "Recon & Enumeration",        color: "#94a3b8" },
+    { id: "relay",   label: "Poisoning, Coercion & Relay", color: "#60a5fa" },
+    { id: "roast",   label: "Roasting & Cracking",        color: "#38bdf8" },
+    { id: "acl",     label: "ACL, GPO & Delegation setup", color: "#a78bfa" },
+    { id: "deleg",   label: "Delegation abuse",           color: "#fb7185" },
+    { id: "adcs",    label: "AD CS (certificates)",       color: "#ffd166" },
+    { id: "sccm",    label: "SCCM",                       color: "#ff9d4d" },
+    { id: "lateral", label: "Lateral move, SQL & privesc", color: "#4ade80" },
+    { id: "creds",   label: "Credential access",          color: "#2dd4bf" },
+    { id: "persist", label: "Domain dominance & trusts",  color: "#ff6b6b" }
+  ],
 
-    {
-      id: "stage-localadmin",
-      name: "Local admin / SYSTEM",
-      hue: "hue-amber",
-      tag: "Host compromised",
-      summary: "You are administrator or SYSTEM on one or more machines. Harvest every credential in memory and on disk, impersonate tokens, and pivot toward accounts that reach the DC.",
-      techniques: [
-        {
-          id: "local-privesc",
-          name: "Local privilege escalation",
-          desc: "From a user shell to SYSTEM: unquoted service paths, modifiable services, writable %PATH%, AlwaysInstallElevated, or a UAC bypass. Triage first, then exploit the cleanest vector.",
-          tools: [
-            { n: "SharpUp", id: "sharpup" },
-            { n: "Seatbelt", id: "seatbelt" },
-            { n: "winPEAS", id: null }
-          ],
-          vuln: { l: "Windows service privilege escalation", id: "windows-service-privesc" },
-          next: [
-            { l: "UAC bypass", to: "uac-bypass" },
-            { l: "Token / potato abuse", to: "token-abuse" }
-          ]
-        },
-        {
-          id: "uac-bypass",
-          name: "UAC bypass",
-          desc: "Elevate from a medium-integrity admin to high integrity without a prompt via an auto-elevating binary or COM hijack — the prerequisite for most credential dumping.",
-          tools: [
-            { n: "Sliver", id: "sliver" },
-            { n: "Metasploit", id: null }
-          ],
-          vuln: { l: "UAC bypass", id: "uac-bypass" },
-          next: [
-            { l: "Dump LSASS", to: "lsass" }
-          ]
-        },
-        {
-          id: "token-abuse",
-          name: "Token impersonation / Potato attacks",
-          desc: "A service account with SeImpersonate can be walked up to SYSTEM (JuicyPotato/PrintSpoofer/RoguePotato), or an existing privileged token stolen with incognito.",
-          tools: [
-            { n: "PrintSpoofer", id: null },
-            { n: "RoguePotato", id: null },
-            { n: "mimikatz (incognito)", id: "mimikatz" }
-          ],
-          vuln: { l: "Token impersonation", id: "token-impersonation" },
-          next: [
-            { l: "Dump credentials", to: "lsass" }
-          ]
-        },
-        {
-          id: "lsass",
-          name: "Dump LSASS (live credentials)",
-          desc: "LSASS holds NT hashes, Kerberos keys and sometimes cleartext for logged-on users — dump it (evasively) and reuse the material for lateral movement.",
-          tools: [
-            { n: "mimikatz", id: "mimikatz" },
-            { n: "minidumpdotnet", id: "minidumpdotnet" },
-            { n: "SharpSecDump", id: "sharpsecdump" },
-            { n: "NetExec", id: "netexec" }
-          ],
-          vuln: { l: "LSASS dumping", id: "lsass-dumping" },
-          next: [
-            { l: "Pass the hash", to: "pth" },
-            { l: "Pass the ticket", to: "ptt" }
-          ]
-        },
-        {
-          id: "sam-lsa",
-          name: "Dump SAM & LSA secrets",
-          desc: "The SAM gives local account hashes (great for local-admin reuse) and LSA secrets give service-account and machine credentials — pull them locally or over SMB.",
-          tools: [
-            { n: "mimikatz", id: "mimikatz" },
-            { n: "Impacket (secretsdump)", id: "impacket-suite" },
-            { n: "SharpSecDump", id: "sharpsecdump" },
-            { n: "NetExec", id: "netexec" }
-          ],
-          vuln: { l: "SAM & LSA secrets", id: "sam-lsa-secrets" },
-          next: [
-            { l: "Pass the hash", to: "pth" }
-          ]
-        },
-        {
-          id: "dpapi",
-          name: "DPAPI secrets",
-          desc: "Windows protects browser passwords, RDP creds, Wi-Fi keys and stored credentials with DPAPI — with admin (or the user's context) those master keys unlock a trove of secrets.",
-          tools: [
-            { n: "mimikatz", id: "mimikatz" },
-            { n: "DonPAPI", id: "donpapi" }
-          ],
-          vuln: { l: "DPAPI abuse", id: "dpapi-abuse" },
-          next: [
-            { l: "Reuse recovered creds", to: "lateral" }
-          ]
-        },
-        {
-          id: "pth",
-          name: "Pass-the-Hash",
-          desc: "Authenticate with an NT hash instead of a password — reuse a local-admin hash across machines that share it, or a domain hash to reach new hosts.",
-          tools: [
-            { n: "NetExec", id: "netexec" },
-            { n: "Impacket", id: "impacket-suite" },
-            { n: "Evil-WinRM", id: "evil-winrm" },
-            { n: "mimikatz", id: "mimikatz" }
-          ],
-          vuln: { l: "Pass-the-hash", id: "pass-the-hash" },
-          next: [
-            { l: "Lateral movement", to: "lateral" }
-          ]
-        },
-        {
-          id: "ptt",
-          name: "Pass-the-Ticket / OverPtH",
-          desc: "Inject a stolen or forged Kerberos ticket (or use an AES key / cert) to act as another user without their password — the currency of delegation and ticket attacks.",
-          tools: [
-            { n: "Rubeus", id: "rubeus" },
-            { n: "mimikatz", id: "mimikatz" },
-            { n: "Impacket", id: "impacket-suite" }
-          ],
-          vuln: { l: "Kerberos ticket attacks", id: "kerberos-ticket-attacks" },
-          next: [
-            { l: "Lateral movement", to: "lateral" }
-          ]
-        },
-        {
-          id: "lateral",
-          name: "Lateral movement",
-          desc: "Move host-to-host with recovered credentials — SMB/PsExec, WMI, WinRM, DCOM or SCShell — hunting for a session or account that reaches Domain Admin.",
-          tools: [
-            { n: "NetExec", id: "netexec" },
-            { n: "Impacket", id: "impacket-suite" },
-            { n: "Evil-WinRM", id: "evil-winrm" },
-            { n: "CIMplant", id: "cimplant" },
-            { n: "LACheck", id: "lacheck" }
-          ],
-          vuln: { l: "Remote execution", id: "remote-execution" },
-          next: [
-            { l: "Hunt a DA session", to: "hunt-da" }
-          ]
-        },
-        {
-          id: "hunt-da",
-          name: "Hunt a Domain Admin session",
-          desc: "Find a machine where a Domain Admin is logged on (you already admin it, or become admin), then steal their token or credentials to inherit DA.",
-          tools: [
-            { n: "BloodHound", id: "bloodhound" },
-            { n: "LACheck", id: "lacheck" },
-            { n: "NetExec", id: "netexec" }
-          ],
-          vuln: null,
-          next: [
-            { l: "Dump their creds", to: "lsass" },
-            { l: "→ Domain Admin", to: "stage-da" }
-          ]
-        }
-      ]
-    },
+  nodes: [
+    /* ---------- Recon & enumeration ---------- */
+    { id: "scan-net", label: "Scan the network", lv: 0, cat: "recon", kind: "entry",
+      desc: "Sweep the subnet and fingerprint hosts/services to find domain controllers and targets.",
+      tools: [["nmap", null], ["NetExec", "netexec"]], vuln: null },
+    { id: "find-dc", label: "Find the domain & DCs", lv: 0, cat: "recon", kind: "entry",
+      desc: "Identify the domain name and its DCs via DNS/SRV, LDAP ping and SMB.",
+      tools: [["NetExec", "netexec"], ["nmap", null], ["ldapsearch", null]], vuln: null },
+    { id: "enum-anon", label: "Anonymous / guest enum", lv: 0, cat: "recon",
+      desc: "Null and guest sessions can leak users, shares and password policy with no credentials.",
+      tools: [["enum4linux-ng", "enum4linux-ng"], ["NetExec", "netexec"], ["ldapdomaindump", "ldapdomaindump"]], vuln: ["Null / anonymous session", "null-session"] },
+    { id: "enum-dns", label: "Enumerate DNS / zone transfer", lv: 0, cat: "recon",
+      desc: "Pull DNS records (AXFR, ADIDNS) to map hostnames and services in the domain.",
+      tools: [["adidnsdump", "adidnsdump"], ["dig", null]], vuln: null },
+    { id: "enum-ldap", label: "Enumerate LDAP (deep)", lv: 2, cat: "recon",
+      desc: "Authenticated directory enumeration — users, groups, ACLs, GPOs, delegation and trusts.",
+      tools: [["BloodHound", "bloodhound"], ["PowerView", "powerview"], ["StandIn", "standin"], ["ADSearch", "adsearch"], ["ldapdomaindump", "ldapdomaindump"], ["PingCastle", "pingcastle"]], vuln: null },
+    { id: "enum-smb", label: "Enumerate SMB shares", lv: 2, cat: "recon",
+      desc: "Hunt readable shares for files, GPP passwords and secrets across the domain.",
+      tools: [["NetExec", "netexec"], ["Snaffler", "snaffler"], ["smbclient.py", "impacket-suite"]], vuln: ["Stored credential harvesting", "stored-cred-harvest"] },
+    { id: "bh-hunt", label: "Map paths (BloodHound)", lv: 2, cat: "recon",
+      desc: "Graph the domain to find the shortest path to Domain Admin from where you stand.",
+      tools: [["BloodHound", "bloodhound"], ["ADCollector", "adcollector"]], vuln: null },
 
-    {
-      id: "stage-da",
-      name: "Domain Admin",
-      hue: "hue-orange",
-      tag: "Domain owned",
-      summary: "You control the domain (DA or DC access). Extract every secret, then establish persistence that survives password resets and remediation.",
-      techniques: [
-        {
-          id: "dcsync",
-          name: "DCSync",
-          desc: "Abuse directory replication to pull any account's hashes — including krbtgt — straight from a DC without touching LSASS on it. The key to golden tickets.",
-          tools: [
-            { n: "mimikatz", id: "mimikatz" },
-            { n: "Impacket (secretsdump)", id: "impacket-suite" },
-            { n: "SharpSecDump", id: "sharpsecdump" },
-            { n: "NetExec", id: "netexec" }
-          ],
-          vuln: { l: "DCSync", id: "dcsync-vuln" },
-          next: [
-            { l: "Forge a golden ticket", to: "tickets" },
-            { l: "Grant yourself DCSync (ACL)", to: "acl-abuse" }
-          ]
-        },
-        {
-          id: "ntds",
-          name: "Dump NTDS.dit",
-          desc: "The domain database holds every account's hash. Extract it (drsuapi or a volume shadow copy) for full offline cracking and total credential compromise.",
-          tools: [
-            { n: "Impacket (secretsdump)", id: "impacket-suite" },
-            { n: "NetExec", id: "netexec" },
-            { n: "mimikatz", id: "mimikatz" }
-          ],
-          vuln: { l: "NTDS.dit extraction", id: "ntds-extraction" },
-          next: [
-            { l: "Crack / reuse hashes", to: "crack-hashes" }
-          ]
-        },
-        {
-          id: "tickets",
-          name: "Golden / Silver / Diamond tickets",
-          desc: "With the krbtgt key forge a golden ticket (any user, any group); with a service key forge a silver ticket; modify a real TGT for a stealthier diamond ticket.",
-          tools: [
-            { n: "mimikatz", id: "mimikatz" },
-            { n: "Rubeus", id: "rubeus" },
-            { n: "Impacket (ticketer)", id: "impacket-suite" }
-          ],
-          vuln: { l: "Kerberos ticket attacks", id: "kerberos-ticket-attacks" },
-          next: [
-            { l: "Cross a trust", to: "stage-forest" }
-          ]
-        },
-        {
-          id: "golden-cert",
-          name: "Golden certificate (CA key theft)",
-          desc: "Steal the CA's private key and you can forge authentication certificates for any principal indefinitely — persistence that a krbtgt reset does not fix.",
-          tools: [
-            { n: "Certipy", id: "certipy" }
-          ],
-          vuln: { l: "AD CS abuse", id: "adcs-esc" },
-          next: [
-            { l: "Pass the certificate", to: "ptt" }
-          ]
-        },
-        {
-          id: "dsrm",
-          name: "DSRM persistence",
-          desc: "The Directory Services Restore Mode local admin on a DC can be enabled for network logon and used with pass-the-hash — a durable backdoor into the DC itself.",
-          tools: [
-            { n: "mimikatz", id: "mimikatz" }
-          ],
-          vuln: { l: "DSRM persistence", id: "dsrm-persistence" },
-          next: [
-            { l: "Pass the hash to the DC", to: "pth" }
-          ]
-        },
-        {
-          id: "sd-backdoor",
-          name: "Security-descriptor / ACL backdoors",
-          desc: "Edit the ACLs on remote WMI, WinRM, the SCM or the domain object to grant a low-priv account standing admin rights — file-less, account-less persistence.",
-          tools: [
-            { n: "RACE", id: "race-toolkit" },
-            { n: "dacledit.py", id: null },
-            { n: "PowerView", id: "powerview" }
-          ],
-          vuln: { l: "Security descriptor / ACL backdoors", id: "security-descriptor-backdoor" },
-          next: [
-            { l: "Grant DCSync rights", to: "dcsync" }
-          ]
-        },
-        {
-          id: "skeleton-dcshadow",
-          name: "Skeleton Key / DCShadow",
-          desc: "Skeleton Key patches LSASS on a DC to accept a master password for every account; DCShadow registers a rogue DC to push malicious directory changes stealthily.",
-          tools: [
-            { n: "mimikatz", id: "mimikatz" }
-          ],
-          vuln: null,
-          next: [
-            { l: "→ Cross-forest", to: "stage-forest" }
-          ]
-        }
-      ]
-    },
+    /* ---------- Poisoning, coercion & relay ---------- */
+    { id: "llmnr", label: "LLMNR / NBT-NS / mDNS poisoning", lv: 0, cat: "relay", kind: "entry",
+      desc: "Answer broadcast name-resolution requests to capture NetNTLM hashes.",
+      tools: [["Responder", "responder"], ["NetExec", "netexec"]], vuln: ["LLMNR / NBT-NS poisoning", "llmnr-nbtns"] },
+    { id: "arp-mitm", label: "ARP poisoning (MITM)", lv: 0, cat: "relay", kind: "entry",
+      desc: "Man-in-the-middle the LAN to capture or relay authentication.",
+      tools: [["bettercap", null], ["Responder", "responder"]], vuln: null },
+    { id: "ipv6", label: "IPv6 / DHCPv6 takeover (mitm6)", lv: 0, cat: "relay", kind: "entry",
+      desc: "Windows prefers IPv6 but rarely serves it — become the IPv6 DNS and funnel auth for relaying.",
+      tools: [["mitm6", null], ["ntlmrelayx", "ntlmrelayx"]], vuln: ["NTLM relay", "ntlm-relay-vuln"] },
+    { id: "coerce", label: "Coerce authentication", lv: 0, cat: "relay", kind: "entry",
+      desc: "Force a machine (often a DC) to authenticate to you — PetitPotam, PrinterBug, DFSCoerce, WebDAV.",
+      tools: [["Coercer", "coercer"], ["ntlmrelayx", "ntlmrelayx"], ["krbrelayx", "krbrelayx"]], vuln: ["Authentication coercion", "authentication-coercion"] },
+    { id: "relay-smb", label: "Relay to SMB (unsigned)", lv: 0, cat: "relay",
+      desc: "Relay captured/coerced auth to hosts without SMB signing for command execution or secrets.",
+      tools: [["ntlmrelayx", "ntlmrelayx"], ["NetExec", "netexec"]], vuln: ["SMB signing disabled", "smb-signing-disabled"] },
+    { id: "relay-ldap", label: "Relay to LDAP(S)", lv: 0, cat: "relay",
+      desc: "Relay to LDAP to write RBCD or shadow credentials on the victim object.",
+      tools: [["ntlmrelayx", "ntlmrelayx"]], vuln: ["NTLM relay", "ntlm-relay-vuln"] },
+    { id: "relay-adcs", label: "Relay to AD CS web (ESC8)", lv: 0, cat: "relay",
+      desc: "Relay coerced machine auth to the CA web endpoint to obtain a certificate, then a TGT.",
+      tools: [["ntlmrelayx", "ntlmrelayx"], ["Certipy", "certipy"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "relay-mssql", label: "Relay to MSSQL", lv: 0, cat: "relay",
+      desc: "Relay authentication to a SQL server for command execution.",
+      tools: [["ntlmrelayx", "ntlmrelayx"]], vuln: ["MSSQL lateral movement", "mssql-lateral"] },
+    { id: "kerb-relay", label: "Kerberos relay", lv: 0, cat: "relay",
+      desc: "Relay Kerberos (krbrelayx / KrbRelayUp) for local privilege escalation or DC compromise.",
+      tools: [["krbrelayx", "krbrelayx"], ["ntlmrelayx", "ntlmrelayx"]], vuln: ["NTLM relay", "ntlm-relay-vuln"] },
 
-    {
-      id: "stage-forest",
-      name: "Cross-forest / Enterprise Admin",
-      hue: "hue-red",
-      tag: "Beyond the domain",
-      summary: "One domain is compromised — now cross the trust. The forest, not the domain, is the real security boundary, so a child domain frequently reaches the forest root.",
-      techniques: [
-        {
-          id: "trust-key",
-          name: "Trust key abuse / inter-realm tickets",
-          desc: "Extract the trust key shared by two domains and forge inter-realm tickets to move across the trust as a high-privileged principal.",
-          tools: [
-            { n: "mimikatz", id: "mimikatz" },
-            { n: "Rubeus", id: "rubeus" },
-            { n: "Impacket", id: "impacket-suite" }
-          ],
-          vuln: { l: "Domain / forest trust key abuse", id: "domain-trust-key-abuse" },
-          next: [
-            { l: "SID history injection", to: "sid-history" }
-          ]
-        },
-        {
-          id: "sid-history",
-          name: "SID history injection",
-          desc: "Add the forest root's Enterprise Admins SID to a forged ticket from a child domain — where SID filtering is off, it survives the boundary and grants EA.",
-          tools: [
-            { n: "mimikatz", id: "mimikatz" },
-            { n: "Impacket (raiseChild)", id: "impacket-suite" }
-          ],
-          vuln: { l: "Trust key abuse", id: "domain-trust-key-abuse" },
-          next: [
-            { l: "Forge a golden ticket", to: "tickets" }
-          ]
-        },
-        {
-          id: "cross-forest-deleg",
-          name: "Cross-trust coercion & delegation",
-          desc: "Coerce a DC in a trusting forest to authenticate to an unconstrained-delegation host you control, then reuse its ticket — trusts extend the delegation and relay attacks across boundaries.",
-          tools: [
-            { n: "Rubeus", id: "rubeus" },
-            { n: "Coercer", id: "coercer" }
-          ],
-          vuln: { l: "Unconstrained delegation", id: "unconstrained-delegation" },
-          next: [
-            { l: "Capture the TGT", to: "unconstrained" }
-          ]
-        },
-        {
-          id: "azure-hybrid",
-          name: "Hybrid / Azure AD Connect",
-          desc: "Where on-prem AD syncs to Entra ID via Azure AD Connect, the sync account and its stored secrets bridge the two — compromise on-prem can reach the cloud tenant and back.",
-          tools: [
-            { n: "AADInternals", id: null },
-            { n: "adconnectdump", id: null }
-          ],
-          vuln: null,
-          next: []
-        }
-      ]
-    }
+    /* ---------- Roasting & cracking ---------- */
+    { id: "pw-spray", label: "Password spraying", lv: 0, cat: "roast", kind: "entry",
+      desc: "Spray one common password across the user list, respecting lockout, to land a valid account.",
+      tools: [["kerbrute", "kerbrute"], ["NetExec", "netexec"]], vuln: null },
+    { id: "asrep-nc", label: "AS-REP roast (no creds)", lv: 0, cat: "roast",
+      desc: "Roast accounts with Kerberos pre-auth disabled from just a username list.",
+      tools: [["Rubeus", "rubeus"], ["Impacket", "impacket-suite"]], vuln: ["AS-REP roasting", "asrep-roasting-vuln"] },
+    { id: "timeroast", label: "Timeroasting", lv: 0, cat: "roast", kind: "entry",
+      desc: "Abuse MS-SNTP to recover computer-account hashes (no auth) to crack offline.",
+      tools: [["timeroast", null]], vuln: null },
+    { id: "crack", label: "Crack captured hashes", lv: 1, cat: "roast",
+      desc: "Crack NetNTLM / AS-REP / Kerberoast / TGS material offline into cleartext.",
+      tools: [["hashcat", null], ["John", null]], vuln: null },
+    { id: "kerberoast", label: "Kerberoasting", lv: 2, cat: "roast",
+      desc: "Request service tickets for SPN accounts and crack their passwords offline.",
+      tools: [["Rubeus", "rubeus"], ["Impacket", "impacket-suite"], ["NetExec", "netexec"]], vuln: ["Kerberoasting", "kerberoasting-vuln"] },
+    { id: "asrep", label: "AS-REP roasting", lv: 2, cat: "roast",
+      desc: "Enumerate and roast pre-auth-disabled accounts as an authenticated user.",
+      tools: [["Rubeus", "rubeus"], ["Impacket", "impacket-suite"]], vuln: ["AS-REP roasting", "asrep-roasting-vuln"] },
+    { id: "blind-roast", label: "Blind Kerberoasting", lv: 2, cat: "roast",
+      desc: "Add an SPN to an account you can write, then Kerberoast it.",
+      tools: [["PowerView", "powerview"], ["Rubeus", "rubeus"]], vuln: ["Kerberoasting", "kerberoasting-vuln"] },
+
+    /* ---------- ACL / GPO / delegation setup ---------- */
+    { id: "acl-abuse", label: "ACL / ACE abuse", lv: 2, cat: "acl",
+      desc: "GenericAll / WriteDACL / WriteOwner / ForceChangePassword over a principal chains into control of it.",
+      tools: [["bloodyAD", "bloodyad"], ["PowerView", "powerview"], ["StandIn", "standin"], ["dacledit.py", null]], vuln: ["AD ACL abuse", "ad-acl-abuse"] },
+    { id: "write-owner", label: "WriteOwner / WriteDACL", lv: 2, cat: "acl",
+      desc: "Take ownership, then rewrite the DACL to grant yourself full rights over the object.",
+      tools: [["bloodyAD", "bloodyad"], ["PowerView", "powerview"], ["dacledit.py", null]], vuln: ["AD ACL abuse", "ad-acl-abuse"] },
+    { id: "force-chpwd", label: "ForceChangePassword", lv: 2, cat: "acl",
+      desc: "Reset the password of a user you hold that right over.",
+      tools: [["bloodyAD", "bloodyad"], ["NetExec", "netexec"], ["PowerView", "powerview"]], vuln: ["AD ACL abuse", "ad-acl-abuse"] },
+    { id: "add-member", label: "Add member to group", lv: 2, cat: "acl",
+      desc: "Add yourself (or a controlled account) to a privileged group you can write — e.g. Domain Admins.",
+      tools: [["bloodyAD", "bloodyad"], ["PowerView", "powerview"], ["net", null]], vuln: ["AD ACL abuse", "ad-acl-abuse"] },
+    { id: "gpo-abuse", label: "Abuse a writable GPO", lv: 2, cat: "acl",
+      desc: "Write access to a GPO is code execution / local admin on every machine in its scope.",
+      tools: [["PowerView", "powerview"], ["SharpGPOAbuse", null], ["pyGPOAbuse", null]], vuln: ["AD ACL abuse", "ad-acl-abuse"] },
+    { id: "laps", label: "Read LAPS passwords", lv: 2, cat: "acl",
+      desc: "Read the LAPS-managed local administrator password on machines you have rights over.",
+      tools: [["NetExec", "netexec"], ["pyLAPS", null], ["PowerView", "powerview"]], vuln: null },
+    { id: "gmsa", label: "Read gMSA password", lv: 2, cat: "acl",
+      desc: "ReadGMSAPassword recovers a group-managed service account's key.",
+      tools: [["NetExec", "netexec"], ["gMSADumper", null]], vuln: null },
+    { id: "shadow-cred", label: "Shadow Credentials", lv: 2, cat: "acl",
+      desc: "Write msDS-KeyCredentialLink on a target and authenticate as them via PKINIT.",
+      tools: [["pyWhisker", "pywhisker"], ["Certipy", "certipy"]], vuln: ["AD CS / key-credential abuse", "adcs-esc"] },
+
+    /* ---------- Delegation abuse ---------- */
+    { id: "unconstrained", label: "Unconstrained delegation", lv: 2, cat: "deleg",
+      desc: "A host that caches TGTs — coerce a DC to authenticate to it and steal the DC's TGT.",
+      tools: [["Rubeus", "rubeus"], ["Coercer", "coercer"], ["Impacket", "impacket-suite"]], vuln: ["Unconstrained delegation", "unconstrained-delegation"] },
+    { id: "constrained", label: "Constrained delegation (S4U)", lv: 2, cat: "deleg",
+      desc: "msDS-AllowedToDelegateTo lets you request tickets to the listed services as any user.",
+      tools: [["Rubeus", "rubeus"], ["Impacket", "impacket-suite"]], vuln: ["Constrained delegation", "constrained-delegation"] },
+    { id: "rbcd", label: "Resource-based constrained delegation", lv: 2, cat: "deleg",
+      desc: "Write msDS-AllowedToActOnBehalfOfOtherIdentity, then S4U to impersonate anyone on the target.",
+      tools: [["StandIn", "standin"], ["Get-RBCD-Threaded", "get-rbcd-threaded"], ["Rubeus", "rubeus"], ["bloodyAD", "bloodyad"]], vuln: ["Resource-based constrained delegation", "rbcd"] },
+    { id: "s4u2self", label: "S4U2self abuse", lv: 2, cat: "deleg",
+      desc: "With protocol transition, request a ticket to yourself as any user (including a DA).",
+      tools: [["Rubeus", "rubeus"], ["Impacket", "impacket-suite"]], vuln: ["Constrained delegation", "constrained-delegation"] },
+    { id: "add-computer", label: "Add a computer account", lv: 2, cat: "deleg",
+      desc: "Use MachineAccountQuota to add a computer you control — the machine account for RBCD.",
+      tools: [["Impacket (addcomputer)", "impacket-suite"], ["bloodyAD", "bloodyad"], ["PowerMad", null]], vuln: ["Resource-based constrained delegation", "rbcd"] },
+
+    /* ---------- AD CS ---------- */
+    { id: "adcs-enum", label: "Enumerate AD CS", lv: 2, cat: "adcs",
+      desc: "Find CAs and templates and flag the vulnerable ESC classes (ESC1–ESC15).",
+      tools: [["Certipy", "certipy"], ["Certify", "certify"], ["certutil", null]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "esc1", label: "ESC1 — arbitrary SAN", lv: 2, cat: "adcs",
+      desc: "Enrollee-supplies-subject template lets you request a cert as any user.",
+      tools: [["Certipy", "certipy"], ["Certify", "certify"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "esc2-3", label: "ESC2 / ESC3 — any-purpose / agent", lv: 2, cat: "adcs",
+      desc: "Any-purpose or enrollment-agent templates let you enroll on behalf of another user.",
+      tools: [["Certipy", "certipy"], ["Certify", "certify"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "esc4", label: "ESC4 — writable template", lv: 2, cat: "adcs",
+      desc: "Write access to a template — reconfigure it into ESC1 and abuse it.",
+      tools: [["Certipy", "certipy"], ["Certify", "certify"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "esc6-7", label: "ESC6 / ESC7 — CA flags / rights", lv: 2, cat: "adcs",
+      desc: "EDITF_ATTRIBUTESUBJECTALTNAME2 on the CA, or CA management rights to issue/approve.",
+      tools: [["Certipy", "certipy"], ["Certify", "certify"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "esc8", label: "ESC8 — relay to web enrollment", lv: 0, cat: "adcs",
+      desc: "Coerce + relay machine auth to the CA web endpoint to obtain a machine certificate.",
+      tools: [["Certipy", "certipy"], ["ntlmrelayx", "ntlmrelayx"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "esc9-10", label: "ESC9 / ESC10 — weak mappings", lv: 2, cat: "adcs",
+      desc: "No-security-extension or weak certificate mapping lets you impersonate via a UPN change.",
+      tools: [["Certipy", "certipy"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "esc11", label: "ESC11 — relay to ICPR (RPC)", lv: 0, cat: "adcs",
+      desc: "Relay authentication to the CA's RPC enrollment interface.",
+      tools: [["Certipy", "certipy"], ["ntlmrelayx", "ntlmrelayx"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "esc13-15", label: "ESC13 / ESC14 / ESC15", lv: 2, cat: "adcs",
+      desc: "Issuance-policy group links and application-policy (CVE-2024-49019) abuses.",
+      tools: [["Certipy", "certipy"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "certifried", label: "Certifried", lv: 2, cat: "adcs", cve: "CVE-2022-26923",
+      desc: "Spoof dNSHostName on a computer you add to forge a machine certificate.",
+      tools: [["Certipy", "certipy"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "pass-cert", label: "Pass the certificate (PKINIT)", lv: 2, cat: "adcs",
+      desc: "Use the issued PFX to request a TGT — or recover the NT hash via UnPAC.",
+      tools: [["Certipy", "certipy"], ["Rubeus", "rubeus"], ["gettgtpkinit", null]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+    { id: "golden-cert", label: "Golden certificate (CA key theft)", lv: 5, cat: "adcs",
+      desc: "Steal the CA private key to forge authentication certificates for anyone, indefinitely.",
+      tools: [["Certipy", "certipy"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+
+    /* ---------- SCCM ---------- */
+    { id: "sccm-enum", label: "Enumerate SCCM", lv: 2, cat: "sccm",
+      desc: "Find the site, management and distribution points, and how clients are configured.",
+      tools: [["SharpSCCM", null], ["sccmhunter", null], ["NetExec", "netexec"]], vuln: ["SCCM abuse", "sccm-abuse"] },
+    { id: "sccm-pxe", label: "PXE credential extraction", lv: 0, cat: "sccm", kind: "entry",
+      desc: "Pull and crack the PXE boot media password to recover deployment credentials — no auth.",
+      tools: [["pxethief", null], ["hashcat", null]], vuln: ["SCCM abuse", "sccm-abuse"] },
+    { id: "sccm-naa", label: "Loot NAA credentials", lv: 2, cat: "sccm",
+      desc: "Recover the Network Access Account credentials from policy, PXE or a distribution point.",
+      tools: [["SharpSCCM", null], ["pxethief", null]], vuln: ["SCCM abuse", "sccm-abuse"] },
+    { id: "sccm-relay", label: "Relay to SCCM (site takeover)", lv: 0, cat: "sccm",
+      desc: "Coerce + relay the site server or site database to become an SCCM administrator.",
+      tools: [["ntlmrelayx", "ntlmrelayx"], ["SharpSCCM", null]], vuln: ["SCCM abuse", "sccm-abuse"] },
+    { id: "sccm-admin", label: "Abuse SCCM admin", lv: 4, cat: "sccm",
+      desc: "As SCCM admin, push applications or scripts to clients for code execution at scale.",
+      tools: [["SharpSCCM", null], ["NetExec", "netexec"]], vuln: ["SCCM abuse", "sccm-abuse"] },
+    { id: "sccm-secrets", label: "Dump SCCM site-DB secrets", lv: 4, cat: "sccm",
+      desc: "Extract stored account secrets from the SCCM database.",
+      tools: [["SharpSCCM", null], ["secretsdump", "impacket-suite"]], vuln: ["SCCM abuse", "sccm-abuse"] },
+
+    /* ---------- Lateral move, SQL & privesc ---------- */
+    { id: "mssql-enum", label: "Find MSSQL access", lv: 2, cat: "lateral",
+      desc: "Locate SQL instances and where your domain user can connect.",
+      tools: [["PowerUpSQL", "powerupsql"], ["NetExec", "netexec"], ["mssqlclient.py", "impacket-suite"]], vuln: ["MSSQL lateral movement", "mssql-lateral"] },
+    { id: "mssql-links", label: "MSSQL trusted links", lv: 2, cat: "lateral",
+      desc: "Crawl linked-server chains to reach an instance where you are sysadmin.",
+      tools: [["PowerUpSQL", "powerupsql"], ["mssqlclient.py", "impacket-suite"]], vuln: ["SQL Server links", "sql-server-links"] },
+    { id: "mssql-exec", label: "MSSQL command exec (xp_cmdshell)", lv: 2, cat: "lateral",
+      desc: "Enable and run xp_cmdshell for OS commands as the SQL service account.",
+      tools: [["PowerUpSQL", "powerupsql"], ["mssqlclient.py", "impacket-suite"]], vuln: ["MSSQL lateral movement", "mssql-lateral"] },
+    { id: "local-privesc", label: "Local privilege escalation", lv: 3, cat: "lateral",
+      desc: "Service / registry / task / AlwaysInstallElevated misconfigs → SYSTEM (triage first).",
+      tools: [["SharpUp", "sharpup"], ["Seatbelt", "seatbelt"], ["winPEAS", null]], vuln: ["Windows service privilege escalation", "windows-service-privesc"] },
+    { id: "potato", label: "Potato attacks (SeImpersonate)", lv: 3, cat: "lateral",
+      desc: "A SeImpersonate service account → SYSTEM via JuicyPotato / PrintSpoofer / GodPotato / RoguePotato.",
+      tools: [["PrintSpoofer", null], ["GodPotato", null], ["RoguePotato", null]], vuln: ["Token impersonation", "token-impersonation"] },
+    { id: "uac-bypass", label: "UAC bypass", lv: 3, cat: "lateral",
+      desc: "Fodhelper / wsreset / etc. to reach high integrity — the prerequisite for credential dumping.",
+      tools: [["Fodhelper", null], ["Sliver", "sliver"]], vuln: ["UAC bypass", "uac-bypass"] },
+    { id: "token-imp", label: "Token impersonation", lv: 4, cat: "lateral",
+      desc: "Steal a privileged token already on the host (incognito) to act as another user.",
+      tools: [["mimikatz", "mimikatz"], ["incognito", null]], vuln: ["Token impersonation", "token-impersonation"] },
+    { id: "lateral", label: "Lateral movement", lv: 4, cat: "lateral",
+      desc: "SMB / WMI / WinRM / DCOM / PsExec with recovered credentials to reach new hosts.",
+      tools: [["NetExec", "netexec"], ["Impacket", "impacket-suite"], ["Evil-WinRM", "evil-winrm"], ["CIMplant", "cimplant"]], vuln: ["Remote execution", "remote-execution"] },
+    { id: "hunt-da", label: "Hunt a Domain Admin session", lv: 4, cat: "lateral",
+      desc: "Find a host with a Domain Admin logged on, then steal their token or credentials.",
+      tools: [["BloodHound", "bloodhound"], ["LACheck", "lacheck"], ["NetExec", "netexec"]], vuln: null },
+
+    /* ---------- Credential access ---------- */
+    { id: "lsass", label: "Dump LSASS", lv: 4, cat: "creds",
+      desc: "Pull NT hashes, Kerberos keys and sometimes cleartext for logged-on users.",
+      tools: [["mimikatz", "mimikatz"], ["minidumpdotnet", "minidumpdotnet"], ["SharpSecDump", "sharpsecdump"], ["NetExec", "netexec"]], vuln: ["LSASS dumping", "lsass-dumping"] },
+    { id: "sam", label: "Dump SAM & LSA secrets", lv: 4, cat: "creds",
+      desc: "Local account hashes plus service and machine-account secrets from the hives.",
+      tools: [["mimikatz", "mimikatz"], ["SharpSecDump", "sharpsecdump"], ["secretsdump", "impacket-suite"], ["NetExec", "netexec"]], vuln: ["SAM & LSA secrets", "sam-lsa-secrets"] },
+    { id: "dpapi", label: "DPAPI secrets", lv: 4, cat: "creds",
+      desc: "Decrypt browser, RDP, Wi-Fi and stored credentials via DPAPI master keys.",
+      tools: [["mimikatz", "mimikatz"], ["DonPAPI", "donpapi"], ["SharpDPAPI", null]], vuln: ["DPAPI abuse", "dpapi-abuse"] },
+    { id: "keepass", label: "Extract KeePass / vaults", lv: 4, cat: "creds",
+      desc: "Loot KeePass databases and other password vaults found on the host.",
+      tools: [["KeeThief", null], ["mimikatz", "mimikatz"]], vuln: ["Stored credential harvesting", "stored-cred-harvest"] },
+    { id: "pth", label: "Pass-the-Hash", lv: 2, cat: "creds",
+      desc: "Authenticate with an NT hash instead of a password — reuse it across hosts.",
+      tools: [["NetExec", "netexec"], ["Impacket", "impacket-suite"], ["Evil-WinRM", "evil-winrm"], ["mimikatz", "mimikatz"]], vuln: ["Pass-the-hash", "pass-the-hash"] },
+    { id: "ptt", label: "Pass-the-Ticket / OverPtH", lv: 2, cat: "creds",
+      desc: "Reuse or inject a Kerberos ticket, AES key or certificate to impersonate a user.",
+      tools: [["Rubeus", "rubeus"], ["mimikatz", "mimikatz"], ["Impacket", "impacket-suite"]], vuln: ["Kerberos ticket attacks", "kerberos-ticket-attacks"] },
+    { id: "unpac", label: "UnPAC the hash", lv: 2, cat: "creds",
+      desc: "Recover a user's NT hash from a PKINIT TGT obtained via a certificate.",
+      tools: [["Rubeus", "rubeus"], ["Certipy", "certipy"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
+
+    /* ---------- Domain dominance & trusts ---------- */
+    { id: "dcsync", label: "DCSync", lv: 5, cat: "persist", kind: "goal",
+      desc: "Replicate any account's hashes — including krbtgt — straight from a DC.",
+      tools: [["mimikatz", "mimikatz"], ["secretsdump", "impacket-suite"], ["SharpSecDump", "sharpsecdump"], ["NetExec", "netexec"]], vuln: ["DCSync", "dcsync-vuln"] },
+    { id: "ntds", label: "Dump NTDS.dit", lv: 5, cat: "persist",
+      desc: "Extract the entire domain database of hashes for offline cracking.",
+      tools: [["secretsdump", "impacket-suite"], ["NetExec", "netexec"], ["mimikatz", "mimikatz"]], vuln: ["NTDS.dit extraction", "ntds-extraction"] },
+    { id: "golden", label: "Golden ticket", lv: 5, cat: "persist",
+      desc: "Forge a TGT with the krbtgt key — any user, any group, until krbtgt is rotated twice.",
+      tools: [["mimikatz", "mimikatz"], ["Rubeus", "rubeus"], ["ticketer", "impacket-suite"]], vuln: ["Kerberos ticket attacks", "kerberos-ticket-attacks"] },
+    { id: "silver", label: "Silver ticket", lv: 5, cat: "persist",
+      desc: "Forge a service ticket with a service or computer account key.",
+      tools: [["mimikatz", "mimikatz"], ["Rubeus", "rubeus"]], vuln: ["Kerberos ticket attacks", "kerberos-ticket-attacks"] },
+    { id: "diamond", label: "Diamond ticket", lv: 5, cat: "persist",
+      desc: "Modify a real TGT rather than forging one — stealthier than a golden ticket.",
+      tools: [["Rubeus", "rubeus"]], vuln: ["Kerberos ticket attacks", "kerberos-ticket-attacks"] },
+    { id: "sapphire", label: "Sapphire ticket", lv: 5, cat: "persist",
+      desc: "Forge a ticket carrying a real high-privilege PAC obtained via S4U.",
+      tools: [["Impacket", "impacket-suite"]], vuln: ["Kerberos ticket attacks", "kerberos-ticket-attacks"] },
+    { id: "dsrm", label: "DSRM persistence", lv: 5, cat: "persist",
+      desc: "Enable the DC's DSRM local admin for network logon and use it with pass-the-hash.",
+      tools: [["mimikatz", "mimikatz"]], vuln: ["DSRM persistence", "dsrm-persistence"] },
+    { id: "skeleton", label: "Skeleton Key", lv: 5, cat: "persist",
+      desc: "Patch LSASS on a DC to accept a master password for every account.",
+      tools: [["mimikatz", "mimikatz"]], vuln: null },
+    { id: "custom-ssp", label: "Custom SSP", lv: 5, cat: "persist",
+      desc: "Register a malicious Security Support Provider to log all authentications in cleartext.",
+      tools: [["mimikatz", "mimikatz"]], vuln: null },
+    { id: "dcshadow", label: "DCShadow", lv: 5, cat: "persist",
+      desc: "Register a rogue DC to push malicious directory changes stealthily.",
+      tools: [["mimikatz", "mimikatz"]], vuln: null },
+    { id: "sd-backdoor", label: "Security-descriptor backdoors", lv: 5, cat: "persist",
+      desc: "Edit WMI / WinRM / SCM / domain ACLs to grant a low-priv account standing access.",
+      tools: [["RACE", "race-toolkit"], ["dacledit.py", null], ["PowerView", "powerview"]], vuln: ["Security descriptor / ACL backdoors", "security-descriptor-backdoor"] },
+    { id: "grant-dcsync", label: "Grant yourself DCSync (ACL)", lv: 5, cat: "persist",
+      desc: "Add replication rights to a controlled account so you can DCSync later.",
+      tools: [["StandIn", "standin"], ["PowerView", "powerview"], ["bloodyAD", "bloodyad"]], vuln: ["DCSync", "dcsync-vuln"] },
+    { id: "trust-enum", label: "Enumerate trusts", lv: 2, cat: "persist",
+      desc: "Map domain and forest trusts, their direction and transitivity.",
+      tools: [["PowerView", "powerview"], ["ADSearch", "adsearch"], ["nltest", null]], vuln: ["Domain / forest trust key abuse", "domain-trust-key-abuse"] },
+    { id: "child-parent", label: "Child → parent (SID history)", lv: 5, cat: "persist",
+      desc: "Forge a ticket with the parent's Enterprise Admins SID where SID filtering is off.",
+      tools: [["mimikatz", "mimikatz"], ["raiseChild", "impacket-suite"]], vuln: ["Domain / forest trust key abuse", "domain-trust-key-abuse"] },
+    { id: "trust-key", label: "Trust key abuse", lv: 5, cat: "persist",
+      desc: "Extract the trust key and forge inter-realm tickets across the trust.",
+      tools: [["mimikatz", "mimikatz"], ["Rubeus", "rubeus"]], vuln: ["Domain / forest trust key abuse", "domain-trust-key-abuse"] },
+    { id: "trust-ticket", label: "Trust ticket (inter-realm)", lv: 5, cat: "persist",
+      desc: "Forge a referral ticket to request access in the trusting domain.",
+      tools: [["mimikatz", "mimikatz"], ["Rubeus", "rubeus"], ["Impacket", "impacket-suite"]], vuln: ["Domain / forest trust key abuse", "domain-trust-key-abuse"] },
+    { id: "cross-forest", label: "Cross-forest coercion / delegation", lv: 6, cat: "persist", kind: "goal",
+      desc: "Extend coercion + unconstrained delegation across a forest trust to reach the other forest.",
+      tools: [["Rubeus", "rubeus"], ["Coercer", "coercer"]], vuln: ["Unconstrained delegation", "unconstrained-delegation"] },
+    { id: "azure-hybrid", label: "Hybrid / Azure AD Connect", lv: 5, cat: "persist",
+      desc: "Abuse the sync account and its stored secrets to bridge on-prem AD and Entra ID.",
+      tools: [["AADInternals", null], ["adconnectdump", null]], vuln: null },
+
+    /* ---------- Known CVEs (fast paths) ---------- */
+    { id: "zerologon", label: "Zerologon", lv: 0, cat: "creds", kind: "entry", cve: "CVE-2020-1472",
+      desc: "Reset the DC machine-account password to Netlogon-empty, then DCSync the domain.",
+      tools: [["NetExec", "netexec"], ["zerologon", null], ["secretsdump", "impacket-suite"]], vuln: ["DCSync", "dcsync-vuln"] },
+    { id: "nopac", label: "noPac", lv: 2, cat: "persist", cve: "CVE-2021-42278/42287",
+      desc: "sAMAccountName spoofing to impersonate a DC and obtain a DA ticket.",
+      tools: [["noPac", null], ["Impacket", "impacket-suite"]], vuln: ["Kerberos ticket attacks", "kerberos-ticket-attacks"] },
+    { id: "printnightmare", label: "PrintNightmare", lv: 3, cat: "lateral", cve: "CVE-2021-1675/34527",
+      desc: "Print Spooler RCE — SYSTEM locally or on a remote spooler.",
+      tools: [["PrintNightmare", null]], vuln: null },
+    { id: "smbghost", label: "SMBGhost", lv: 0, cat: "lateral", kind: "entry", cve: "CVE-2020-0796",
+      desc: "SMBv3 compression RCE on unpatched hosts.",
+      tools: [["Metasploit", null]], vuln: null },
+    { id: "eternalblue", label: "EternalBlue", lv: 0, cat: "lateral", kind: "entry", cve: "MS17-010",
+      desc: "Classic SMBv1 RCE on legacy hosts.",
+      tools: [["Metasploit", null]], vuln: null },
+    { id: "exchange", label: "ProxyShell / ProxyNotShell", lv: 0, cat: "lateral", kind: "entry", cve: "CVE-2021-34473…",
+      desc: "Exchange chains to RCE and mailbox access from the perimeter.",
+      tools: [["Metasploit", null]], vuln: null },
+    { id: "hivenightmare", label: "HiveNightmare / SeriousSAM", lv: 3, cat: "creds", cve: "CVE-2021-36934",
+      desc: "World-readable SAM/SYSTEM shadow copies → local account hashes.",
+      tools: [["HiveNightmare", null]], vuln: ["SAM & LSA secrets", "sam-lsa-secrets"] },
+    { id: "petitpotam", label: "PetitPotam", lv: 0, cat: "relay", kind: "entry", cve: "CVE-2021-36942",
+      desc: "Unauthenticated coercion via MS-EFSR (EfsRpcOpenFileRaw) — force a DC to authenticate to you.",
+      tools: [["PetitPotam", null], ["Coercer", "coercer"]], vuln: ["Authentication coercion", "authentication-coercion"] },
+    { id: "printerbug", label: "PrinterBug (MS-RPRN)", lv: 0, cat: "relay", kind: "entry",
+      desc: "Coerce a host to authenticate to you via the print spooler change-notification RPC.",
+      tools: [["SpoolSample", null], ["Coercer", "coercer"]], vuln: ["Authentication coercion", "authentication-coercion"] },
+    { id: "ms08068", label: "MS08-068 self-relay", lv: 0, cat: "relay",
+      desc: "Relay SMB authentication back to the originating host to dump its secrets.",
+      tools: [["ntlmrelayx", "ntlmrelayx"]], vuln: ["NTLM relay", "ntlm-relay-vuln"] }
+  ],
+
+  edges: [
+    /* recon */
+    ["scan-net", "find-dc"], ["find-dc", "enum-anon"], ["find-dc", "enum-dns"], ["enum-dns", "find-dc"],
+    ["enum-anon", "pw-spray"], ["enum-anon", "asrep-nc"],
+    ["enum-ldap", "kerberoast"], ["enum-ldap", "asrep"], ["enum-ldap", "acl-abuse"], ["enum-ldap", "adcs-enum"],
+    ["enum-ldap", "unconstrained"], ["enum-ldap", "constrained"], ["enum-ldap", "rbcd"], ["enum-ldap", "mssql-enum"],
+    ["enum-ldap", "sccm-enum"], ["enum-ldap", "laps"], ["enum-ldap", "gmsa"], ["enum-ldap", "trust-enum"],
+    ["enum-ldap", "enum-smb"], ["bh-hunt", "acl-abuse"], ["bh-hunt", "hunt-da"], ["enum-ldap", "bh-hunt"],
+    ["enum-smb", "pth"],
+    /* poisoning / relay */
+    ["llmnr", "crack"], ["llmnr", "relay-smb"], ["arp-mitm", "relay-smb"], ["ipv6", "relay-ldap"],
+    ["coerce", "relay-smb"], ["coerce", "relay-ldap"], ["coerce", "relay-adcs"], ["coerce", "relay-mssql"],
+    ["coerce", "unconstrained"], ["coerce", "kerb-relay"], ["printerbug", "coerce"], ["petitpotam", "coerce"],
+    ["relay-smb", "sam"], ["relay-smb", "lateral"], ["relay-ldap", "rbcd"], ["relay-ldap", "shadow-cred"],
+    ["relay-adcs", "pass-cert"], ["relay-mssql", "mssql-exec"], ["kerb-relay", "local-privesc"], ["ms08068", "sam"],
+    /* roasting / cracking */
+    ["pw-spray", "enum-ldap"], ["asrep-nc", "crack"], ["timeroast", "crack"],
+    ["kerberoast", "crack"], ["asrep", "crack"], ["blind-roast", "crack"], ["crack", "pth"], ["crack", "lateral"], ["crack", "enum-ldap"],
+    /* ACL / GPO */
+    ["acl-abuse", "write-owner"], ["acl-abuse", "force-chpwd"], ["acl-abuse", "add-member"], ["acl-abuse", "gpo-abuse"],
+    ["acl-abuse", "rbcd"], ["acl-abuse", "shadow-cred"], ["acl-abuse", "blind-roast"], ["acl-abuse", "grant-dcsync"],
+    ["write-owner", "add-member"], ["force-chpwd", "pth"], ["add-member", "dcsync"], ["gpo-abuse", "lateral"],
+    ["laps", "lateral"], ["gmsa", "ptt"], ["shadow-cred", "pass-cert"],
+    /* delegation */
+    ["unconstrained", "ptt"], ["constrained", "ptt"], ["rbcd", "ptt"], ["s4u2self", "ptt"],
+    ["add-computer", "rbcd"], ["constrained", "s4u2self"], ["ptt", "lateral"], ["ptt", "dcsync"],
+    /* ADCS */
+    ["adcs-enum", "esc1"], ["adcs-enum", "esc2-3"], ["adcs-enum", "esc4"], ["adcs-enum", "esc6-7"],
+    ["adcs-enum", "esc8"], ["adcs-enum", "esc9-10"], ["adcs-enum", "esc11"], ["adcs-enum", "esc13-15"], ["adcs-enum", "certifried"],
+    ["esc1", "pass-cert"], ["esc2-3", "pass-cert"], ["esc4", "esc1"], ["esc6-7", "pass-cert"], ["esc8", "pass-cert"],
+    ["esc9-10", "pass-cert"], ["esc11", "pass-cert"], ["esc13-15", "pass-cert"], ["certifried", "pass-cert"],
+    ["pass-cert", "ptt"], ["pass-cert", "unpac"], ["unpac", "pth"], ["golden-cert", "pass-cert"],
+    /* SCCM */
+    ["sccm-enum", "sccm-naa"], ["sccm-enum", "sccm-relay"], ["sccm-pxe", "sccm-naa"], ["sccm-naa", "lateral"],
+    ["sccm-relay", "sccm-admin"], ["sccm-admin", "sccm-secrets"], ["sccm-admin", "lateral"], ["sccm-secrets", "dcsync"],
+    /* MSSQL / privesc */
+    ["mssql-enum", "mssql-links"], ["mssql-enum", "mssql-exec"], ["mssql-links", "mssql-exec"],
+    ["mssql-exec", "potato"], ["mssql-exec", "lateral"],
+    ["local-privesc", "lsass"], ["potato", "lsass"], ["uac-bypass", "lsass"], ["printnightmare", "lsass"],
+    ["local-privesc", "token-imp"], ["hivenightmare", "sam"],
+    /* credential access */
+    ["lsass", "pth"], ["lsass", "ptt"], ["lsass", "dpapi"], ["sam", "pth"], ["dpapi", "lateral"], ["keepass", "lateral"],
+    ["lsass", "keepass"], ["lateral", "hunt-da"], ["hunt-da", "lsass"], ["token-imp", "lateral"],
+    /* to domain admin */
+    ["hunt-da", "dcsync"], ["zerologon", "dcsync"], ["nopac", "dcsync"], ["grant-dcsync", "dcsync"],
+    /* domain dominance */
+    ["dcsync", "golden"], ["dcsync", "ntds"], ["dcsync", "silver"], ["dcsync", "diamond"], ["dcsync", "sapphire"],
+    ["dcsync", "dsrm"], ["dcsync", "skeleton"], ["dcsync", "custom-ssp"], ["dcsync", "dcshadow"], ["dcsync", "sd-backdoor"],
+    ["dcsync", "golden-cert"], ["ntds", "crack"], ["dcsync", "azure-hybrid"],
+    /* trusts */
+    ["trust-enum", "child-parent"], ["trust-enum", "trust-key"], ["trust-enum", "trust-ticket"], ["trust-enum", "cross-forest"],
+    ["dcsync", "child-parent"], ["golden", "child-parent"], ["trust-key", "trust-ticket"], ["trust-ticket", "cross-forest"],
+    ["child-parent", "golden"], ["unconstrained", "cross-forest"]
   ]
 };
