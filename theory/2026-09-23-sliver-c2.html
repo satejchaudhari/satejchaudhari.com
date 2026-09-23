@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sliver C2 — Architecture &amp; Concepts — Satej Chaudhari</title>
+  <meta name="description" content="How Sliver is put together — the server and client, sessions versus beacons, listeners and egress protocols, implant generation and profiles, the armory and extensions, and pivots — the mechanism behind the commands.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html" class="current">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Red Team</span>
+        <h1 class="post-title">Sliver C2 — Architecture &amp; Concepts</h1>
+        <p class="post-meta">
+          <time datetime="2026-09-23">2026-09-23</time>
+          <span>&middot; 11 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Sliver is an open-source, cross-platform
+          <a href="2026-09-23-command-and-control.html">command-and-control</a> framework built for
+          adversary simulation — a modern, Go-based alternative to Cobalt Strike that has become a
+          common choice on real engagements. This page is how Sliver is <em>put together</em>: the
+          concepts behind sessions, beacons, listeners, implants, the armory, and pivots. The
+          step-by-step commands and deployment live in the
+          <a href="../toolkit.html">Sliver toolkit entry</a>; here we cover the model that makes
+          those commands make sense.
+        </p>
+
+        <h2>Server and client</h2>
+
+        <p>
+          Sliver ships as two binaries. The <strong>sliver-server</strong> is the C2 backend — it
+          runs the listeners, compiles implants, stores operation state, and is meant to run on
+          Linux/macOS. The <strong>sliver-client</strong> is the operator console; running the server
+          binary directly gives you a built-in client. Because the server and client are separate,
+          Sliver supports <strong>multiplayer</strong>: several operators connect to one server at
+          once, each issued a client config with <code>new-operator</code>. That is how a team shares
+          a single operation.
+        </p>
+
+        <h2>Implants: sessions vs beacons</h2>
+
+        <p>
+          A Sliver <strong>implant</strong> is the payload that runs on the target and calls home. It
+          exists in two modes — the same asynchronous/interactive split every C2 has, but worth
+          pinning down in Sliver's own words because you switch between them constantly.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Mode</th><th>In Sliver</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Beacon</td><td>Asynchronous. Checks in on an interval (sleep + jitter), runs queued tasks, returns output, sleeps again. The default posture for stealth — quiet, bursty callbacks. Generated with the beacon flag</td></tr>
+            <tr><td>Session</td><td>Interactive, real-time control. Faster to work in, noisier on the wire. You typically upgrade a beacon to a session only for hands-on-keyboard bursts</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          The same compiled implant can back either mode, and Sliver tracks them separately —
+          <code>beacons</code> and <code>sessions</code> list them, and <code>use &lt;id&gt;</code>
+          selects which one your commands target. Everything you type is scoped to the implant you
+          have selected.
+        </blockquote>
+
+        <h2>Listeners and egress protocols</h2>
+
+        <p>
+          A <strong>listener</strong> is the server-side endpoint an implant connects back to. Sliver
+          speaks several egress protocols so the operator can match the environment; a running
+          listener is a <em>job</em>, listed with <code>jobs</code>.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Protocol</th><th>Character</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>HTTP(S)</td><td>Procedurally generated C2 over web traffic — the everyday default; blends with browsing and survives proxies. Supports custom/Let's Encrypt certificates</td></tr>
+            <tr><td>mTLS</td><td>Mutually-authenticated TLS; strong and simple where raw sockets egress is allowed</td></tr>
+            <tr><td>DNS</td><td>Slow but almost always permitted; includes a <em>DNS canary</em> feature to detect when blue teams detonate an implant</td></tr>
+            <tr><td>WireGuard</td><td>Efficient VPN-style tunnel, typically for internal use</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Generating implants and profiles</h2>
+
+        <p>
+          Implants are <strong>compiled on demand</strong> by the server with <code>generate</code>.
+          Because the code is produced per build, Sliver can apply <em>dynamic code generation</em>
+          and <em>compile-time / symbol obfuscation</em> so no two implants are byte-identical — which
+          defeats simple hash and static signatures. The build is parameterised: callback URL,
+          beacon vs session, output format, and obfuscation.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Choice at generate-time</th><th>What it controls</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Callback (e.g. <code>-b https://host</code>)</td><td>Which listener/protocol the implant dials, and beacon vs session</td></tr>
+            <tr><td>Output format</td><td>Executable, shared library, service binary, or raw <strong>shellcode</strong> to inject via a loader</td></tr>
+            <tr><td>Obfuscation / encoders</td><td>Symbol obfuscation and shellcode encoding to reduce static detection</td></tr>
+            <tr><td>Staged vs stageless</td><td>A one-shot implant, or a small stager that pulls the full implant over C2</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          A <strong>profile</strong> saves a generate configuration so the same implant recipe can be
+          rebuilt or served on demand — useful for staging and for keeping a consistent build across
+          a team.
+        </p>
+
+        <h2>The armory: extensions and aliases</h2>
+
+        <p>
+          Out of the box Sliver has built-in commands (file operations, process listing, injection,
+          <code>execute-assembly</code>, and so on). Beyond that, the <strong>armory</strong> is
+          Sliver's package manager: <code>armory install &lt;name&gt;</code> pulls third-party tooling
+          and registers it as a first-class command.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Type</th><th>What it is</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Alias</td><td>A wrapper around a .NET assembly (e.g. SharpUp, Rubeus) so it runs like a native command via in-memory execution</td></tr>
+            <tr><td>Extension</td><td>A compiled module — often a BOF/COFF (Beacon Object File) — loaded into the implant to add capability without spawning a process</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          This is why an operator can run dozens of named commands that are really external tools: the
+          armory turns SharpUp, Rubeus, Seatbelt, service-abuse helpers and BOFs into commands the
+          implant executes in memory. How that in-memory execution actually works — fork-and-run vs
+          inline, PPID spoofing, AMSI/ETW bypass — is covered in
+          <a href="2026-09-23-in-memory-tradecraft.html">in-memory tradecraft</a>.
+        </blockquote>
+
+        <h2>Pivots: reaching segmented hosts</h2>
+
+        <p>
+          On a segmented network only the foothold can reach the internet. Sliver handles this with
+          <strong>pivots</strong>: the foothold implant opens a local <strong>TCP</strong> or
+          <strong>named-pipe</strong> pivot listener, and implants on internal machines connect to
+          <em>that</em> instead of the internet. Their C2 traffic is relayed through the foothold's
+          egress channel back to the server.
+        </p>
+
+        <blockquote>
+          The result is one egress point and many internal agents — a small, defensible network
+          footprint. A typical lab layout: the foothold beacons out over HTTPS, and every other
+          compromised host talks TCP to a pivot on the foothold, which relays it onward. Named-pipe
+          pivots go a step further, carrying C2 over SMB so it looks like ordinary Windows
+          inter-process traffic.
+        </blockquote>
+
+        <h2>Why Sliver is a common choice</h2>
+
+        <ul>
+          <li><strong>Open-source and cross-platform</strong> — no licence, implants for Windows/Linux/macOS across architectures.</li>
+          <li><strong>Per-build obfuscation</strong> — dynamic code generation and symbol obfuscation defeat naive signatures.</li>
+          <li><strong>In-memory .NET and BOF execution</strong> — run the standard C#/BOF offensive toolset without dropping tools to disk.</li>
+          <li><strong>Scriptable and multiplayer</strong> — automate with JavaScript/TypeScript or Python; share one server across a team.</li>
+        </ul>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          Sliver is a server that compiles obfuscated implants on demand, listeners that speak
+          HTTPS/mTLS/DNS/WireGuard, implants that run as quiet beacons or interactive sessions, an
+          armory that turns external tools and BOFs into in-memory commands, and pivots that fan C2
+          out across a segmented network from a single foothold. Hold that model and the command
+          reference reads as a set of knobs on one machine. The full deployment and every command are
+          in the <a href="../toolkit.html">Sliver toolkit entry</a>.
+        </p>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

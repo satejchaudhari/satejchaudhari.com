@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>In-Memory Post-Exploitation Tradecraft — Satej Chaudhari</title>
+  <meta name="description" content="How offensive tools run without touching disk — process injection, fork-and-run vs inline execution, execute-assembly and .NET CLR hosting, BOFs, PPID spoofing and process migration, and the OPSEC behind each choice.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html" class="current">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Red Team</span>
+        <h1 class="post-title">In-Memory Post-Exploitation Tradecraft</h1>
+        <p class="post-meta">
+          <time datetime="2026-09-23">2026-09-23</time>
+          <span>&middot; 11 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          A modern operator almost never drops a tool to disk and runs it. The whole toolkit —
+          credential dumpers, .NET enumerators, service-abuse helpers — is executed <em>in the memory
+          of an existing process</em>, so antivirus never scans a file and the
+          <a href="2026-09-23-windows-telemetry-logging.html">PowerShell logging</a> layers never see a
+          script. This page is how that is done: injection, the fork-and-run vs inline choice,
+          <code>execute-assembly</code> and BOFs, and the OPSEC of process lineage. It is the mechanism
+          behind a large share of the commands in the <a href="../toolkit.html">Toolkit</a>.
+        </p>
+
+        <h2>The core primitive: process injection</h2>
+
+        <p>
+          Injection means placing your code into a process's address space and getting a thread to run
+          it. Classically: allocate executable memory in a target process, write your shellcode there,
+          and start execution (a remote thread, a queued APC, a hijacked thread). Whether the target is
+          a brand-new process you spawn or one already running, the point is the same — <strong>your
+          code runs under another process's identity and image</strong>, so on the surface it is
+          <code>svchost.exe</code> or <code>explorer.exe</code> doing the work, not an unknown binary.
+        </p>
+
+        <p>
+          Which process you pick is an OPSEC decision, not a detail. Some choices signal intent
+          (<code>lsass.exe</code> for credential theft), some are chosen purely to blend in
+          (<code>svchost.exe</code>, <code>dllhost.exe</code>, <code>RuntimeBroker.exe</code>,
+          <code>taskhostw.exe</code>), and some help defeat application-control
+          (<code>regsvr32.exe</code>, <code>backgroundtaskhost.exe</code>). Injecting into a process
+          that runs often and lives briefly is a way to disappear into normal activity.
+        </p>
+
+        <h2>Fork-and-run vs inline</h2>
+
+        <p>
+          When an implant runs an external tool, it has two strategies, and the difference is central
+          to both stealth and stability.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Technique</th><th>How it works</th><th>Trade-off</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Fork-and-run</td><td>Spawn a temporary <em>sacrificial</em> process, inject the tool's code into it, run it, capture output, then kill the process</td><td>Safe — a crash takes the sacrificial process, not the implant. But spawning a process (and the parent/child relationship it creates) is a detection opportunity</td></tr>
+            <tr><td>Inline / self-inject</td><td>Run the tool inside the implant's own process, no new process spawned</td><td>Quieter — no new process, no telltale lineage. But a crash or a detected action takes the implant with it, so it is riskier</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          This is the same stealth-versus-safety dial as beacon-versus-session, one level down. Fork-and-run
+          is the resilient default; inline execution is what you reach for when the extra process itself
+          would be the thing that gets you caught — and it is where the implant's built-in
+          <a href="2026-09-23-windows-telemetry-logging.html">AMSI/ETW</a> bypass applies, since the code
+          runs in a process the implant already controls.
+        </blockquote>
+
+        <h2>execute-assembly: running .NET in memory</h2>
+
+        <p>
+          The bulk of the offensive C# toolset — Rubeus, SharpUp, Seatbelt, Certify, SharpHound and the
+          rest — are .NET assemblies. <strong>execute-assembly</strong> loads the .NET runtime (CLR)
+          into a process and runs the assembly's bytes straight from memory, passing arguments as if it
+          were launched normally. Nothing is written to disk, and because it never goes through the
+          PowerShell engine, script-block and transcription logging are blind to it. It works in both
+          modes: fork-and-run into a chosen (optionally PPID-spoofed) process, or inline into the
+          implant with AMSI/ETW patched first.
+        </p>
+
+        <blockquote>
+          Not every assembly is compatible, and a tool that shells out or spawns children reintroduces
+          the very process events inline execution was meant to avoid. The tradecraft is choosing the
+          right execution method for each tool, not applying one blindly.
+        </blockquote>
+
+        <h2>BOFs — the lighter alternative</h2>
+
+        <p>
+          A <strong>Beacon Object File</strong> (BOF/COFF) is a small compiled object loaded and run
+          <em>inside the implant's own process</em>, using the implant as a mini-linker. Because there
+          is no new process, no CLR to host, and a tiny footprint, BOFs are the quiet way to do focused
+          post-exploitation tasks. Frameworks distribute them as extensions (Sliver's armory does exactly
+          this), which is why an operator can run many &ldquo;native&rdquo; commands that are really
+          in-process modules.
+        </p>
+
+        <h2>PPID spoofing and process migration</h2>
+
+        <p>
+          Endpoint detection leans heavily on <strong>process lineage</strong> — who spawned whom. An
+          illegitimate parent/child pair (<code>WINWORD.exe</code> spawning <code>cmd.exe</code>, or
+          <code>rundll32.exe</code> with no parent reason) is a classic indicator. Two techniques bend
+          this to the operator's advantage.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Technique</th><th>What it does</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PPID spoofing</td><td>Start a process with an <em>arbitrary</em> parent, so the new process appears to have been launched by a benign, expected one. Mimic real relationships (e.g. <code>svchost.exe</code> → <code>RuntimeBroker.exe</code> / <code>taskhostw.exe</code>) so a fork-and-run doesn't stand out in a process tree</td></tr>
+            <tr><td>Process migration</td><td>Move the running implant from its current host process into a different, longer-lived or more plausible one — leaving the original process (and its risk) behind</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Getting a tool into shellcode</h2>
+
+        <p>
+          Injection needs position-independent shellcode, but most tools are PE executables or .NET
+          assemblies. Packers bridge the gap: <strong>Donut</strong> turns a .NET/PE payload into
+          shellcode that reflectively loads and runs it, and wrappers like <strong>PEzor</strong> add
+          evasion (unhooking, anti-debug, sleep obfuscation, output as .NET or shellcode) so the result
+          both runs in memory and resists inspection. This is how a stock <code>mimikatz.exe</code> or a
+          PowerShell-derived executable becomes something an implant can inject and
+          <code>execute-assembly</code>.
+        </p>
+
+        <h2>Unhooking</h2>
+
+        <p>
+          EDR products insert user-mode <em>hooks</em> into common API functions to watch calls from
+          inside a process. Loaders counter this by <strong>unhooking</strong> — restoring the original,
+          clean copies of those functions (typically by reloading a pristine <code>ntdll</code> from
+          disk) — or by calling the underlying syscalls directly, so the sensitive operations happen out
+          of the EDR's view. It is the endpoint-level equivalent of the AMSI/ETW patch: quietly remove
+          the observation point before doing the noisy thing.
+        </p>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          In-memory tradecraft is a stack of choices around one idea — run your code inside a process
+          that is already trusted, and touch disk as little as possible. Injection provides the
+          primitive; fork-and-run versus inline sets the stealth/safety balance;
+          <code>execute-assembly</code> and BOFs run the standard toolset without dropping files; PPID
+          spoofing and migration launder process lineage; and packers, unhooking and AMSI/ETW bypasses
+          smooth over what defenders watch. Every one is a deliberate trade of noise for control. The
+          tools that implement these — and the Sliver commands that drive them — are in the
+          <a href="../toolkit.html">Toolkit</a>.
+        </p>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

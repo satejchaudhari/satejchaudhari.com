@@ -20,6 +20,38 @@
 
 var THEORY = [
   {
+    title: "Command & Control (C2) Frameworks",
+    url: "theory/2026-09-23-command-and-control.html",
+    date: "2026-09-23",
+    tag: "Red Team",
+    description: "How C2 frameworks work — implants, listeners, beacons versus interactive sessions, staging, egress channels, redirectors, and the OPSEC that shapes every operation.",
+    readTime: "10 min read"
+  },
+  {
+    title: "Sliver C2 — Architecture & Concepts",
+    url: "theory/2026-09-23-sliver-c2.html",
+    date: "2026-09-23",
+    tag: "Red Team",
+    description: "How Sliver is put together — server and client, sessions vs beacons, listeners, implant generation and profiles, the armory and extensions, and pivots — the mechanism behind the commands.",
+    readTime: "11 min read"
+  },
+  {
+    title: "Windows Telemetry & PowerShell Logging",
+    url: "theory/2026-09-23-windows-telemetry-logging.html",
+    date: "2026-09-23",
+    tag: "Evasion",
+    description: "What Windows records when code runs — PSReadline history, Script Block (4104) and Module (4103) logging, transcription, AMSI and ETW — how each works and why in-memory tradecraft defeats them.",
+    readTime: "10 min read"
+  },
+  {
+    title: "In-Memory Post-Exploitation Tradecraft",
+    url: "theory/2026-09-23-in-memory-tradecraft.html",
+    date: "2026-09-23",
+    tag: "Red Team",
+    description: "How offensive tools run without touching disk — process injection, fork-and-run vs inline, execute-assembly and BOFs, PPID spoofing and migration, packers and unhooking.",
+    readTime: "11 min read"
+  },
+  {
     title: "Windows Access Tokens & UAC",
     url: "theory/2026-08-18-windows-tokens-uac.html",
     date: "2026-09-22",

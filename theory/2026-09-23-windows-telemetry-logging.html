@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows Telemetry &amp; PowerShell Logging — Satej Chaudhari</title>
+  <meta name="description" content="What Windows records when code runs — PSReadline history, Script Block and Module logging, transcription, AMSI and ETW — how each mechanism works, and why in-memory tradecraft is designed to defeat them.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html" class="current">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Evasion</span>
+        <h1 class="post-title">Windows Telemetry &amp; PowerShell Logging</h1>
+        <p class="post-meta">
+          <time datetime="2026-09-23">2026-09-23</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Running commands on a modern Windows host is not silent. Over the last decade Microsoft
+          added layers of telemetry that record <em>what</em> code ran, <em>which</em> script content
+          was compiled, and even hand script content to antivirus <em>before</em> it executes. An
+          operator who understands each layer — where it records, what it misses, and why — can
+          reason about how loud any action is. This page is that map. It explains the mechanisms;
+          the specific bypass tooling belongs to
+          <a href="2026-09-23-in-memory-tradecraft.html">in-memory tradecraft</a> and the
+          <a href="../toolkit.html">Toolkit</a>.
+        </p>
+
+        <h2>The layers, from disk to memory</h2>
+
+        <table>
+          <thead>
+            <tr><th>Mechanism</th><th>What it captures</th><th>Where</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PSReadline history</td><td>Every command physically typed at a PowerShell console, saved to a text file across sessions</td><td>A per-user <code>ConsoleHost_history.txt</code></td></tr>
+            <tr><td>Module logging</td><td>Pipeline execution details for modules that opt in</td><td>Windows PowerShell log, event ID 4103</td></tr>
+            <tr><td>Script Block logging</td><td>The actual content of every script block the engine compiles — including de-obfuscated code</td><td>PowerShell/Operational, event ID 4104</td></tr>
+            <tr><td>Transcription</td><td>A full console transcript — commands and their output — written to a directory</td><td>Text transcripts on disk</td></tr>
+            <tr><td>AMSI</td><td>Script/buffer content handed to the registered AV for a verdict before execution</td><td>Defender/Operational, event IDs 1116 / 1117</td></tr>
+            <tr><td>ETW</td><td>The underlying event pipe most of the above feed into</td><td>Kernel/user event tracing</td></tr>
+          </tbody>
+        </table>
+
+        <h2>PSReadline command history</h2>
+
+        <p>
+          PSReadline gives the console its Unix-like editing and history (Ctrl+R recall), and to do
+          that it persists typed commands to a file that survives reboots. It is not a security control
+          — it is a convenience feature — but it is a rich <strong>forensic artifact</strong>: an
+          investigator can grep every user's history file for tool names. It only ever captures what is
+          <em>typed at a console</em>, so commands executed programmatically (through a C2 implant, an
+          assembly, or a runspace) never touch it. That gap is exactly why operators avoid interactive
+          consoles and work through in-memory execution.
+        </p>
+
+        <h2>Module logging (4103)</h2>
+
+        <p>
+          Introduced in PowerShell 3.0, module logging records pipeline and command-execution events,
+          but only for modules whose <code>LogPipelineExecutionDetails</code> property is set — by
+          default most are off. Because the switch is a per-module property that lives in the current
+          session's objects, its coverage is narrow and its state is mutable from within the session.
+        </p>
+
+        <h2>Script Block logging (4104) — the important one</h2>
+
+        <p>
+          Script Block logging is the layer that matters most. It records the <strong>content of every
+          script block the PowerShell engine compiles</strong>, regardless of the host application and
+          — critically — <em>after</em> de-obfuscation, because the engine has to decode a script to
+          run it. Long scripts are split across multiple 4104 events sharing one ScriptBlock ID.
+        </p>
+
+        <blockquote>
+          This defeats the classic evasions: string concatenation, base64, and encoded commands all get
+          logged in their final, readable form because the engine must expand them to execute. Against
+          Script Block logging, hiding the <em>text</em> of a script is close to pointless — which is a
+          major reason offensive tradecraft moved away from PowerShell scripts toward compiled
+          in-memory .NET assemblies and BOFs that never pass through the PowerShell engine at all.
+        </blockquote>
+
+        <h2>Transcription</h2>
+
+        <p>
+          System-wide transcription makes any host that uses the PowerShell engine
+          (<code>powershell.exe</code>, ISE, and .NET applications that load
+          <code>System.Management.Automation</code>) write a full transcript of commands and output to
+          a configured directory. Its weakness is operational: if the output path is predictable and
+          not access-controlled, the recorded evidence can simply be deleted or altered on a host the
+          attacker already controls. Robust deployments push transcripts to a write-only remote share
+          so a local attacker cannot reach them.
+        </p>
+
+        <h2>AMSI — content inspection before execution</h2>
+
+        <p>
+          The <strong>Antimalware Scan Interface</strong> is different in kind from the logging above:
+          it is not a record after the fact but an inspection <em>before</em> execution. AMSI lets an
+          application hand a buffer — a script, an <code>-EncodedCommand</code>, an in-memory .NET
+          assembly — to the registered antivirus for a malicious/clean verdict, and blocks it on a
+          hit. That is why AMSI catches malware regardless of input method (disk, encoded, in-memory):
+          it sees the content at the moment of use, not the file. Detections surface in the Defender
+          Operational log as events 1116/1117.
+        </p>
+
+        <blockquote>
+          AMSI's strength is also the shape of its weakness. It runs <em>in the same process</em> as the
+          code being scanned, so code already executing in that process can neuter the interface —
+          typically by patching the in-memory scan function to always return &ldquo;clean,&rdquo; or by
+          corrupting the provider's initialization so it never engages. After that patch, everything in
+          that process is invisible to AMSI. This is a memory patch, not a file change, so it leaves no
+          disk artifact — and it is why modern loaders bundle an AMSI (and ETW) bypass that runs first.
+        </blockquote>
+
+        <h2>ETW — the pipe underneath</h2>
+
+        <p>
+          Event Tracing for Windows is the plumbing many of these logs flow through, including the
+          .NET/CLR provider that reports assembly loads. Disabling or corrupting the relevant ETW
+          provider in the current process — again, an in-memory patch — starves those logs of events,
+          which is why AMSI and ETW bypasses are usually applied together before running post-exploitation
+          tooling in a process.
+        </p>
+
+        <h2>How the layers combine (and why in-memory wins)</h2>
+
+        <p>
+          Read together, the layers explain a clear direction of travel in offensive tradecraft:
+        </p>
+
+        <ul>
+          <li><strong>On-disk scripts</strong> are the worst case — caught by AMSI, Script Block logging, transcription, and Defender's file scanning at once.</li>
+          <li><strong>Encoded / obfuscated scripts</strong> still lose to Script Block logging (de-obfuscated content is logged) and AMSI (content inspected at runtime).</li>
+          <li><strong>Compiled .NET assemblies run in memory</strong> skip the PowerShell engine entirely, so PSReadline, module, script-block and transcription logging never see them — leaving only AMSI/ETW (patched first) and endpoint behavioural detection.</li>
+        </ul>
+
+        <blockquote>
+          None of these are impenetrable, and none should lull an operator: bypasses are per-process and
+          per-session, EDR watches for the bypass patterns themselves, and behavioural detection does not
+          care what the logs say. Knowing the layers is about reading a host's real visibility, not
+          assuming invisibility.
+        </blockquote>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          Windows records command-line activity at several layers — a per-user history file, module
+          (4103) and script-block (4104) logging, transcription, and content inspection via AMSI
+          (1116/1117) over ETW. Each has a specific reach and a specific blind spot, and the sum of
+          those blind spots is why offensive tooling migrated to compiled, in-memory execution with
+          AMSI/ETW patched first. The mechanics of that execution are in
+          <a href="2026-09-23-in-memory-tradecraft.html">in-memory tradecraft</a>, and the tooling is in
+          the <a href="../toolkit.html">Toolkit</a>.
+        </p>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

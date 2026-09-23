@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Command &amp; Control (C2) Frameworks — Satej Chaudhari</title>
+  <meta name="description" content="How command-and-control frameworks work — implants, listeners, beacons versus interactive sessions, staging, egress channels, redirectors, and the OPSEC that shapes every operation.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html" class="current">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Red Team</span>
+        <h1 class="post-title">Command &amp; Control (C2) Frameworks</h1>
+        <p class="post-meta">
+          <time datetime="2026-09-23">2026-09-23</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Once an attacker has code running on a target, they need a way to keep talking to it:
+          to send commands, receive output, run tools, and pivot deeper — all while blending into
+          normal network traffic. That channel and the software that manages it is
+          <strong>command and control</strong> (C2). Almost every real intrusion and every serious
+          red-team operation runs on a C2 framework; understanding how one is built explains a
+          large part of modern offensive tradecraft. This page is the general model.
+          <a href="2026-09-23-sliver-c2.html">Sliver</a> is one concrete implementation, and the
+          commands live in the <a href="../toolkit.html">Toolkit</a>.
+        </p>
+
+        <h2>The three moving parts</h2>
+
+        <p>
+          Every C2 framework, whatever its name, is built from the same three components.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Component</th><th>What it is</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Team server (C2 server)</td><td>The attacker-controlled server that holds operation state, issues tasks, and receives results. Often supports multiple operators at once (multiplayer)</td></tr>
+            <tr><td>Implant / agent</td><td>The code running on the compromised host that calls back to the server, executes tasks, and returns output. Also called a beacon, payload, or RAT</td></tr>
+            <tr><td>Listener</td><td>The server-side endpoint the implant connects to, speaking a specific egress protocol (HTTPS, DNS, mTLS, …) on a specific port</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          The whole design is inverted from a normal remote-access tool: the implant <em>dials out</em>
+          to the server rather than the server connecting in. Outbound connections from a workstation
+          to the internet are ordinary and rarely blocked, so the implant hides in that expected flow —
+          which is why C2 is so hard to stop at the perimeter.
+        </blockquote>
+
+        <h2>Beacons versus interactive sessions</h2>
+
+        <p>
+          The single most important design choice is <em>how often</em> the implant talks to the
+          server, and it produces two modes that every operator switches between.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Mode</th><th>Behaviour</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Beacon (asynchronous)</td><td>The implant sleeps, then wakes on an interval (the <em>sleep</em>, often with random <em>jitter</em>), asks the server for queued tasks, runs them, returns output, and sleeps again. Low, bursty traffic that looks like periodic web requests — quiet and hard to spot</td></tr>
+            <tr><td>Interactive session</td><td>A live, low-latency connection where commands and output flow in real time. Convenient for fast work (a shell, a socks proxy) but chatty and far easier to detect</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          Good operations spend most of their time in beacon mode with a long sleep for stealth and
+          switch to an interactive session only for short, deliberate bursts of hands-on-keyboard
+          work. The trade-off — <strong>stealth versus latency</strong> — is the rhythm of the whole
+          engagement.
+        </p>
+
+        <h2>Egress channels</h2>
+
+        <p>
+          The implant has to reach the server across whatever egress the network allows, so mature
+          frameworks speak several protocols and let the operator pick per environment.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Channel</th><th>Why you'd choose it</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>HTTP(S)</td><td>The default almost everywhere — blends with normal web browsing, survives proxies, and the TLS wrapper hides the payload. Often shaped to imitate a real site's traffic (a <em>malleable</em> or procedurally generated profile)</td></tr>
+            <tr><td>DNS</td><td>Extremely slow but nearly always allowed out; a last-resort channel that works when everything else is filtered</td></tr>
+            <tr><td>mTLS</td><td>Mutually-authenticated TLS — strong encryption and both ends verified, good where raw sockets are permitted</td></tr>
+            <tr><td>WireGuard / raw TCP</td><td>Efficient tunnels for internal use, typically behind a foothold rather than facing the internet</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Staging: how the implant gets there</h2>
+
+        <p>
+          A payload can be delivered whole or in two steps, and the choice affects both size and
+          detectability.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Type</th><th>Detail</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Stageless</td><td>The full implant is delivered in one artifact. Larger, but a single self-contained file with no follow-up network fetch to flag</td></tr>
+            <tr><td>Staged</td><td>A tiny first-stage <em>stager</em> lands first, then pulls the full implant from the server over the C2 channel. Small initial footprint, but the second fetch is an extra detection opportunity</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Redirectors and infrastructure</h2>
+
+        <p>
+          Operators almost never point implants straight at the team server. Traffic is bounced
+          through <strong>redirectors</strong> — cheap proxy hosts (or CDN/domain-fronting) that
+          forward C2 traffic to the real server. If a redirector is burned and blocked, the team
+          server and the operation survive; only a disposable relay is lost. This separation of the
+          public-facing relay from the sensitive backend is standard attack-infrastructure hygiene.
+        </p>
+
+        <blockquote>
+          In segmented networks the same idea goes <em>inward</em>: only one foothold host talks to the
+          internet, and every other compromised machine tunnels its C2 through that foothold over an
+          internal protocol (a <em>pivot</em>). One egress point, many internal agents — smaller
+          network footprint and one place to shape the traffic.
+        </blockquote>
+
+        <h2>Why defenders still catch C2</h2>
+
+        <p>
+          The channel is designed to blend in, so detection shifts to behaviour and pattern:
+        </p>
+
+        <ul>
+          <li><strong>Beaconing regularity</strong> — even with jitter, a callback every N seconds to the same destination is a statistical signature network analytics hunt for.</li>
+          <li><strong>JA3/TLS and header fingerprints</strong> — a framework's default TLS stack or HTTP headers can be recognised even inside encryption.</li>
+          <li><strong>Host-side telemetry</strong> — process injection, unusual parent/child process trees, and in-memory .NET execution generate endpoint signals regardless of how clean the network looks (see <a href="2026-09-23-windows-telemetry-logging.html">Windows telemetry</a> and <a href="2026-09-23-in-memory-tradecraft.html">in-memory tradecraft</a>).</li>
+          <li><strong>Known indicators</strong> — default certificates, ports, URIs, and named-pipe names ship with every framework and are widely signatured until the operator changes them.</li>
+        </ul>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          A C2 framework is a team server, an implant that dials out to it, and a listener that
+          speaks a chosen egress protocol — with the beacon/session trade-off setting the tempo and
+          redirectors and pivots shaping the infrastructure. Every operator decision is really the
+          same decision in different clothes: how much noise to make for how much control. The
+          concrete mechanics of one modern framework are on the
+          <a href="2026-09-23-sliver-c2.html">Sliver C2</a> page, and its full command reference is
+          in the <a href="../toolkit.html">Toolkit</a>.
+        </p>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
