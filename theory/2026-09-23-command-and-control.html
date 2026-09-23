@@ -64,7 +64,7 @@
         <h1 class="post-title">Command &amp; Control (C2) Frameworks</h1>
         <p class="post-meta">
           <time datetime="2026-09-23">2026-09-23</time>
-          <span>&middot; 10 min read</span>
+          <span>&middot; 16 min read</span>
         </p>
       </header>
 
@@ -181,6 +181,102 @@
           internal protocol (a <em>pivot</em>). One egress point, many internal agents — smaller
           network footprint and one place to shape the traffic.
         </blockquote>
+
+        <h2>Sleep, jitter, and the beaconing signature</h2>
+
+        <p>
+          A beacon's <em>sleep</em> is the interval it waits between check-ins; <em>jitter</em> is a
+          random percentage added to or subtracted from that interval so callbacks don't land on a
+          perfect metronome. This one setting is the crux of the whole stealth-versus-latency
+          trade-off, and it is worth understanding why defenders can still find a beacon even with
+          jitter turned up.
+        </p>
+
+        <p>
+          Network analytics treat beaconing as a <strong>signal-processing problem</strong>. Take the
+          set of connection timestamps from one internal host to one external destination and compute
+          the intervals between them. A human browsing the web produces intervals that are wildly
+          irregular and bursty; a beacon — even with 50% jitter — produces intervals that cluster
+          around a mean. Run those intervals through autocorrelation or an FFT and a periodic
+          component stands out from the noise. Jitter widens the distribution but does not remove the
+          central tendency, so a long enough capture still reveals the period. This is why the
+          defensive research literature talks about beacon hunting in terms of variance, the
+          coefficient of variation, and Fourier peaks rather than fixed thresholds.
+        </p>
+
+        <blockquote>
+          The operator's counter is to make the sleep long (hours, not seconds), push jitter high, and
+          keep the total number of callbacks small — fewer data points make the statistics weaker.
+          Some frameworks add a <em>working-hours</em> constraint so the beacon only calls back during
+          the target's business day, hiding inside the times when real user traffic is densest.
+        </blockquote>
+
+        <h2>Sleep masking: hiding in memory between check-ins</h2>
+
+        <p>
+          A beacon spends almost all of its life asleep, and for most of that time its implant sits in
+          the memory of some host process. That resident image is the single richest source of host
+          evidence: an EDR or a memory scanner can walk process memory looking for the framework's
+          decrypted strings, its configuration block, or the RWX regions typical of injected code.
+          A beacon that leaves itself in the clear while sleeping is easy to catch with a periodic
+          scan, regardless of how good its network profile is.
+        </p>
+
+        <p>
+          Mature implants answer this with <strong>sleep masking</strong>: just before sleeping, the
+          implant encrypts its own image and configuration in place and restores normal page
+          permissions, then decrypts itself again on wake. For the entire dormant window there is
+          nothing in memory that pattern-matches a known tool — the interesting bytes only exist for
+          the brief moment the beacon is actually running a task. Some implementations go further and
+          use a legitimate timer or APC callback to trigger the encrypt/decrypt so that even the act of
+          sleeping doesn't look like a tight custom loop. The research point is that C2 detection is a
+          contest across two surfaces at once — the network channel and the resident memory image — and
+          a serious framework has to defeat both, not just the one that's easier to reason about.
+        </p>
+
+        <h2>Traffic shaping: malleable and procedural profiles</h2>
+
+        <p>
+          The default HTTP a framework emits — its URIs, headers, User-Agent, cookie format, and
+          response bodies — is a fingerprint. Threat-intel feeds publish those defaults, and a proxy or
+          IDS can match on them even when the payload inside is encrypted. So the second half of a good
+          egress channel isn't the encryption, it's making the request and response <em>look like
+          something ordinary</em>.
+        </p>
+
+        <p>
+          Two approaches dominate. A <strong>malleable profile</strong> is an operator-written template
+          that dictates exactly how the traffic is dressed: which URI paths to use, what headers to
+          send, how to encode the task data (base64 in a cookie, wrapped in what looks like a JSON API
+          response, appended to a fake image), and how to imitate a specific real application's
+          traffic. A <strong>procedural / randomised profile</strong> instead generates plausible-looking
+          traffic on the fly so no two implants share a static template. Either way, the encrypted C2
+          data is smuggled inside a request/response that a casual look — and many automated
+          classifiers — will read as normal web activity. Detection then has to fall back to the
+          behavioural signals below rather than a clean content match.
+        </p>
+
+        <h2>Peer-to-peer topologies: pivots and mesh</h2>
+
+        <p>
+          Not every implant talks to the internet. In a segmented network only a handful of hosts can
+          egress at all, so frameworks support <strong>peer-to-peer links</strong> where one implant
+          relays another's C2 over an internal protocol — most commonly an <em>SMB named pipe</em> or a
+          raw <em>TCP</em> connection between two compromised machines. An internal host beacons to a
+          foothold; the foothold forwards that traffic out over the real egress channel. To the
+          network, the internal machine never contacts anything unusual — it only speaks to another
+          domain-joined host over a port (445 for SMB) that is expected to be busy.
+        </p>
+
+        <p>
+          This produces a <strong>tree or mesh</strong> of implants with a single egress point at the
+          root, which has three OPSEC benefits: one place to shape and monitor egress traffic, a much
+          smaller external footprint, and resilience — if a leaf is caught, the branch above it
+          survives. The cost is fragility in the chain: kill an intermediate node and everything
+          behind it goes dark until the operator re-links. Named-pipe links are especially valued
+          because inter-process and inter-host pipe traffic is a normal part of Windows operation, so
+          the C2 hides inside expected IPC rather than standing up a new listening port.
+        </p>
 
         <h2>Why defenders still catch C2</h2>
 

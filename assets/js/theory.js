@@ -52,6 +52,14 @@ var THEORY = [
     readTime: "11 min read"
   },
   {
+    title: "Windows Defense Evasion — AV, EDR & ASR",
+    url: "theory/2026-09-23-defense-evasion.html",
+    date: "2026-09-23",
+    tag: "Evasion",
+    description: "Why offensive tradecraft evades endpoint defences — the static and runtime detection surfaces, userland API hooking and unhooking, in-memory execution, packing, AMSI/ETW as in-process instrumentation, and ASR rules. Mechanisms, not payloads.",
+    readTime: "14 min read"
+  },
+  {
     title: "Windows Access Tokens & UAC",
     url: "theory/2026-08-18-windows-tokens-uac.html",
     date: "2026-09-22",

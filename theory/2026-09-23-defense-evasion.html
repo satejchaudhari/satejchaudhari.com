@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows Defense Evasion — AV, EDR &amp; ASR — Satej Chaudhari</title>
+  <meta name="description" content="Why offensive tradecraft evades endpoint defences — the static and runtime detection surfaces, userland API hooking and unhooking, in-memory execution, packing, AMSI and ETW as userland instrumentation, and Attack Surface Reduction rules. A research-oriented explanation of the mechanisms, not payloads.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html" class="current">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Evasion</span>
+        <h1 class="post-title">Windows Defense Evasion — AV, EDR &amp; ASR</h1>
+        <p class="post-meta">
+          <time datetime="2026-09-23">2026-09-23</time>
+          <span>&middot; 14 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Modern offensive tradecraft spends most of its effort not on the exploit but on
+          <em>not being seen</em>. To understand why techniques like in-memory execution, unhooking, and
+          packing work — and why a heavily-signatured tool such as mimikatz can still be run — you have
+          to understand how endpoint defences actually inspect code. This page is the research view of
+          the detection surfaces and the structural reasons each can be evaded. It deliberately explains
+          <strong>mechanisms, not payloads</strong>: the goal is to know why a class of bypass exists,
+          which is what makes both attack and detection legible. The concrete commands live in the
+          <a href="../toolkit.html">Toolkit</a> (PEzor, Invisi-Shell, Stracciatella, Sliver), and the
+          logging side is on the <a href="2026-09-23-windows-telemetry-logging.html">Windows Telemetry</a>
+          page.
+        </p>
+
+        <h2>Two detection surfaces: static and runtime</h2>
+
+        <p>
+          Every endpoint product inspects code across two fundamentally different moments, and almost
+          every evasion technique is really a choice about which surface to defeat.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Surface</th><th>What it inspects</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Static (on disk / pre-execution)</td><td>The file's bytes before it runs — signatures, hashes, entropy, imports, strings. Cheap and safe, but blind to anything that only exists once the code is running</td></tr>
+            <tr><td>Runtime (in memory / behavioural)</td><td>What the code does as it executes — the API calls it makes, the memory it allocates, the process tree it creates, the scripts it feeds to interpreters. Far harder to fool, but also harder and costlier to observe</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>
+          The single biggest move in modern tradecraft — running tools <em>in memory</em> instead of
+          from disk — is simply refusing to present anything to the static surface at all. If the tool
+          never becomes a file on the target, file scanning has nothing to scan, and the whole contest
+          shifts to the runtime surface where the attacker has more room to manoeuvre.
+        </blockquote>
+
+        <h2>How AV and EDR actually inspect</h2>
+
+        <p>
+          "Antivirus" and "EDR" sit on a spectrum of the same idea, differing in how much runtime
+          visibility they have.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Mechanism</th><th>How it works</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Signatures</td><td>Match known-bad byte patterns/hashes. Precise but brittle — any change to the bytes defeats them</td></tr>
+            <tr><td>Heuristics / ML</td><td>Score suspicious traits (packed sections, rare imports, odd entropy) rather than exact matches — catches variants but generates false positives</td></tr>
+            <tr><td>Userland API hooking</td><td>The product injects a DLL into processes and redirects sensitive API calls through its own inspection code before they reach the real function</td></tr>
+            <tr><td>Kernel callbacks / ETW</td><td>Kernel-level notifications on process/thread/image events and a telemetry stream (ETW) the sensor subscribes to</td></tr>
+            <tr><td>AMSI</td><td>An interface that lets scripting engines and .NET submit content to the installed AV for scanning at the moment it would execute</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          The key research insight is where each of these lives. Signatures and heuristics act on the
+          <em>static</em> surface. Kernel callbacks live below the process and are hard to touch from
+          userland. But <strong>userland hooking and AMSI both live inside the target process</strong>,
+          in the same address space as the code they inspect — and that co-location is the structural
+          weakness the next sections exploit.
+        </p>
+
+        <h2>Userland API hooking and unhooking</h2>
+
+        <p>
+          To watch what a program does without kernel-level cost, many products place <strong>inline
+          hooks</strong> in the userland libraries every program calls — chiefly <code>ntdll.dll</code>,
+          the lowest userland layer before the kernel. A hook redirects the start of a sensitive
+          function (say, the routine that writes another process's memory or opens a handle to LSASS)
+          to the sensor's code, which inspects the arguments, decides, and then continues to the real
+          function. This is how an EDR "sees" behaviour that never generates a file.
+        </p>
+
+        <p>
+          The weakness is architectural: those hooks are just instructions in the calling process's own
+          memory, and the process can read and write its own memory. <strong>Unhooking</strong>
+          exploits exactly this — the tooling maps a fresh, clean copy of <code>ntdll</code> from disk
+          (or a known-good source) and restores the original function prologues, so the sensor's
+          redirects are overwritten and subsequent calls run straight to the real functions with no
+          inspection. A related family avoids the hooks rather than removing them by invoking the kernel
+          transition directly instead of going through the hooked library entry points. Either way, the
+          principle is the same: a defence that lives in the attacker's own address space can be edited
+          by the attacker. This is the mechanism behind PEzor's <code>-unhook</code> option.
+        </p>
+
+        <h2>In-memory execution and reflective loading</h2>
+
+        <p>
+          The static surface only exists if the tool is a file. In-memory execution removes the file
+          entirely: the tool's bytes are delivered over the C2 channel and loaded directly into the
+          memory of a process that is already running, then executed there. For .NET tooling this is
+          what <code>execute-assembly</code> does — it loads a C# assembly into the CLR in memory and
+          invokes its entry point; for native code the equivalent is reflectively mapping a PE into
+          memory rather than letting the OS loader read it from disk.
+        </p>
+
+        <blockquote>
+          Because no file is written, on-write and on-disk scanning never fire, and only the runtime
+          surface remains. That surface can still catch the tool — memory scanners look for the
+          decrypted tool image, and the behaviour it produces is still visible — which is why in-memory
+          execution is usually combined with the other techniques here: unhooking to blind the API
+          inspection, and, for a resident implant, sleep masking to keep the image encrypted while
+          dormant (see <a href="2026-09-23-in-memory-tradecraft.html">in-memory tradecraft</a>).
+        </blockquote>
+
+        <h2>Packing, encoding, and donut</h2>
+
+        <p>
+          Packing changes what the <em>static</em> surface sees. A packer wraps the original code in a
+          layer that only reveals the real payload at runtime, so the file's bytes — its signature,
+          its imports, its strings — no longer match anything in a signature set, and the interesting
+          content only appears in memory once the loader has run. Tools like <strong>donut</strong>
+          turn a PE or .NET assembly into position-independent code that can be loaded in memory, and
+          packers such as <a href="../toolkit.html">PEzor</a> combine that with unhooking, anti-analysis
+          and delayed execution.
+        </p>
+
+        <p>
+          The research point is the trade-off. Packing reliably defeats exact signatures, but the traits
+          that make a packed file <em>work</em> — high entropy, a small stub that allocates executable
+          memory and jumps to it — are themselves what heuristic and ML classifiers score as suspicious.
+          So packing shifts the problem from "matches a known tool" to "looks like a packed thing", and
+          the operator's job becomes making the loader's runtime behaviour unremarkable rather than
+          making the file unmatchable. This is why serious evasion is layered: no single technique
+          covers both surfaces at once.
+        </p>
+
+        <h2>AMSI and ETW: userland instrumentation</h2>
+
+        <p>
+          The Antimalware Scan Interface (AMSI) and Event Tracing for Windows (ETW) are the two pieces
+          of instrumentation that give defenders visibility into script and .NET activity that would
+          otherwise be invisible. AMSI lets the PowerShell and .NET runtimes hand content to the
+          installed AV to be scanned at the moment it would run — defeating the old trick of never
+          writing a script to disk. ETW carries a rich stream of runtime events (including .NET method
+          and assembly-load events) that an EDR can subscribe to.
+        </p>
+
+        <p>
+          Both are powerful, and both share the same structural property as userland hooks: the check is
+          performed <strong>inside the process</strong>, by code and state that the process itself can
+          reach. AMSI's scan is a userland function call whose result the runtime trusts; ETW's provider
+          state is likewise reachable from the process. That co-location is the reason a long line of
+          published bypasses exists — they influence the in-process check or its cached result so that
+          content is treated as clean, or so that no event is emitted, without ever involving the
+          kernel or the AV engine proper. This page does not reproduce those payloads; the load-bearing
+          idea is simply that <em>a check living in the same trust boundary as the code it inspects can
+          be influenced by that code</em>. It is also why the durable defensive answer is layering these
+          userland signals with kernel-level telemetry that the process cannot reach.
+        </p>
+
+        <blockquote>
+          Helpers like <a href="../toolkit.html">Invisi-Shell</a> and Stracciatella apply this at the
+          engine level: rather than patching AMSI after the fact, they arrange for a PowerShell runspace
+          in which the instrumentation was never wired up, so scripts run in an environment that is
+          clean from the start. The <a href="2026-09-23-windows-telemetry-logging.html">Windows
+          Telemetry</a> page covers the logging channels these affect.
+        </blockquote>
+
+        <h2>Attack Surface Reduction (ASR) rules</h2>
+
+        <p>
+          ASR is a set of Defender rules that block <em>behaviours</em> commonly associated with
+          intrusion regardless of the file involved — for example, Office spawning child processes,
+          scripts launching downloaded executables, or processes stealing credentials from LSASS. Rather
+          than asking "is this file malicious?", an ASR rule asks "is this <em>action</em> one attackers
+          rely on?" and blocks the action.
+        </p>
+
+        <p>
+          That framing is why ASR is bypassed differently from signature detection. An operator does not
+          try to make a file look clean; they route the same objective through an action the rule does
+          not cover — a different parent process, a different execution primitive, moving the sensitive
+          step onto a host or path the rule does not watch, or repackaging the tool so the blocked
+          behaviour (e.g. a particular loader touching disk) is replaced by an in-memory equivalent. The
+          research lesson is that behavioural controls raise the cost of the obvious path and push the
+          attacker toward less-instrumented alternatives, which is exactly what a defender wants ASR to
+          do even when a determined operator gets around a specific rule.
+        </p>
+
+        <h2>Defence in depth is the real answer</h2>
+
+        <p>
+          Every technique on this page defeats one surface, and each has a matching defensive
+          counter-move: static evasion is answered by runtime telemetry, userland bypasses by
+          kernel-level sensors and memory scanning, behavioural blocks by breadth of coverage. No single
+          layer is sufficient, and neither is any single bypass. That symmetry is the takeaway — an
+          operator layers techniques because the defence is layered, and a blue team invests in
+          kernel-level and cross-surface visibility precisely because the userland surfaces can be
+          influenced from within.
+        </p>
+
+        <ul>
+          <li><strong>Static-only evasion</strong> (packing, encoding) is defeated by watching runtime behaviour, so it is never used alone.</li>
+          <li><strong>Userland bypasses</strong> (unhooking, AMSI/ETW) are answered by kernel callbacks and memory scanning the process cannot touch.</li>
+          <li><strong>In-memory execution</strong> removes the file but not the behaviour — the resident image and the actions still betray it.</li>
+          <li><strong>Behavioural blocks</strong> (ASR) raise cost and force less-instrumented paths, which is a win even when a rule is individually bypassed.</li>
+        </ul>
+
+        <h2>The takeaway</h2>
+
+        <p>
+          Endpoint defence inspects code statically before it runs and behaviourally as it runs; almost
+          every evasion technique is a decision about which surface to avoid and which to fight.
+          In-memory execution removes the static surface, unhooking and AMSI/ETW bypasses neutralise
+          userland runtime checks that share the process's own trust boundary, packing shifts the static
+          picture at the cost of looking packed, and ASR forces attackers off the obvious behavioural
+          path. Hold the two-surface model and every tool in the
+          <a href="../toolkit.html">Toolkit</a> — from PEzor to Invisi-Shell to Sliver's in-memory
+          execution — reads as an answer to a specific detection surface rather than a bag of tricks.
+        </p>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

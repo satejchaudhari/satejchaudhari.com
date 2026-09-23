@@ -64,7 +64,7 @@
         <h1 class="post-title">Sliver C2 — Architecture &amp; Concepts</h1>
         <p class="post-meta">
           <time datetime="2026-09-23">2026-09-23</time>
-          <span>&middot; 11 min read</span>
+          <span>&middot; 15 min read</span>
         </p>
       </header>
 
@@ -210,6 +210,37 @@
           pivots go a step further, carrying C2 over SMB so it looks like ordinary Windows
           inter-process traffic.
         </blockquote>
+
+        <h2>The C2 message protocol and per-implant crypto</h2>
+
+        <p>
+          What actually crosses the wire between an implant and the server is not raw commands but
+          serialised <strong>task envelopes</strong>: a task type and its arguments in one direction,
+          results in the other, wrapped in the framework's own message format and then encrypted. The
+          egress protocol (HTTPS, mTLS, DNS) is only the <em>carrier</em> — the same envelope rides
+          inside any of them, which is why an operator can switch protocols without changing how they
+          task the implant.
+        </p>
+
+        <p>
+          The architectural detail that matters for detection is that each implant carries its
+          <strong>own key material, established per build</strong>, rather than every implant sharing
+          one static key. Sliver leans on modern asymmetric cryptography (elliptic-curve keys, and
+          mutually-authenticated TLS in the mTLS mode) so that traffic is opaque on the wire and one
+          burned implant does not hand a defender the keys to decrypt every other implant's traffic.
+          The practical consequence for a blue team is that network capture alone rarely yields the
+          plaintext tasks — detection has to come from the beaconing pattern, TLS fingerprint, and
+          host-side behaviour rather than from reading the C2 content.
+        </p>
+
+        <p>
+          Sliver also ships small integrity features that reflect this defensive-aware design. The
+          <strong>DNS canary</strong> is the clearest example: an implant can embed a unique DNS name
+          that should never be resolved in normal operation, so if a blue team detonates the sample in
+          a sandbox and it phones that name home, the operator is alerted that the implant is burned.
+          These are the kinds of operational-security affordances that separate a mature framework from
+          a proof-of-concept RAT.
+        </p>
 
         <h2>Why Sliver is a common choice</h2>
 
