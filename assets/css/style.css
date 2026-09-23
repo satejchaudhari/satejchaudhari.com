@@ -1266,6 +1266,8 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
   gap: 14px;
 }
+/* a feature card that spans the whole Explore grid */
+.home-card-wide { grid-column: 1 / -1; }
 
 .home-card {
   display: flex;

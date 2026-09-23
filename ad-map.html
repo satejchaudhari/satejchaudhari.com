@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AD Attack Path Explorer — Satej Chaudhari</title>
+  <meta name="description" content="An interactive Active Directory attack-path explorer — techniques organised by access level, each linked to the tools and vulnerability write-ups on this site, with the next steps one click away.">
+
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+
+  <style>
+    /* ---- AD attack-path explorer (page-specific) ---- */
+    .adm-hero { padding: 40px 0 8px; }
+    .adm-hero .eyebrow { color: var(--accent); }
+    .adm-hero h1 { font-family: var(--display, "Space Grotesk"), sans-serif; font-size: clamp(1.8rem, 4vw, 2.6rem); margin: 6px 0 10px; }
+    .adm-lede { color: var(--muted); max-width: 74ch; font-size: 1.02rem; line-height: 1.6; }
+    .adm-credit { color: var(--muted-2); font-size: 0.85rem; margin-top: 10px; }
+    .adm-credit a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+
+    /* sticky control bar: legend + search */
+    .adm-controls {
+      position: sticky; top: 64px; z-index: 20;
+      background: var(--header-bg); backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 0; margin-top: 22px;
+    }
+    .adm-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .adm-legend a {
+      font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.02em;
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 5px 11px; border-radius: 999px;
+      border: 1px solid var(--accent-border, var(--border)); color: var(--text);
+      background: var(--accent-soft);
+      transition: transform 0.12s ease;
+    }
+    .adm-legend a:hover { transform: translateY(-1px); }
+    .adm-legend a .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+    .adm-legend a .num { color: var(--muted); }
+    .adm-search {
+      width: 100%; box-sizing: border-box;
+      font-family: var(--mono); font-size: 0.9rem;
+      padding: 11px 14px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    }
+    .adm-search::placeholder { color: var(--muted-2); }
+    .adm-empty { color: var(--muted); font-family: var(--mono); font-size: 0.9rem; padding: 24px 0; display: none; }
+
+    /* stage section */
+    .adm-stage { margin-top: 40px; scroll-margin-top: 150px; }
+    .adm-stage-head {
+      border-left: 4px solid var(--accent);
+      padding: 2px 0 2px 16px; margin-bottom: 20px;
+    }
+    .adm-stage-head .adm-stage-tag {
+      font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--accent);
+    }
+    .adm-stage-head h2 { font-size: 1.5rem; margin: 4px 0 8px; }
+    .adm-stage-head .adm-stage-num { color: var(--muted-2); font-weight: 500; }
+    .adm-stage-head p { color: var(--muted); max-width: 78ch; margin: 0; line-height: 1.55; }
+
+    .adm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+
+    .tq-card {
+      border: 1px solid var(--border); border-top: 2px solid var(--accent);
+      border-radius: 10px; background: var(--surface);
+      padding: 16px 16px 14px; display: flex; flex-direction: column;
+      scroll-margin-top: 160px; transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    }
+    .tq-card:hover { border-color: var(--accent-border, var(--accent)); }
+    .tq-card.is-target { box-shadow: 0 0 0 2px var(--accent); transform: translateY(-2px); }
+    .tq-card h3 { font-size: 1.02rem; margin: 0 0 8px; line-height: 1.3; }
+    .tq-desc { color: var(--muted); font-size: 0.9rem; line-height: 1.55; margin: 0 0 12px; }
+
+    .tq-row { margin-top: auto; }
+    .tq-row + .tq-row { margin-top: 10px; }
+    .tq-row-label {
+      font-family: var(--mono); font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.09em;
+      color: var(--muted-2); margin: 0 0 6px;
+    }
+    .tq-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tq-chip {
+      font-family: var(--mono); font-size: 0.72rem;
+      padding: 4px 9px; border-radius: 6px;
+      border: 1px solid var(--border); color: var(--text); background: var(--surface-2);
+      transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+      white-space: nowrap;
+    }
+    .tq-chip:hover { border-color: var(--accent-border, var(--accent)); color: var(--accent); }
+    .tq-chip.tq-pending {
+      color: var(--muted-2); border-style: dashed; cursor: default; background: transparent;
+    }
+    .tq-chip.tq-pending:hover { color: var(--muted-2); border-color: var(--border); }
+    .tq-chip.tq-pending::after { content: " ·"; }
+    .tq-vuln {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--mono); font-size: 0.74rem; font-weight: 500;
+      color: var(--accent);
+    }
+    .tq-vuln:hover { text-decoration: underline; text-underline-offset: 2px; }
+    .tq-vuln svg { width: 12px; height: 12px; }
+    .tq-next .tq-chips { gap: 6px; }
+    .tq-nextchip {
+      font-family: var(--mono); font-size: 0.72rem;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 9px; border-radius: 6px;
+      border: 1px dashed var(--accent-border, var(--border)); color: var(--muted); background: transparent;
+      cursor: pointer;
+    }
+    .tq-nextchip:hover { color: var(--accent); border-color: var(--accent); }
+    .tq-nextchip .arw { color: var(--accent); }
+
+    .tq-card.is-hidden, .adm-stage.is-hidden { display: none; }
+
+    @media (max-width: 680px) {
+      .adm-controls { top: 56px; }
+      .adm-grid { grid-template-columns: 1fr; }
+      .adm-stage-head h2 { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="writeups.html">Writeups</a>
+        <a href="blog.html">Blog</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap-wide">
+    <section class="adm-hero">
+      <p class="eyebrow">Interactive</p>
+      <h1>Active Directory Attack Path</h1>
+      <p class="adm-lede">
+        The AD attack surface, organised the way an engagement actually unfolds — by how much access you
+        hold right now. Start where you are, read the technique, and follow the <strong>next steps</strong>
+        to move up. Every technique links straight to the matching <a href="toolkit.html">tool</a> and
+        <a href="vulns.html">vulnerability write-up</a> on this site.
+      </p>
+      <p class="adm-credit">
+        Reimagined as an interactive, linkable explorer — inspired by the community
+        &ldquo;Pentesting Active Directory&rdquo; mind map by
+        <a href="https://github.com/Orange-Cyberdefense/arsenal" target="_blank" rel="noopener">Orange Cyberdefense / mayfly277</a>.
+      </p>
+    </section>
+
+    <div class="adm-controls">
+      <nav class="adm-legend" id="adm-legend" aria-label="Jump to access level"></nav>
+      <input type="text" class="adm-search" id="adm-search" placeholder="Filter techniques, tools, or keywords…" aria-label="Filter techniques">
+    </div>
+
+    <p class="adm-empty" id="adm-empty"></p>
+    <div id="adm-root"></div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="writeups.html">Writeups</a>
+        <a href="blog.html">Blog</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/admap.js"></script>
+  <script>
+  (function () {
+    var data = (typeof AD_MAP !== "undefined" && AD_MAP.stages) ? AD_MAP.stages : [];
+    var root = document.getElementById("adm-root");
+    var legend = document.getElementById("adm-legend");
+    var searchEl = document.getElementById("adm-search");
+    var emptyEl = document.getElementById("adm-empty");
+
+    function esc(s) { var d = document.createElement("div"); d.textContent = String(s == null ? "" : s); return d.innerHTML; }
+    var ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>';
+
+    // ---- build a lookup so a next-step target can name its stage for the label ----
+    var techStage = {};
+    data.forEach(function (s) { s.techniques.forEach(function (t) { techStage[t.id] = s.id; }); });
+    var stageName = {};
+    data.forEach(function (s) { stageName[s.id] = s.name; });
+
+    function toolChip(x) {
+      if (x.id) {
+        return '<a class="tq-chip" href="tool-detail.html?tool=' + encodeURIComponent(x.id) + '">' + esc(x.n) + '</a>';
+      }
+      // no page yet — a placeholder link kept blank on purpose
+      return '<a class="tq-chip tq-pending" href="#" data-pending="1" title="Reference page coming soon">' + esc(x.n) + '</a>';
+    }
+    function vulnLink(v) {
+      if (!v) return "";
+      var inner = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 8.4 8 11 4.6-2.6 8-6 8-11V5l-8-3z"></path></svg>' + esc(v.l);
+      if (v.id) {
+        return '<div class="tq-row tq-vulnrow"><a class="tq-vuln" href="vuln-detail.html?vuln=' + encodeURIComponent(v.id) + '">' + inner + '</a></div>';
+      }
+      return '<div class="tq-row tq-vulnrow"><a class="tq-vuln tq-pending" href="#" data-pending="1" title="Write-up coming soon" style="color:var(--muted-2)">' + inner + '</a></div>';
+    }
+    function nextChips(next) {
+      if (!next || !next.length) return "";
+      var chips = next.map(function (n) {
+        return '<a class="tq-nextchip" href="#' + esc(n.to) + '" data-jump="' + esc(n.to) + '"><span class="arw">' + ARROW + '</span>' + esc(n.l) + '</a>';
+      }).join("");
+      return '<div class="tq-row tq-next"><p class="tq-row-label">Next steps</p><div class="tq-chips">' + chips + '</div></div>';
+    }
+
+    function render() {
+      var html = "";
+      data.forEach(function (s, i) {
+        html += '<section class="adm-stage ' + s.hue + '" id="' + esc(s.id) + '">';
+        html += '<div class="adm-stage-head">';
+        html += '<span class="adm-stage-tag">' + esc(s.tag) + '</span>';
+        html += '<h2><span class="adm-stage-num">' + (i + 1) + '.</span> ' + esc(s.name) + '</h2>';
+        html += '<p>' + esc(s.summary) + '</p></div>';
+        html += '<div class="adm-grid">';
+        s.techniques.forEach(function (t) {
+          html += '<article class="tq-card" id="' + esc(t.id) + '" data-text="' +
+            esc((t.name + " " + t.desc + " " + (t.tools || []).map(function (x) { return x.n; }).join(" ")).toLowerCase()) + '">';
+          html += '<h3>' + esc(t.name) + '</h3>';
+          html += '<p class="tq-desc">' + esc(t.desc) + '</p>';
+          if (t.tools && t.tools.length) {
+            html += '<div class="tq-row"><p class="tq-row-label">Tools</p><div class="tq-chips">' +
+              t.tools.map(toolChip).join("") + '</div></div>';
+          }
+          html += vulnLink(t.vuln);
+          html += nextChips(t.next);
+          html += '</article>';
+        });
+        html += '</div></section>';
+      });
+      root.innerHTML = html;
+
+      // legend
+      legend.innerHTML = data.map(function (s, i) {
+        return '<a class="' + s.hue + '" href="#' + esc(s.id) + '" data-jump="' + esc(s.id) +
+          '"><span class="dot"></span><span class="num">' + (i + 1) + '</span> ' + esc(s.name) + '</a>';
+      }).join("");
+    }
+
+    function scrollToId(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (el.classList.contains("tq-card")) {
+        document.querySelectorAll(".tq-card.is-target").forEach(function (c) { c.classList.remove("is-target"); });
+        el.classList.add("is-target");
+        setTimeout(function () { el.classList.remove("is-target"); }, 2200);
+      }
+    }
+
+    render();
+
+    // interactions
+    document.addEventListener("click", function (e) {
+      var jump = e.target.closest("[data-jump]");
+      if (jump) { e.preventDefault(); var id = jump.getAttribute("data-jump"); history.replaceState(null, "", "#" + id); scrollToId(id); return; }
+      var pend = e.target.closest("[data-pending]");
+      if (pend) { e.preventDefault(); return; }
+    });
+
+    // search filter
+    if (searchEl) {
+      searchEl.addEventListener("input", function (e) {
+        var q = e.target.value.trim().toLowerCase();
+        var totalVisible = 0;
+        document.querySelectorAll(".adm-stage").forEach(function (stage) {
+          var any = false;
+          stage.querySelectorAll(".tq-card").forEach(function (card) {
+            var match = !q || (card.getAttribute("data-text") || "").indexOf(q) !== -1;
+            card.classList.toggle("is-hidden", !match);
+            if (match) { any = true; totalVisible++; }
+          });
+          stage.classList.toggle("is-hidden", q.length > 0 && !any);
+        });
+        if (emptyEl) {
+          if (q && totalVisible === 0) { emptyEl.style.display = "block"; emptyEl.textContent = '// nothing matches "' + e.target.value.trim() + '"'; }
+          else { emptyEl.style.display = "none"; }
+        }
+      });
+    }
+
+    // deep-link on load
+    if (location.hash && location.hash.length > 1) {
+      setTimeout(function () { scrollToId(location.hash.slice(1)); }, 120);
+    }
+  })();
+  </script>
+
+</body>
+</html>
