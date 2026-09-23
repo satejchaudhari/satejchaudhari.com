@@ -406,7 +406,7 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 
 .entry {
   display: block;
-  padding: 20px 22px;
+  padding: 15px 20px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
@@ -414,17 +414,27 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 }
 .entry:hover { border-color: var(--accent-border); background: var(--surface-2); text-decoration: none; }
 
-.entry-meta {
+/* title on the left, category (and read time) top-right on the same line */
+.entry-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 5px;
+}
+.entry-tags {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  font-family: var(--mono);
-  font-size: 0.74rem;
-  color: var(--muted-2);
-  margin-bottom: 10px;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding-top: 2px;
 }
-.entry-meta time, .entry-meta > span { white-space: nowrap; }
+.entry-read {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--muted-2);
+  white-space: nowrap;
+}
 
 .tag {
   display: inline-block;
@@ -440,7 +450,7 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   text-transform: uppercase;
 }
 
-.entry-title { font-family: var(--display); font-weight: 600; font-size: 1.1rem; color: var(--text); margin: 0 0 6px; }
+.entry-title { font-family: var(--display); font-weight: 600; font-size: 1.1rem; color: var(--text); margin: 0; flex: 1 1 auto; min-width: 0; line-height: 1.3; }
 .entry:hover .entry-title { color: var(--accent); }
 .entry-excerpt { font-size: 0.92rem; color: var(--muted); margin: 0; }
 

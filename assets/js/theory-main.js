@@ -66,35 +66,38 @@
     a.className = "entry";
     a.href = topic.url;
 
-    const meta = document.createElement("div");
-    meta.className = "entry-meta";
-    if (topic.date) {
-      const time = document.createElement("time");
-      time.textContent = topic.date;
-      meta.appendChild(time);
-    }
-    if (topic.readTime) {
-      const rt = document.createElement("span");
-      rt.textContent = "· " + topic.readTime;
-      meta.appendChild(rt);
-    }
-    if (topic.tag) {
-      const tag = document.createElement("span");
-      tag.className = "tag";
-      tag.textContent = topic.tag;
-      meta.appendChild(tag);
-    }
+    // title + category on one line (category sits top-right)
+    const head = document.createElement("div");
+    head.className = "entry-head";
 
     const title = document.createElement("h3");
     title.className = "entry-title";
     title.textContent = topic.title || "Untitled";
+    head.appendChild(title);
+
+    if (topic.readTime || topic.tag) {
+      const tags = document.createElement("div");
+      tags.className = "entry-tags";
+      if (topic.readTime) {
+        const rt = document.createElement("span");
+        rt.className = "entry-read";
+        rt.textContent = topic.readTime;
+        tags.appendChild(rt);
+      }
+      if (topic.tag) {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = topic.tag;
+        tags.appendChild(tag);
+      }
+      head.appendChild(tags);
+    }
 
     const excerpt = document.createElement("p");
     excerpt.className = "entry-excerpt";
     excerpt.textContent = topic.description || "";
 
-    a.appendChild(meta);
-    a.appendChild(title);
+    a.appendChild(head);
     a.appendChild(excerpt);
     return a;
   }
