@@ -641,15 +641,27 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 .detail-toc:not(.is-collapsed) .detail-toc-chevron { transform: rotate(180deg); }
 .detail-toc:not(.is-collapsed) .detail-toc-current { display: none; }
 
+/* base rule — also the graceful fallback if an older cached build renders a
+   bare nav with no .detail-toc wrapper: one compact horizontal scroll row,
+   never a full-page cloud or a stray capped box */
 .tool-detail-quicknav {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
-  max-height: 44vh;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 12px 0;
+}
+.tool-detail-quicknav::-webkit-scrollbar { display: none; }
+.detail-toc.is-collapsed .tool-detail-quicknav { display: none; }
+/* inside the collapsible panel: wrap into a capped, vertically-scrolling list */
+.detail-toc .tool-detail-quicknav {
+  flex-wrap: wrap;
+  overflow-x: visible;
   overflow-y: auto;
+  max-height: 44vh;
   padding: 2px 0 16px;
 }
-.detail-toc.is-collapsed .tool-detail-quicknav { display: none; }
 .tool-detail-quicknav a {
   font-family: var(--mono);
   font-size: 0.72rem;
@@ -660,8 +672,11 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   border-radius: 6px;
   border: 1px solid var(--border);
   color: var(--muted);
+  flex: 0 0 auto;
+  white-space: nowrap;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
+.detail-toc .tool-detail-quicknav a { white-space: normal; }
 .tool-detail-quicknav a:hover { color: var(--text); border-color: var(--accent-border); background: var(--accent-soft); }
 /* scroll-spy: the section currently in view */
 .tool-detail-quicknav a.is-active { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); font-weight: 600; }
@@ -960,14 +975,12 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   /* collapsible jump panel: collapsed by default so it never eats the
      screen; when opened it wraps into a capped, scrollable list */
   .detail-toc-toggle { padding: 12px 0; }
-  .tool-detail-quicknav {
+  .detail-toc .tool-detail-quicknav {
     max-height: 50vh;
     -webkit-overflow-scrolling: touch;
     padding: 2px 0 14px;
     gap: 7px;
-    scrollbar-width: none;
   }
-  .tool-detail-quicknav::-webkit-scrollbar { display: none; }
   .tool-detail-quicknav a { padding: 7px 12px; }
 
   /* larger, comfier tap targets for filter chips and sidebar items */
