@@ -34,6 +34,20 @@
   function escapeAttr(str) {
     return String(str == null ? "" : str).replace(/"/g, "&quot;");
   }
+  /* escape a command string, dimming shell-style (#) comments so the typed
+     command stays in focus. Only treats '#' as a comment when it starts a
+     line or follows whitespace — never '--', which is a flag prefix. */
+  function formatCmd(cmd) {
+    return String(cmd == null ? "" : cmd).split("\n").map(function (line) {
+      let idx = -1;
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === "#" && (i === 0 || /\s/.test(line[i - 1]))) { idx = i; break; }
+      }
+      if (idx === -1) return escapeHtml(line);
+      return escapeHtml(line.slice(0, idx)) +
+        '<span class="cmd-comment">' + escapeHtml(line.slice(idx)) + "</span>";
+    }).join("\n");
+  }
   function slugify(str) {
     return String(str).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   }
@@ -159,7 +173,7 @@
       out += `
         <div class="command-block">
           ${c.label ? `<p class="command-label">${escapeHtml(c.label)}</p>` : ""}
-          <pre><code>${escapeHtml(c.cmd)}</code></pre>
+          <pre><code>${formatCmd(c.cmd)}</code></pre>
         </div>
       `;
     });

@@ -582,6 +582,8 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   margin: 0 0 8px;
 }
 .command-block pre { margin: 0; }
+/* dim inline "# comments" so the typed command stays in focus */
+.command-block .cmd-comment { color: var(--muted); font-style: italic; opacity: 0.85; }
 
 /* Sectioned tool-detail layout: a sticky quick-nav to jump between
    titled sections, each section holding either a reference table
