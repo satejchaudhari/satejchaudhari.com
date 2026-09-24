@@ -1360,7 +1360,7 @@ var AD_MAP_V2 = {
             ], outcomes: [{ label: "Kerberos TGT", color: "#9ca3af" }, { label: "PassTheTicket", color: "#9ca3af" }] }
           ],
           outcomes: [],
-          moveTo: [{ section: "no-creds", label: "Coerce", note: "use a coercion technique to force the DC to authenticate" }]
+          moveTo: [{ section: "no-creds", tech: "coerce", label: "Coerce", note: "use a coercion technique to force the DC to authenticate" }]
         },
         {
           id: "kd-constrained",
@@ -1644,7 +1644,7 @@ var AD_MAP_V2 = {
           desc: "Pull PXE boot media with no domain account (see the No Credentials → PXE technique) to recover deployment credentials.",
           cmds: [],
           outcomes: [{ label: "NAA credentials", color: "#4ade80" }, { label: "User + Pass", color: "#4ade80" }],
-          moveTo: [{ section: "no-creds", label: "PXE", note: "extract PXE boot media with no credentials" }]
+          moveTo: [{ section: "no-creds", tech: "pxe", label: "PXE", note: "extract PXE boot media with no credentials" }]
         },
         {
           id: "sccm-elevate1",
@@ -1656,7 +1656,7 @@ var AD_MAP_V2 = {
             "ntlmrelayx.py -tf <site_systems> -smb2support -socks   # listen for the connection"
           ],
           outcomes: [{ label: "Admin on site system", color: "#4ade80" }],
-          moveTo: [{ section: "no-creds", label: "Coerce", note: "coerce the SCCM site server first" }]
+          moveTo: [{ section: "no-creds", tech: "coerce", label: "Coerce", note: "coerce the SCCM site server first" }]
         },
         {
           id: "sccm-elevate2",
