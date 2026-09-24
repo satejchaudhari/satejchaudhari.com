@@ -17,6 +17,12 @@
   const data = Array.isArray(window.TOOLKIT) ? window.TOOLKIT : [];
   const searchEl = document.getElementById("toolkit-search");
   const countEl = document.getElementById("tool-count");
+  const navEl = document.getElementById("toolkit-nav");
+
+  function slug(str) {
+    return String(str).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  }
+  function cardId(tool) { return "tool-" + (tool.id || slug(tool.name)); }
 
   const totalTools = data.reduce((sum, cat) => sum + cat.tools.length, 0);
   if (countEl) countEl.textContent = totalTools;
@@ -28,6 +34,7 @@
     const q = (query || "").trim().toLowerCase();
     listEl.innerHTML = "";
     let anyVisible = false;
+    const navGroups = [];
 
     data.forEach(cat => {
       const matches = cat.tools.filter(t =>
@@ -38,6 +45,7 @@
       if (matches.length === 0) return;
 
       anyVisible = true;
+      navGroups.push({ category: cat.category, tools: matches.map(t => ({ name: t.name, target: cardId(t) })) });
 
       const section = document.createElement("div");
       section.className = "toolkit-category";
@@ -53,6 +61,7 @@
       matches.forEach(tool => {
         const card = document.createElement("div");
         card.className = "tool-card";
+        card.id = cardId(tool);
 
         const name = document.createElement("div");
         name.className = "tool-card-name";
@@ -103,6 +112,43 @@
       empty.textContent = "// no tools match \"" + query + "\"";
       listEl.appendChild(empty);
     }
+
+    buildNav(navGroups);
+  }
+
+  let hoverTimer = null;
+  function scrollToCard(id, smooth) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
+    el.classList.add("tool-card-flash");
+    setTimeout(() => el.classList.remove("tool-card-flash"), 900);
+  }
+
+  function buildNav(groups) {
+    if (!navEl) return;
+    navEl.innerHTML = "";
+    if (!groups.length) return;
+    groups.forEach(g => {
+      const h = document.createElement("p");
+      h.className = "toolkit-nav-cat";
+      h.textContent = g.category;
+      navEl.appendChild(h);
+      g.tools.forEach(t => {
+        const a = document.createElement("a");
+        a.className = "toolkit-nav-item";
+        a.href = "#" + t.target;
+        a.textContent = t.name;
+        // hover the name -> scroll the list to the tool (debounced); click -> jump
+        a.addEventListener("mouseenter", () => {
+          clearTimeout(hoverTimer);
+          hoverTimer = setTimeout(() => scrollToCard(t.target, true), 120);
+        });
+        a.addEventListener("mouseleave", () => clearTimeout(hoverTimer));
+        a.addEventListener("click", (e) => { e.preventDefault(); scrollToCard(t.target, true); });
+        navEl.appendChild(a);
+      });
+    });
   }
 
   function escapeHtml(str) {

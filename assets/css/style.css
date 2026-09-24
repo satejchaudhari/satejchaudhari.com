@@ -487,6 +487,32 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 .toolkit-search::placeholder { color: var(--muted-2); }
 .toolkit-search:focus { border-color: var(--accent-border); outline: none; }
 
+/* two-column layout: quick-nav on the left, tool list on the right */
+.toolkit-split { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 26px; align-items: start; }
+.toolkit-nav {
+  position: sticky; top: 84px; align-self: start;
+  max-height: calc(100vh - 104px); overflow-y: auto;
+  padding-right: 8px; border-right: 1px solid var(--border);
+  scrollbar-width: thin;
+}
+.toolkit-nav-cat {
+  font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--accent); margin: 14px 0 5px; padding-top: 2px;
+}
+.toolkit-nav-cat:first-child { margin-top: 0; }
+.toolkit-nav-item {
+  display: block; font-size: 0.82rem; line-height: 1.3; color: var(--muted);
+  padding: 4px 8px; border-radius: 6px; text-decoration: none;
+  border-left: 2px solid transparent; cursor: pointer;
+}
+.toolkit-nav-item:hover { color: var(--text); background: var(--surface); border-left-color: var(--accent); }
+.tool-card { scroll-margin-top: 84px; }
+.tool-card-flash { animation: toolFlash 0.9s ease; }
+@keyframes toolFlash {
+  0% { box-shadow: 0 0 0 2px var(--accent-border); }
+  100% { box-shadow: 0 0 0 2px transparent; }
+}
+
 .search-status {
   font-family: var(--mono);
   font-size: 0.76rem;
@@ -977,6 +1003,10 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   .page-head { padding-block: 44px 30px; }
   .post { padding-block: 44px 72px; }
   .tool-grid { grid-template-columns: 1fr; }
+  .toolkit-split { grid-template-columns: 1fr; gap: 12px; }
+  .toolkit-nav { position: static; max-height: none; overflow: visible; border-right: none; border-bottom: 1px solid var(--border); padding: 0 0 10px; margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 4px 6px; }
+  .toolkit-nav-cat { width: 100%; margin: 8px 0 2px; }
+  .toolkit-nav-item { border-left: none; padding: 3px 8px; border: 1px solid var(--border); }
   .home-grid { grid-template-columns: 1fr; }
 
   /* wide tables scroll horizontally instead of overflowing the page */

