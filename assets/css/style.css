@@ -472,6 +472,13 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 =========================================================== */
 .toolkit-intro { color: var(--muted); max-width: 62ch; margin: 0 0 8px; }
 
+/* sticky search bar — pins just below the site header while the list scrolls */
+.toolkit-searchbar {
+  position: sticky; top: 63px; z-index: 15;
+  background: var(--bg);
+  padding: 20px 0 16px; margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
 .toolkit-search {
   width: 100%;
   font-family: var(--sans);
@@ -481,7 +488,7 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
   border: 1px solid var(--border);
   border-radius: 9px;
   padding: 12px 16px;
-  margin: 28px 0 32px;
+  margin: 0;
   transition: border-color 0.15s ease;
 }
 .toolkit-search::placeholder { color: var(--muted-2); }
@@ -490,8 +497,8 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 /* two-column layout: quick-nav on the left, tool list on the right */
 .toolkit-split { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 26px; align-items: start; }
 .toolkit-nav {
-  position: sticky; top: 84px; align-self: start;
-  max-height: calc(100vh - 104px); overflow-y: auto;
+  position: sticky; top: 132px; align-self: start;
+  max-height: calc(100vh - 148px); overflow-y: auto;
   padding-right: 8px; border-right: 1px solid var(--border);
   scrollbar-width: thin;
 }
