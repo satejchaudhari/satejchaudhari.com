@@ -27,19 +27,10 @@ var POSTS = [
     title: "OSINT From a Single Domain: A Red Team Methodology",
     url: "posts/2026-08-18-osint-methodology.html",
     date: "2026-08-18",
-    type: "blog",
+    type: "writeup",
     tag: "RECON",
     description: "A phase-by-phase OSINT workflow for an authorised red team engagement that starts with nothing but a domain name.",
     readTime: "36 min read"
-  },
-  {
-    title: "Welcome to the Log",
-    url: "posts/2026-07-02-welcome-to-the-log.html",
-    date: "2026-07-02",
-    type: "blog",
-    tag: "NOTES",
-    description: "How this site works and how to add new writeups and posts.",
-    readTime: "2 min read"
   },
   {
     title: "Vintage:  HackTheBox",

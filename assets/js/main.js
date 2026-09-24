@@ -84,7 +84,6 @@
   }
 
   renderPreview("writeups-preview", "writeup", 3);
-  renderPreview("blog-preview", "blog", 3);
 
   /* ---------- full list pages (writeups.html / blog.html) ---------- */
   const listEl = document.getElementById("log-list");

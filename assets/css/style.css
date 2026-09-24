@@ -26,7 +26,7 @@
   --accent-border: color-mix(in srgb, var(--accent) 38%, transparent);
 
   /* header/overlay backgrounds, tokenised so light mode can override */
-  --header-bg: color-mix(in srgb, var(--bg) 86%, transparent);
+  --header-bg: color-mix(in srgb, var(--bg) 76%, transparent);
 
   /* category hue palette (dark-tuned) */
   --h-red:    #ff6b6b;
@@ -67,7 +67,7 @@
   --sel-bg:    color-mix(in srgb, var(--accent) 22%, transparent);
   --sel-fg:    #33403f;
 
-  --header-bg: color-mix(in srgb, var(--bg) 84%, transparent);
+  --header-bg: color-mix(in srgb, var(--bg) 74%, transparent);
 
   /* category hues — Monokai-vivid, darkened just enough to read on cream */
   --h-red:    #d13438;
@@ -1382,5 +1382,5 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   padding-block: 44px 8px;      /* longhand so .wrap-wide keeps its side gutter */
   border-top: 1px solid var(--border);
 }
-.about-compact .about-body { font-size: 0.95rem; max-width: 66ch; margin-top: 14px; }
+.about-compact .about-body { font-size: 0.95rem; max-width: none; margin-top: 14px; }
 .about-compact .about-body p { margin: 0 0 12px; }
