@@ -73,6 +73,12 @@
     .adv2-chip svg { width: 13px; height: 13px; flex: 0 0 auto; }
     .adv2-chip.theory:hover { border-color: var(--accent-border); color: var(--accent); }
     .adv2-chip.cve { color: var(--h-rose, #fb7185); border-color: color-mix(in srgb, var(--h-rose, #fb7185) 45%, transparent); }
+    .adv2-chip.vuln { color: var(--h-rose, #fb7185); border-color: color-mix(in srgb, var(--h-rose, #fb7185) 40%, transparent); }
+    .adv2-chip.vuln:hover { border-color: var(--h-rose, #fb7185); }
+    .adv2-chip.disabled { opacity: 0.45; cursor: default; border-style: dashed; }
+    .adv2-chip.disabled:hover { border-color: var(--border); color: inherit; }
+    .adv2-cvebar-link.disabled { opacity: 0.55; cursor: default; font-style: italic; }
+    .adv2-cvebar-link.disabled:hover { text-decoration: none; }
     .adv2-desc { color: var(--muted); font-size: 0.9rem; line-height: 1.55; margin: 10px 0 4px; }
 
     .adv2-cmds { margin-top: 10px; }

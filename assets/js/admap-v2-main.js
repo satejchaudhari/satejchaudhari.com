@@ -59,11 +59,20 @@
     if (t.cve && (t.cve.id || t.cve.label)) {
       var cveText = (t.cve.label ? esc(t.cve.label) + ' ' : '') + (t.cve.id ? '(' + esc(t.cve.id) + ')' : '');
       h += '<div class="adv2-cvebar">' + SHIELD + '<span>' + cveText + '</span>' +
-        (t.cve.url ? '<a class="adv2-cvebar-link" href="' + attr(t.cve.url) + '" target="_blank" rel="noopener">advisory &#8599;</a>' : '') + '</div>';
+        (t.cve.url ? '<a class="adv2-cvebar-link" href="' + attr(t.cve.url) + '" target="_blank" rel="noopener">advisory &#8599;</a>'
+                   : '<span class="adv2-cvebar-link disabled" title="Not documented yet">details soon</span>') + '</div>';
     }
-    // links row (theory)
+    // links row (theory + vuln). A link with no url renders as a disabled
+    // placeholder button — the page it points to isn't published yet.
     var links = [];
-    if (t.theory && t.theory.url) links.push('<a class="adv2-chip theory" href="' + attr(t.theory.url) + '">' + BOOK + esc(t.theory.label || "Theory") + '</a>');
+    if (t.theory) {
+      if (t.theory.url) links.push('<a class="adv2-chip theory" href="' + attr(t.theory.url) + '">' + BOOK + esc(t.theory.label || "Theory") + '</a>');
+      else links.push('<span class="adv2-chip theory disabled" title="Not documented yet">' + BOOK + esc(t.theory.label || "Theory") + '</span>');
+    }
+    if (t.vuln) {
+      if (t.vuln.url) links.push('<a class="adv2-chip vuln" href="' + attr(t.vuln.url) + '">' + SHIELD + esc(t.vuln.label || "Details") + '</a>');
+      else links.push('<span class="adv2-chip vuln disabled" title="Not documented yet">' + SHIELD + esc(t.vuln.label || "Details") + '</span>');
+    }
     if (links.length) h += '<div class="adv2-links">' + links.join("") + '</div>';
     // short description
     if (t.desc) h += '<p class="adv2-desc">' + esc(t.desc) + '</p>';
