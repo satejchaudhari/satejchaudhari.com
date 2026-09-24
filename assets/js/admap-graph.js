@@ -178,8 +178,20 @@
   var panel = document.getElementById("adm-detail"), pbody = document.getElementById("adm-detail-body");
   var SHIELD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 8.4 8 11 4.6-2.6 8-6 8-11V5l-8-3z"></path></svg>';
   var BOOK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>';
+  var COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+  function cmdBlock(c) { return '<div class="command-block"><button class="adm-copy" title="Copy" aria-label="Copy command">' + COPY + '</button><pre><code>' + fmtCmd(c) + '</code></pre></div>'; }
   function toolChip(t) { return t[1] ? '<a class="adm-chip" href="tool-detail.html?tool=' + encodeURIComponent(t[1]) + '">' + esc(t[0]) + '</a>' : '<span class="adm-chip pending" title="Reference page coming soon">' + esc(t[0]) + '</span>'; }
   function stepChip(id) { var n = byId[id]; return n ? '<button class="adm-chip step" data-goto="' + esc(id) + '">' + esc(n.label) + '</button>' : ""; }
+  // one delegated listener copies any command block (detail panel + guided view)
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest(".adm-copy"); if (!btn) return;
+    e.preventDefault();
+    var code = btn.parentNode.querySelector("code"); if (!code) return;
+    var text = code.innerText;
+    function done() { btn.classList.add("copied"); setTimeout(function () { btn.classList.remove("copied"); }, 1100); }
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(done, function () {}); }
+    else { try { var t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); document.body.removeChild(t); done(); } catch (x) {} }
+  });
   function detailHTML(n) {
     var color = catColor[n.cat], ty = typeById[n.type];
     var h = '<span class="adm-detail-cat"><span class="sw" style="background:' + color + '"></span>' + esc(catLabel[n.cat]);
@@ -192,16 +204,17 @@
     h += '<p class="desc">' + esc(n.desc) + '</p>';
     if (n.prereq) h += '<p class="adm-meta req"><span>Requires</span>' + esc(n.prereq) + '</p>';
     if (n.detect) h += '<p class="adm-meta det"><span>Detection / OPSEC</span>' + esc(n.detect) + '</p>';
+    if (n.cleanup) h += '<p class="adm-meta clean"><span>Cleanup</span>' + esc(n.cleanup) + '</p>';
     if (n.cmds && n.cmds.length) {
       h += '<div class="sec"><p class="sec-l">Example commands</p>';
-      h += n.cmds.map(function (c) { return '<div class="command-block"><pre><code>' + fmtCmd(c) + '</code></pre></div>'; }).join("");
+      h += n.cmds.map(cmdBlock).join("");
       h += '</div>';
     }
     if (n.variants && n.variants.length) {
       h += '<div class="sec"><p class="sec-l">Variants &amp; sub-steps</p>';
       h += n.variants.map(function (v) {
         var b = '<div class="adm-variant"><p class="adm-variant-l">' + esc(v.label) + '</p>';
-        (v.cmds || []).forEach(function (c) { b += '<div class="command-block"><pre><code>' + fmtCmd(c) + '</code></pre></div>'; });
+        (v.cmds || []).forEach(function (c) { b += cmdBlock(c); });
         if (v.note) b += '<p class="adm-variant-note">' + esc(v.note) + '</p>';
         return b + '</div>';
       }).join("");
