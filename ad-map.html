@@ -48,7 +48,7 @@
 
     /* graph + detail split */
     .adm-stage { position: relative; display: grid; grid-template-columns: 1fr; gap: 0; }
-    #cy { width: 100%; height: min(78vh, 860px); min-height: 460px; background: #0a0c10; border: 1px solid var(--border); border-radius: 12px; }
+    #cy { width: 100%; height: min(78vh, 860px); min-height: 460px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; }
 
     /* detail panel (desktop: floats over the graph, right) */
     .adm-detail {
@@ -72,7 +72,9 @@
     .adm-chip { font-family: var(--mono); font-size: 0.72rem; padding: 4px 9px; border-radius: 6px; border: 1px solid var(--border); color: var(--text); background: var(--surface-2); cursor: pointer; }
     .adm-chip:hover { border-color: var(--accent-border); color: var(--accent); }
     .adm-chip.pending { color: var(--muted-2); border-style: dashed; background: transparent; cursor: default; }
-    .adm-chip.step .a { color: var(--accent); }
+    .adm-chip.vuln { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); font-weight: 600; }
+    .adm-chip.vuln svg { width: 13px; height: 13px; }
+    .adm-chip.vuln.pending { color: var(--muted-2); border-color: var(--border); background: transparent; border-style: dashed; cursor: default; }
     .adm-vuln { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 0.76rem; color: var(--accent); font-weight: 500; }
     .adm-vuln.pending { color: var(--muted-2); }
     .adm-vuln svg { width: 13px; height: 13px; }
