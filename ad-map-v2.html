@@ -112,8 +112,11 @@
     .adv2-branches { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
     .adv2-branch { padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid color-mix(in srgb, var(--sc) 55%, var(--border)); border-radius: 8px; background: var(--surface); }
     .adv2-branch.warn { border-left-color: var(--h-amber, #f59e0b); }
-    .adv2-branch-l { font-family: var(--mono); font-size: 0.76rem; color: var(--text); font-weight: 600; margin: 0 0 6px; display: flex; align-items: center; gap: 7px; }
+    .adv2-branch.cve { border-left-color: var(--h-rose, #fb7185); }
+    .adv2-branch-l { font-family: var(--mono); font-size: 0.76rem; color: var(--text); font-weight: 600; margin: 0 0 6px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
     .adv2-warn { color: var(--h-amber, #f59e0b); }
+    .adv2-branch-cve { font-family: var(--mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.03em; color: var(--h-rose, #fb7185); border: 1px solid color-mix(in srgb, var(--h-rose, #fb7185) 55%, transparent); background: color-mix(in srgb, var(--h-rose, #fb7185) 12%, transparent); border-radius: 999px; padding: 1px 7px; }
+    .adv2-branch-note { color: var(--muted); font-size: 0.8rem; line-height: 1.45; margin: 0 0 7px; }
     .adv2-branch .command-block { position: relative; margin: 5px 0 0; }
     .adv2-branch pre { margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 34px 9px 11px; overflow-x: auto; }
     .adv2-branch code { font-family: var(--mono); font-size: 0.76rem; color: var(--text); white-space: pre; display: block; }

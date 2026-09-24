@@ -42,8 +42,10 @@
   function branchesHTML(list) {
     if (!list || !list.length) return "";
     return '<div class="adv2-branches">' + list.map(function (b) {
-      var h = '<div class="adv2-branch' + (b.warn ? ' warn' : '') + '">';
-      h += '<p class="adv2-branch-l">' + (b.warn ? '<span class="adv2-warn">&#9888;</span>' : '') + esc(b.label) + '</p>';
+      var h = '<div class="adv2-branch' + (b.warn ? ' warn' : '') + (b.cve ? ' cve' : '') + '">';
+      h += '<p class="adv2-branch-l">' + (b.warn ? '<span class="adv2-warn">&#9888;</span>' : '') + esc(b.label) +
+        (b.cve ? '<span class="adv2-branch-cve">' + esc(b.cve) + '</span>' : '') + '</p>';
+      if (b.note) h += '<p class="adv2-branch-note">' + esc(b.note) + '</p>';
       (b.cmds || []).forEach(function (c) { h += cmdBlock(c); });
       h += outcomesHTML(b.outcomes);
       return h + '</div>';
