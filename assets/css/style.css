@@ -984,9 +984,9 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
     top: 64px;
     left: 0;
     right: 0;
-    background: var(--header-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--bg) 97%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border);
     box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
     flex-direction: column;
@@ -1060,6 +1060,9 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 }
 @media (max-width: 480px) {
   .wrap, .wrap-wide { padding: 0 18px; }
+  /* the shorthand above resets vertical padding, so restore the bottom gap
+     for the main content columns (toolkit / writeups / vulns / theory) */
+  .page-body, .catalog { padding-bottom: 64px; }
   .hero-title { font-size: 1.8rem; }
   .page-title { font-size: 1.5rem; }
   .post-title { font-size: 1.4rem; }
@@ -1399,7 +1402,7 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 
 /* compact about, at the foot of the home page */
 .about-compact {
-  padding-block: 44px 8px;      /* longhand so .wrap-wide keeps its side gutter */
+  padding-block: 44px 48px;     /* longhand so .wrap-wide keeps its side gutter */
   border-top: 1px solid var(--border);
 }
 .about-compact .about-body { font-size: 0.95rem; max-width: none; margin-top: 14px; }
