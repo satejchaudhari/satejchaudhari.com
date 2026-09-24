@@ -43,8 +43,8 @@
     "Authority/System": "admin-access",
     "Low access": "low-access", "Low Access": "low-access", "Low access (without AppLocker)": "low-access",
     "Domain admin": "domain-admin", "Domain Admin": "domain-admin",
-    // usable credentials -> Valid Credentials
-    "User + Pass": "valid-creds", "User Account": "valid-creds", "Username": "valid-creds",
+    // usable credentials -> Valid Credentials ("Username" alone -> Valid user)
+    "User + Pass": "valid-creds", "User Account": "valid-creds", "Username": "valid-user",
     "Clear text Credentials": "valid-creds", "Clear text password": "valid-creds",
     "Clear text password / NT hash": "valid-creds", "User with clear text pass": "valid-creds",
     "Account password": "valid-creds", "Service account password": "valid-creds",
@@ -83,6 +83,39 @@
     // SCCM, trusts, quick wins
     "SCCM Exploitation": "sccm", "SCCM ADMIN": "sccm", "Trust": "trusts", "Vulnerable host": "quick-compromise"
   };
+  // one-line "when to click this" note per destination (keyed by the same
+  // target string used above; a "section/technique" key falls back to "section")
+  var OUTCOME_NOTES = {
+    "admin-access": "you're privileged here — harvest credentials from the host",
+    "low-access": "escalate this foothold to local admin / SYSTEM",
+    "domain-admin": "you own the domain — dump it and set up persistence",
+    "valid-creds": "use the credentials to enumerate and move",
+    "valid-user": "feed the account into spraying / roasting",
+    "crack-hash": "crack the hash offline to recover the secret",
+    "lateral-move": "reuse this access to execute on other hosts",
+    "lateral-move/lm-nthash": "authenticate by passing the NT hash",
+    "lateral-move/lm-kerberos": "reuse the Kerberos ticket or key",
+    "lateral-move/lm-certificate": "authenticate with the certificate",
+    "lateral-move/lm-mssql": "pivot through the SQL server",
+    "lateral-move/lm-socks": "run tools through the SOCKS relay",
+    "mitm": "relay or capture the authentication",
+    "acls-aces": "abuse the discovered ACL / ACE rights",
+    "acls-aces/acl-dcsync": "replicate the directory secrets (DCSync)",
+    "acls-aces/acl-shadow-creds": "add shadow credentials to take over the object",
+    "kerberos-delegation": "abuse the delegation to impersonate a user",
+    "kerberos-delegation/kd-unconstrained": "dump the cached ticket from the delegation host",
+    "kerberos-delegation/kd-rbcd": "configure RBCD to impersonate a user",
+    "adcs": "exploit the AD CS misconfiguration",
+    "adcs/adcs-esc8": "relay to web enrolment for a privileged certificate (ESC8)",
+    "adcs/adcs-templates": "enrol a certificate from the vulnerable template",
+    "adcs/adcs-acl": "abuse write access over the template / CA",
+    "adcs/adcs-ca": "abuse the CA misconfiguration",
+    "adcs/adcs-pki-object": "abuse the PKI object access control",
+    "sccm": "abuse the SCCM / MECM hierarchy",
+    "trusts": "pivot across the domain / forest trust",
+    "quick-compromise": "try an unauthenticated quick-compromise exploit"
+  };
+  function noteFor(target) { return OUTCOME_NOTES[target] || OUTCOME_NOTES[target.split("/")[0]] || ""; }
   function outcomesHTML(list) {
     if (!list || !list.length) return "";
     return '<div class="adv2-outcomes">' + list.map(function (o) {
@@ -98,6 +131,42 @@
           ' style="--oc:' + attr(col) + '" title="Go to ' + (sec ? attr(sec.title) : "section") + '">' + esc(o.label) + '</button>';
       }
       // no section to open -> a plain status tag, not a (dead) button
+      return '<span class="adv2-outcome terminal">' + esc(o.label) + '</span>';
+    }).join("") + '</div>';
+  }
+  // one "Move to" row: coloured button (to its section) + a one-line note
+  function moveRowHTML(section, tech, label, note) {
+    var sec = byId[section]; if (!sec) return "";
+    var col = sec.color || "var(--accent)";
+    var chip = '<button class="adv2-move" data-goto="' + attr(section) + '"' + (tech ? ' data-tech="' + attr(tech) + '"' : '') +
+      ' style="--mc:' + attr(col) + '" title="Go to ' + attr(sec.title) + '">' +
+      '<span class="adv2-move-dot"></span><span class="adv2-move-to">' + esc(label || sec.title) + '</span>' + ARROW + '</button>';
+    return '<div class="adv2-move-row">' + chip + (note ? '<span class="adv2-move-note">' + esc(note) + '</span>' : "") + '</div>';
+  }
+  // technique-level navigation: explicit moveTo entries + linked outcomes,
+  // all rendered as uniform "Move to" rows (deduped by destination section)
+  function techNavHTML(t) {
+    var rows = [], seen = {};
+    (t.moveTo || []).forEach(function (m) {
+      if (!byId[m.section]) return;
+      seen[m.section] = true;
+      rows.push(moveRowHTML(m.section, m.tech || null, m.label, m.note || noteFor(m.section)));
+    });
+    (t.outcomes || []).forEach(function (o) {
+      var target = OUTCOME_LINKS[o.label]; if (!target) return;
+      var parts = target.split("/");
+      if (seen[parts[0]]) return;           // already covered by an explicit moveTo
+      rows.push(moveRowHTML(parts[0], parts[1] || null, o.label, noteFor(target)));
+    });
+    rows = rows.filter(Boolean);
+    if (!rows.length) return "";
+    return '<div class="adv2-moves"><p class="adv2-moves-l">Move to</p>' + rows.join("") + '</div>';
+  }
+  // terminal (non-navigating) outcomes -> small ghost tags
+  function terminalTagsHTML(list) {
+    var terms = (list || []).filter(function (o) { return !OUTCOME_LINKS[o.label]; });
+    if (!terms.length) return "";
+    return '<div class="adv2-outcomes">' + terms.map(function (o) {
       return '<span class="adv2-outcome terminal">' + esc(o.label) + '</span>';
     }).join("") + '</div>';
   }
@@ -144,22 +213,10 @@
     }
     // nested branches
     h += branchesHTML(t.branches);
-    // technique-level outcome badges
-    h += outcomesHTML(t.outcomes);
-    // move-to links (cross-section pivots)
-    if (t.moveTo && t.moveTo.length) {
-      h += '<div class="adv2-moves"><p class="adv2-moves-l">Move to</p>';
-      h += t.moveTo.map(function (m) {
-        var target = byId[m.section];
-        if (!target) return "";
-        var col = target.color || "var(--accent)";
-        var label = m.label || target.title;
-        var chip = '<button class="adv2-move" data-goto="' + attr(m.section) + '" style="--mc:' + attr(col) + '" title="Go to ' + attr(target.title) + '">' +
-          '<span class="adv2-move-dot"></span><span class="adv2-move-to">' + esc(label) + '</span>' + ARROW + '</button>';
-        return '<div class="adv2-move-row">' + chip + (m.note ? '<span class="adv2-move-note">' + esc(m.note) + '</span>' : "") + '</div>';
-      }).join("");
-      h += '</div>';
-    }
+    // terminal (non-navigating) outcomes as small ghost tags
+    h += terminalTagsHTML(t.outcomes);
+    // unified "Move to" block: linked outcomes + explicit pivots, each with a note
+    h += techNavHTML(t);
     h += '</div></div>';
     return h;
   }
@@ -200,17 +257,25 @@
       setTimeout(function () { sec.classList.remove("flash"); }, 1200);
     }
   }
+  // collapse every technique inside a section, so reopening it starts clean
+  function collapseTechs(sec) {
+    sec.querySelectorAll(".adv2-tech.open").forEach(function (el) {
+      el.classList.remove("open");
+      var b = el.querySelector(".adv2-tech-body");
+      if (b) b.hidden = true;
+    });
+  }
+  function closeSection(sec) {
+    sec.querySelector(".adv2-head").setAttribute("aria-expanded", "false");
+    sec.classList.remove("open");
+    sec.querySelector(".adv2-body").hidden = true;
+    collapseTechs(sec);
+  }
   function toggleSection(id) {
     var sec = document.getElementById("sec-" + id);
     if (!sec) return;
-    if (sec.classList.contains("open")) {
-      var head = sec.querySelector(".adv2-head"), body = sec.querySelector(".adv2-body");
-      head.setAttribute("aria-expanded", "false");
-      sec.classList.remove("open");
-      body.hidden = true;
-    } else {
-      openSection(id, false);
-    }
+    if (sec.classList.contains("open")) closeSection(sec);
+    else openSection(id, false);
   }
   function toggleTech(id) {
     var el = document.getElementById("tech-" + id);
@@ -258,7 +323,7 @@
   if (col) col.addEventListener("click", function () {
     DATA.sections.forEach(function (s) {
       var sec = document.getElementById("sec-" + s.id);
-      sec.classList.remove("open"); sec.querySelector(".adv2-head").setAttribute("aria-expanded", "false"); sec.querySelector(".adv2-body").hidden = true;
+      if (sec) closeSection(sec);
     });
   });
 

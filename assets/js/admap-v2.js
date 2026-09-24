@@ -582,7 +582,7 @@ var AD_MAP_V2 = {
         {
           id: "qc-database",
           title: "Database",
-          theory: { label: "MSSQL Server Abuse", url: "theory/2026-09-24-mssql-server-abuse.html" },
+          theory: { label: "MSSQL Server Abuse", url: "theory/2026-09-24-mssql-abuse.html" },
           cve: null,
           desc: "Enumerate SQL logins and hunt weak or default credentials on exposed database services.",
           cmds: [
@@ -1305,7 +1305,7 @@ var AD_MAP_V2 = {
         {
           id: "kd-find",
           title: "Find delegation",
-          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-kerberos-delegation.html" },
+          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-delegation.html" },
           cve: null,
           desc: "Locate accounts and computers configured for delegation.",
           cmds: [
@@ -1323,7 +1323,7 @@ var AD_MAP_V2 = {
         {
           id: "kd-unconstrained",
           title: "Unconstrained delegation",
-          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-kerberos-delegation.html" },
+          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-delegation.html" },
           cve: null,
           desc: "A host trusted for unconstrained delegation caches the TGT of anyone who authenticates to it (UAC flag ADS_UF_TRUSTED_FOR_DELEGATION). Coerce a DC to it, then dump the tickets.",
           cmds: [],
@@ -1341,7 +1341,7 @@ var AD_MAP_V2 = {
         {
           id: "kd-constrained",
           title: "Constrained delegation",
-          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-kerberos-delegation.html" },
+          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-delegation.html" },
           cve: null,
           desc: "An account with msDS-AllowedToDelegateTo can request tickets to the listed SPNs as any user via S4U.",
           cmds: [],
@@ -1370,7 +1370,7 @@ var AD_MAP_V2 = {
         {
           id: "kd-rbcd",
           title: "Resource-Based Constrained Delegation (RBCD)",
-          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-kerberos-delegation.html" },
+          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-delegation.html" },
           cve: null,
           desc: "Write access to a target's msDS-AllowedToActOnBehalfOfOtherIdentity lets a computer you control impersonate any user to that target.",
           cmds: [],
@@ -1393,7 +1393,7 @@ var AD_MAP_V2 = {
         {
           id: "kd-s4u2self",
           title: "S4U2self abuse",
-          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-kerberos-delegation.html" },
+          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-delegation.html" },
           cve: null,
           desc: "With a machine account's key, request a service ticket to itself as any user (including a local admin) using S4U2self.",
           cmds: [
@@ -1795,7 +1795,7 @@ var AD_MAP_V2 = {
         {
           id: "aa-lsass",
           title: "Extract credentials from LSASS",
-          theory: { label: "Credential Dumping" },
+          theory: { label: "Credential Dumping", url: "theory/2026-08-18-windows-credential-storage.html" },
           cve: null,
           desc: "Dump the LSASS process for logon passwords, NT hashes, and Kerberos tickets.",
           cmds: [],
@@ -1818,7 +1818,7 @@ var AD_MAP_V2 = {
         {
           id: "aa-sam",
           title: "Extract credentials from SAM",
-          theory: { label: "Credential Dumping" },
+          theory: { label: "Credential Dumping", url: "theory/2026-08-18-windows-credential-storage.html" },
           cve: null,
           desc: "Dump local account hashes from the SAM hive.",
           cmds: [
@@ -1836,7 +1836,7 @@ var AD_MAP_V2 = {
         {
           id: "aa-lsa",
           title: "Extract credentials from LSA",
-          theory: { label: "Credential Dumping" },
+          theory: { label: "Credential Dumping", url: "theory/2026-08-18-windows-credential-storage.html" },
           cve: null,
           desc: "Dump LSA secrets (service accounts, cached domain logons, machine account).",
           cmds: [
@@ -1851,7 +1851,7 @@ var AD_MAP_V2 = {
         {
           id: "aa-dpapi",
           title: "Extract credentials from DPAPI",
-          theory: { label: "Credential Dumping" },
+          theory: { label: "Credential Dumping", url: "theory/2026-08-18-windows-credential-storage.html" },
           cve: null,
           desc: "Recover browser passwords, cookies, and stored credentials protected by DPAPI.",
           cmds: [],
@@ -1879,7 +1879,7 @@ var AD_MAP_V2 = {
         {
           id: "aa-impersonate",
           title: "Impersonate",
-          theory: { label: "Credential Dumping" },
+          theory: { label: "Credential Dumping", url: "theory/2026-08-18-windows-credential-storage.html" },
           cve: null,
           desc: "Steal or impersonate the token / session of another logged-on user.",
           cmds: [],
@@ -2077,7 +2077,7 @@ var AD_MAP_V2 = {
         {
           id: "lm-mssql",
           title: "MSSQL",
-          theory: { label: "MSSQL Server Abuse", url: "theory/2026-09-24-mssql-server-abuse.html" },
+          theory: { label: "MSSQL Server Abuse", url: "theory/2026-09-24-mssql-abuse.html" },
           cve: null,
           desc: "Abuse SQL admin rights for command execution, impersonation, coercion, or linked-server hops.",
           cmds: [
@@ -2147,7 +2147,7 @@ var AD_MAP_V2 = {
         {
           id: "tr-enum",
           title: "Enumeration",
-          theory: { label: "Domain & Forest Trusts" },
+          theory: { label: "Domain & Forest Trusts", url: "theory/2026-08-18-trusts.html" },
           cve: null,
           desc: "Map the trust relationships and gather the domain SIDs you will need.",
           cmds: [
@@ -2166,7 +2166,7 @@ var AD_MAP_V2 = {
         {
           id: "tr-child-parent",
           title: "Child → Parent (intra-forest)",
-          theory: { label: "Domain & Forest Trusts" },
+          theory: { label: "Domain & Forest Trusts", url: "theory/2026-08-18-trusts.html" },
           cve: null,
           desc: "Escalate from a child domain to the forest root using the trust key or the child krbtgt, adding the Enterprise Admins SID (-519) via SID history.",
           cmds: [],
@@ -2191,7 +2191,7 @@ var AD_MAP_V2 = {
         {
           id: "tr-parent-child",
           title: "Parent → Child",
-          theory: { label: "Domain & Forest Trusts" },
+          theory: { label: "Domain & Forest Trusts", url: "theory/2026-08-18-trusts.html" },
           cve: null,
           desc: "Same techniques as Child → Parent, applied in the other direction.",
           cmds: [],
@@ -2201,7 +2201,7 @@ var AD_MAP_V2 = {
         {
           id: "tr-external",
           title: "External / forest trust",
-          theory: { label: "Domain & Forest Trusts" },
+          theory: { label: "Domain & Forest Trusts", url: "theory/2026-08-18-trusts.html" },
           cve: null,
           desc: "Abuse a two-way or one-way trust: password reuse, foreign group memberships, SID history (where SID filtering allows), and cross-forest ADCS / unconstrained delegation.",
           cmds: [],
@@ -2228,7 +2228,7 @@ var AD_MAP_V2 = {
         {
           id: "tr-mssql-links",
           title: "MSSQL links",
-          theory: { label: "MSSQL Server Abuse", url: "theory/2026-09-24-mssql-server-abuse.html" },
+          theory: { label: "MSSQL Server Abuse", url: "theory/2026-09-24-mssql-abuse.html" },
           cve: null,
           desc: "Linked SQL servers ignore the AD trust boundary — crawl them to execute across domains.",
           cmds: [
