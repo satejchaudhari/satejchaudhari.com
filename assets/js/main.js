@@ -31,15 +31,26 @@
     a.className = "entry";
     a.href = post.url;
 
+    // header row: title on the left, date + read time + tag pushed to the right
+    const head = document.createElement("div");
+    head.className = "entry-head";
+
+    const title = document.createElement("h3");
+    title.className = "entry-title";
+    title.textContent = post.title || "Untitled";
+    head.appendChild(title);
+
     const meta = document.createElement("div");
     meta.className = "entry-meta";
 
     const time = document.createElement("time");
+    time.className = "entry-date";
     time.textContent = post.date || "";
     meta.appendChild(time);
 
     if (post.readTime) {
       const rt = document.createElement("span");
+      rt.className = "entry-read";
       rt.textContent = "· " + post.readTime;
       meta.appendChild(rt);
     }
@@ -51,16 +62,13 @@
       meta.appendChild(tag);
     }
 
-    const title = document.createElement("h3");
-    title.className = "entry-title";
-    title.textContent = post.title || "Untitled";
+    head.appendChild(meta);
 
     const excerpt = document.createElement("p");
     excerpt.className = "entry-excerpt";
     excerpt.textContent = post.description || "";
 
-    a.appendChild(meta);
-    a.appendChild(title);
+    a.appendChild(head);
     a.appendChild(excerpt);
     return a;
   }

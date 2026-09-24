@@ -39,6 +39,21 @@
     .adv2-bar { display: flex; gap: 8px; margin: 12px 0 16px; }
     .adv2-btn { font-family: var(--mono); font-size: 0.74rem; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
     .adv2-btn:hover { border-color: var(--accent-border); color: var(--text); }
+    /* "How to use" collapsible */
+    .adv2-howto { margin: 14px 0 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; }
+    .adv2-howto summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 9px; padding: 13px 16px; font-family: var(--mono); font-size: 0.8rem; font-weight: 600; color: var(--text); }
+    .adv2-howto summary::-webkit-details-marker { display: none; }
+    .adv2-howto summary:hover { color: var(--accent); }
+    .adv2-howto summary svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .adv2-howto .adv2-howto-caret { margin-left: auto; transition: transform 0.2s ease; }
+    .adv2-howto[open] .adv2-howto-caret { transform: rotate(90deg); }
+    .adv2-howto-body { padding: 2px 18px 16px; border-top: 1px solid var(--border); }
+    .adv2-howto-body ul { margin: 12px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 9px; }
+    .adv2-howto-body li { color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
+    .adv2-howto-body li b { color: var(--text); font-weight: 600; }
+    .adv2-howto-body li em { color: var(--accent); font-style: normal; }
+    .adv2-howto-body code { font-family: var(--mono); font-size: 0.82em; background: var(--surface-2, rgba(127,127,127,0.14)); padding: 1px 6px; border-radius: 5px; }
+    .adv2-howto-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
 
     /* section card */
     .adv2-section { border: 1px solid var(--border); border-left: 4px solid var(--sc); border-radius: 12px; margin-bottom: 12px; background: var(--surface); overflow: hidden; transition: box-shadow 0.2s ease; }
@@ -174,6 +189,24 @@
       </div>
     </div>
     <p class="adv2-hint">Work it top&#8209;to&#8209;bottom: <b>click an access section</b> to expand it, <b>click a technique</b> for its theory link and commands, and follow the coloured <b>Move&nbsp;to</b> pivots when your access level changes.</p>
+
+    <details class="adv2-howto">
+      <summary>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        How to use this map
+        <svg class="adv2-howto-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </summary>
+      <div class="adv2-howto-body">
+        <ul>
+          <li><b>Sections are colour&#8209;coded by how much access you hold.</b> Start at the top (<em>No Credentials</em>) and work down as you gain access &mdash; each section is a stage of the attack.</li>
+          <li><b>Click a section</b> to expand it, then <b>click a technique</b> to reveal its commands. Every command block has a <b>copy</b> button.</li>
+          <li>A technique can carry a <b>Theory</b> chip (opens the concept) and a red <b>shield</b> chip (opens its Vulns&nbsp;&amp;&nbsp;Misconfigs entry). A <b>CVE banner</b> flags techniques tied to a specific CVE.</li>
+          <li><b>&ldquo;Move&nbsp;to&rdquo; rows</b> are coloured to the section they jump to &mdash; follow them when your access changes (e.g. a captured hash &rarr; <em>Crack&nbsp;hash</em>). Outcome buttons jump the same way; dashed grey tags are just end&nbsp;states.</li>
+          <li>Use <b>Expand&nbsp;all</b> / <b>Collapse&nbsp;all</b> below. Collapsing a section also closes its techniques, so it reopens clean.</li>
+          <li><b>Link straight to a spot</b> by adding <code>#section</code> or <code>#section/technique</code> to the URL.</li>
+        </ul>
+      </div>
+    </details>
 
     <div class="adv2-bar">
       <button class="adv2-btn" id="adv2-expand">Expand all</button>
