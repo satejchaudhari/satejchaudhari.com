@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SCCM / MECM Abuse — Satej Chaudhari</title>
+  <meta name="description" content="How Microsoft Configuration Manager (SCCM/MECM) becomes a domain-wide code-execution and credential-theft platform — enumeration, NAA and PXE looting, coercion-and-relay site takeover, and admin-level mass deployment.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+        <h1 class="post-title">SCCM / MECM Abuse</h1>
+        <p class="post-meta">
+          <time datetime="2026-09-24">2026-09-24</time>
+          <span>&middot; 16 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Microsoft Configuration Manager — <strong>SCCM</strong>, rebranded <strong>MECM</strong>,
+          now folded into <em>Microsoft Intune / Configuration Manager</em> — is the software that
+          pushes patches, applications and operating systems to every managed Windows box in an
+          enterprise. That job description is also its threat model: a platform that can run code as
+          <code>SYSTEM</code> on thousands of machines, that stores credentials so it can reach them,
+          and whose servers are almost always highly privileged in Active Directory. Compromising it
+          is frequently a faster route to Domain Admin than any Kerberos trick, which is why it earns
+          its own lane on the <a href="../ad-map.html">Attack-Path map</a>.
+        </p>
+
+        <blockquote>
+          Rule of thumb: the SCCM client agent runs as <code>SYSTEM</code> on every endpoint, and the
+          site server is usually one misconfiguration away from Tier&nbsp;0. If you can influence what
+          the site tells its clients to do, you have code execution everywhere; if you can coerce the
+          site server to authenticate to you, you can often <em>become</em> an SCCM admin.
+        </blockquote>
+
+        <h2>The architecture you are actually attacking</h2>
+        <p>
+          You cannot abuse what you cannot name, and SCCM has a lot of moving parts. These are the
+          roles that matter to an attacker:
+        </p>
+        <table>
+          <thead><tr><th>Role</th><th>What it does</th><th>Why you care</th></tr></thead>
+          <tbody>
+            <tr><td>Site server</td><td>The brain of a primary site; runs the site components</td><td>Usually local admin on the site database and highly privileged in AD — the ultimate target</td></tr>
+            <tr><td>Central Admin Site (CAS)</td><td>Sits above multiple primary sites in a hierarchy</td><td>Owning a primary can lead to the CAS and vice-versa — hierarchy takeover</td></tr>
+            <tr><td>Management Point (MP)</td><td>The HTTP(S) endpoint clients talk to for policy</td><td>Serves policies that can contain secrets (NAA); a relay/impersonation target</td></tr>
+            <tr><td>Distribution Point (DP)</td><td>Hosts the content — apps, packages, boot media</td><td>PXE media and package files leak credentials; often anonymously reachable</td></tr>
+            <tr><td>SMS Provider</td><td>The WMI/administration layer the console talks to</td><td>Relaying a site-server or admin auth here can grant you <em>Full Administrator</em></td></tr>
+            <tr><td>Site database</td><td>A Microsoft SQL Server holding all config and secrets</td><td>Contains RBAC, OSD variables and encrypted account secrets — see <a href="2026-09-24-mssql-abuse.html">MSSQL abuse</a></td></tr>
+            <tr><td>Client agent (CcmExec)</td><td>Runs on every managed host as <code>SYSTEM</code></td><td>The blast radius: whatever the site deploys runs as SYSTEM here</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Two design facts drive almost every attack below. First, clients need to <em>find</em> and
+          <em>trust</em> their site, and by default that discovery and much of the traffic is
+          unauthenticated or NTLM-authenticated HTTP. Second, to install software before a user logs
+          in, SCCM historically stores a reusable domain credential — the <strong>Network Access
+          Account (NAA)</strong> — and ships it to clients inside policy.
+        </p>
+
+        <h2>Enumeration — with and without credentials</h2>
+        <p>
+          SCCM advertises itself. A domain machine account (or a null session against the right
+          endpoint) is often enough to locate the whole hierarchy:
+        </p>
+        <ul>
+          <li><strong>LDAP</strong> — if the site publishes to AD, the <code>System Management</code>
+              container under the domain holds <code>mSSMSManagementPoint</code> objects naming the
+              MPs and site codes. Any authenticated user can read it.</li>
+          <li><strong>HTTP management point</strong> — the MP answers policy requests over HTTP; tools
+              enumerate site code, MPs and DPs and probe whether PXE and NAA are in play.</li>
+          <li><strong>Device / collection RBAC</strong> — once you have <em>any</em> console access,
+              enumerate who the Full Administrators are and which collections you can target.</li>
+        </ul>
+        <pre><code>sccmhunter.py find -u &lt;user&gt; -p '&lt;pass&gt;' -d &lt;domain&gt; -dc-ip &lt;dc_ip&gt;   # map the hierarchy
+SharpSCCM.exe get devices -sms &lt;SMS_PROVIDER&gt;                        # devices &amp; primary users
+nxc smb &lt;range&gt; -M sccm                                             # quick discovery sweep</code></pre>
+        <p>
+          The reconnaissance goal is to answer three questions: <em>Is the NAA in use? Is PXE
+          enabled on a DP? Is automatic client push turned on?</em> Each "yes" is a distinct path to
+          compromise.
+        </p>
+
+        <h2>Path 1 — loot the Network Access Account</h2>
+        <p>
+          The NAA is a domain account SCCM uses when a client has no computer-account context yet
+          (for example during OS deployment). Because clients must be able to use it, the site
+          <em>encrypts it and sends it to them</em> in a policy blob. The encryption is done with a
+          key the client itself can recover, so anyone who can obtain the policy as a client can
+          decrypt the NAA. That turns a "protected" service account into plaintext domain credentials.
+        </p>
+        <p>You can obtain the policy by:</p>
+        <table>
+          <thead><tr><th>Vector</th><th>How</th></tr></thead>
+          <tbody>
+            <tr><td>Impersonating a client</td><td>Register (or spoof) a device record, request the machine policy, decrypt the NAA blob</td></tr>
+            <tr><td>Distribution point</td><td>Pull secret policies / content from a DP that trusts unauthenticated or machine-account requests</td></tr>
+            <tr><td>PXE boot media</td><td>See Path 2 — PXE variables include the NAA and task-sequence accounts</td></tr>
+          </tbody>
+        </table>
+        <pre><code>SharpSCCM.exe get secrets -r &lt;newcomputer&gt;         # request policy as a client, decrypt NAA
+# or via sccmhunter's http module once you can register a device</code></pre>
+        <p>
+          The NAA is frequently over-privileged (a leftover domain admin, or an account reused as a
+          local admin), so recovering it commonly hands you immediate lateral movement or better. Even
+          a low-privileged NAA is a valid domain credential that unlocks the rest of the
+          <a href="../ad-map.html">map</a>.
+        </p>
+
+        <h2>Path 2 — PXE boot media (no credentials)</h2>
+        <p>
+          If a DP offers PXE for OS deployment, an unauthenticated attacker on the network can request
+          the boot media. That media contains the task-sequence variables — including the NAA and any
+          accounts baked into the deployment — encrypted with either no password or a weak one you can
+          brute offline.
+        </p>
+        <pre><code>pxethief.py 2 &lt;dp_ip&gt;                 # download &amp; decrypt the PXE media variables
+hashcat -m 19850 pxe.hash wordlist    # crack the boot-media password if set</code></pre>
+        <p>
+          This is one of the few paths that needs <em>zero</em> credentials — just network line of
+          sight to a PXE-enabled DP — which makes it a favourite opening move.
+        </p>
+
+        <h2>Path 3 — coercion + relay = site takeover</h2>
+        <p>
+          This is the high-impact path and it builds directly on
+          <a href="2026-08-18-coercion-ntlm-relay.html">Coercion &amp; NTLM Relay</a>. Two SCCM
+          behaviours make the site server <em>authenticate to you</em>:
+        </p>
+        <ul>
+          <li><strong>Automatic client push installation</strong> — when enabled, the site server
+              reaches out to hosts to install the client, and (unless restricted to Kerberos) it will
+              fall back to sending NTLM authentication <em>as the site server's machine account or the
+              client-push account</em>. You can trigger it against a host you control.</li>
+          <li><strong>General coercion</strong> — the site server is still a Windows box, so PetitPotam
+              / PrinterBug / DFSCoerce work if those services are exposed.</li>
+        </ul>
+        <p>Relay that captured authentication to one of two places:</p>
+        <table>
+          <thead><tr><th>Relay target</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td>SMS Provider (over SMB/HTTP)</td><td>Add your principal as a <strong>Full Administrator</strong> in SCCM RBAC — total control of deployments</td></tr>
+            <tr><td>Site database (MSSQL)</td><td>Write RBAC directly, or read secrets — pivot via <a href="2026-09-24-mssql-abuse.html">MSSQL abuse</a></td></tr>
+          </tbody>
+        </table>
+        <pre><code>SharpSCCM.exe invoke client-push -mp &lt;mp&gt; -sc &lt;site_code&gt; -t &lt;relay_ip&gt;   # trigger the auth
+ntlmrelayx.py -t mssql://&lt;site_db&gt; -socks                                  # relay to the site DB
+# or relay the site-server machine account to the SMS Provider to grant Full Admin</code></pre>
+        <p>
+          The elegance (from an attacker's view) is that <em>no exploit</em> is involved — you are
+          abusing a feature that is on by default in many environments, exactly like classic NTLM
+          relay to LDAP.
+        </p>
+
+        <h2>Path 4 — you are an SCCM admin, now what</h2>
+        <p>
+          Once you hold Full Administrator (or any role that can target a collection), SCCM is a
+          legitimate mass-deployment tool you now own. The client runs your payload as
+          <code>SYSTEM</code>:
+        </p>
+        <ul>
+          <li><strong>Application / package deployment</strong> — push an install that runs your
+              command on every device in a collection.</li>
+          <li><strong>Scripts &amp; CMPivot</strong> — the "Run Scripts" and CMPivot features execute
+              PowerShell on clients on demand; CMPivot's <code>osinfo</code>/query engine can be bent
+              into arbitrary execution.</li>
+          <li><strong>Task sequences</strong> — heavier, but run in the deployment context.</li>
+        </ul>
+        <pre><code>SharpSCCM.exe exec -d &lt;device&gt; -p '&lt;payload&gt;'      # execute on a client as SYSTEM
+# or deploy a script/application to a whole collection from the console</code></pre>
+        <p>
+          Target a device where a Domain Admin is logged on and you convert SCCM control into
+          <a href="2026-08-18-windows-credential-storage.html">credential theft</a> and then domain
+          compromise. Or simply target the domain controllers if they are managed.
+        </p>
+
+        <h2>Path 5 — secrets in the site database</h2>
+        <p>
+          If you reach the site database with sufficient rights (relay, or admin on the SQL host),
+          it stores account secrets — the NAA, task-sequence accounts, and other credentials — in
+          tables such as <code>SC_UserAccount</code>. They are encrypted, but with keys recoverable
+          from the site server, so DB access plus site-server access yields plaintext. This is also
+          the pivot point for <strong>hierarchy takeover</strong>: primary sites and the CAS trust
+          each other's databases, so control of one database can propagate upward or downward.
+        </p>
+
+        <h2>Detection &amp; defence</h2>
+        <table>
+          <thead><tr><th>Control</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td>Use PKI/HTTPS + <strong>Enhanced HTTP</strong>, retire the NAA</td><td>Removes the reusable credential and the plaintext-policy problem entirely — the single biggest win</td></tr>
+            <tr><td>Disable site-wide <strong>automatic client push</strong>, or require Kerberos + no NTLM fallback</td><td>Kills the coercion-to-relay path to the SMS Provider / DB</td></tr>
+            <tr><td>Harden the site systems (EPA, SMB signing, disable NTLM)</td><td>Relay generally stops working — see <a href="2026-08-18-coercion-ntlm-relay.html">Coercion &amp; Relay</a></td></tr>
+            <tr><td>Least-privilege the NAA and all service accounts; use gMSA; LAPS on clients</td><td>Limits the value of any credential you do recover</td></tr>
+            <tr><td>Treat site servers, SMS Provider and site DB as <strong>Tier&nbsp;0</strong></td><td>Stops "SCCM admin" from silently equalling Domain Admin</td></tr>
+            <tr><td>Monitor new Full Administrators, unexpected script/application deployments, and CMPivot from new principals</td><td>Catches Path&nbsp;3 and Path&nbsp;4 in the act</td></tr>
+            <tr><td>Restrict PXE (password + network segmentation) or disable it</td><td>Closes the no-credentials boot-media path</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+        <p>
+          SCCM/MECM is a parallel administration plane that sits beside Active Directory and is often
+          less scrutinised. The same three ideas recur: it <em>stores</em> credentials (NAA, DB
+          secrets) you can loot, it <em>authenticates</em> in ways you can coerce and relay, and it
+          <em>executes</em> code as SYSTEM everywhere once you hold a role. Defenders should adopt
+          Enhanced HTTP, kill the NAA, and pull every SCCM server object into Tier&nbsp;0. Attackers
+          should ask, early, "is there a Config Manager here?" — because the answer often shortcuts the
+          rest of the <a href="../ad-map.html">attack path</a>. The tools live in the
+          <a href="../toolkit.html">Toolkit</a>; the abuse write-up is under <em>SCCM abuse</em> in
+          <a href="../vulns.html">Vulns &amp; Misconfigs</a>.
+        </p>
+        
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

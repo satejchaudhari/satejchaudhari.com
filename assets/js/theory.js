@@ -20,6 +20,46 @@
 
 var THEORY = [
   {
+    title: "SCCM / MECM Abuse",
+    url: "theory/2026-09-24-sccm-mecm-abuse.html",
+    date: "2026-09-24",
+    tag: "AD",
+    description: "How Configuration Manager becomes a domain-wide code-execution and credential platform — enumeration, NAA and PXE looting, coercion-and-relay site takeover, and admin-level mass deployment.",
+    readTime: "16 min read"
+  },
+  {
+    title: "MSSQL / SQL Server Abuse",
+    url: "theory/2026-09-24-mssql-abuse.html",
+    date: "2026-09-24",
+    tag: "AD",
+    description: "SQL Server as an AD attack surface — Windows auth, xp_cmdshell and CLR execution, EXECUTE AS impersonation, trusted-link crawling, and coercing the service account for relay.",
+    readTime: "15 min read"
+  },
+  {
+    title: "Perimeter → Active Directory",
+    url: "theory/2026-09-24-perimeter-to-ad.html",
+    date: "2026-09-24",
+    tag: "AD",
+    description: "Turning an edge foothold into a domain foothold — app-server exploitation, insecure deserialization, Log4Shell and the Exchange pre-auth chains — then the pivot from web shell into the AD attack path.",
+    readTime: "14 min read"
+  },
+  {
+    title: "Shadow Credentials, PKINIT & UnPAC-the-Hash",
+    url: "theory/2026-09-24-shadow-credentials-pkinit.html",
+    date: "2026-09-24",
+    tag: "AD",
+    description: "How writing msDS-KeyCredentialLink lets you authenticate as a target via certificate-based Kerberos (PKINIT) without their password, then recover the account's NT hash from the ticket.",
+    readTime: "14 min read"
+  },
+  {
+    title: "Fast-Path CVEs: Zerologon, noPac, Certifried & PrintNightmare",
+    url: "theory/2026-09-24-fast-path-cves.html",
+    date: "2026-09-24",
+    tag: "AD",
+    description: "Four vulnerabilities that collapse the attack path to Domain Admin or SYSTEM — how each abuses a trusted-but-unverified identity, and how to detect and defend them.",
+    readTime: "16 min read"
+  },
+  {
     title: "Command & Control (C2) Frameworks",
     url: "theory/2026-09-23-command-and-control.html",
     date: "2026-09-23",

