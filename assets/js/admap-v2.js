@@ -101,6 +101,7 @@ var AD_MAP_V2 = {
           id: "anon-guest-smb",
           title: "Anonymous & Guest access on SMB shares",
           theory: { label: "LDAP and the AD Database", url: "theory/2026-08-18-ldap.html" },
+          vuln: { label: "Anonymous / Null Sessions", url: "vuln-detail.html?vuln=null-session" },
           cve: null,
           desc: "Null and guest sessions can leak users, shares and policy with no credentials.",
           cmds: [
@@ -155,6 +156,7 @@ var AD_MAP_V2 = {
           id: "poisoning",
           title: "Poisoning",
           theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          vuln: { label: "LLMNR / NBT-NS Poisoning", url: "vuln-detail.html?vuln=llmnr-nbtns" },
           cve: null,
           desc: "Answer broadcast name-resolution or MITM the segment to capture / relay authentication.",
           cmds: [],
@@ -175,6 +177,7 @@ var AD_MAP_V2 = {
           id: "coerce",
           title: "Coerce",
           theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          vuln: { label: "Authentication Coercion", url: "vuln-detail.html?vuln=authentication-coercion" },
           cve: { id: "CVE-2022-26925", label: "Unauthenticated PetitPotam", url: "https://nvd.nist.gov/vuln/detail/CVE-2022-26925" },
           desc: "Force a host (often a DC) to authenticate to your listener so it can be relayed.",
           cmds: [
@@ -222,7 +225,7 @@ var AD_MAP_V2 = {
         {
           id: "pw-spray",
           title: "Password Spray",
-          theory: { label: "Kerberos Authentication", url: "theory/2026-08-18-kerberos.html" },
+          theory: { label: "Password Spraying" },
           cve: null,
           desc: "Try one password across many users. Read the lockout policy FIRST so you don't lock accounts.",
           cmds: [],
@@ -254,6 +257,7 @@ var AD_MAP_V2 = {
           id: "asreproast",
           title: "ASREPRoast",
           theory: { label: "AS-REP Roasting", url: "theory/2026-08-18-asrep-roasting.html" },
+          vuln: { label: "AS-REP Roasting", url: "vuln-detail.html?vuln=asrep-roasting-vuln" },
           cve: null,
           desc: "Accounts with Kerberos pre-auth disabled (and SPN-write via a pre-auth account) yield crackable tickets.",
           cmds: [],
@@ -291,6 +295,7 @@ var AD_MAP_V2 = {
           id: "listen",
           title: "Listen",
           theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          vuln: { label: "NTLM Relay & Coercion", url: "vuln-detail.html?vuln=ntlm-relay-vuln" },
           cve: null,
           desc: "Answer name resolution / capture SMB authentication to obtain hashes or credentials.",
           cmds: [
@@ -308,6 +313,7 @@ var AD_MAP_V2 = {
           id: "ntlm-relay",
           title: "NTLM relay",
           theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          vuln: { label: "NTLM Relay & Coercion", url: "vuln-detail.html?vuln=ntlm-relay-vuln" },
           cve: null,
           desc: "Relay captured/coerced NTLM authentication to a service, picking the target by what's unsigned/unenforced.",
           cmds: [],
@@ -425,6 +431,7 @@ var AD_MAP_V2 = {
           id: "crack-krb5tgs",
           title: "Kerberos 5 TGS  ($krb5tgs$23$...)",
           theory: { label: "Kerberoasting", url: "theory/2026-08-18-kerberoasting.html" },
+          vuln: { label: "Kerberoasting", url: "vuln-detail.html?vuln=kerberoasting-vuln" },
           cve: null,
           desc: "RC4 (etype 23) service ticket recovered from Kerberoasting.",
           cmds: [
@@ -450,6 +457,7 @@ var AD_MAP_V2 = {
           id: "crack-asrep",
           title: "Kerberos ASREP  ($krb5asrep$23...)",
           theory: { label: "AS-REP Roasting", url: "theory/2026-08-18-asrep-roasting.html" },
+          vuln: { label: "AS-REP Roasting", url: "vuln-detail.html?vuln=asrep-roasting-vuln" },
           cve: null,
           desc: "AS-REP for a pre-auth-disabled account, recovered from ASREPRoasting.",
           cmds: [
@@ -507,7 +515,7 @@ var AD_MAP_V2 = {
         {
           id: "qc-zerologon",
           title: "Zerologon (unsafe)",
-          theory: null,
+          theory: { label: "Perimeter to AD", url: "theory/2026-09-24-perimeter-to-ad.html" },
           cve: { id: "CVE-2020-1472", label: "Zerologon" },
           desc: "Resets the domain controller machine account password to empty. The exploit is destructive — it breaks the DC until the password is restored, so use with care.",
           cmds: [],
@@ -521,7 +529,7 @@ var AD_MAP_V2 = {
         {
           id: "qc-eternalblue",
           title: "EternalBlue MS17-010",
-          theory: null,
+          theory: { label: "Perimeter to AD", url: "theory/2026-09-24-perimeter-to-ad.html" },
           cve: { id: "CVE-2017-0144", label: "EternalBlue" },
           desc: "SMBv1 remote code execution. Only targets hosts still exposing SMBv1.",
           cmds: [
@@ -533,7 +541,7 @@ var AD_MAP_V2 = {
         {
           id: "qc-tomcat",
           title: "Tomcat / JBoss Manager",
-          theory: null,
+          theory: { label: "Perimeter to AD", url: "theory/2026-09-24-perimeter-to-ad.html" },
           cve: null,
           desc: "Weak or default manager credentials allow deploying a malicious WAR for code execution.",
           cmds: [
@@ -546,7 +554,7 @@ var AD_MAP_V2 = {
         {
           id: "qc-javarmi",
           title: "Java RMI",
-          theory: null,
+          theory: { label: "Perimeter to AD", url: "theory/2026-09-24-perimeter-to-ad.html" },
           cve: null,
           desc: "Exposed Java RMI registries can allow remote class loading and code execution.",
           cmds: [
@@ -558,7 +566,7 @@ var AD_MAP_V2 = {
         {
           id: "qc-javaser",
           title: "Java Serialized port",
-          theory: null,
+          theory: { label: "Perimeter to AD", url: "theory/2026-09-24-perimeter-to-ad.html" },
           cve: null,
           desc: "Ports accepting serialized Java objects can be exploited with ysoserial gadget chains.",
           cmds: [
@@ -570,7 +578,7 @@ var AD_MAP_V2 = {
         {
           id: "qc-log4shell",
           title: "Log4Shell",
-          theory: null,
+          theory: { label: "Perimeter to AD", url: "theory/2026-09-24-perimeter-to-ad.html" },
           cve: { id: "CVE-2021-44228", label: "Log4Shell" },
           desc: "A crafted string logged by a vulnerable Log4j triggers a JNDI lookup to your server and remote code execution.",
           cmds: [
@@ -594,7 +602,7 @@ var AD_MAP_V2 = {
         {
           id: "qc-exchange",
           title: "Exchange (ProxyShell)",
-          theory: null,
+          theory: { label: "Perimeter to AD", url: "theory/2026-09-24-perimeter-to-ad.html" },
           cve: { id: "CVE-2021-34473", label: "ProxyShell" },
           desc: "Chained Exchange vulnerabilities give unauthenticated remote code execution as SYSTEM.",
           cmds: [
@@ -606,7 +614,7 @@ var AD_MAP_V2 = {
         {
           id: "qc-veeam",
           title: "Veeam",
-          theory: null,
+          theory: { label: "Perimeter to AD", url: "theory/2026-09-24-perimeter-to-ad.html" },
           cve: null,
           desc: "A run of Veeam Backup vulnerabilities recover stored credentials or give authentication bypass and code execution.",
           cmds: [],
@@ -631,7 +639,7 @@ var AD_MAP_V2 = {
         {
           id: "qc-glpi",
           title: "GLPI",
-          theory: null,
+          theory: { label: "Perimeter to AD", url: "theory/2026-09-24-perimeter-to-ad.html" },
           cve: null,
           desc: "GLPI asset-management vulnerabilities leading to code execution or SQL injection.",
           cmds: [],
@@ -649,7 +657,7 @@ var AD_MAP_V2 = {
         {
           id: "qc-weakweb",
           title: "Weak websites / services",
-          theory: null,
+          theory: { label: "Perimeter to AD", url: "theory/2026-09-24-perimeter-to-ad.html" },
           cve: null,
           desc: "Mass-scan for low-hanging vulnerabilities across web and network services.",
           cmds: [],
@@ -756,7 +764,8 @@ var AD_MAP_V2 = {
         {
           id: "vc-enum-adcs",
           title: "Enumerate ADCS",
-          theory: { label: "Shadow Credentials & PKINIT", url: "theory/2026-09-24-shadow-credentials-pkinit.html" },
+          theory: { label: "AD CS", url: "theory/2026-08-18-adcs.html" },
+          vuln: { label: "AD CS Template Abuse", url: "vuln-detail.html?vuln=adcs-esc" },
           cve: null,
           desc: "Find certificate templates and CAs, then check for the ESC misconfigurations.",
           cmds: [
@@ -798,6 +807,7 @@ var AD_MAP_V2 = {
           id: "vc-kerberoasting",
           title: "Kerberoasting",
           theory: { label: "Kerberoasting", url: "theory/2026-08-18-kerberoasting.html" },
+          vuln: { label: "Kerberoasting", url: "vuln-detail.html?vuln=kerberoasting-vuln" },
           cve: null,
           desc: "Request service tickets for SPN accounts and crack them offline. Exclude machine and (g)MSA accounts.",
           cmds: [
@@ -812,6 +822,7 @@ var AD_MAP_V2 = {
           id: "vc-drop-file",
           title: "Drop file (forced authentication)",
           theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          vuln: { label: "Authentication Coercion", url: "vuln-detail.html?vuln=authentication-coercion" },
           cve: null,
           desc: "Plant files on writable shares that trigger authentication to your host when a user browses the folder.",
           cmds: [],
@@ -828,6 +839,7 @@ var AD_MAP_V2 = {
           id: "vc-webdav",
           title: "WebDAV (HTTP coercion)",
           theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          vuln: { label: "Authentication Coercion", url: "vuln-detail.html?vuln=authentication-coercion" },
           cve: null,
           desc: "Force HTTP authentication (relayable cross-protocol) by enabling WebClient and coercing to your host.",
           cmds: [],
@@ -843,6 +855,7 @@ var AD_MAP_V2 = {
           id: "vc-rpc-coerce",
           title: "RPC call (NTLM coercion)",
           theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          vuln: { label: "Authentication Coercion", url: "vuln-detail.html?vuln=authentication-coercion" },
           cve: null,
           desc: "Coerce a host (often a DC) over MS-RPRN / MS-EFSR to authenticate to your listener.",
           cmds: [
@@ -857,6 +870,7 @@ var AD_MAP_V2 = {
           id: "vc-coerce-kerberos",
           title: "Coerce Kerberos",
           theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          vuln: { label: "Authentication Coercion", url: "vuln-detail.html?vuln=authentication-coercion" },
           cve: null,
           desc: "Add a DNS record for an attacker hostname encoding a Kerberos SPN, then coerce Kerberos authentication to it.",
           cmds: [
@@ -930,7 +944,8 @@ var AD_MAP_V2 = {
         {
           id: "la-uac-bypass",
           title: "UAC bypass",
-          theory: null,
+          theory: { label: "Windows Tokens & UAC", url: "theory/2026-08-18-windows-tokens-uac.html" },
+          vuln: { label: "UAC Bypass", url: "vuln-detail.html?vuln=uac-bypass" },
           cve: null,
           desc: "Abuse auto-elevating binaries to run code at high integrity.",
           cmds: [
@@ -984,6 +999,7 @@ var AD_MAP_V2 = {
           id: "la-webdav",
           title: "WebDAV (HTTP coercion)",
           theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          vuln: { label: "Authentication Coercion", url: "vuln-detail.html?vuln=authentication-coercion" },
           cve: null,
           desc: "Trigger HTTP authentication from the host to your listener for relaying.",
           cmds: [
@@ -1010,7 +1026,8 @@ var AD_MAP_V2 = {
         {
           id: "la-seimpersonate",
           title: "From service account (SeImpersonate)",
-          theory: null,
+          theory: { label: "Windows Tokens & UAC", url: "theory/2026-08-18-windows-tokens-uac.html" },
+          vuln: { label: "Token Impersonation", url: "vuln-detail.html?vuln=token-impersonation" },
           cve: null,
           desc: "A service account holding SeImpersonatePrivilege can be escalated to SYSTEM with a Potato technique.",
           cmds: [],
@@ -1036,7 +1053,7 @@ var AD_MAP_V2 = {
         {
           id: "kv-ms14-068",
           title: "MS14-068",
-          theory: null,
+          theory: { label: "Fast-path CVEs", url: "theory/2026-09-24-fast-path-cves.html" },
           cve: { id: "MS14-068", label: "Kerberos PAC forgery" },
           desc: "Forge a PAC to grant yourself Domain Admin group membership in a Kerberos ticket.",
           cmds: [
@@ -1053,7 +1070,7 @@ var AD_MAP_V2 = {
         {
           id: "kv-gpp",
           title: "GPP MS14-025",
-          theory: null,
+          theory: { label: "Fast-path CVEs", url: "theory/2026-09-24-fast-path-cves.html" },
           cve: { id: "MS14-025", label: "Group Policy Preferences password" },
           desc: "Group Policy Preferences stored an AES-encrypted password with a published key. Anyone who can read SYSVOL can decrypt it.",
           cmds: [
@@ -1067,7 +1084,7 @@ var AD_MAP_V2 = {
         {
           id: "kv-privexchange",
           title: "PrivExchange",
-          theory: null,
+          theory: { label: "Fast-path CVEs", url: "theory/2026-09-24-fast-path-cves.html" },
           cve: { id: "CVE-2019-0724", label: "PrivExchange (also CVE-2019-0686)" },
           desc: "Exchange pushes authentication to your host, which you relay to LDAP to grant DCSync rights.",
           cmds: [
@@ -1079,7 +1096,7 @@ var AD_MAP_V2 = {
         {
           id: "kv-nopac",
           title: "noPac (sAMAccountName spoofing)",
-          theory: null,
+          theory: { label: "Fast-path CVEs", url: "theory/2026-09-24-fast-path-cves.html" },
           cve: { id: "CVE-2021-42287", label: "noPac (with CVE-2021-42278)" },
           desc: "Abuse sAMAccountName spoofing to impersonate a DC and obtain a privileged ticket.",
           cmds: [
@@ -1092,7 +1109,7 @@ var AD_MAP_V2 = {
         {
           id: "kv-printnightmare",
           title: "PrintNightmare",
-          theory: null,
+          theory: { label: "Fast-path CVEs", url: "theory/2026-09-24-fast-path-cves.html" },
           cve: { id: "CVE-2021-1675", label: "PrintNightmare (with CVE-2021-34527)" },
           desc: "Abuse the Print Spooler to load a malicious DLL and run code as SYSTEM.",
           cmds: [
@@ -1105,7 +1122,8 @@ var AD_MAP_V2 = {
         {
           id: "kv-certifried",
           title: "Certifried",
-          theory: { label: "Shadow Credentials & PKINIT", url: "theory/2026-09-24-shadow-credentials-pkinit.html" },
+          theory: { label: "AD CS", url: "theory/2026-08-18-adcs.html" },
+          vuln: { label: "AD CS Template Abuse", url: "vuln-detail.html?vuln=adcs-esc" },
           cve: { id: "CVE-2022-26923", label: "Certifried" },
           desc: "Abuse a machine-account certificate request to impersonate a DC and DCSync.",
           cmds: [],
@@ -1120,7 +1138,7 @@ var AD_MAP_V2 = {
         {
           id: "kv-proxynotshell",
           title: "ProxyNotShell",
-          theory: null,
+          theory: { label: "Fast-path CVEs", url: "theory/2026-09-24-fast-path-cves.html" },
           cve: { id: "CVE-2022-41040", label: "ProxyNotShell (with CVE-2022-41082)" },
           desc: "Authenticated Exchange SSRF chained to PowerShell remoting for code execution.",
           cmds: [
@@ -1142,7 +1160,8 @@ var AD_MAP_V2 = {
         {
           id: "acl-dcsync",
           title: "DCSync",
-          theory: null,
+          theory: { label: "DCSync", url: "theory/2026-08-18-dcsync.html" },
+          vuln: { label: "DCSync", url: "vuln-detail.html?vuln=dcsync-vuln" },
           cve: null,
           desc: "Replicate directory secrets. Granted to Administrators, Domain Admins, Enterprise Admins, and Domain Controller computer accounts — or anyone with the DS-Replication rights.",
           cmds: [
@@ -1168,7 +1187,8 @@ var AD_MAP_V2 = {
         {
           id: "acl-on-group",
           title: "On a Group",
-          theory: null,
+          theory: { label: "AD ACLs & DACLs", url: "theory/2026-08-18-acls-dacls.html" },
+          vuln: { label: "Dangerous AD ACLs", url: "vuln-detail.html?vuln=ad-acl-abuse" },
           cve: null,
           desc: "Rights over a group let you add yourself (or a controlled account) as a member.",
           cmds: [],
@@ -1183,7 +1203,8 @@ var AD_MAP_V2 = {
         {
           id: "acl-on-computer",
           title: "On a Computer",
-          theory: null,
+          theory: { label: "AD ACLs & DACLs", url: "theory/2026-08-18-acls-dacls.html" },
+          vuln: { label: "Dangerous AD ACLs", url: "vuln-detail.html?vuln=ad-acl-abuse" },
           cve: null,
           desc: "Rights over a computer object enable RBCD or shadow credentials for a takeover.",
           cmds: [],
@@ -1197,7 +1218,8 @@ var AD_MAP_V2 = {
         {
           id: "acl-on-user",
           title: "On a User",
-          theory: null,
+          theory: { label: "AD ACLs & DACLs", url: "theory/2026-08-18-acls-dacls.html" },
+          vuln: { label: "Dangerous AD ACLs", url: "vuln-detail.html?vuln=ad-acl-abuse" },
           cve: null,
           desc: "Rights over a user account allow password reset, targeted Kerberoasting, shadow credentials, or logon-script abuse.",
           cmds: [],
@@ -1214,7 +1236,8 @@ var AD_MAP_V2 = {
         {
           id: "acl-on-ou",
           title: "On an OU",
-          theory: null,
+          theory: { label: "AD ACLs & DACLs", url: "theory/2026-08-18-acls-dacls.html" },
+          vuln: { label: "Dangerous AD ACLs", url: "vuln-detail.html?vuln=ad-acl-abuse" },
           cve: null,
           desc: "Rights over an organizational unit let you push inherited ACEs or abuse linked GPOs against every object inside.",
           cmds: [],
@@ -1228,7 +1251,7 @@ var AD_MAP_V2 = {
         {
           id: "acl-readgmsa",
           title: "ReadGMSAPassword",
-          theory: null,
+          theory: { label: "AD ACLs & DACLs", url: "theory/2026-08-18-acls-dacls.html" },
           cve: null,
           desc: "Read the managed password blob of a gMSA you are allowed to retrieve, and compute its NT hash.",
           cmds: [
@@ -1242,7 +1265,7 @@ var AD_MAP_V2 = {
         {
           id: "acl-laps",
           title: "Get LAPS passwords",
-          theory: null,
+          theory: { label: "AD ACLs & DACLs", url: "theory/2026-08-18-acls-dacls.html" },
           cve: null,
           desc: "Principals allowed to read LAPS can recover the local administrator password of managed hosts.",
           cmds: [],
@@ -1262,7 +1285,7 @@ var AD_MAP_V2 = {
         {
           id: "acl-gpo",
           title: "GPO",
-          theory: null,
+          theory: { label: "Group Policy", url: "theory/2026-08-18-group-policy.html" },
           cve: null,
           desc: "Write access to a GPO (or to a GP-Link on an OU) lets you push a malicious policy to every affected host or user.",
           cmds: [],
@@ -1324,6 +1347,7 @@ var AD_MAP_V2 = {
           id: "kd-unconstrained",
           title: "Unconstrained delegation",
           theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-delegation.html" },
+          vuln: { label: "Unconstrained Delegation", url: "vuln-detail.html?vuln=unconstrained-delegation" },
           cve: null,
           desc: "A host trusted for unconstrained delegation caches the TGT of anyone who authenticates to it (UAC flag ADS_UF_TRUSTED_FOR_DELEGATION). Coerce a DC to it, then dump the tickets.",
           cmds: [],
@@ -1342,6 +1366,7 @@ var AD_MAP_V2 = {
           id: "kd-constrained",
           title: "Constrained delegation",
           theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-delegation.html" },
+          vuln: { label: "Constrained Delegation", url: "vuln-detail.html?vuln=constrained-delegation" },
           cve: null,
           desc: "An account with msDS-AllowedToDelegateTo can request tickets to the listed SPNs as any user via S4U.",
           cmds: [],
@@ -1371,6 +1396,7 @@ var AD_MAP_V2 = {
           id: "kd-rbcd",
           title: "Resource-Based Constrained Delegation (RBCD)",
           theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-delegation.html" },
+          vuln: { label: "RBCD", url: "vuln-detail.html?vuln=rbcd" },
           cve: null,
           desc: "Write access to a target's msDS-AllowedToActOnBehalfOfOtherIdentity lets a computer you control impersonate any user to that target.",
           cmds: [],
@@ -1416,7 +1442,8 @@ var AD_MAP_V2 = {
         {
           id: "adcs-enum",
           title: "Enumeration",
-          theory: { label: "Shadow Credentials & PKINIT", url: "theory/2026-09-24-shadow-credentials-pkinit.html" },
+          theory: { label: "AD CS", url: "theory/2026-08-18-adcs.html" },
+          vuln: { label: "AD CS Template Abuse", url: "vuln-detail.html?vuln=adcs-esc" },
           cve: null,
           desc: "Enumerate templates, CAs, and PKI objects to find the vulnerable ESC condition.",
           cmds: [
@@ -1440,7 +1467,8 @@ var AD_MAP_V2 = {
         {
           id: "adcs-esc8",
           title: "ESC8 — Web Enrollment is up",
-          theory: null,
+          theory: { label: "AD CS", url: "theory/2026-08-18-adcs.html" },
+          vuln: { label: "AD CS Template Abuse", url: "vuln-detail.html?vuln=adcs-esc" },
           cve: null,
           desc: "Relay NTLM authentication to the CA web-enrollment endpoint, obtain a certificate for a privileged account, then authenticate with it.",
           cmds: [],
@@ -1461,7 +1489,8 @@ var AD_MAP_V2 = {
         {
           id: "adcs-templates",
           title: "Misconfigured certificate template (ESC1/2/3/13/15)",
-          theory: null,
+          theory: { label: "AD CS", url: "theory/2026-08-18-adcs.html" },
+          vuln: { label: "AD CS Template Abuse", url: "vuln-detail.html?vuln=adcs-esc" },
           cve: null,
           desc: "Templates that allow requester-supplied subject names or agent enrolment let you request a certificate as a privileged user.",
           cmds: [],
@@ -1492,7 +1521,8 @@ var AD_MAP_V2 = {
         {
           id: "adcs-acl",
           title: "Misconfigured ACL (ESC4/ESC7)",
-          theory: null,
+          theory: { label: "AD CS", url: "theory/2026-08-18-adcs.html" },
+          vuln: { label: "AD CS Template Abuse", url: "vuln-detail.html?vuln=adcs-esc" },
           cve: null,
           desc: "Write access over a template or CA lets you make it vulnerable, exploit it, and restore it.",
           cmds: [],
@@ -1515,7 +1545,8 @@ var AD_MAP_V2 = {
         {
           id: "adcs-pki-object",
           title: "Vulnerable PKI object access control (ESC5)",
-          theory: null,
+          theory: { label: "AD CS", url: "theory/2026-08-18-adcs.html" },
+          vuln: { label: "AD CS Template Abuse", url: "vuln-detail.html?vuln=adcs-esc" },
           cve: null,
           desc: "Control over a PKI object (or the CA's private key) lets you forge certificates for anyone.",
           cmds: [],
@@ -1532,7 +1563,8 @@ var AD_MAP_V2 = {
         {
           id: "adcs-ca",
           title: "Misconfigured Certificate Authority (ESC6/ESC11)",
-          theory: null,
+          theory: { label: "AD CS", url: "theory/2026-08-18-adcs.html" },
+          vuln: { label: "AD CS Template Abuse", url: "vuln-detail.html?vuln=adcs-esc" },
           cve: null,
           desc: "A CA that honours requester-supplied SANs (ESC6) or accepts unauthenticated ICPR (ESC11) can be relayed to for a privileged certificate.",
           cmds: [],
@@ -1552,7 +1584,8 @@ var AD_MAP_V2 = {
         {
           id: "adcs-mapping",
           title: "Abuse certificate mapping (ESC9/ESC10/ESC14)",
-          theory: null,
+          theory: { label: "AD CS", url: "theory/2026-08-18-adcs.html" },
+          vuln: { label: "AD CS Template Abuse", url: "vuln-detail.html?vuln=adcs-esc" },
           cve: null,
           desc: "Weak certificate-to-account mapping (implicit or explicit) lets a certificate for one account authenticate as another.",
           cmds: [],
@@ -1591,6 +1624,7 @@ var AD_MAP_V2 = {
           id: "sccm-recon",
           title: "Recon",
           theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          vuln: { label: "SCCM / ConfigMgr Abuse", url: "vuln-detail.html?vuln=sccm-abuse" },
           cve: null,
           desc: "Find SCCM site systems, management points, and distribution points.",
           cmds: [
@@ -1796,6 +1830,7 @@ var AD_MAP_V2 = {
           id: "aa-lsass",
           title: "Extract credentials from LSASS",
           theory: { label: "Credential Dumping", url: "theory/2026-08-18-windows-credential-storage.html" },
+          vuln: { label: "LSASS Dumping", url: "vuln-detail.html?vuln=lsass-dumping" },
           cve: null,
           desc: "Dump the LSASS process for logon passwords, NT hashes, and Kerberos tickets.",
           cmds: [],
@@ -1819,6 +1854,7 @@ var AD_MAP_V2 = {
           id: "aa-sam",
           title: "Extract credentials from SAM",
           theory: { label: "Credential Dumping", url: "theory/2026-08-18-windows-credential-storage.html" },
+          vuln: { label: "SAM & LSA Secrets", url: "vuln-detail.html?vuln=sam-lsa-secrets" },
           cve: null,
           desc: "Dump local account hashes from the SAM hive.",
           cmds: [
@@ -1837,6 +1873,7 @@ var AD_MAP_V2 = {
           id: "aa-lsa",
           title: "Extract credentials from LSA",
           theory: { label: "Credential Dumping", url: "theory/2026-08-18-windows-credential-storage.html" },
+          vuln: { label: "SAM & LSA Secrets", url: "vuln-detail.html?vuln=sam-lsa-secrets" },
           cve: null,
           desc: "Dump LSA secrets (service accounts, cached domain logons, machine account).",
           cmds: [
@@ -1852,6 +1889,7 @@ var AD_MAP_V2 = {
           id: "aa-dpapi",
           title: "Extract credentials from DPAPI",
           theory: { label: "Credential Dumping", url: "theory/2026-08-18-windows-credential-storage.html" },
+          vuln: { label: "DPAPI Abuse", url: "vuln-detail.html?vuln=dpapi-abuse" },
           cve: null,
           desc: "Recover browser passwords, cookies, and stored credentials protected by DPAPI.",
           cmds: [],
@@ -1879,7 +1917,8 @@ var AD_MAP_V2 = {
         {
           id: "aa-impersonate",
           title: "Impersonate",
-          theory: { label: "Credential Dumping", url: "theory/2026-08-18-windows-credential-storage.html" },
+          theory: { label: "Windows Tokens & UAC", url: "theory/2026-08-18-windows-tokens-uac.html" },
+          vuln: { label: "Token Impersonation", url: "vuln-detail.html?vuln=token-impersonation" },
           cve: null,
           desc: "Steal or impersonate the token / session of another logged-on user.",
           cmds: [],
@@ -1906,6 +1945,7 @@ var AD_MAP_V2 = {
           id: "aa-misc",
           title: "Misc",
           theory: null,
+          vuln: { label: "Stored Credential Harvesting", url: "vuln-detail.html?vuln=stored-cred-harvest" },
           cve: null,
           desc: "Other credential sources worth checking on a compromised host.",
           cmds: [],
@@ -1939,6 +1979,7 @@ var AD_MAP_V2 = {
           id: "lm-cleartext",
           title: "Clear text password",
           theory: null,
+          vuln: { label: "Remote Service Execution", url: "vuln-detail.html?vuln=remote-execution" },
           cve: null,
           desc: "Authenticate with a known password over the protocol available on the target.",
           cmds: [],
@@ -1976,7 +2017,8 @@ var AD_MAP_V2 = {
         {
           id: "lm-nthash",
           title: "NT hash",
-          theory: null,
+          theory: { label: "NTLM & Pass-the-Hash", url: "theory/2026-08-18-ntlm.html" },
+          vuln: { label: "Pass-the-Hash / PtT", url: "vuln-detail.html?vuln=pass-the-hash" },
           cve: null,
           desc: "Pass the NT hash instead of a password (PtH), or overpass-the-hash to obtain a TGT.",
           cmds: [],
@@ -2006,7 +2048,8 @@ var AD_MAP_V2 = {
         {
           id: "lm-kerberos",
           title: "Kerberos (ticket / key)",
-          theory: null,
+          theory: { label: "Ticket Attacks", url: "theory/2026-08-18-ticket-attacks.html" },
+          vuln: { label: "Pass-the-Hash / PtT", url: "vuln-detail.html?vuln=pass-the-hash" },
           cve: null,
           desc: "Reuse a Kerberos ccache/kirbi ticket (PtT) or an AES key.",
           cmds: [],
@@ -2078,6 +2121,7 @@ var AD_MAP_V2 = {
           id: "lm-mssql",
           title: "MSSQL",
           theory: { label: "MSSQL Server Abuse", url: "theory/2026-09-24-mssql-abuse.html" },
+          vuln: { label: "MSSQL Lateral Movement", url: "vuln-detail.html?vuln=mssql-lateral" },
           cve: null,
           desc: "Abuse SQL admin rights for command execution, impersonation, coercion, or linked-server hops.",
           cmds: [
@@ -2108,7 +2152,8 @@ var AD_MAP_V2 = {
         {
           id: "da-ntds",
           title: "Dump ntds.dit",
-          theory: null,
+          theory: { label: "DCSync", url: "theory/2026-08-18-dcsync.html" },
+          vuln: { label: "NTDS.dit Extraction", url: "vuln-detail.html?vuln=ntds-extraction" },
           cve: null,
           desc: "Extract every account hash from the domain database.",
           cmds: [
@@ -2148,6 +2193,7 @@ var AD_MAP_V2 = {
           id: "tr-enum",
           title: "Enumeration",
           theory: { label: "Domain & Forest Trusts", url: "theory/2026-08-18-trusts.html" },
+          vuln: { label: "Trust Key Abuse", url: "vuln-detail.html?vuln=domain-trust-key-abuse" },
           cve: null,
           desc: "Map the trust relationships and gather the domain SIDs you will need.",
           cmds: [
@@ -2167,6 +2213,7 @@ var AD_MAP_V2 = {
           id: "tr-child-parent",
           title: "Child → Parent (intra-forest)",
           theory: { label: "Domain & Forest Trusts", url: "theory/2026-08-18-trusts.html" },
+          vuln: { label: "Trust Key Abuse", url: "vuln-detail.html?vuln=domain-trust-key-abuse" },
           cve: null,
           desc: "Escalate from a child domain to the forest root using the trust key or the child krbtgt, adding the Enterprise Admins SID (-519) via SID history.",
           cmds: [],
@@ -2192,6 +2239,7 @@ var AD_MAP_V2 = {
           id: "tr-parent-child",
           title: "Parent → Child",
           theory: { label: "Domain & Forest Trusts", url: "theory/2026-08-18-trusts.html" },
+          vuln: { label: "Trust Key Abuse", url: "vuln-detail.html?vuln=domain-trust-key-abuse" },
           cve: null,
           desc: "Same techniques as Child → Parent, applied in the other direction.",
           cmds: [],
@@ -2202,6 +2250,7 @@ var AD_MAP_V2 = {
           id: "tr-external",
           title: "External / forest trust",
           theory: { label: "Domain & Forest Trusts", url: "theory/2026-08-18-trusts.html" },
+          vuln: { label: "Trust Key Abuse", url: "vuln-detail.html?vuln=domain-trust-key-abuse" },
           cve: null,
           desc: "Abuse a two-way or one-way trust: password reuse, foreign group memberships, SID history (where SID filtering allows), and cross-forest ADCS / unconstrained delegation.",
           cmds: [],
@@ -2229,6 +2278,7 @@ var AD_MAP_V2 = {
           id: "tr-mssql-links",
           title: "MSSQL links",
           theory: { label: "MSSQL Server Abuse", url: "theory/2026-09-24-mssql-abuse.html" },
+          vuln: { label: "SQL Server Trusted Links", url: "vuln-detail.html?vuln=sql-server-links" },
           cve: null,
           desc: "Linked SQL servers ignore the AD trust boundary — crawl them to execute across domains.",
           cmds: [
@@ -2263,7 +2313,8 @@ var AD_MAP_V2 = {
         {
           id: "pe-golden",
           title: "Golden ticket",
-          theory: null,
+          theory: { label: "Ticket Attacks", url: "theory/2026-08-18-ticket-attacks.html" },
+          vuln: { label: "Golden/Silver/Diamond Tickets", url: "vuln-detail.html?vuln=kerberos-ticket-attacks" },
           cve: null,
           desc: "Forge TGTs with the krbtgt key — valid for any user until krbtgt is rotated twice.",
           cmds: [
@@ -2276,7 +2327,8 @@ var AD_MAP_V2 = {
         {
           id: "pe-silver",
           title: "Silver ticket",
-          theory: null,
+          theory: { label: "Ticket Attacks", url: "theory/2026-08-18-ticket-attacks.html" },
+          vuln: { label: "Golden/Silver/Diamond Tickets", url: "vuln-detail.html?vuln=kerberos-ticket-attacks" },
           cve: null,
           desc: "Forge a service ticket with a service/computer account key — grants access to that one service without touching a DC.",
           cmds: [
@@ -2290,6 +2342,7 @@ var AD_MAP_V2 = {
           id: "pe-dsrm",
           title: "Directory Service Restore Mode (DSRM)",
           theory: null,
+          vuln: { label: "DSRM Persistence", url: "vuln-detail.html?vuln=dsrm-persistence" },
           cve: null,
           desc: "Enable the DSRM local admin of a DC to log on over the network with its (dumpable) hash.",
           cmds: [
@@ -2339,7 +2392,8 @@ var AD_MAP_V2 = {
         {
           id: "pe-diamond",
           title: "Diamond ticket",
-          theory: null,
+          theory: { label: "Ticket Attacks", url: "theory/2026-08-18-ticket-attacks.html" },
+          vuln: { label: "Golden/Silver/Diamond Tickets", url: "vuln-detail.html?vuln=kerberos-ticket-attacks" },
           cve: null,
           desc: "Modify a legitimate TGT's PAC with the krbtgt key — stealthier than a golden ticket.",
           cmds: [
@@ -2351,7 +2405,8 @@ var AD_MAP_V2 = {
         {
           id: "pe-sapphire",
           title: "Sapphire ticket",
-          theory: null,
+          theory: { label: "Ticket Attacks", url: "theory/2026-08-18-ticket-attacks.html" },
+          vuln: { label: "Golden/Silver/Diamond Tickets", url: "vuln-detail.html?vuln=kerberos-ticket-attacks" },
           cve: null,
           desc: "Request a ticket while impersonating a privileged user via S4U, keeping a legitimate PAC.",
           cmds: [
@@ -2374,6 +2429,7 @@ var AD_MAP_V2 = {
           id: "pe-acl",
           title: "ACL manipulation",
           theory: null,
+          vuln: { label: "ACL Backdoors", url: "vuln-detail.html?vuln=security-descriptor-backdoor" },
           cve: null,
           desc: "Plant durable rights (DCSync, GenericAll, AdminSDHolder) so access can be re-established later.",
           cmds: [],
@@ -2384,3 +2440,4 @@ var AD_MAP_V2 = {
     }
   ]
 };
+

@@ -170,6 +170,17 @@
       return '<span class="adv2-outcome terminal">' + esc(o.label) + '</span>';
     }).join("") + '</div>';
   }
+  // linked outcomes (no explicit moveTo) rendered as uniform "Move to" rows —
+  // used at branch level so branch buttons match the technique-level ones
+  function outcomeNavHTML(list) {
+    var rows = (list || []).map(function (o) {
+      var target = OUTCOME_LINKS[o.label]; if (!target) return "";
+      var parts = target.split("/");
+      return moveRowHTML(parts[0], parts[1] || null, o.label, noteFor(target));
+    }).filter(Boolean);
+    if (!rows.length) return "";
+    return '<div class="adv2-moves"><p class="adv2-moves-l">Move to</p>' + rows.join("") + '</div>';
+  }
   function branchesHTML(list) {
     if (!list || !list.length) return "";
     return '<div class="adv2-branches">' + list.map(function (b) {
@@ -178,7 +189,8 @@
         (b.cve ? '<span class="adv2-branch-cve">' + esc(b.cve) + '</span>' : '') + '</p>';
       if (b.note) h += '<p class="adv2-branch-note">' + esc(b.note) + '</p>';
       (b.cmds || []).forEach(function (c) { h += cmdBlock(c); });
-      h += outcomesHTML(b.outcomes);
+      h += terminalTagsHTML(b.outcomes);
+      h += outcomeNavHTML(b.outcomes);
       return h + '</div>';
     }).join("") + '</div>';
   }
