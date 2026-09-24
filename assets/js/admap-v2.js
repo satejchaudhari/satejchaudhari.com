@@ -1,5 +1,5 @@
 /*
-  AD ATTACK PATH v2 — data for ad-map-v2.html
+  AD ATTACK PATH v2 — data for ad-map.html
 
   A guided "playbook": colour-coded ACCESS SECTIONS you expand, each holding
   TECHNIQUE buttons you expand, each showing a Theory/CVE link, a short note,

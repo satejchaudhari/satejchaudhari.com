@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AD Attack Path Explorer — Satej Chaudhari</title>
+  <meta name="description" content="An interactive Active Directory attack-path graph — follow the arrows from no-access to Domain Admin, tap any step to trace its chain, and jump to the matching tool and vulnerability write-up.">
+
+  <link rel="icon" type="image/svg+xml" href="../../assets/img/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+
+  <style>
+    .adm-wrap { max-width: none; width: 100%; margin: 0 auto; padding: 0 clamp(14px, 2.2vw, 30px); }
+    .adm-top { padding: 22px 0 10px; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+    .adm-top h1 { font-family: "Space Grotesk", sans-serif; font-size: clamp(1.5rem, 3.5vw, 2.1rem); margin: 4px 0 2px; }
+    .adm-top .eyebrow { color: var(--accent); }
+    .adm-hint { color: var(--muted); font-size: 0.9rem; margin: 0; max-width: 66ch; }
+    .adm-hint b { color: var(--text); font-weight: 600; }
+
+    /* controls */
+    .adm-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0 12px; }
+    .adm-search { flex: 1 1 240px; min-width: 200px; font-family: var(--mono); font-size: 0.88rem; padding: 9px 13px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .adm-search::placeholder { color: var(--muted-2); }
+    .adm-btn { font-family: var(--mono); font-size: 0.76rem; padding: 8px 13px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+    .adm-btn:hover { border-color: var(--accent-border); color: var(--accent); }
+
+    .adm-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .adm-legend button { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 0.7rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
+    .adm-legend button .sw { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+    .adm-legend button.on, .adm-legend button:hover { color: var(--text); border-color: var(--accent-border); }
+
+    /* graph + detail split */
+    .adm-stage { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 0px; gap: 0; align-items: stretch; transition: grid-template-columns 0.2s ease, gap 0.2s ease; }
+    .adm-stage.detail-open { grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; }
+    #cy { width: 100%; min-width: 0; height: min(78vh, 860px); min-height: 460px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; }
+
+    /* detail panel (desktop: its own column to the right of the map — never overlaps) */
+    .adm-detail {
+      position: relative; align-self: stretch; width: 100%; min-width: 0; overflow: hidden auto;
+      max-height: min(78vh, 860px);
+      background: color-mix(in srgb, var(--surface) 94%, #000); border: 1px solid var(--accent-border, var(--border));
+      border-radius: 12px; padding: 16px 16px 18px; box-shadow: none;
+      opacity: 0; pointer-events: none; transition: opacity 0.18s ease; z-index: 5;
+    }
+    .adm-stage.detail-open .adm-detail { opacity: 1; pointer-events: auto; }
+    .adm-detail-close { position: absolute; top: 10px; right: 12px; background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; line-height: 1; }
+    .adm-detail-cat { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .adm-detail-cat .sw { width: 9px; height: 9px; border-radius: 2px; }
+    .adm-detail h2 { font-size: 1.12rem; margin: 8px 0 4px; line-height: 1.25; }
+    .adm-detail .lvl { font-family: var(--mono); font-size: 0.68rem; color: var(--muted-2); }
+    .adm-detail .cve { display: inline-block; font-family: var(--mono); font-size: 0.64rem; color: var(--h-rose, #fb7185); border: 1px solid currentColor; border-radius: 5px; padding: 1px 6px; margin-left: 6px; }
+    .adm-detail .desc { color: var(--muted); font-size: 0.9rem; line-height: 1.55; margin: 10px 0 4px; }
+    .adm-detail .sec { margin-top: 12px; }
+    .adm-detail .sec-l { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted-2); margin: 0 0 6px; }
+    .adm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .adm-chip { font-family: var(--mono); font-size: 0.72rem; padding: 4px 9px; border-radius: 6px; border: 1px solid var(--border); color: var(--text); background: var(--surface-2); cursor: pointer; }
+    .adm-chip:hover { border-color: var(--accent-border); color: var(--accent); }
+    .adm-chip.pending { color: var(--muted-2); border-style: dashed; background: transparent; cursor: default; }
+    .adm-chip.vuln { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); font-weight: 600; }
+    .adm-chip.vuln svg { width: 13px; height: 13px; }
+    .adm-chip.vuln.pending { color: var(--muted-2); border-color: var(--border); background: transparent; border-style: dashed; cursor: default; }
+    .adm-vuln { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 0.76rem; color: var(--accent); font-weight: 500; }
+    .adm-vuln.pending { color: var(--muted-2); }
+    .adm-vuln svg { width: 13px; height: 13px; }
+
+    /* trace dropdowns */
+    .adm-sel { font-family: var(--mono); font-size: 0.76rem; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); max-width: 200px; }
+    .adm-arrow { color: var(--muted-2); font-size: 0.9rem; }
+    .adm-btn.on { border-color: var(--accent-border); color: var(--accent); background: var(--accent-soft); }
+
+    /* how-to-read explainer */
+    .adm-howto { margin: 0 0 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .adm-howto > summary { cursor: pointer; font-family: var(--mono); font-size: 0.78rem; color: var(--text); padding: 10px 14px; list-style: none; }
+    .adm-howto > summary::-webkit-details-marker { display: none; }
+    .adm-howto > summary::before { content: "▸ "; color: var(--accent); }
+    .adm-howto[open] > summary::before { content: "▾ "; }
+    .adm-howto-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px 22px; padding: 4px 16px 16px; }
+    .adm-howto-h { font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin: 0 0 6px; }
+    .adm-howto p { color: var(--muted); font-size: 0.82rem; line-height: 1.5; margin: 0; }
+    .adm-howto-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+    .adm-howto-list li { color: var(--muted); font-size: 0.8rem; line-height: 1.45; }
+    .adm-key { display: inline-block; font-family: var(--mono); font-size: 0.68rem; color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; margin-right: 4px; }
+    .adm-key.gold { color: #ffd27a; border-color: #ffd27a; }
+    /* type legend swatches (border language) */
+    .adm-tl { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 0.8rem; }
+    .adm-tl-sw { width: 15px; height: 15px; border-radius: 4px; background: var(--surface-2); flex: 0 0 auto; }
+    .adm-tl.enum .adm-tl-sw { border: 2px dashed var(--muted-2); }
+    .adm-tl.attack .adm-tl-sw { border: 1px solid var(--muted-2); }
+    .adm-tl.cred .adm-tl-sw { border: 2px solid #2dd4bf; }
+    .adm-tl.objective .adm-tl-sw { border: 3px double var(--text); }
+
+    /* breadcrumb trail + status */
+    .adm-trail { display: none; flex-wrap: wrap; align-items: center; gap: 5px; margin: 0 0 8px; }
+    .adm-trail.show { display: flex; }
+    .adm-trail-l { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted-2); margin-right: 4px; }
+    .adm-trail-x { font-family: var(--mono); font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+    .adm-trail-x:hover { border-color: var(--accent-border); color: var(--accent); }
+    .adm-trail-sep { color: var(--muted-2); }
+    .adm-trail-clear { margin-left: 6px; font-family: var(--mono); font-size: 0.66rem; padding: 3px 8px; border-radius: 6px; border: 1px dashed var(--border); background: transparent; color: var(--muted-2); cursor: pointer; }
+    .adm-status { display: none; font-family: var(--mono); font-size: 0.74rem; color: var(--muted); margin: 0 0 8px; padding: 7px 11px; border-left: 2px solid var(--accent-border); background: var(--accent-soft); border-radius: 0 6px 6px 0; }
+    .adm-status.show { display: block; }
+
+    /* minimap */
+    .adm-mini { position: absolute; left: 12px; bottom: 12px; width: 180px; height: 132px; border: 1px solid var(--border); border-radius: 8px; background: color-mix(in srgb, var(--surface) 92%, #000); box-shadow: 0 6px 20px rgba(0,0,0,0.35); cursor: crosshair; z-index: 4; }
+
+    /* detail-panel extras: meta lines + commands + attack chips + type tag */
+    .adm-type-tag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .adm-type-tag.enum { border-style: dashed; }
+    .adm-type-tag.cred { color: #2dd4bf; border-color: #2dd4bf; }
+    .adm-type-tag.objective { color: var(--accent); border-color: var(--accent-border); }
+    .adm-meta { font-size: 0.8rem; line-height: 1.5; color: var(--muted); margin: 8px 0 0; }
+    .adm-meta span { display: inline-block; font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 7px; padding: 1px 6px; border-radius: 4px; }
+    .adm-meta.req span { color: var(--accent); background: var(--accent-soft); }
+    .adm-meta.det span { color: var(--h-rose, #fb7185); background: color-mix(in srgb, var(--h-rose, #fb7185) 15%, transparent); }
+    .adm-meta.clean span { color: #4ade80; background: color-mix(in srgb, #4ade80 15%, transparent); }
+    /* copy button on command blocks */
+    .adm-detail .command-block, .adm-acc-detail-in .command-block { position: relative; }
+    .adm-copy { position: absolute; top: 5px; right: 5px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--muted); cursor: pointer; opacity: 0.55; transition: opacity 0.12s, color 0.12s, border-color 0.12s; }
+    .adm-copy svg { width: 13px; height: 13px; }
+    .command-block:hover .adm-copy { opacity: 1; }
+    .adm-copy:hover { color: var(--accent); border-color: var(--accent-border); }
+    .adm-copy.copied { color: #4ade80; border-color: #4ade80; opacity: 1; }
+    .adm-copy.copied::after { content: "copied"; position: absolute; right: 28px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.6rem; color: #4ade80; white-space: nowrap; }
+    .adm-detail .command-block pre code { padding-right: 26px; display: block; }
+    .adm-detail .command-block { margin: 6px 0 0; }
+    .adm-detail .command-block pre { margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; overflow-x: auto; }
+    .adm-detail .command-block code { font-family: var(--mono); font-size: 0.72rem; color: var(--text); white-space: pre; }
+    .adm-detail .cmd-comment { color: var(--muted); font-style: italic; opacity: 0.85; }
+    .adm-att { display: inline-block; font-family: var(--mono); font-size: 0.68rem; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; text-decoration: none; }
+    .adm-att:hover { border-color: var(--accent-border); color: var(--accent); }
+    .adm-chip.theory { display: inline-flex; align-items: center; gap: 6px; }
+    .adm-chip.theory svg { width: 13px; height: 13px; }
+    /* flag badges */
+    .adm-flag { display: inline-block; font-family: var(--mono); font-size: 0.68rem; margin: 6px 0 0; padding: 3px 8px; border-radius: 6px; }
+    .adm-flag.hot { color: #ff9d4d; background: color-mix(in srgb, #ff9d4d 16%, transparent); border: 1px solid color-mix(in srgb, #ff9d4d 45%, transparent); }
+    .adm-flag.danger { color: var(--h-rose, #fb7185); background: color-mix(in srgb, var(--h-rose, #fb7185) 15%, transparent); border: 1px solid color-mix(in srgb, var(--h-rose, #fb7185) 45%, transparent); }
+    /* variants / sub-steps */
+    .adm-variant { margin: 8px 0 0; padding: 8px 10px; border: 1px solid var(--border); border-left: 2px solid var(--accent-border); border-radius: 7px; background: var(--surface-2); }
+    .adm-variant-l { font-family: var(--mono); font-size: 0.72rem; color: var(--text); margin: 0 0 5px; font-weight: 600; }
+    .adm-variant-note { color: var(--muted); font-size: 0.76rem; line-height: 1.45; margin: 6px 0 0; }
+    .adm-variant .command-block { margin: 4px 0 0; }
+    /* phase jump-nav */
+    .adm-phasenav { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+    .adm-phase { font-family: var(--mono); font-size: 0.7rem; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
+    .adm-phase b { color: var(--accent); margin-right: 3px; }
+    .adm-phase:hover { border-color: var(--accent-border); color: var(--text); }
+
+    /* guided (accordion) view — hidden unless body.adm-guided-on */
+    .adm-guided { display: none; }
+    body.adm-guided-on #cy, body.adm-guided-on .adm-mini, body.adm-guided-on .adm-detail { display: none !important; }
+    body.adm-guided-on .adm-guided { display: block; }
+    body.adm-guided-on .adm-stage { display: block; }
+    .adm-acc { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; background: var(--surface); overflow: hidden; }
+    .adm-acc > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px; font-family: "Space Grotesk", sans-serif; font-weight: 600; color: var(--text); }
+    .adm-acc > summary::-webkit-details-marker { display: none; }
+    .adm-acc-n { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-family: var(--mono); font-size: 0.72rem; flex: 0 0 auto; }
+    .adm-acc-c { margin-left: auto; font-family: var(--mono); font-size: 0.7rem; color: var(--muted-2); }
+    .adm-acc-body { padding: 4px 10px 10px; }
+    .adm-acc-node { width: 100%; display: flex; align-items: center; gap: 9px; text-align: left; padding: 9px 10px; margin-top: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); cursor: pointer; font-size: 0.88rem; }
+    .adm-acc-node .adm-acc-sw { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+    .adm-acc-node.enum { border-style: dashed; }
+    .adm-acc-node.cred { border-left: 3px solid #2dd4bf; }
+    .adm-acc-node.objective { border-left: 3px solid var(--accent); }
+    .adm-acc-node.open { border-color: var(--accent-border); }
+    .adm-acc-node:hover { border-color: var(--accent-border); }
+    .adm-acc-detail { display: none; }
+    .adm-acc-detail.open { display: block; padding: 4px 4px 10px; }
+    .adm-acc-detail-in { padding: 10px 12px; border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; background: var(--surface); }
+    .adm-acc-detail-in h2 { font-size: 1rem; margin: 6px 0 4px; }
+
+    @media (max-width: 720px) {
+      .adm-top { padding: 12px 0 4px; }
+      .adm-top h1 { font-size: 1.3rem; }
+      .adm-top .eyebrow { font-size: 0.68rem; }
+      .adm-hint { display: none; }
+      .adm-bar { margin: 8px 0 8px; gap: 8px; }
+      .adm-search { padding: 8px 12px; }
+      .adm-legend { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; margin-bottom: 8px; }
+      .adm-legend::-webkit-scrollbar { display: none; }
+      .adm-legend button { flex: 0 0 auto; }
+      .adm-sel { max-width: 44vw; flex: 1 1 44vw; }
+      .adm-howto-grid { grid-template-columns: 1fr; }
+      .adm-phasenav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+      .adm-phasenav::-webkit-scrollbar { display: none; }
+      .adm-phase { flex: 0 0 auto; }
+      .adm-mini { display: none; }
+      #cy { height: calc(100svh - 205px); min-height: 340px; }
+      .adm-stage, .adm-stage.detail-open { grid-template-columns: 1fr; gap: 0; }
+      .adm-detail {
+        position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: 100%;
+        max-height: 42vh; border-radius: 16px 16px 0 0; padding-top: 22px;
+        opacity: 1; pointer-events: auto; overflow-y: auto;
+        transform: translateY(calc(100% + 20px)); transition: transform 0.22s ease;
+        box-shadow: 0 -10px 40px rgba(0,0,0,0.6);
+      }
+      .adm-stage.detail-open .adm-detail { opacity: 1; }
+      .adm-detail::before { content: ""; position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; border-radius: 999px; background: var(--muted-2); opacity: 0.6; }
+      .adm-detail.open { transform: translateY(0); }
+      .adm-detail-close { top: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../../index.html"><span class="brand-mark">SC</span><span class="brand-name">Satej Chaudhari</span></a>
+      <nav class="site-nav">
+        <a href="../../index.html">Home</a>
+        <a href="../../writeups.html">Writeups</a>
+        <a href="../../blog.html">Blog</a>
+        <a href="../../theory.html">Theory</a>
+        <a href="../../toolkit.html">Toolkit</a>
+        <a href="../../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="https://github.com/satejchaudhari" target="_blank" rel="noopener" class="nav-external">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="adm-wrap">
+    <div class="adm-top">
+      <div>
+        <p class="eyebrow">Interactive</p>
+        <h1>Active Directory Attack Path</h1>
+      </div>
+      <p class="adm-hint">Read it top&#8209;to&#8209;bottom: each band is <b>more access</b> than the one above. Follow the arrows, or <b>tap any step</b> to light up its full chain and open its tools &amp; write&#8209;up. <a href="../../ad-map.html" style="color:var(--accent);white-space:nowrap;">&#8599; Try the v2 guided playbook</a></p>
+    </div>
+
+    <div class="adm-bar">
+      <input type="text" class="adm-search" id="adm-search" placeholder="Find a technique, tool, ATT&CK ID or command…" aria-label="Find a technique">
+      <select class="adm-sel" id="adm-start" aria-label="Trace path — start node"></select>
+      <span class="adm-arrow">&rarr;</span>
+      <select class="adm-sel" id="adm-goal" aria-label="Trace path — goal node"></select>
+      <button class="adm-btn" id="adm-trace">Trace path</button>
+      <button class="adm-btn" id="adm-hot" title="Spotlight the common quick-win techniques">🔥 Common</button>
+      <button class="adm-btn" id="adm-flow" title="Hide lateral / loop-back (dashed) edges">Flow only</button>
+      <button class="adm-btn" id="adm-fit">Fit</button>
+      <button class="adm-btn" id="adm-reset">Reset</button>
+      <button class="adm-btn adm-guided-toggle" id="adm-guided-btn" aria-pressed="false" title="Switch between the graph and a level-by-level guided view">Guided view</button>
+    </div>
+
+    <details class="adm-howto" id="adm-howto">
+      <summary>How to read this map</summary>
+      <div class="adm-howto-grid">
+        <div>
+          <p class="adm-howto-h">Fill colour = attack category</p>
+          <p>Each colour is a family of techniques — see the coloured chips below. Click one to spotlight that family.</p>
+        </div>
+        <div>
+          <p class="adm-howto-h">Border = what kind of node</p>
+          <ul class="adm-howto-list" id="adm-typelegend"></ul>
+        </div>
+        <div>
+          <p class="adm-howto-h">Markers &amp; arrows</p>
+          <ul class="adm-howto-list">
+            <li><span class="adm-key">&#9656; prefix</span> an entry point — you can start here with no access</li>
+            <li><span class="adm-key gold">gold ring</span> an end goal (Domain Admin / forest)</li>
+            <li><span class="adm-key">&rarr; solid</span> escalation / forward step</li>
+            <li><span class="adm-key">&#8674; dashed</span> lateral move or loop-back</li>
+          </ul>
+        </div>
+        <div>
+          <p class="adm-howto-h">Try this</p>
+          <ul class="adm-howto-list">
+            <li><b>Tap a node</b> for commands, ATT&amp;CK IDs, prerequisites, detection and links.</li>
+            <li><b>Trace path</b>: pick a start and a goal to light up a concrete attack chain.</li>
+            <li>Your clicks build a <b>trail</b> so you can retrace the chain you assembled.</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+
+    <div class="adm-legend" id="adm-legend"></div>
+    <div class="adm-phasenav" id="adm-phasenav" aria-label="Jump to an access phase"></div>
+    <div class="adm-trail" id="adm-trail"></div>
+    <div class="adm-status" id="adm-status"></div>
+
+    <div class="adm-stage">
+      <div id="cy"></div>
+      <canvas class="adm-mini" id="adm-mini" width="180" height="132" title="Minimap — click or drag to move"></canvas>
+      <aside class="adm-detail" id="adm-detail" aria-live="polite">
+        <button class="adm-detail-close" id="adm-detail-close" aria-label="Close">&times;</button>
+        <div id="adm-detail-body"></div>
+      </aside>
+      <div class="adm-guided" id="adm-guided" aria-label="Guided level-by-level view"></div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../../writeups.html">Writeups</a>
+        <a href="../../blog.html">Blog</a>
+        <a href="../../theory.html">Theory</a>
+        <a href="../../toolkit.html">Toolkit</a>
+        <a href="../../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../../assets/vendor/cytoscape.min.js"></script>
+  <script src="admap.js"></script>
+  <script src="admap-graph.js"></script>
+</body>
+</html>
