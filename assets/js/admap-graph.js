@@ -127,6 +127,16 @@
   /* ---------- selection / highlight ---------- */
   var selected = null;
   function clearHl() { cy.elements().removeClass("dim hl sel"); }
+  // pan the node into the visible strip — on mobile that means ABOVE the
+  // bottom-sheet panel, so you can still see the step you tapped in context.
+  function focusNode(node) {
+    var isM = window.innerWidth <= 720;
+    var z = Math.max(cy.zoom(), isM ? 0.72 : 0.6);
+    var w = cy.width(), h = cy.height();
+    var tx = isM ? w / 2 : (w - 340) / 2;   // desktop: clear of the right panel
+    var ty = isM ? h * 0.24 : h / 2;        // mobile: upper strip above the sheet
+    cy.animate({ zoom: z, pan: { x: tx - node.position("x") * z, y: ty - node.position("y") * z } }, { duration: 280 });
+  }
   function selectNode(node, focus) {
     selected = node;
     var chain = node.predecessors().union(node.successors()).union(node);
@@ -135,7 +145,7 @@
     chain.edges().addClass("hl");
     node.removeClass("hl").addClass("sel");
     openDetail(node);
-    if (focus) cy.animate({ center: { eles: node }, zoom: Math.max(cy.zoom(), 0.55) }, { duration: 260 });
+    if (focus || window.innerWidth <= 720) focusNode(node);
   }
   function deselect() { selected = null; clearHl(); panel.classList.remove("open"); }
   cy.on("tap", "node[color]", function (e) { selectNode(e.target, false); });

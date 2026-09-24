@@ -78,9 +78,25 @@
     .adm-vuln svg { width: 13px; height: 13px; }
 
     @media (max-width: 720px) {
-      #cy { height: 68vh; }
-      .adm-detail { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: 100%; max-height: 60vh; border-radius: 14px 14px 0 0; transform: translateY(calc(100% + 20px)); }
+      .adm-top { padding: 12px 0 4px; }
+      .adm-top h1 { font-size: 1.3rem; }
+      .adm-top .eyebrow { font-size: 0.68rem; }
+      .adm-hint { display: none; }
+      .adm-bar { margin: 8px 0 8px; gap: 8px; }
+      .adm-search { padding: 8px 12px; }
+      .adm-legend { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; margin-bottom: 8px; }
+      .adm-legend::-webkit-scrollbar { display: none; }
+      .adm-legend button { flex: 0 0 auto; }
+      #cy { height: calc(100svh - 205px); min-height: 340px; }
+      .adm-detail {
+        position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: 100%;
+        max-height: 42vh; border-radius: 16px 16px 0 0; padding-top: 22px;
+        transform: translateY(calc(100% + 20px));
+        box-shadow: 0 -10px 40px rgba(0,0,0,0.6);
+      }
+      .adm-detail::before { content: ""; position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; border-radius: 999px; background: var(--muted-2); opacity: 0.6; }
       .adm-detail.open { transform: translateY(0); }
+      .adm-detail-close { top: 14px; }
     }
   </style>
 </head>
