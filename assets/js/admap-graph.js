@@ -81,8 +81,10 @@
     var cls = [n.type || "attack"];
     if (n.kind === "entry") cls.push("entry");
     if (n.kind === "goal") cls.push("goal");
-    var label = (n.kind === "entry" ? "▸ " : "") + n.label;
-    els.push({ data: { id: n.id, label: label, color: catColor[n.cat] || "#888", tcolor: TYPE_COLOR[n.type] || "#8a93a3" }, position: pos[n.id], classes: cls.join(" ") });
+    if (n.flag === "hot") cls.push("hot");
+    if (n.flag === "danger") cls.push("danger");
+    var glyph = (n.kind === "entry" ? "▸ " : "") + (n.flag === "hot" ? "🔥 " : n.flag === "danger" ? "🧨 " : "");
+    els.push({ data: { id: n.id, label: glyph + n.label, color: catColor[n.cat] || "#888", tcolor: TYPE_COLOR[n.type] || "#8a93a3" }, position: pos[n.id], classes: cls.join(" ") });
   });
   edges.forEach(function (e, k) { els.push({ data: { id: "e" + k, source: e[0], target: e[1], back: (byId[e[1]].lv <= byId[e[0]].lv) ? 1 : 0 } }); });
 
@@ -181,6 +183,8 @@
     if (ty) h += ' <span class="adm-type-tag ' + esc(n.type) + '">' + esc(ty.label) + '</span>';
     h += '</span>';
     h += '<h2>' + esc(n.label) + (n.cve ? '<span class="cve">' + esc(n.cve) + '</span>' : "") + '</h2>';
+    if (n.flag === "hot") h += '<p class="adm-flag hot">🔥 Common, quick win</p>';
+    if (n.flag === "danger") h += '<p class="adm-flag danger">🧨 Higher-risk — can break things / very loud</p>';
     h += '<div class="lvl">Grants: ' + (n.lv + 1) + ' &middot; ' + esc(levelLabel[n.lv]) + (n.kind === "entry" ? " &middot; entry point" : (n.kind === "goal" ? " &middot; objective" : "")) + '</div>';
     h += '<p class="desc">' + esc(n.desc) + '</p>';
     if (n.prereq) h += '<p class="adm-meta req"><span>Requires</span>' + esc(n.prereq) + '</p>';
@@ -188,6 +192,16 @@
     if (n.cmds && n.cmds.length) {
       h += '<div class="sec"><p class="sec-l">Example commands</p>';
       h += n.cmds.map(function (c) { return '<div class="command-block"><pre><code>' + fmtCmd(c) + '</code></pre></div>'; }).join("");
+      h += '</div>';
+    }
+    if (n.variants && n.variants.length) {
+      h += '<div class="sec"><p class="sec-l">Variants &amp; sub-steps</p>';
+      h += n.variants.map(function (v) {
+        var b = '<div class="adm-variant"><p class="adm-variant-l">' + esc(v.label) + '</p>';
+        (v.cmds || []).forEach(function (c) { b += '<div class="command-block"><pre><code>' + fmtCmd(c) + '</code></pre></div>'; });
+        if (v.note) b += '<p class="adm-variant-note">' + esc(v.note) + '</p>';
+        return b + '</div>';
+      }).join("");
       h += '</div>';
     }
     if (n.attack && n.attack.length) h += '<div class="sec"><p class="sec-l">MITRE ATT&amp;CK</p><div class="adm-chips">' + n.attack.map(attackChip).join("") + '</div></div>';
@@ -370,7 +384,35 @@
   var tLegend = document.getElementById("adm-typelegend");
   if (tLegend) tLegend.innerHTML = (AD_MAP.types || []).map(function (t) {
     return '<span class="adm-tl ' + esc(t.id) + '" title="' + esc(t.desc) + '"><span class="adm-tl-sw"></span>' + esc(t.label) + '</span>';
-  }).join("");
+  }).join("") +
+    '<span class="adm-tl" title="Common, quick win">🔥 common</span><span class="adm-tl" title="Higher-risk / very loud">🧨 risky</span>';
+
+  /* ---------- phase jump-nav ---------- */
+  var phaseNav = document.getElementById("adm-phasenav");
+  function fitLevel(lv) {
+    var col = cy.nodes("node[color]").filter(function (n) { return byId[n.id()].lv === lv; });
+    if (col.length) cy.animate({ fit: { eles: col, padding: 70 } }, { duration: 300 });
+  }
+  if (phaseNav) {
+    phaseNav.innerHTML = lvKeys.map(function (lv) {
+      return '<button class="adm-phase" data-lv="' + lv + '"><b>' + (lv + 1) + '</b> ' + esc(levelLabel[lv]) + '</button>';
+    }).join("");
+    phaseNav.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-lv]"); if (!b) return;
+      deselect(); clearPathState(); fitLevel(parseInt(b.getAttribute("data-lv"), 10));
+    });
+  }
+
+  /* ---------- "common quick-wins" spotlight ---------- */
+  var hotBtn = document.getElementById("adm-hot"), hotOn = false;
+  if (hotBtn) hotBtn.addEventListener("click", function () {
+    hotOn = !hotOn; hotBtn.classList.toggle("on", hotOn);
+    if (!hotOn) { clearHl(); return; }
+    deselect(); clearPathState(); activeCat = null;
+    legend.querySelectorAll("button").forEach(function (x) { x.classList.remove("on"); });
+    cy.elements("node[color], edge").addClass("faded");
+    cy.nodes("node.hot").removeClass("faded").addClass("hl");
+  });
 
   /* ---------- search / controls ---------- */
   var search = document.getElementById("adm-search");
@@ -389,6 +431,7 @@
   document.getElementById("adm-reset").addEventListener("click", function () {
     deselect(); clearPathState(); activeCat = null; setTraceMode(false); trail = []; renderTrail(); setStatus("");
     legend.querySelectorAll("button").forEach(function (x) { x.classList.remove("on"); });
+    if (hotBtn) { hotOn = false; hotBtn.classList.remove("on"); }
     if (selStart) selStart.value = ""; if (selGoal) selGoal.value = "";
     cy.animate({ fit: { padding: 42 } }, { duration: 260 });
   });
@@ -441,7 +484,7 @@
       var arr = levels[lv].map(function (id) { return byId[id]; });
       html += '<details class="adm-acc" ' + (lv === 0 ? "open" : "") + '><summary><span class="adm-acc-n">' + (lv + 1) + '</span>' + esc(levelLabel[lv]) + '<span class="adm-acc-c">' + arr.length + '</span></summary><div class="adm-acc-body">';
       arr.forEach(function (n) {
-        html += '<button class="adm-acc-node ' + esc(n.type) + '" data-node="' + esc(n.id) + '"><span class="adm-acc-sw" style="background:' + catColor[n.cat] + '"></span><span class="adm-acc-t">' + (n.kind === "entry" ? "▸ " : "") + esc(n.label) + '</span></button>';
+        html += '<button class="adm-acc-node ' + esc(n.type) + '" data-node="' + esc(n.id) + '"><span class="adm-acc-sw" style="background:' + catColor[n.cat] + '"></span><span class="adm-acc-t">' + (n.kind === "entry" ? "▸ " : "") + (n.flag === "hot" ? "🔥 " : n.flag === "danger" ? "🧨 " : "") + esc(n.label) + '</span></button>';
         html += '<div class="adm-acc-detail" data-detail="' + esc(n.id) + '"></div>';
       });
       html += '</div></details>';

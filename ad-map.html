@@ -136,6 +136,20 @@
     .adm-att:hover { border-color: var(--accent-border); color: var(--accent); }
     .adm-chip.theory { display: inline-flex; align-items: center; gap: 6px; }
     .adm-chip.theory svg { width: 13px; height: 13px; }
+    /* flag badges */
+    .adm-flag { display: inline-block; font-family: var(--mono); font-size: 0.68rem; margin: 6px 0 0; padding: 3px 8px; border-radius: 6px; }
+    .adm-flag.hot { color: #ff9d4d; background: color-mix(in srgb, #ff9d4d 16%, transparent); border: 1px solid color-mix(in srgb, #ff9d4d 45%, transparent); }
+    .adm-flag.danger { color: var(--h-rose, #fb7185); background: color-mix(in srgb, var(--h-rose, #fb7185) 15%, transparent); border: 1px solid color-mix(in srgb, var(--h-rose, #fb7185) 45%, transparent); }
+    /* variants / sub-steps */
+    .adm-variant { margin: 8px 0 0; padding: 8px 10px; border: 1px solid var(--border); border-left: 2px solid var(--accent-border); border-radius: 7px; background: var(--surface-2); }
+    .adm-variant-l { font-family: var(--mono); font-size: 0.72rem; color: var(--text); margin: 0 0 5px; font-weight: 600; }
+    .adm-variant-note { color: var(--muted); font-size: 0.76rem; line-height: 1.45; margin: 6px 0 0; }
+    .adm-variant .command-block { margin: 4px 0 0; }
+    /* phase jump-nav */
+    .adm-phasenav { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+    .adm-phase { font-family: var(--mono); font-size: 0.7rem; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
+    .adm-phase b { color: var(--accent); margin-right: 3px; }
+    .adm-phase:hover { border-color: var(--accent-border); color: var(--text); }
 
     /* guided (accordion) view — hidden unless body.adm-guided-on */
     .adm-guided { display: none; }
@@ -172,6 +186,9 @@
       .adm-legend button { flex: 0 0 auto; }
       .adm-sel { max-width: 44vw; flex: 1 1 44vw; }
       .adm-howto-grid { grid-template-columns: 1fr; }
+      .adm-phasenav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+      .adm-phasenav::-webkit-scrollbar { display: none; }
+      .adm-phase { flex: 0 0 auto; }
       .adm-mini { display: none; }
       #cy { height: calc(100svh - 205px); min-height: 340px; }
       .adm-detail {
@@ -225,6 +242,7 @@
       <span class="adm-arrow">&rarr;</span>
       <select class="adm-sel" id="adm-goal" aria-label="Trace path — goal node"></select>
       <button class="adm-btn" id="adm-trace">Trace path</button>
+      <button class="adm-btn" id="adm-hot" title="Spotlight the common quick-win techniques">🔥 Common</button>
       <button class="adm-btn" id="adm-flow" title="Hide lateral / loop-back (dashed) edges">Flow only</button>
       <button class="adm-btn" id="adm-fit">Fit</button>
       <button class="adm-btn" id="adm-reset">Reset</button>
@@ -263,6 +281,7 @@
     </details>
 
     <div class="adm-legend" id="adm-legend"></div>
+    <div class="adm-phasenav" id="adm-phasenav" aria-label="Jump to an access phase"></div>
     <div class="adm-trail" id="adm-trail"></div>
     <div class="adm-status" id="adm-status"></div>
 
