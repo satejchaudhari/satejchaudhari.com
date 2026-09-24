@@ -47,9 +47,9 @@
     .adm-legend button.on, .adm-legend button:hover { color: var(--text); border-color: var(--accent-border); }
 
     /* graph + detail split */
-    .adm-stage { position: relative; display: grid; grid-template-columns: 1fr 0px; gap: 0; align-items: stretch; transition: grid-template-columns 0.2s ease, gap 0.2s ease; }
-    .adm-stage.detail-open { grid-template-columns: 1fr 330px; gap: 14px; }
-    #cy { width: 100%; height: min(78vh, 860px); min-height: 460px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; }
+    .adm-stage { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 0px; gap: 0; align-items: stretch; transition: grid-template-columns 0.2s ease, gap 0.2s ease; }
+    .adm-stage.detail-open { grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; }
+    #cy { width: 100%; min-width: 0; height: min(78vh, 860px); min-height: 460px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; }
 
     /* detail panel (desktop: its own column to the right of the map — never overlaps) */
     .adm-detail {
