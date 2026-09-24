@@ -33,24 +33,46 @@
   }
 
   /* ---------- render ---------- */
+  function outcomesHTML(list) {
+    if (!list || !list.length) return "";
+    return '<div class="adv2-outcomes">' + list.map(function (o) {
+      return '<span class="adv2-outcome" style="--oc:' + attr(o.color || "#94a3b8") + '">' + esc(o.label) + '</span>';
+    }).join("") + '</div>';
+  }
+  function branchesHTML(list) {
+    if (!list || !list.length) return "";
+    return '<div class="adv2-branches">' + list.map(function (b) {
+      var h = '<div class="adv2-branch' + (b.warn ? ' warn' : '') + '">';
+      h += '<p class="adv2-branch-l">' + (b.warn ? '<span class="adv2-warn">&#9888;</span>' : '') + esc(b.label) + '</p>';
+      (b.cmds || []).forEach(function (c) { h += cmdBlock(c); });
+      h += outcomesHTML(b.outcomes);
+      return h + '</div>';
+    }).join("") + '</div>';
+  }
   function techniqueHTML(sec, t) {
     var h = '<div class="adv2-tech" id="tech-' + attr(t.id) + '">';
     h += '<button class="adv2-tech-btn" data-tech="' + attr(t.id) + '"><span class="adv2-tech-t">' + esc(t.title) + '</span><span class="adv2-tech-caret">' + ARROW + '</span></button>';
     h += '<div class="adv2-tech-body" hidden>';
-    // links row (theory / cve)
+    // CVE banner (when the technique is anchored to a CVE)
+    if (t.cve && (t.cve.id || t.cve.label)) {
+      var cveText = (t.cve.label ? esc(t.cve.label) + ' ' : '') + (t.cve.id ? '(' + esc(t.cve.id) + ')' : '');
+      h += '<div class="adv2-cvebar">' + SHIELD + '<span>' + cveText + '</span>' +
+        (t.cve.url ? '<a class="adv2-cvebar-link" href="' + attr(t.cve.url) + '" target="_blank" rel="noopener">advisory &#8599;</a>' : '') + '</div>';
+    }
+    // links row (theory)
     var links = [];
     if (t.theory && t.theory.url) links.push('<a class="adv2-chip theory" href="' + attr(t.theory.url) + '">' + BOOK + esc(t.theory.label || "Theory") + '</a>');
-    if (t.cve && t.cve.url) links.push('<a class="adv2-chip cve" href="' + attr(t.cve.url) + '" target="_blank" rel="noopener">' + SHIELD + esc(t.cve.id || t.cve.label || "CVE") + '</a>');
-    else if (t.cve && t.cve.id) links.push('<span class="adv2-chip cve">' + SHIELD + esc(t.cve.id) + '</span>');
     if (links.length) h += '<div class="adv2-links">' + links.join("") + '</div>';
     // short description
     if (t.desc) h += '<p class="adv2-desc">' + esc(t.desc) + '</p>';
-    // commands
+    // commands (flat)
     if (t.cmds && t.cmds.length) {
-      h += '<div class="adv2-cmds">';
-      h += t.cmds.map(cmdBlock).join("");
-      h += '</div>';
+      h += '<div class="adv2-cmds">' + t.cmds.map(cmdBlock).join("") + '</div>';
     }
+    // nested branches
+    h += branchesHTML(t.branches);
+    // technique-level outcome badges
+    h += outcomesHTML(t.outcomes);
     // move-to links (cross-section pivots)
     if (t.moveTo && t.moveTo.length) {
       h += '<div class="adv2-moves"><p class="adv2-moves-l">Move to</p>';
@@ -58,8 +80,9 @@
         var target = byId[m.section];
         if (!target) return "";
         var col = target.color || "var(--accent)";
-        var chip = '<button class="adv2-move" data-goto="' + attr(m.section) + '" style="--mc:' + attr(col) + '">' +
-          '<span class="adv2-move-dot"></span><span class="adv2-move-to">' + esc(target.title) + '</span>' + ARROW + '</button>';
+        var label = m.label || target.title;
+        var chip = '<button class="adv2-move" data-goto="' + attr(m.section) + '" style="--mc:' + attr(col) + '" title="Go to ' + attr(target.title) + '">' +
+          '<span class="adv2-move-dot"></span><span class="adv2-move-to">' + esc(label) + '</span>' + ARROW + '</button>';
         return '<div class="adv2-move-row">' + chip + (m.note ? '<span class="adv2-move-note">' + esc(m.note) + '</span>' : "") + '</div>';
       }).join("");
       h += '</div>';

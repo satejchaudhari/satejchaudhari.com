@@ -45,8 +45,8 @@
     .adv2-section.open { box-shadow: 0 0 0 1px color-mix(in srgb, var(--sc) 40%, transparent); }
     .adv2-section.flash { animation: adv2flash 1.2s ease; }
     @keyframes adv2flash { 0% { box-shadow: 0 0 0 3px var(--sc); } 100% { box-shadow: 0 0 0 1px transparent; } }
-    .adv2-head { width: 100%; display: flex; align-items: center; gap: 13px; padding: 15px 16px; background: none; border: none; text-align: left; cursor: pointer; color: var(--text); }
-    .adv2-head:hover { background: color-mix(in srgb, var(--sc) 7%, transparent); }
+    .adv2-head { width: 100%; display: flex; align-items: center; gap: 13px; padding: 15px 16px; background: color-mix(in srgb, var(--sc) 14%, transparent); border: none; text-align: left; cursor: pointer; color: var(--text); }
+    .adv2-head:hover { background: color-mix(in srgb, var(--sc) 22%, transparent); }
     .adv2-swatch { width: 12px; height: 12px; border-radius: 4px; background: var(--sc); flex: 0 0 auto; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc) 22%, transparent); }
     .adv2-head-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
     .adv2-title { font-family: "Space Grotesk", sans-serif; font-weight: 600; font-size: 1.05rem; display: inline-flex; align-items: center; gap: 9px; }
@@ -96,6 +96,29 @@
     .adv2-move-dot { width: 9px; height: 9px; border-radius: 3px; background: var(--mc); flex: 0 0 auto; }
     .adv2-move svg { width: 13px; height: 13px; }
     .adv2-move-note { color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+
+    /* CVE banner */
+    .adv2-cvebar { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 11px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--h-rose, #fb7185) 55%, transparent); background: color-mix(in srgb, var(--h-rose, #fb7185) 12%, transparent); color: var(--h-rose, #fb7185); font-family: var(--mono); font-size: 0.78rem; }
+    .adv2-cvebar svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .adv2-cvebar span { color: var(--text); }
+    .adv2-cvebar-link { margin-left: auto; color: var(--h-rose, #fb7185); text-decoration: none; font-size: 0.72rem; }
+    .adv2-cvebar-link:hover { text-decoration: underline; }
+
+    /* colour-coded outcome badges (solid, dark text — matches the result boxes) */
+    .adv2-outcomes { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .adv2-outcome { font-family: var(--mono); font-size: 0.72rem; font-weight: 600; color: #0a0c10; background: var(--oc); border-radius: 7px; padding: 5px 11px; }
+
+    /* nested branches (Poisoning, PXE …) */
+    .adv2-branches { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+    .adv2-branch { padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid color-mix(in srgb, var(--sc) 55%, var(--border)); border-radius: 8px; background: var(--surface); }
+    .adv2-branch.warn { border-left-color: var(--h-amber, #f59e0b); }
+    .adv2-branch-l { font-family: var(--mono); font-size: 0.76rem; color: var(--text); font-weight: 600; margin: 0 0 6px; display: flex; align-items: center; gap: 7px; }
+    .adv2-warn { color: var(--h-amber, #f59e0b); }
+    .adv2-branch .command-block { position: relative; margin: 5px 0 0; }
+    .adv2-branch pre { margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 34px 9px 11px; overflow-x: auto; }
+    .adv2-branch code { font-family: var(--mono); font-size: 0.76rem; color: var(--text); white-space: pre; display: block; }
+    .adv2-branch .cmd-comment { color: var(--muted); font-style: italic; opacity: 0.85; }
+    .adv2-branch .adv2-outcomes { margin-top: 9px; }
 
     @media (max-width: 720px) {
       .adv2-top { padding: 14px 0 4px; }
