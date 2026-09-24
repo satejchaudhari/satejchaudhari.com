@@ -110,15 +110,18 @@
         "background-color": "data(color)", "shape": "round-rectangle", "label": "data(label)", "color": "#0a0c10",
         "font-family": "Inter, sans-serif", "font-size": "11px", "font-weight": "600", "text-wrap": "wrap", "text-max-width": "128px",
         "text-valign": "center", "text-halign": "center", "width": "label", "height": "label", "padding": "7px",
-        "border-width": 0, "z-index": 10, "transition-property": "opacity", "transition-duration": "0.14s"
+        /* every cell gets a clear outline for definition */
+        "border-width": 2, "border-color": (isLight() ? "#1c2330" : "#0a0c10"), "border-opacity": 0.55,
+        "z-index": 10, "transition-property": "opacity", "transition-duration": "0.14s"
       } },
       /* node TYPE -> border treatment (the visual language) */
-      { selector: "node.enum", style: { "border-width": 2, "border-color": t.marker, "border-style": "dashed", "border-opacity": 0.9 } },
-      { selector: "node.cred", style: { "border-width": 2, "border-color": "#0c6b60", "border-opacity": 0.95 } },
-      { selector: "node.objective", style: { "border-width": 3, "border-color": "#1a1205", "border-style": "double", "border-opacity": 0.85 } },
+      { selector: "node.attack", style: { "border-width": 2.5, "border-color": (isLight() ? "#1c2330" : "#05070b"), "border-opacity": 0.7 } },
+      { selector: "node.enum", style: { "border-width": 3, "border-color": t.marker, "border-style": "dashed", "border-opacity": 1 } },
+      { selector: "node.cred", style: { "border-width": 3.5, "border-color": "#0b3d38", "border-opacity": 1 } },
+      { selector: "node.objective", style: { "border-width": 4, "border-color": "#1a1205", "border-style": "double", "border-opacity": 1 } },
       /* kind overlays */
-      { selector: "node.entry", style: { "border-width": 3, "border-color": t.mark, "border-opacity": 0.9, "border-style": "solid" } },
-      { selector: "node.goal", style: { "border-width": 4, "border-color": "#ffd27a", "border-opacity": 1, "border-style": "double" } },
+      { selector: "node.entry", style: { "border-width": 4, "border-color": t.mark, "border-opacity": 1, "border-style": "solid" } },
+      { selector: "node.goal", style: { "border-width": 5, "border-color": "#ffd27a", "border-opacity": 1, "border-style": "double" } },
       { selector: "edge", style: { "width": 1.4, "line-color": t.edge, "target-arrow-color": t.edge, "target-arrow-shape": "triangle", "curve-style": "bezier", "arrow-scale": 0.8, "opacity": 0.55, "z-index": 5, "transition-property": "opacity, line-color, width", "transition-duration": "0.14s" } },
       { selector: "edge[back = 1]", style: { "line-style": "dashed", "line-color": t.edgeBack, "target-arrow-color": t.edgeBack } },
       { selector: "edge.hidden", style: { "display": "none" } },
@@ -222,7 +225,14 @@
     return h;
   }
   function adjIncomers(id) { var r = []; edges.forEach(function (e) { if (e[1] === id) r.push(e[0]); }); return r; }
-  function openDetail(id) { pbody.innerHTML = detailHTML(byId[id]); panel.classList.add("open"); }
+  var admStage = document.querySelector(".adm-stage");
+  function setDetail(open) {
+    if (admStage) admStage.classList.toggle("detail-open", open);
+    panel.classList.toggle("open", open);
+    clearTimeout(setDetail._t);
+    setDetail._t = setTimeout(function () { cy.resize(); drawMini(); }, 210);
+  }
+  function openDetail(id) { pbody.innerHTML = detailHTML(byId[id]); setDetail(true); }
 
   /* ---------- breadcrumb trail ---------- */
   var trail = [], trailEl = document.getElementById("adm-trail");
@@ -250,7 +260,7 @@
   function clearHl() { cy.elements().removeClass("faded hl sel path"); }
   function focusNode(node) {
     var isM = window.innerWidth <= 720, z = Math.max(cy.zoom(), isM ? 0.72 : 0.6), w = cy.width(), h = cy.height();
-    var tx = isM ? w / 2 : (w - 360) / 2, ty = isM ? h * 0.24 : h / 2;
+    var tx = w / 2, ty = isM ? h * 0.24 : h / 2;
     cy.animate({ zoom: z, pan: { x: tx - node.position("x") * z, y: ty - node.position("y") * z } }, { duration: 280 });
   }
   function selectNode(id, focus, addTrail) {
@@ -264,9 +274,10 @@
     node.removeClass("hl").addClass("sel");
     openDetail(id);
     if (addTrail !== false) pushTrail(id);
-    if (focus || window.innerWidth <= 720) focusNode(node);
+    // the graph column resizes when the panel opens — focus after it settles
+    if (focus || window.innerWidth <= 720) setTimeout(function () { focusNode(node); }, 230);
   }
-  function deselect() { selected = null; clearHl(); panel.classList.remove("open"); }
+  function deselect() { selected = null; clearHl(); setDetail(false); }
   cy.on("tap", "node[color]", function (e) {
     var id = e.target.id();
     if (traceActive) { handleTraceTap(id); return; }
@@ -304,7 +315,7 @@
   }
   function clearPathState() { tracePath = []; }
   function drawPath(path) {
-    clearHl(); selected = null; panel.classList.remove("open");
+    clearHl(); selected = null; setDetail(false);
     tracePath = path;
     cy.elements("node[color], edge").addClass("faded");
     for (var i = 0; i < path.length; i++) {
@@ -333,24 +344,40 @@
 
   /* start/goal dropdowns */
   var selStart = document.getElementById("adm-start"), selGoal = document.getElementById("adm-goal");
-  function fillSelect(sel, preferEntry) {
+  // reverse adjacency for ancestor search
+  var inc = {}; nodes.forEach(function (n) { inc[n.id] = []; });
+  edges.forEach(function (e) { if (inc[e[1]]) inc[e[1]].push(e[0]); });
+  function reach(startId, adjMap) {
+    var seen = {}, q = [startId];
+    while (q.length) { var c = q.shift(); (adjMap[c] || []).forEach(function (v) { if (!seen[v]) { seen[v] = 1; q.push(v); } }); }
+    return seen; // does NOT include startId itself
+  }
+  function fillSelect(sel, kind, allowed) {
     if (!sel) return;
-    var groups = {};
-    nodes.forEach(function (n) { (groups[n.lv] = groups[n.lv] || []).push(n); });
-    var html = '<option value="">' + (preferEntry ? "Start…" : "Goal…") + '</option>';
+    var keep = sel.value, groups = {};
+    nodes.forEach(function (n) { if (!allowed || allowed[n.id]) (groups[n.lv] = groups[n.lv] || []).push(n); });
+    var html = '<option value="">' + (kind === "start" ? "Start…" : "Goal…") + '</option>';
     lvKeys.forEach(function (lv) {
+      if (!groups[lv] || !groups[lv].length) return;
       html += '<optgroup label="' + esc((lv + 1) + " · " + levelLabel[lv]) + '">';
       groups[lv].slice().sort(function (a, b) { return a.label.localeCompare(b.label); }).forEach(function (n) {
-        html += '<option value="' + esc(n.id) + '">' + esc(n.label) + (n.kind === "entry" ? " ▸" : n.kind === "goal" ? " ★" : "") + '</option>';
+        html += '<option value="' + esc(n.id) + '"' + (n.id === keep ? " selected" : "") + '>' + esc(n.label) + (n.kind === "entry" ? " ▸" : n.kind === "goal" ? " ★" : "") + '</option>';
       });
       html += '</optgroup>';
     });
     sel.innerHTML = html;
   }
-  fillSelect(selStart, true); fillSelect(selGoal, false);
+  fillSelect(selStart, "start"); fillSelect(selGoal, "goal");
   function tryDropdownTrace() { if (selStart && selGoal && selStart.value && selGoal.value) runTrace(selStart.value, selGoal.value); }
-  if (selStart) selStart.addEventListener("change", tryDropdownTrace);
-  if (selGoal) selGoal.addEventListener("change", tryDropdownTrace);
+  // when a start is picked, the goal list becomes only its forward-reachable nodes; and vice-versa
+  if (selStart) selStart.addEventListener("change", function () {
+    fillSelect(selGoal, "goal", selStart.value ? reach(selStart.value, out) : null);
+    tryDropdownTrace();
+  });
+  if (selGoal) selGoal.addEventListener("change", function () {
+    fillSelect(selStart, "start", selGoal.value ? reach(selGoal.value, inc) : null);
+    tryDropdownTrace();
+  });
 
   var traceBtn = document.getElementById("adm-trace");
   function setTraceMode(on) {
@@ -375,7 +402,7 @@
     var cat = b.getAttribute("data-cat");
     legend.querySelectorAll("button").forEach(function (x) { x.classList.remove("on"); });
     if (activeCat === cat) { activeCat = null; clearHl(); return; }
-    activeCat = cat; b.classList.add("on"); selected = null; panel.classList.remove("open"); clearPathState();
+    activeCat = cat; b.classList.add("on"); selected = null; setDetail(false); clearPathState();
     cy.elements("node[color], edge").addClass("faded");
     cy.nodes("node[color]").filter(function (n) { return byId[n.id()].cat === cat; }).removeClass("faded").addClass("hl");
   });
@@ -433,6 +460,7 @@
     legend.querySelectorAll("button").forEach(function (x) { x.classList.remove("on"); });
     if (hotBtn) { hotOn = false; hotBtn.classList.remove("on"); }
     if (selStart) selStart.value = ""; if (selGoal) selGoal.value = "";
+    fillSelect(selStart, "start"); fillSelect(selGoal, "goal");
     cy.animate({ fit: { padding: 42 } }, { duration: 260 });
   });
 
@@ -459,20 +487,22 @@
     mctx.strokeStyle = "#ff9d4d"; mctx.lineWidth = 1.2;
     mctx.strokeRect(Math.max(0, rx), Math.max(0, ry), Math.min(W, rw), Math.min(H, rh));
   }
+  // pan the graph directly to the clicked minimap point — no animation, so it
+  // can't fight the viewport clamp (that was the "shaking")
   function miniTo(evt) {
     if (!mini._map) return;
     var r = mini.getBoundingClientRect(), m = mini._map;
     var cxp = (evt.clientX - r.left) * (mini.width / r.width), cyp = (evt.clientY - r.top) * (mini.height / r.height);
     var gx = m.bb.x1 + (cxp - m.ox) / m.s, gy = m.bb.y1 + (cyp - m.oy) / m.s;
     var z = cy.zoom();
-    cy.animate({ pan: { x: cy.width() / 2 - gx * z, y: cy.height() / 2 - gy * z } }, { duration: 180 });
+    cy.stop();
+    cy.pan({ x: cy.width() / 2 - gx * z, y: cy.height() / 2 - gy * z });
   }
   if (mini) {
     var dragging = false;
-    mini.addEventListener("mousedown", function (e) { dragging = true; miniTo(e); });
-    mini.addEventListener("mousemove", function (e) { if (dragging) miniTo(e); });
+    mini.addEventListener("mousedown", function (e) { e.preventDefault(); dragging = true; miniTo(e); });
+    window.addEventListener("mousemove", function (e) { if (dragging) miniTo(e); });
     window.addEventListener("mouseup", function () { dragging = false; });
-    mini.addEventListener("click", miniTo);
   }
 
   /* ---------- mobile guided (levels) view ---------- */
@@ -512,7 +542,7 @@
   function setGuided(on) {
     document.body.classList.toggle("adm-guided-on", on);
     if (guidedBtn) { guidedBtn.classList.toggle("on", on); guidedBtn.setAttribute("aria-pressed", on ? "true" : "false"); }
-    if (on) panel.classList.remove("open");
+    if (on) setDetail(false);
     else setTimeout(function () { cy.resize(); cy.fit(undefined, 42); drawMini(); }, 30);
   }
   if (guidedBtn) guidedBtn.addEventListener("click", function () { setGuided(!document.body.classList.contains("adm-guided-on")); });
