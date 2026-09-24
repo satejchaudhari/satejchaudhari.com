@@ -86,15 +86,19 @@
   function outcomesHTML(list) {
     if (!list || !list.length) return "";
     return '<div class="adv2-outcomes">' + list.map(function (o) {
-      var style = '--oc:' + attr(o.color || "#94a3b8");
       var target = OUTCOME_LINKS[o.label];
       if (target) {
         var parts = target.split("/");
+        var sec = byId[parts[0]];
+        // colour the badge with its DESTINATION section's colour, so the badge
+        // visibly belongs to the section it jumps to
+        var col = (sec && sec.color) || o.color || "#94a3b8";
         return '<button class="adv2-outcome linked" data-goto="' + attr(parts[0]) + '"' +
           (parts[1] ? ' data-tech="' + attr(parts[1]) + '"' : '') +
-          ' style="' + style + '" title="Go to this section">' + esc(o.label) + '</button>';
+          ' style="--oc:' + attr(col) + '" title="Go to ' + (sec ? attr(sec.title) : "section") + '">' + esc(o.label) + '</button>';
       }
-      return '<span class="adv2-outcome" style="' + style + '">' + esc(o.label) + '</span>';
+      // no section to open -> a plain status tag, not a (dead) button
+      return '<span class="adv2-outcome terminal">' + esc(o.label) + '</span>';
     }).join("") + '</div>';
   }
   function branchesHTML(list) {
