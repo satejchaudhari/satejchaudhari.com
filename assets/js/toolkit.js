@@ -5646,6 +5646,46 @@ var TOOLKIT = [
     category: "Web Application",
     tools: [
       {
+        "id": "vhostscan",
+        "name": "VHostScan",
+        "url": "https://github.com/codingo/VHostScan",
+        "description": "Brute-forces virtual hosts on a target IP by fuzzing the Host header.",
+        "brief": "VHostScan discovers virtual hosts served from a single IP address by sending requests with different Host headers and clustering the responses. Because many web servers pick which site to return based solely on the Host header, VHostScan can surface staging, admin, and internal virtual hosts that have no public DNS record and are therefore invisible to ordinary subdomain enumeration.\n\nIt is smarter than a plain Host-header fuzzer: it detects catch-all / default responses, filters them out, and reverse-lookups the IP to seed candidate names, so distinct hidden hosts stand out from the noise.",
+        "quickReference": [
+          { "label": "Basic scan", "cmd": "VHostScan -t 192.0.2.10" },
+          { "label": "With a wordlist", "cmd": "VHostScan -t 192.0.2.10 -w wordlist.txt" },
+          { "label": "Base domain + output", "cmd": "VHostScan -t 192.0.2.10 -b target.com -oN vhosts.txt" },
+          { "label": "Over TLS on a custom port", "cmd": "VHostScan -t 192.0.2.10 -p 8443 --ssl" }
+        ],
+        "sections": [
+          {
+            "title": "Options",
+            "type": "table",
+            "columns": ["Flag", "Description"],
+            "rows": [
+              ["-t <ip/host>", "Target IP or hostname to scan"],
+              ["-w <wordlist>", "Virtual-host name wordlist"],
+              ["-b <base>", "Base domain appended to each word (word.base)"],
+              ["-p <port>", "Target port (default 80)"],
+              ["--ssl", "Connect over TLS"],
+              ["-oN / -oJ", "Write results to a normal or JSON file"],
+              ["--ignore-http-codes", "Filter out specific status codes"],
+              ["--unique-depth", "Tune how aggressively similar responses are de-duplicated"]
+            ]
+          },
+          {
+            "title": "How It Works",
+            "type": "notes",
+            "items": [
+              "Sends each candidate as the Host header against the same IP and groups responses so a distinct hidden host stands out from the default page.",
+              "Detects catch-all / wildcard virtual hosts and filters them, avoiding a flood of identical hits.",
+              "Reverse-DNS on the target seeds extra candidate names beyond the wordlist.",
+              "Any hidden vhost it finds (staging, admin, internal) should then be tested as its own application — they often run weaker, older code."
+            ]
+          }
+        ]
+      },
+      {
         "id": "upload-scanner",
         "name": "UploadScanner (Burp)",
         "url": "https://github.com/portswigger/upload-scanner",

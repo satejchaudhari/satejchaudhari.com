@@ -329,12 +329,12 @@ var WEB_MAP = {
           title: "Error generation",
           scenario: "Use these to see how the app behaves on malformed or unexpected input.",
           items: [
-            { text: "Request custom / non-existent pages (/whatever_fake.php, .aspx, .html)", vulns: [{ n: "Verbose Errors & Info Disclosure", id: "verbose-errors" }] },
-            { text: "Add multiple GET & POST parameters with different values" },
-            { text: "Inject \"[]\", \"]]\", \"[[\" in cookie and parameter values" },
-            { text: "Generate an error with /~randomthing/%s at the end of the URL" },
-            { text: "Fuzz inputs to generate error codes", tools: [{ n: "Burp Suite", id: "burpsuite" }] },
-            { text: "Try unusual HTTP verbs (PATCH, DEBUG) or invalid ones (FAKE)" }
+            { text: "Request custom / non-existent pages (/whatever_fake.php, .aspx, .html)", desc: "Request files with several extensions the app never serves; the 404 (or 500) it returns often reveals the underlying technology, framework version, and full server paths in its error page, which sharpens every later payload.", vulns: [{ n: "Verbose Errors & Info Disclosure", id: "verbose-errors" }] },
+            { text: "Add multiple GET & POST parameters with different values", desc: "Send the same parameter several times, and mix GET with POST, to confuse the parameter parser; conflicting values frequently trip an unhandled exception that leaks a stack trace, or expose which layer wins - useful for parameter-pollution and filter-bypass follow-ups.", vulns: [{ n: "Verbose Errors & Info Disclosure", id: "verbose-errors" }] },
+            { text: "Inject \"[]\", \"]]\", \"[[\" in cookie and parameter values", desc: "Feeding array-style brackets into values that the backend expects to be scalars can force a type error or array-handling exception, often dumping the framework's debug page along with file paths and internal variable names.", vulns: [{ n: "Verbose Errors & Info Disclosure", id: "verbose-errors" }] },
+            { text: "Generate an error with /~randomthing/%s at the end of the URL", desc: "A tilde-prefixed path and a stray format specifier (%s) probe for user-directory disclosure and format-string / path-handling errors; the response can reveal usernames, absolute paths, or an unfiltered error template.", vulns: [{ n: "Verbose Errors & Info Disclosure", id: "verbose-errors" }] },
+            { text: "Fuzz inputs to generate error codes", desc: "Systematically fuzz every input with malformed data, oversized values, wrong types, and special characters while watching status codes; a jump to 500 marks an unhandled path, and the body of that response is where stack traces and internal detail leak.", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "Verbose Errors & Info Disclosure", id: "verbose-errors" }] },
+            { text: "Try unusual HTTP verbs (PATCH, DEBUG) or invalid ones (FAKE)", desc: "Send methods the app is unlikely to handle cleanly - PATCH, DEBUG, TRACK, or an entirely made-up verb like FAKE; unsupported verbs commonly return revealing errors, expose which methods the server allows, or behave differently from GET/POST in ways worth chasing.", vulns: [{ n: "Dangerous HTTP Methods", id: "dangerous-http-methods" }] }
           ]
         }
       ]
@@ -352,28 +352,28 @@ var WEB_MAP = {
           title: "Business & logic flaws",
           scenario: "Workflows and business features — checkout, transfers, discounts, and multi-step processes.",
           items: [
-            { text: "Identify the logic attack surface" },
-            { text: "Test transmission of data via the client" },
-            { text: "Test reliance on client-side input validation" },
-            { text: "Thick-client components (Java, ActiveX, Flash)" },
-            { text: "Multi-stage processes for logic flaws" },
-            { text: "Handling of incomplete input" },
-            { text: "Trust boundaries" },
-            { text: "Transaction logic" },
-            { text: "CAPTCHA present on email forms to stop flooding" },
-            { text: "Tamper product id, price, or quantity in any action", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
-            { text: "Tamper gift or discount codes", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
-            { text: "Reuse gift codes" },
-            { text: "Parameter pollution to use a gift code twice", vulns: [{ n: "Mass Assignment", id: "mass-assignment" }] },
-            { text: "Stored XSS in non-limited fields like address", vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
-            { text: "Payment form: is CVV / card number in clear text or masked?" },
-            { text: "Is payment processed by the app itself or a third party?" },
-            { text: "IDOR on another user's ticket / cart / shipment", vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
-            { text: "Test credit-card numbers accepted (4111 1111 1111 1111)" },
-            { text: "IDOR in PRINT / PDF generation", vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
-            { text: "Unsubscribe button leading to user enumeration" },
-            { text: "Parameter pollution on social-media sharing links" },
-            { text: "Change sensitive POST requests to GET" }
+            { text: "Identify the logic attack surface", desc: "Before testing anything, map the workflows a business cares about - checkout, funds transfer, subscription changes, role changes - and note every assumption the developers appear to rely on; logic flaws live in those assumptions, and a scanner will never find them for you.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "Test transmission of data via the client", desc: "Look for values the server should own but instead round-trips through the browser - a price, a user role, a discount amount, an account balance - in hidden fields, cookies, or JavaScript; anything the client sends back is attacker-controlled and must be re-validated server-side.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "Test reliance on client-side input validation", desc: "Disable or bypass every front-end check (JavaScript validators, maxlength, disabled buttons, dropdown constraints) and submit the raw request directly; if the server accepts what the client would have rejected, its validation is decorative and the real rules must be tested from the wire.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "Thick-client components (Java, ActiveX, Flash)", desc: "Where the app ships a Java applet, ActiveX control, or legacy Flash component, decompile it and inspect its traffic; these often embed secrets, enforce checks only client-side, or expose endpoints the web UI hides.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "Multi-stage processes for logic flaws", desc: "In any wizard or multi-step flow, try skipping steps, revisiting completed steps, replaying an earlier step with new data, or jumping straight to the final step; state that is not re-verified at each stage lets you reach a confirmed order or elevated state you never earned.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "Handling of incomplete input", desc: "Submit requests with required fields removed, emptied, or truncated mid-flow; apps that assume a field is always present can crash, fall through to a default (sometimes a privileged one), or persist a half-formed record that bypasses later checks.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "Trust boundaries", desc: "Identify where data crosses from an untrusted zone (the user, a third party) into a trusted one (an internal service, an admin view) and test whether validation and authorization are actually enforced at that crossing rather than assumed from an earlier step.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "Transaction logic", desc: "Probe money and inventory maths for abuse: negative quantities that credit you, integer overflow on totals, currency or rounding mismatches, and race conditions where two concurrent requests both pass a one-time balance check.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }, { n: "Race Conditions", id: "race-condition" }] },
+            { text: "CAPTCHA present on email forms to stop flooding", desc: "Confirm that forms which send mail (contact, invite, password reset, share) are rate-limited or CAPTCHA-gated; an open email form lets an attacker flood arbitrary inboxes from the application's trusted domain, harming both victims and the sender's reputation.", vulns: [{ n: "CAPTCHA Weaknesses & Bypass", id: "captcha-bypass" }] },
+            { text: "Tamper product id, price, or quantity in any action", desc: "Intercept add-to-cart, checkout, and update requests and edit the price, product id, or quantity (including negative and fractional values); if the server trusts the client's figure instead of re-reading it from the catalogue, you buy at your own price.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "Tamper gift or discount codes", desc: "Try to guess, brute-force, or stack discount and gift codes, apply them to ineligible items, or combine several beyond the intended limit; weak validation here converts directly into free or discounted goods.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "Reuse gift codes", desc: "Redeem a single-use gift or coupon code, then attempt to redeem it again - sequentially and concurrently; if redemption is not atomic or is not marked as consumed, the same code can be spent repeatedly.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }, { n: "Race Conditions", id: "race-condition" }] },
+            { text: "Parameter pollution to use a gift code twice", desc: "Supply the coupon parameter more than once in a single request (code=X&code=X, or as an array) so that different layers apply it separately; HTTP parameter pollution can double a discount the app believes it applied only once.", vulns: [{ n: "HTTP Parameter Pollution", id: "http-parameter-pollution" }] },
+            { text: "Stored XSS in non-limited fields like address", desc: "Place an XSS payload in free-text fields that rarely get sanitised - street address, company name, order notes - and check where they render later, especially in the admin order view or a generated invoice, where the script runs in a privileged context.", vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
+            { text: "Payment form: is CVV / card number in clear text or masked?", desc: "Inspect how card data is handled in transit and on screen: whether the PAN and CVV travel to your own backend at all, appear unmasked in requests, responses, or logs, or are stored - all of which are serious data-handling and PCI failures.", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] },
+            { text: "Is payment processed by the app itself or a third party?", desc: "Determine whether card data hits the application's own servers or is tokenised straight to a payment provider; an app that proxies raw card details takes on the full breach and compliance burden and is worth deeper scrutiny.", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] },
+            { text: "IDOR on another user's ticket / cart / shipment", desc: "Swap the identifier on order-, cart-, ticket-, and shipment-view requests to another user's value; if the object is returned without an ownership check, you can read or manipulate other customers' transactions.", vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
+            { text: "Test credit-card numbers accepted (4111 1111 1111 1111)", desc: "Submit well-known test card numbers (such as 4111 1111 1111 1111) against the live payment flow; if a Luhn-valid test card is accepted for a real order, the app is not talking to a real processor or is misconfigured, allowing free purchases.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "IDOR in PRINT / PDF generation", desc: "Print, export, and PDF-generation endpoints often take a raw document id and skip the authorization check the main view enforces; increment or swap the id to pull other users' invoices, tickets, or reports.", vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
+            { text: "Unsubscribe button leading to user enumeration", desc: "Unsubscribe and preference links often embed a raw email or user id and respond differently for real versus unknown addresses; that difference lets an attacker confirm which addresses are registered, feeding phishing and credential-stuffing.", vulns: [{ n: "Authentication Bypass", id: "auth-bypass" }] },
+            { text: "Parameter pollution on social-media sharing links", desc: "Share and social-preview endpoints that reflect a URL or title parameter are prone to parameter pollution and injection - duplicate or extra parameters can redirect the share target, poison the preview, or smuggle a second value past validation.", vulns: [{ n: "HTTP Parameter Pollution", id: "http-parameter-pollution" }] },
+            { text: "Change sensitive POST requests to GET", desc: "Resend state-changing POST actions as GET; if the server honours it, the action becomes forgeable via a simple link or image tag (bypassing method-based CSRF defences) and its parameters leak into browser history, proxies, and server logs.", vulns: [{ n: "Cross-Site Request Forgery (CSRF)", id: "csrf" }, { n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] }
           ]
         }
       ]
@@ -391,16 +391,16 @@ var WEB_MAP = {
           title: "Infrastructure",
           scenario: "Against the hosting environment and web server itself.",
           items: [
-            { text: "Segregation in shared infrastructure" },
-            { text: "Segregation between hosted applications" },
-            { text: "Web-server vulnerabilities", tools: [{ n: "Nikto", id: "nikto" }, { n: "Nuclei", id: "nuclei" }] },
-            { text: "Dangerous HTTP methods" },
-            { text: "Proxy functionality" },
-            { text: "Virtual-host misconfiguration", tools: [{ n: "VHostScan" }], vulns: [{ n: "Virtual Host Misconfiguration" }] },
-            { text: "Internal numeric IPs in requests" },
-            { text: "External numeric IPs — resolve them" },
-            { text: "Test cloud storage" },
-            { text: "Alternative channels (www.web.com vs m.web.com)" }
+            { text: "Segregation in shared infrastructure", desc: "On shared or multi-tenant hosting, test whether one tenant can reach another's files, database, or session store; weak isolation between co-located customers turns a foothold in any neighbour into a path to your target.", vulns: [{ n: "Virtual Host Misconfiguration", id: "vhost-misconfig" }] },
+            { text: "Segregation between hosted applications", desc: "Where several of the organisation's own apps share a server, check for shared credentials, a common session domain, or filesystem access across app roots; a low-value app on the same box is often the easiest way into a high-value one beside it.", vulns: [{ n: "Virtual Host Misconfiguration", id: "vhost-misconfig" }] },
+            { text: "Web-server vulnerabilities", desc: "Fingerprint the exact web-server and application-server versions and check them against known CVEs, default files, and risky sample scripts; an outdated or default-configured server is a direct, well-documented route in.", tools: [{ n: "Nikto", id: "nikto" }, { n: "Nuclei", id: "nuclei" }] },
+            { text: "Dangerous HTTP methods", desc: "Enumerate the methods each endpoint allows (OPTIONS, then confirm) and test PUT, DELETE, and TRACE; a writable PUT can drop a web shell, DELETE can destroy content, and TRACE can enable cross-site tracing.", vulns: [{ n: "Dangerous HTTP Methods", id: "dangerous-http-methods" }] },
+            { text: "Proxy functionality", desc: "If the app forwards or fetches URLs on your behalf (a proxy, preview, or import feature), test whether it will reach internal addresses and alternate schemes; an open proxy is server-side request forgery by design.", vulns: [{ n: "Server-Side Request Forgery (SSRF)", id: "ssrf" }] },
+            { text: "Virtual-host misconfiguration", desc: "Brute-force the Host header against the target's IPs to surface virtual hosts that are not meant to be public - staging, admin, or internal apps - and to reach sites bound to the same server that DNS never advertises.", tools: [{ n: "VHostScan", id: "vhostscan" }], vulns: [{ n: "Virtual Host Misconfiguration", id: "vhost-misconfig" }] },
+            { text: "Internal numeric IPs in requests", desc: "Watch requests and responses for hard-coded internal IPs (10.x, 172.16-31.x, 192.168.x) leaking in redirects, headers, or bodies; they map the internal network and mark endpoints worth targeting through SSRF.", vulns: [{ n: "Verbose Errors & Info Disclosure", id: "verbose-errors" }] },
+            { text: "External numeric IPs — resolve them", desc: "Resolve any external IPs the app references or connects to back to hostnames and owners; this uncovers additional in-scope infrastructure and third-party dependencies that expand the attack surface.", tools: [{ n: "Amass", id: "amass" }] },
+            { text: "Test cloud storage", desc: "Locate the S3/GCS/Azure buckets the app uses (from asset URLs and JS) and test them for public listing, unauthenticated read, and - most damaging - unauthenticated write, which lets an attacker tamper with served content.", tools: [{ n: "cloud_enum", id: "cloud-enum" }], vulns: [{ n: "Cloud Storage Misconfiguration", id: "cloud-storage-misconfig" }] },
+            { text: "Alternative channels (www.web.com vs m.web.com)", desc: "Compare the desktop, mobile (m.), API, and legacy hostnames of the same service; parallel channels often lag on patches and enforce weaker validation, so a check blocked on www may succeed on m.", tools: [{ n: "Amass", id: "amass" }] }
           ]
         },
         {
@@ -408,15 +408,15 @@ var WEB_MAP = {
           title: "CAPTCHA",
           scenario: "Wherever a CAPTCHA gates an action.",
           items: [
-            { text: "Send an old CAPTCHA value" },
-            { text: "Send an old CAPTCHA value with an old session id" },
-            { text: "Request the CAPTCHA image by absolute path" },
-            { text: "Block the CAPTCHA with an adblocker and request again" },
-            { text: "Bypass it with an OCR tool" },
-            { text: "Change the request from POST to GET" },
-            { text: "Remove the CAPTCHA parameter" },
-            { text: "Convert a JSON request to a normal form request" },
-            { text: "Try header injections" }
+            { text: "Send an old CAPTCHA value", desc: "Replay a CAPTCHA answer that was already solved once; if the server does not invalidate a token after a single use, the CAPTCHA can be solved manually one time and then automated indefinitely.", vulns: [{ n: "CAPTCHA Weaknesses & Bypass", id: "captcha-bypass" }] },
+            { text: "Send an old CAPTCHA value with an old session id", desc: "Pair a previously valid CAPTCHA value with the session it was issued for and resubmit; some implementations tie the check to the pair and never expire it, so the whole tuple can be reused to bypass the gate.", vulns: [{ n: "CAPTCHA Weaknesses & Bypass", id: "captcha-bypass" }] },
+            { text: "Request the CAPTCHA image by absolute path", desc: "Fetch the CAPTCHA image URL directly and repeatedly; if the answer is embedded in the filename, a header, or a predictable path, or the same image is served twice, the challenge is defeated without ever reading it.", vulns: [{ n: "CAPTCHA Weaknesses & Bypass", id: "captcha-bypass" }] },
+            { text: "Block the CAPTCHA with an adblocker and request again", desc: "Prevent the CAPTCHA script or image from loading and submit anyway; if the form still processes when the challenge is absent, the check is enforced only in the browser and not on the server.", vulns: [{ n: "CAPTCHA Weaknesses & Bypass", id: "captcha-bypass" }] },
+            { text: "Bypass it with an OCR tool", desc: "Run the CAPTCHA image through OCR or a solver; simple text CAPTCHAs with little distortion are read automatically, which shows the challenge provides no real anti-automation value.", vulns: [{ n: "CAPTCHA Weaknesses & Bypass", id: "captcha-bypass" }] },
+            { text: "Change the request from POST to GET", desc: "Resubmit the protected action as GET; a different code path may skip the CAPTCHA validation that only the POST handler performs.", vulns: [{ n: "CAPTCHA Weaknesses & Bypass", id: "captcha-bypass" }] },
+            { text: "Remove the CAPTCHA parameter", desc: "Strip the CAPTCHA field from the request entirely and send it; backends that only validate the parameter when present - rather than requiring it - let the action through when it is missing.", vulns: [{ n: "CAPTCHA Weaknesses & Bypass", id: "captcha-bypass" }] },
+            { text: "Convert a JSON request to a normal form request", desc: "Re-encode a JSON request as url-encoded form data (or vice versa); the alternate content-type may hit a handler that never wired up the CAPTCHA check.", vulns: [{ n: "CAPTCHA Weaknesses & Bypass", id: "captcha-bypass" }] },
+            { text: "Try header injections", desc: "Test the CAPTCHA and surrounding parameters for header/CRLF injection, and try injecting values that trick the verifier (empty, null, or a trusted internal flag) into treating the challenge as passed.", vulns: [{ n: "HTTP Response / Header Injection (CRLF)", id: "crlf-injection" }] }
           ]
         },
         {
@@ -424,15 +424,15 @@ var WEB_MAP = {
           title: "Security Headers",
           scenario: "Check these response headers on every in-scope host.",
           items: [
-            { text: "X-XSS-Protection", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
-            { text: "Strict-Transport-Security", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
-            { text: "Content-Security-Policy", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
-            { text: "Public-Key-Pins", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
-            { text: "X-Frame-Options", vulns: [{ n: "Clickjacking", id: "clickjacking" }] },
-            { text: "X-Content-Type-Options", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
-            { text: "Referrer-Policy", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
-            { text: "Cache-Control", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
-            { text: "Expires", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] }
+            { text: "X-XSS-Protection", desc: "A legacy header that toggled the browser's built-in XSS auditor. Modern browsers have removed it, so its absence is not itself a finding - but note it, and rely on a strong Content-Security-Policy for real XSS mitigation.", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
+            { text: "Strict-Transport-Security", desc: "HSTS forces the browser to use HTTPS for the domain, defeating SSL-strip downgrade attacks. Check it is present with a long max-age, and ideally includeSubDomains and preload; its absence leaves the first request hijackable.", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
+            { text: "Content-Security-Policy", desc: "CSP is the strongest defence against XSS and data injection. Look for a missing policy, or a weak one using unsafe-inline, unsafe-eval, or a wildcard source - each of which largely defeats the point of having a policy at all.", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
+            { text: "Public-Key-Pins", desc: "HPKP pinned a site to specific certificate keys. It is deprecated and browsers no longer honour it (it caused more outages than it prevented), so its absence is expected - flag its presence instead, as a stale or wrong pin can lock users out.", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
+            { text: "X-Frame-Options", desc: "This header (or CSP's frame-ancestors) stops the page being framed by another site. Without it, an attacker can overlay the page invisibly and trick users into clicking - the classic clickjacking attack.", vulns: [{ n: "Clickjacking", id: "clickjacking" }] },
+            { text: "X-Content-Type-Options", desc: "Setting nosniff stops the browser from second-guessing declared content types. Without it, a file served as text but sniffed as HTML or JavaScript can execute, turning a benign upload or response into stored XSS.", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
+            { text: "Referrer-Policy", desc: "Controls how much of the current URL is sent in the Referer header on outbound links and requests. A permissive policy leaks full URLs - including tokens and session ids embedded in them - to third parties and analytics.", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
+            { text: "Cache-Control", desc: "On authenticated or sensitive responses, check for no-store / no-cache / private; without them, personal data and tokens can be cached by the browser or an intermediary proxy and later served to the wrong user.", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
+            { text: "Expires", desc: "The older caching control paired with Cache-Control. Confirm sensitive pages set it to the past (or an already-expired value) so they are never stored; a future Expires on authenticated content risks the same cross-user cache leak.", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] }
           ]
         }
       ]

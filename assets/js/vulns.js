@@ -26,6 +26,52 @@ var VULNS = [
     category: "Injection",
     vulns: [
       {
+        "id": "http-parameter-pollution",
+        "name": "HTTP Parameter Pollution",
+        "severity": "Medium",
+        "ref": "https://owasp.org/www-community/attacks/HTTP_Parameter_Pollution",
+        "description": "Supplying the same parameter more than once causes different components to read different values, bypassing validation, filters, or business rules.",
+        "brief": "HTTP allows a parameter to appear multiple times in one request (a=1&a=2). There is no single standard for which occurrence wins, so every layer decides for itself: one framework takes the first value, another the last, a third concatenates them, and a WAF may inspect one while the application uses another. HTTP Parameter Pollution (HPP) weaponises that disagreement.\n\nBy splitting a payload across duplicate parameters, an attacker can slip malicious input past a WAF or input filter that only checks one copy, make an application apply a discount or privilege twice, override a server-set value the client should not control, or tamper with the parameters of a downstream request the server builds from the input. It is both an attack in its own right and a bypass technique that amplifies SQLi, XSS, and access-control flaws.",
+        "quickReference": [
+          { "label": "Duplicate a parameter", "cmd": "GET /search?q=safe&q=<payload>   (which value does the app use?)" },
+          { "label": "Split a filtered payload", "cmd": "id=1&id=2--   or   ?a=%27&a=OR&a=1=1  to reassemble past a WAF" },
+          { "label": "Body pollution", "cmd": "coupon=SAVE10&coupon=SAVE10   (apply a single-use code twice)" },
+          { "label": "Array form", "cmd": "user[]=self&user[]=admin   (does the last/first/array win?)" }
+        ],
+        "sections": [
+          { "title": "How It's Tested", "type": "commands", "commands": [
+            { "label": "1. Establish which occurrence wins", "cmd": "# send a benign duplicate and observe the reflected/processed value\ncurl -s 'https://target/echo?x=first&x=second'\n# note whether the app uses first, last, both, or an array" },
+            { "label": "2. Use it to bypass a filter / WAF", "cmd": "# WAF may inspect only the first value while the app concatenates:\n/item?id=1&id=2)+UNION+SELECT+...\n# or split a blocked keyword across copies the backend rejoins" },
+            { "label": "3. Abuse business logic", "cmd": "# apply a one-time coupon twice, or override a server-controlled field:\nPOST /checkout\namount=10&amount=1&coupon=X&coupon=X" },
+            { "label": "4. Pollute a server-built downstream request", "cmd": "# input that the server forwards into an internal API/URL:\n?redirect=https://ok.com&redirect=https://evil.com" }
+          ]},
+          { "title": "Where Values Are Resolved", "type": "table", "columns": ["Technology", "Duplicate a=1&a=2 resolves to"], "rows": [
+            ["PHP / Apache", "Last (a=2)"],
+            ["ASP.NET / IIS", "Both, comma-joined (a=1,2)"],
+            ["JSP / Tomcat", "First (a=1)"],
+            ["Node.js (Express)", "Array ([1,2])"],
+            ["Python (Flask/Django)", "First / list depending on accessor"]
+          ]},
+          { "title": "Impact", "type": "table", "columns": ["Scenario", "Result"], "rows": [
+            ["WAF vs app disagreement", "Injection payload reaches the app un-inspected"],
+            ["Duplicate discount / vote", "Business-logic abuse - double redemption"],
+            ["Override server field", "Set a value (role, price) the client shouldn't control"],
+            ["Downstream request tampering", "Redirect, SSRF, or API-parameter manipulation"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP - HTTP Parameter Pollution", "url": "https://owasp.org/www-community/attacks/HTTP_Parameter_Pollution" },
+            { "label": "OWASP WSTG - Testing for HTTP Parameter Pollution", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/04-Testing_for_HTTP_Parameter_Pollution" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Reject requests that contain duplicate parameters where only one is expected, rather than silently picking one.",
+            "Canonicalise input to a single, well-defined value before validation, and validate the exact value the application will actually use.",
+            "Ensure the WAF or input filter and the application resolve duplicates identically, so nothing is inspected in one form and used in another.",
+            "Treat single-use tokens (coupons, votes, one-time actions) as atomic server-side operations that cannot be replayed via duplicate parameters.",
+            "Use strict, typed parameter binding (a scalar where a scalar is expected) instead of accepting arrays implicitly."
+          ]}
+        ]
+      },
+      {
         "id": "smtp-injection",
         "name": "SMTP / Email Header Injection",
         "severity": "Medium",
@@ -4718,6 +4764,166 @@ var VULNS = [
     {
     category: "Misconfigurations",
     vulns: [
+      {
+        "id": "sensitive-data-exposure",
+        "name": "Sensitive Data Exposure",
+        "severity": "High",
+        "ref": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/",
+        "description": "Sensitive data (cards, credentials, personal or health data, tokens) is transmitted, stored, logged, or displayed without adequate protection.",
+        "brief": "Sensitive data exposure is not a single injection bug but a class of handling failures: card numbers or CVVs passing through and being stored by the application instead of tokenised to a processor; passwords stored with weak or no hashing; personal data returned in API responses beyond what the UI needs; secrets and tokens embedded in URLs (and therefore in browser history, Referer headers, proxy logs, and access logs); or sensitive pages cached by browsers and shared proxies.\n\nThe damage rarely comes from a clever exploit - it comes from the data simply being reachable, cacheable, or loggable by someone who should not have it. It underpins large breaches and carries direct regulatory weight (PCI-DSS for card data, GDPR/HIPAA for personal and health data).",
+        "quickReference": [
+          { "label": "Card data in the request", "cmd": "check whether the PAN / CVV hit YOUR backend at all, or go straight to the processor's iframe/token" },
+          { "label": "Secrets in the URL", "cmd": "look for ?token= / ?reset= / ?api_key= in links, redirects, and history" },
+          { "label": "Caching of private pages", "cmd": "curl -sI https://target/account | grep -i 'cache-control\\|pragma\\|expires'" },
+          { "label": "Over-exposed API fields", "cmd": "diff what the API returns against what the UI shows (password hashes, other users' PII)" }
+        ],
+        "sections": [
+          { "title": "How It's Observed", "type": "commands", "commands": [
+            { "label": "1. Inspect transmission", "cmd": "# proxy the payment/login flow and read the raw requests\n# does the PAN/CVV/password appear in a request to the app's own domain?\n# is everything over HTTPS with HSTS, or is any leg plaintext?" },
+            { "label": "2. Hunt secrets in URLs", "cmd": "# tokens in the query string leak via Referer, history, and logs\ngrep -rEi 'token=|reset=|api_?key=|sessionid=' <collected-urls>" },
+            { "label": "3. Check caching of sensitive responses", "cmd": "curl -sI https://target/account -H 'Cookie: session=...' | grep -i 'cache-control\\|expires\\|pragma'\n# no-store/no-cache/private expected on authenticated pages" },
+            { "label": "4. Compare API output to need", "cmd": "# request a profile/object and look for fields the UI never shows:\n# password hashes, internal ids, other users' PII, full card data" }
+          ]},
+          { "title": "Common Failure Points", "type": "table", "columns": ["Location", "Exposure"], "rows": [
+            ["Card data through the app", "PCI scope + breach risk; should be tokenised to the processor"],
+            ["Secrets in the URL", "Leak via history, Referer, proxy and server logs"],
+            ["Weak/absent hashing", "Stored passwords cracked wholesale after any DB leak"],
+            ["Over-broad API responses", "PII and internal fields returned beyond the UI's need"],
+            ["Cacheable private pages", "Personal data served to the next user of a shared cache"],
+            ["Plaintext / mixed content", "Data readable on the wire; downgrade attacks"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP - Sensitive Data Exposure / Cryptographic Failures", "url": "https://owasp.org/Top10/A02_2021-Cryptographic_Failures/" },
+            { "label": "OWASP WSTG - Testing for Weak Cryptography", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Never let raw card data touch the application - use the processor's hosted fields or tokenisation so the app only ever sees a token.",
+            "Keep secrets and tokens out of URLs; pass them in headers or POST bodies, and give them short lifetimes.",
+            "Encrypt sensitive data in transit (TLS everywhere, HSTS) and at rest, and hash passwords with a strong, salted, adaptive algorithm (bcrypt/argon2).",
+            "Return only the fields each response needs; do not lean on the UI to hide data the API still sends.",
+            "Set Cache-Control: no-store (and matching Pragma/Expires) on every authenticated or sensitive response.",
+            "Scrub sensitive values from application, access, and error logs."
+          ]}
+        ]
+      },
+      {
+        "id": "vhost-misconfig",
+        "name": "Virtual Host Misconfiguration",
+        "severity": "Medium",
+        "ref": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/",
+        "description": "A server hosting multiple virtual hosts exposes internal, staging, or neighbouring sites through the Host header - sites DNS never advertises.",
+        "brief": "One IP address commonly serves many sites, and the web server decides which to return based on the Host header. When configuration is loose, an attacker who sets the Host header by hand can reach virtual hosts that were never meant to be public: staging and admin instances, internal tools, or default/catch-all sites bound to the same server. Because these hosts have no public DNS record, they are invisible to normal enumeration yet fully reachable once you know (or guess) the name.\n\nRelated failures include weak isolation between co-tenants on shared infrastructure and default virtual hosts that leak server information. It frequently chains with Host header injection, and reaching a hidden staging app often exposes weaker authentication and unpatched code.",
+        "quickReference": [
+          { "label": "Manually request a vhost", "cmd": "curl -s -H 'Host: staging.target.com' https://<target-ip>/ " },
+          { "label": "Brute-force virtual hosts", "cmd": "ffuf -w vhosts.txt -u https://<ip>/ -H 'Host: FUZZ.target.com' -fs <baseline-size>" },
+          { "label": "Dedicated scanner", "cmd": "VHostScan -t <target-ip> -w wordlist.txt" },
+          { "label": "Probe the default vhost", "cmd": "curl -s -H 'Host: nonexistent.invalid' https://<target-ip>/  (what does the catch-all serve?)" }
+        ],
+        "sections": [
+          { "title": "How It's Tested", "type": "commands", "commands": [
+            { "label": "1. Baseline the IP directly", "cmd": "# what does the server return for its IP with a bogus Host?\ncurl -s -H 'Host: doesnotexist.example' https://<target-ip>/ -k -o /dev/null -w '%{size_download}\\n'" },
+            { "label": "2. Brute-force candidate vhosts", "cmd": "ffuf -w subdomains.txt -u https://<target-ip>/ -H 'Host: FUZZ.target.com' -k -fs <baseline>\n# filter out the baseline size to reveal distinct hosts" },
+            { "label": "3. Use a purpose-built tool", "cmd": "VHostScan -t <target-ip> -oN vhosts.txt\n# flags catch-all pages and clusters distinct responses" },
+            { "label": "4. Chase what surfaces", "cmd": "# hit any hidden admin/staging vhost found and test it as its own app\n# these often run older code with weaker auth" }
+          ]},
+          { "title": "What It Exposes", "type": "table", "columns": ["Hidden host type", "Why it matters"], "rows": [
+            ["Staging / QA", "Debug features, weaker auth, unpatched or unreleased code"],
+            ["Admin / internal tools", "High-privilege functionality not meant to be public"],
+            ["Default / catch-all vhost", "Server version, sample pages, and config disclosure"],
+            ["Co-tenant sites", "Weak isolation lets a neighbour become a pivot"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP WSTG - Configuration and Deployment Management Testing", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/" },
+            { "label": "VHostScan", "url": "https://github.com/codingo/VHostScan" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Do not bind internal, staging, or admin sites to the same public-facing server as production; isolate them by network, not just by an unadvertised Host name.",
+            "Configure an explicit default virtual host that returns a neutral page or an error, rather than leaking a real site or server details for unknown Host values.",
+            "Restrict non-production and administrative virtual hosts by IP allow-list, VPN, or authentication at the edge.",
+            "On shared infrastructure, enforce strong tenant isolation (separate accounts, filesystems, and database credentials).",
+            "Validate the Host header against an allow-list so unexpected values are rejected."
+          ]}
+        ]
+      },
+      {
+        "id": "cloud-storage-misconfig",
+        "name": "Cloud Storage Misconfiguration",
+        "severity": "High",
+        "ref": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/11-Test_Cloud_Storage",
+        "description": "Cloud storage buckets (S3, GCS, Azure Blob) are readable, listable, or writable by anyone, exposing or allowing tampering with stored data.",
+        "brief": "Applications increasingly serve assets and store uploads in cloud object storage. When the bucket's access policy is too permissive, the consequences scale with the data it holds. Public list permission lets anyone enumerate every object; public read exposes documents, backups, and user uploads directly; and - the most dangerous - public write lets an attacker overwrite the files the site serves, planting malicious JavaScript, defacing content, or replacing downloads with malware, all from a trusted origin.\n\nBuckets are discoverable from asset URLs, JavaScript, and predictable names based on the organisation, so they are a routine, high-yield check. Misconfiguration is a configuration failure rather than a code bug, which is why it is so common and so often overlooked.",
+        "quickReference": [
+          { "label": "Test S3 listing", "cmd": "curl -s https://<bucket>.s3.amazonaws.com/   (XML listing = public list)" },
+          { "label": "Test read on an object", "cmd": "curl -s https://<bucket>.s3.amazonaws.com/<key> -o out && file out" },
+          { "label": "Test write (most critical)", "cmd": "curl -s -X PUT https://<bucket>.s3.amazonaws.com/poc.txt -d 'poc'  ->  then GET it back" },
+          { "label": "Discover buckets", "cmd": "cloud_enum -k <org>   /   check asset hostnames in page + JS" }
+        ],
+        "sections": [
+          { "title": "How It's Tested", "type": "commands", "commands": [
+            { "label": "1. Find the buckets", "cmd": "# from served assets and JavaScript, and by guessing org-based names\ncloud_enum -k targetcorp -k target-corp -k targetcdn" },
+            { "label": "2. Test anonymous list and read", "cmd": "aws s3 ls s3://<bucket> --no-sign-request\naws s3 cp s3://<bucket>/<key> . --no-sign-request\n# or plain curl to the bucket URL" },
+            { "label": "3. Test anonymous write (with authorisation)", "cmd": "echo poc > poc.txt\naws s3 cp poc.txt s3://<bucket>/poc.txt --no-sign-request\n# success = attacker can replace served content" },
+            { "label": "4. Check ACLs / policy", "cmd": "aws s3api get-bucket-acl --bucket <bucket> --no-sign-request\naws s3api get-bucket-policy --bucket <bucket> --no-sign-request" }
+          ]},
+          { "title": "Permission Impact", "type": "table", "columns": ["Public permission", "Impact"], "rows": [
+            ["List", "Enumerate every object name in the bucket"],
+            ["Read", "Download documents, backups, and user uploads"],
+            ["Write", "Overwrite served files - stored XSS, defacement, malware delivery from a trusted origin"],
+            ["Full control / ACL", "Take over the bucket entirely"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP WSTG - Test Cloud Storage", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/11-Test_Cloud_Storage" },
+            { "label": "AWS - S3 Security Best Practices", "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Block public access at the account and bucket level by default (e.g. S3 Block Public Access) and grant access only through signed URLs or a CDN with an origin-access identity.",
+            "Never grant anonymous write; scope write permissions to specific authenticated principals with least privilege.",
+            "Review bucket ACLs and policies for wildcards (Principal: * / AllUsers / AuthenticatedUsers) and remove them.",
+            "Serve user uploads from a separate, non-executable origin and validate content types so a poisoned object cannot run as script.",
+            "Enable access logging and monitoring so anonymous access attempts are visible."
+          ]}
+        ]
+      },
+      {
+        "id": "captcha-bypass",
+        "name": "CAPTCHA Weaknesses & Bypass",
+        "severity": "Low",
+        "ref": "https://owasp.org/www-project-automated-threats-to-web-applications/",
+        "description": "A CAPTCHA meant to stop automation can be replayed, removed, solved, or side-stepped, leaving the protected action open to abuse.",
+        "brief": "CAPTCHAs exist to stop automated abuse of an action - mass account creation, credential stuffing, email flooding, brute force. They fail in predictable, implementation-level ways rather than by breaking the image itself. Common weaknesses: the token is not invalidated after one use, so a single solved value can be replayed forever; validation happens only in the browser, so blocking or removing the CAPTCHA parameter lets the request through; the check is wired to one method or content-type but not another; or the challenge is weak enough for OCR/solver services.\n\nThe CAPTCHA is rarely the real prize - it is the gate in front of a valuable action. A bypass matters because of what it unlocks, so the impact is judged by the protected function (account creation, login, password reset, mail sending), not by the CAPTCHA alone.",
+        "quickReference": [
+          { "label": "Replay a solved token", "cmd": "submit a valid captcha value twice - is the second request accepted?" },
+          { "label": "Remove the parameter", "cmd": "strip the captcha field entirely and send the request" },
+          { "label": "Change the method / type", "cmd": "POST -> GET, or JSON -> form-encoded, to hit a handler that skips the check" },
+          { "label": "Solve it", "cmd": "run weak text captchas through an OCR/solver to defeat anti-automation" }
+        ],
+        "sections": [
+          { "title": "How It's Tested", "type": "commands", "commands": [
+            { "label": "1. Test token reuse", "cmd": "# solve once, capture the value, then replay it on repeated requests\n# also try the same value paired with its original session id" },
+            { "label": "2. Test server-side enforcement", "cmd": "# remove the captcha parameter, send an empty value, or block the\n# captcha script/image from loading - does the action still succeed?" },
+            { "label": "3. Test alternate paths", "cmd": "# resend as GET instead of POST; re-encode JSON as form data\n# a second handler may never validate the captcha" },
+            { "label": "4. Test the challenge strength", "cmd": "# feed the image to OCR / a solver; request the image by direct URL\n# to see if the answer is predictable or repeated" }
+          ]},
+          { "title": "Weakness -> Bypass", "type": "table", "columns": ["Weakness", "Bypass"], "rows": [
+            ["Token not invalidated", "Replay one solved value indefinitely"],
+            ["Client-side only", "Remove/empty the parameter, or block the widget"],
+            ["Per-handler validation", "Switch method or content-type"],
+            ["Weak image", "OCR / automated solver"],
+            ["Predictable/reused image", "Request by path; map image to known answer"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP - Automated Threats to Web Applications", "url": "https://owasp.org/www-project-automated-threats-to-web-applications/" },
+            { "label": "OWASP - Blocking Brute Force Attacks", "url": "https://owasp.org/www-community/controls/Blocking_Brute_Force_Attacks" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Validate the CAPTCHA server-side on every path to the protected action, and reject the request when the token is missing, empty, or malformed.",
+            "Invalidate each token immediately after a single verification and bind it to the session and a short expiry.",
+            "Use a modern, well-maintained CAPTCHA service instead of home-grown text images that OCR defeats.",
+            "Do not rely on the CAPTCHA alone - add server-side rate limiting and monitoring on the underlying action (login, registration, mail).",
+            "Ensure every method and content-type for the endpoint enforces the same check."
+          ]}
+        ]
+      },
       {
         "id": "dangerous-http-methods",
         "name": "Dangerous HTTP Methods",
