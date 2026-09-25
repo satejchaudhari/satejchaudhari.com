@@ -45,10 +45,10 @@ var WEB_MAP = {
           title: "Large scope",
           scenario: "You're testing a whole organisation — multiple domains, brands, and IP ranges.",
           items: [
-            { text: "Find the ASN(s) and owned IP ranges", tools: [{ n: "Amass", id: "amass" }, { n: "Asnlookup" }, { n: "metabigor" }, { n: "bgp.he.net" }] },
-            { text: "Review recent acquisitions and subsidiaries", tools: [{ n: "Crunchbase" }] },
-            { text: "Map related domains by shared registrant (reverse WHOIS)", tools: [{ n: "ViewDNS", id: "viewdns" }] },
-            { text: "Drop into Medium scope for each domain in turn" }
+            { text: "Find the ASN(s) and owned IP ranges", desc: "Public IP ranges are grouped under Autonomous System Numbers; mapping them reveals owned netblocks and hosts that DNS alone would miss.", tools: [{ n: "Amass", id: "amass" }, { n: "Asnlookup", id: "asnlookup" }, { n: "metabigor", id: "metabigor" }, { n: "bgp.he.net", id: "bgp-he" }] },
+            { text: "Review recent acquisitions and subsidiaries", desc: "Newly acquired companies often keep weaker, unmerged infrastructure, so treat each subsidiary's domains as in-scope assets.", tools: [{ n: "Crunchbase", id: "crunchbase" }] },
+            { text: "Map related domains by shared registrant (reverse WHOIS)", desc: "Reverse WHOIS pivots on a shared registrant email or organisation name to surface other domains the same entity owns.", tools: [{ n: "ViewDNS", id: "viewdns" }] },
+            { text: "Drop into Medium scope for each domain in turn", desc: "Once you have the full domain list, run the whole medium-scope workflow against each domain one by one." }
           ]
         },
         {
@@ -56,16 +56,16 @@ var WEB_MAP = {
           title: "Medium scope",
           scenario: "You're testing a single domain and want every subdomain and asset it exposes.",
           items: [
-            { text: "Enumerate subdomains (passive, all API keys)", tools: [{ n: "Amass", id: "amass" }, { n: "Subfinder", id: "subfinder" }] },
-            { text: "Bruteforce subdomains against a resolver list", tools: [{ n: "puredns" }] },
-            { text: "Permute and alter known subdomains", tools: [{ n: "gotator" }, { n: "ripgen" }] },
-            { text: "Identify which subdomains are alive", tools: [{ n: "httpx" }] },
-            { text: "Check every subdomain for takeover", tools: [{ n: "Nuclei", id: "nuclei" }], vulns: [{ n: "Subdomain Takeover" }] },
-            { text: "Enumerate exposed cloud assets (buckets, blobs)", tools: [{ n: "cloud_enum" }] },
-            { text: "Search Shodan for the organisation's hosts", tools: [{ n: "Shodan", id: "shodan" }] },
-            { text: "Attempt a DNS zone transfer (AXFR)" },
-            { text: "Run recon recursively on newly found subdomains", tools: [{ n: "Amass", id: "amass" }, { n: "Subfinder", id: "subfinder" }] },
-            { text: "Screenshot every live host to triage visually", tools: [{ n: "gowitness" }, { n: "aquatone" }] }
+            { text: "Enumerate subdomains (passive, all API keys)", desc: "Passive sources (certificate logs, DNS aggregators, search engines) return known subdomains without sending a single packet to the target.", tools: [{ n: "Amass", id: "amass" }, { n: "Subfinder", id: "subfinder" }] },
+            { text: "Bruteforce subdomains against a resolver list", desc: "Resolving a large candidate wordlist against the domain finds hosts that never appear in any public source.", tools: [{ n: "puredns", id: "puredns" }] },
+            { text: "Permute and alter known subdomains", desc: "Generating variations of the names you already have (dev-, staging-, -uk) catches predictable hosts that brute-forcing misses.", tools: [{ n: "gotator", id: "gotator" }, { n: "ripgen", id: "ripgen" }] },
+            { text: "Identify which subdomains are alive", desc: "Probing every candidate over HTTP and HTTPS keeps only the hosts that actually respond, along with their status codes and titles.", tools: [{ n: "httpx", id: "httpx" }] },
+            { text: "Check every subdomain for takeover", desc: "A subdomain whose DNS still points at a de-provisioned cloud service can be claimed by an attacker, so scan every host for dangling records.", tools: [{ n: "Nuclei", id: "nuclei" }], vulns: [{ n: "Subdomain Takeover", id: "subdomain-takeover" }] },
+            { text: "Enumerate exposed cloud assets (buckets, blobs)", desc: "Guessing and validating storage buckets named after the organisation often turns up publicly readable files.", tools: [{ n: "cloud_enum", id: "cloud-enum" }] },
+            { text: "Search Shodan for the organisation's hosts", desc: "Shodan already indexes internet-facing services, so it surfaces exposed hosts, ports, and banners without you scanning anything.", tools: [{ n: "Shodan", id: "shodan" }] },
+            { text: "Attempt a DNS zone transfer (AXFR)", desc: "A DNS server that mistakenly allows zone transfers hands you every record in the zone in a single request." },
+            { text: "Run recon recursively on newly found subdomains", desc: "Feeding freshly discovered subdomains back into enumeration reaches deeper, second-level hosts.", tools: [{ n: "Amass", id: "amass" }, { n: "Subfinder", id: "subfinder" }] },
+            { text: "Screenshot every live host to triage visually", desc: "Capturing every live host lets you triage hundreds of targets by eye and spot logins, dashboards, and defaults quickly.", tools: [{ n: "gowitness", id: "gowitness" }, { n: "aquatone", id: "aquatone" }] }
           ]
         },
         {
@@ -73,25 +73,25 @@ var WEB_MAP = {
           title: "Small scope",
           scenario: "You're testing a single website and want to fingerprint, crawl, and mine it deeply.",
           items: [
-            { text: "Fingerprint the web server, technologies, and database", tools: [{ n: "httpx" }, { n: "WhatWeb", id: "whatweb" }] },
-            { text: "Fetch /robots.txt, /sitemap.xml, /.well-known/, crossdomain.xml, clientaccesspolicy.xml" },
-            { text: "Review comments in HTML and JS source", tools: [{ n: "Burp Suite", id: "burpsuite" }] },
-            { text: "Enumerate directories and content", tools: [{ n: "FFUF", id: "ffuf" }, { n: "Gobuster", id: "gobuster" }, { n: "feroxbuster", id: "feroxbuster" }] },
-            { text: "Fuzz for hidden files and directories", tools: [{ n: "FFUF", id: "ffuf" }, { n: "SecLists", id: "seclists" }] },
-            { text: "Search for leaked emails and credentials", tools: [{ n: "pwndb" }] },
-            { text: "Identify the WAF in front of the app", tools: [{ n: "wafw00f" }, { n: "WhatWaf" }] },
-            { text: "Google dorking for exposed content", tools: [{ n: "Google Dorking", id: "google-dorking" }] },
-            { text: "GitHub dorking for leaked code and secrets", tools: [{ n: "git-hound" }, { n: "gitdorks_go" }], vulns: [{ n: "Exposed Secrets & API Keys", id: "secrets-exposure" }] },
-            { text: "Collect historical URLs", tools: [{ n: "gau" }, { n: "Wayback Machine", id: "wayback-machine" }, { n: "gospider" }] },
-            { text: "Filter URLs down to potentially vulnerable patterns", tools: [{ n: "gf-patterns" }] },
-            { text: "Run automated XSS discovery over collected URLs", tools: [{ n: "Dalfox", id: "dalfox" }], vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
-            { text: "Locate admin and login panels", tools: [{ n: "FFUF", id: "ffuf" }] },
-            { text: "Check for broken-link hijacking", tools: [{ n: "broken-link-checker" }] },
-            { text: "Collect every JavaScript file", tools: [{ n: "subjs" }, { n: "xnLinkFinder" }] },
-            { text: "Hunt hardcoded API keys and secrets in JS", tools: [{ n: "Nuclei", id: "nuclei" }], vulns: [{ n: "Exposed Secrets & API Keys", id: "secrets-exposure" }] },
-            { text: "Analyse JS for endpoints and words", tools: [{ n: "subjs" }, { n: "xnLinkFinder" }, { n: "JSA" }] },
-            { text: "Run an automated vulnerability scanner", tools: [{ n: "Nuclei", id: "nuclei" }] },
-            { text: "Test the CORS configuration", tools: [{ n: "Corsy" }, { n: "CORScanner" }], vulns: [{ n: "CORS Misconfiguration", id: "cors-misconfig" }] }
+            { text: "Fingerprint the web server, technologies, and database", desc: "Knowing the exact server, framework, and database narrows down which vulnerabilities and payloads are worth trying.", tools: [{ n: "httpx", id: "httpx" }, { n: "WhatWeb", id: "whatweb" }] },
+            { text: "Fetch /robots.txt, /sitemap.xml, /.well-known/, crossdomain.xml, clientaccesspolicy.xml", desc: "These files routinely disclose hidden paths, admin areas, and endpoints the developers meant to keep out of sight." },
+            { text: "Review comments in HTML and JS source", desc: "Developer comments frequently leak credentials, internal URLs, and notes about known weaknesses.", tools: [{ n: "Burp Suite", id: "burpsuite" }] },
+            { text: "Enumerate directories and content", desc: "Brute-forcing paths reveals unlinked directories, backups, and admin panels that are not reachable from the UI.", tools: [{ n: "FFUF", id: "ffuf" }, { n: "Gobuster", id: "gobuster" }, { n: "feroxbuster", id: "feroxbuster" }] },
+            { text: "Fuzz for hidden files and directories", desc: "Extension-aware wordlists find forgotten files such as .bak, .old, and .zip that often expose source or data.", tools: [{ n: "FFUF", id: "ffuf" }, { n: "SecLists", id: "seclists" }] },
+            { text: "Search for leaked emails and credentials", desc: "Breach databases may already hold valid credentials for the target's users, so check before brute-forcing anything.", tools: [{ n: "pwndb", id: "pwndb" }] },
+            { text: "Identify the WAF in front of the app", desc: "Fingerprinting the WAF tells you what will block your payloads and how to shape them to slip through.", tools: [{ n: "wafw00f", id: "wafw00f" }, { n: "WhatWaf", id: "whatwaf" }] },
+            { text: "Google dorking for exposed content", desc: "Targeted search operators surface indexed sensitive files, error pages, and login portals straight from the search engine.", tools: [{ n: "Google Dorking", id: "google-dorking" }] },
+            { text: "GitHub dorking for leaked code and secrets", desc: "Public repositories and commit history often expose hardcoded secrets, internal hostnames, and config files.", tools: [{ n: "git-hound", id: "git-hound" }, { n: "gitdorks_go", id: "gitdorks-go" }], vulns: [{ n: "Exposed Secrets & API Keys", id: "secrets-exposure" }] },
+            { text: "Collect historical URLs", desc: "Archives such as the Wayback Machine reveal old endpoints and parameters that may still work but are no longer linked.", tools: [{ n: "gau", id: "gau" }, { n: "Wayback Machine", id: "wayback-machine" }, { n: "gospider", id: "gospider" }] },
+            { text: "Filter URLs down to potentially vulnerable patterns", desc: "Pattern-matching the URL list highlights the ones carrying parameters worth testing for XSS, SSRF, LFI, and similar.", tools: [{ n: "gf-patterns", id: "gf-patterns" }] },
+            { text: "Run automated XSS discovery over collected URLs", desc: "Passing collected URLs through an automated scanner flags reflected-XSS candidates quickly before manual testing.", tools: [{ n: "Dalfox", id: "dalfox" }], vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
+            { text: "Locate admin and login panels", desc: "Finding the authentication and admin endpoints gives you the highest-value targets for auth and access-control testing.", tools: [{ n: "FFUF", id: "ffuf" }] },
+            { text: "Check for broken-link hijacking", desc: "Links pointing at expired third-party domains can be re-registered by an attacker to serve content in the site's trust context.", tools: [{ n: "broken-link-checker", id: "broken-link-checker" }] },
+            { text: "Collect every JavaScript file", desc: "Client-side JavaScript maps the application's endpoints, parameters, and hidden functionality.", tools: [{ n: "subjs", id: "subjs" }, { n: "xnLinkFinder", id: "xnlinkfinder" }] },
+            { text: "Hunt hardcoded API keys and secrets in JS", desc: "Front-end bundles frequently ship API keys, tokens, and internal URLs that were never meant to be public.", tools: [{ n: "Nuclei", id: "nuclei" }], vulns: [{ n: "Exposed Secrets & API Keys", id: "secrets-exposure" }] },
+            { text: "Analyse JS for endpoints and words", desc: "Parsing JavaScript for endpoints and keywords expands your attack surface with routes the crawler never saw.", tools: [{ n: "subjs", id: "subjs" }, { n: "xnLinkFinder", id: "xnlinkfinder" }, { n: "JSA", id: "jsa" }] },
+            { text: "Run an automated vulnerability scanner", desc: "A template-based scanner quickly flags known CVEs, misconfigurations, and exposures across every host.", tools: [{ n: "Nuclei", id: "nuclei" }] },
+            { text: "Test the CORS configuration", desc: "A permissive cross-origin policy can let a malicious site read authenticated responses on the victim's behalf.", tools: [{ n: "Corsy", id: "corsy" }, { n: "CORScanner", id: "corscanner" }], vulns: [{ n: "CORS Misconfiguration", id: "cors-misconfig" }] }
           ]
         },
         {
@@ -99,13 +99,13 @@ var WEB_MAP = {
           title: "Network",
           scenario: "You have hosts/IPs in scope and want to profile exposed services and transport security.",
           items: [
-            { text: "Check whether ICMP (ping) is allowed" },
-            { text: "Check DMARC / SPF / DKIM email policies", tools: [{ n: "spoofcheck" }], vulns: [{ n: "Spoofable Email (SPF/DKIM/DMARC)", id: "email-spoofing" }] },
-            { text: "Review open ports via Shodan", tools: [{ n: "Shodan", id: "shodan" }] },
-            { text: "Full TCP port scan of all ports", tools: [{ n: "Nmap", id: "nmap" }] },
-            { text: "Scan the common UDP ports", tools: [{ n: "Nmap", id: "nmap" }, { n: "udp-proto-scanner" }] },
-            { text: "Test the SSL/TLS configuration", tools: [{ n: "testssl.sh" }], vulns: [{ n: "Weak TLS / SSL Configuration", id: "weak-tls" }] },
-            { text: "Password-spray discovered services (if you have creds)", tools: [{ n: "brutespray" }] }
+            { text: "Check whether ICMP (ping) is allowed", desc: "Knowing whether ping is permitted tells you how to tune host discovery so live hosts are not missed." },
+            { text: "Check DMARC / SPF / DKIM email policies", desc: "Weak or missing email-authentication records let an attacker spoof mail from the organisation's own domain.", tools: [{ n: "spoofcheck", id: "spoofcheck" }], vulns: [{ n: "Spoofable Email (SPF/DKIM/DMARC)", id: "email-spoofing" }] },
+            { text: "Review open ports via Shodan", desc: "Shodan's existing scan data shows exposed ports and services without you generating any traffic.", tools: [{ n: "Shodan", id: "shodan" }] },
+            { text: "Full TCP port scan of all ports", desc: "Scanning all 65,535 ports catches services hiding on non-standard ports that a top-ports scan skips.", tools: [{ n: "Nmap", id: "nmap" }] },
+            { text: "Scan the common UDP ports", desc: "UDP services such as DNS, SNMP, and VPN are easy to overlook but often expose sensitive functionality.", tools: [{ n: "Nmap", id: "nmap" }, { n: "udp-proto-scanner", id: "udp-proto-scanner" }] },
+            { text: "Test the SSL/TLS configuration", desc: "Auditing the TLS setup flags weak ciphers, outdated protocols, and certificate problems.", tools: [{ n: "testssl.sh", id: "testssl" }], vulns: [{ n: "Weak TLS / SSL Configuration", id: "weak-tls" }] },
+            { text: "Password-spray discovered services (if you have creds)", desc: "With a valid credential and a service list, a slow spray of common passwords can find reused logins without tripping lockouts.", tools: [{ n: "brutespray", id: "brutespray" }] }
           ]
         },
         {
@@ -113,10 +113,10 @@ var WEB_MAP = {
           title: "Preparation",
           scenario: "Recon is done — organise everything before you start active testing.",
           items: [
-            { text: "Study the site structure and user roles" },
-            { text: "Draft a list of test cases for every feature" },
-            { text: "Understand the business area and what its users need" },
-            { text: "Compile the asset inventory (subdomains, live hosts, wayback URLs, hidden dirs, nmap, JS files, vulnerable links)" }
+            { text: "Study the site structure and user roles", desc: "Understanding how the application and its roles fit together shows where the interesting logic and access boundaries are." },
+            { text: "Draft a list of test cases for every feature", desc: "A per-feature test plan makes coverage deliberate instead of ad-hoc and stops checks slipping through." },
+            { text: "Understand the business area and what its users need", desc: "Understanding what the business does clarifies which flaws actually matter and what a real attacker would target." },
+            { text: "Compile the asset inventory (subdomains, live hosts, wayback URLs, hidden dirs, nmap, JS files, vulnerable links)", desc: "A consolidated inventory of everything you found keeps the engagement organised so nothing is left untested." }
           ]
         }
       ]

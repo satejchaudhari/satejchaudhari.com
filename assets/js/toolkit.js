@@ -58,6 +58,44 @@ var TOOLKIT = [
     category: "Network Recon",
     tools: [
       {
+        "id": "udp-proto-scanner",
+        "name": "udp-proto-scanner",
+        "url": "https://github.com/CiscoCXSecurity/udp-proto-scanner",
+        "description": "Probe UDP services with protocol-specific packets to find responders.",
+        "brief": "UDP scanning with generic probes is slow and unreliable; udp-proto-scanner sends real protocol-specific payloads (DNS, SNMP, NTP, NetBIOS, and more) so genuine UDP services actually respond, making it far more accurate than a blind UDP sweep.",
+        "quickReference": [
+          { "label": "Scan a range", "cmd": "udp-proto-scanner.pl 10.0.0.0/24" },
+          { "label": "From a targets file", "cmd": "udp-proto-scanner.pl --file targets.txt" }
+        ]
+      },
+      {
+        "id": "testssl",
+        "name": "testssl.sh",
+        "url": "https://github.com/drwetter/testssl.sh",
+        "description": "Test a server's TLS/SSL for protocols, ciphers, and known flaws.",
+        "brief": "testssl.sh is a single script that audits a host's TLS configuration: supported protocols, cipher strength, certificate details, and known vulnerabilities (Heartbleed, ROBOT, POODLE, etc.). It runs offline with no dependencies and produces clear, gradeable output.",
+        "quickReference": [
+          { "label": "Full test", "cmd": "testssl.sh https://target.com" },
+          { "label": "Only high-severity findings", "cmd": "testssl.sh --severity HIGH target.com:443" },
+          { "label": "Known vulnerabilities only", "cmd": "testssl.sh --vulnerable target.com" }
+        ]
+      },
+      {
+        "id": "brutespray",
+        "name": "BruteSpray",
+        "url": "https://github.com/x90skysn3k/brutespray",
+        "description": "Spray credentials across services discovered by nmap.",
+        "brief": "BruteSpray reads nmap output (gnmap/XML) and automatically launches credential attacks against the services it found — SSH, FTP, RDP, SMB, databases, and more — so a set of discovered services and a small password list becomes a targeted spray without manual per-service commands.",
+        "quickReference": [
+          { "label": "From nmap gnmap output", "cmd": "brutespray --file nmap.gnmap -u admin -p passwords.txt" },
+          { "label": "From nmap XML, threaded", "cmd": "brutespray --file scan.xml --threads 5 --hosts 5" }
+        ],
+        "sections": [ { "title": "Notes & Tips", "type": "notes", "items": [
+          "Mind account-lockout policies — spray slowly and prefer a few common passwords over a large list.",
+          "Only test services you are explicitly authorised to attack."
+        ] } ]
+      },
+      {
         id: "nmap",
         name: "Nmap",
         url: "https://nmap.org/",
@@ -3680,6 +3718,121 @@ var TOOLKIT = [
     category: "OSINT",
     tools: [
       {
+        "id": "asnlookup",
+        "name": "ASNLookup",
+        "url": "https://github.com/yassineaboukir/Asnlookup",
+        "description": "Resolve an organisation to its ASNs and the IP ranges (CIDRs) they announce.",
+        "brief": "ASNLookup maps a company name or ASN to the IP ranges it owns, which turns a single organisation into a concrete list of netblocks to scan. It is a fast first step for large-scope recon, before subdomain work.",
+        "quickReference": [
+          { "label": "By organisation name", "cmd": "asnlookup -o \"Target Corp\"" },
+          { "label": "By ASN, output CIDRs", "cmd": "asnlookup -a AS12345 -c" },
+          { "label": "Pipe ranges into a scanner", "cmd": "asnlookup -o Target -c | tee ranges.txt" }
+        ],
+        "sections": [ { "title": "Notes & Tips", "type": "notes", "items": [
+          "Confirm every range actually belongs to the target before scanning — shared hosting and cloud ASNs contain other people's assets.",
+          "Cross-check results against bgp.he.net and metabigor; no single source is complete."
+        ] } ]
+      },
+      {
+        "id": "metabigor",
+        "name": "Metabigor",
+        "url": "https://github.com/j3ssie/metabigor",
+        "description": "OSINT tool that turns organisation names into ASNs and IP ranges with no API keys.",
+        "brief": "Metabigor gathers intelligence — ASNs, netblocks, and related data — from public sources without needing any API keys, which makes it a quick, dependency-light way to expand a target's IP footprint.",
+        "quickReference": [
+          { "label": "Org name to netblocks", "cmd": "echo \"target\" | metabigor net --org" },
+          { "label": "ASN to ranges", "cmd": "echo \"AS12345\" | metabigor net --asn" },
+          { "label": "Search by IP", "cmd": "echo \"1.2.3.4\" | metabigor net --ip" }
+        ]
+      },
+      {
+        "id": "bgp-he",
+        "name": "BGP.he.net (Hurricane Electric)",
+        "url": "https://bgp.he.net/",
+        "description": "Free BGP toolkit for looking up ASNs, prefixes, peers, and DNS by organisation.",
+        "brief": "Hurricane Electric's BGP toolkit is a web interface for exploring routing data: search an organisation to find its ASNs, then list the IPv4/IPv6 prefixes each ASN announces. It is the manual counterpart to asnlookup/metabigor and useful for validating their output.",
+        "quickReference": [
+          { "label": "Look up an ASN", "cmd": "https://bgp.he.net/AS12345" },
+          { "label": "Prefixes announced by an ASN", "cmd": "https://bgp.he.net/AS12345#_prefixes" },
+          { "label": "DNS records for a domain", "cmd": "https://bgp.he.net/dns/target.com" }
+        ]
+      },
+      {
+        "id": "crunchbase",
+        "name": "Crunchbase",
+        "url": "https://www.crunchbase.com/",
+        "description": "Company intelligence — funding, acquisitions, and subsidiaries.",
+        "brief": "Crunchbase profiles companies with their funding history, leadership, and — most usefully for recon — acquisitions. Acquired companies often keep separate, less-hardened infrastructure, so their domains belong in scope on a large engagement.",
+        "quickReference": [
+          { "label": "Company profile", "cmd": "https://www.crunchbase.com/organization/<company>" },
+          { "label": "Acquisitions", "cmd": "profile page -> Financials / Acquisitions tab" }
+        ]
+      },
+      {
+        "id": "cloud-enum",
+        "name": "cloud_enum",
+        "url": "https://github.com/initstring/cloud_enum",
+        "description": "Enumerate public AWS, Azure, and GCP assets for a keyword.",
+        "brief": "cloud_enum guesses and validates cloud resources — S3 buckets, Azure blobs/containers, GCP buckets and apps — named after a keyword, flagging which exist and which are publicly readable. Open buckets are a common source of leaked files.",
+        "quickReference": [
+          { "label": "Scan a keyword across all three clouds", "cmd": "cloud_enum -k targetcompany" },
+          { "label": "Multiple keywords", "cmd": "cloud_enum -k target -k target-corp -k targetapp" },
+          { "label": "From a keyword file", "cmd": "cloud_enum -kf keywords.txt -l results.txt" }
+        ]
+      },
+      {
+        "id": "pwndb",
+        "name": "pwndb",
+        "url": "https://github.com/davidtavarez/pwndb",
+        "description": "Search leaked-credential dumps for a target's emails or domain (over Tor).",
+        "brief": "pwndb queries a leaked-credentials database (reachable through Tor) for accounts belonging to an email or an entire domain, surfacing passwords already exposed in past breaches. Check this before any brute-force — a known password is faster and quieter.",
+        "quickReference": [
+          { "label": "Single account", "cmd": "python3 pwndb.py --target user@target.com" },
+          { "label": "Whole domain", "cmd": "python3 pwndb.py --target @target.com" }
+        ],
+        "sections": [ { "title": "Notes & Tips", "type": "notes", "items": [
+          "Requires Tor running locally (the service is a hidden service).",
+          "Only use recovered credentials against systems you are authorised to test."
+        ] } ]
+      },
+      {
+        "id": "git-hound",
+        "name": "git-hound",
+        "url": "https://github.com/tillson/git-hound",
+        "description": "Find exposed secrets across GitHub with pattern matching.",
+        "brief": "git-hound searches GitHub code (beyond a single org) for secrets tied to a target, using regex rules and commit digging to catch keys that were committed and later 'removed'. It is aimed at surfacing leaked credentials at scale.",
+        "quickReference": [
+          { "label": "Search by domain", "cmd": "echo \"target.com\" | git-hound --dig-files --dig-commits" },
+          { "label": "From a subdomain list", "cmd": "git-hound --subdomain-file subs.txt" },
+          { "label": "Custom regex rules", "cmd": "git-hound --regex-file rules.txt" }
+        ]
+      },
+      {
+        "id": "gitdorks-go",
+        "name": "gitdorks_go",
+        "url": "https://github.com/damit5/gitdorks_go",
+        "description": "Automate GitHub dorking with a curated dork list to find leaked info.",
+        "brief": "gitdorks_go runs a list of GitHub search dorks against a target org or keyword, automating the tedious manual dorking that turns up credentials, internal hostnames, and config files in public repositories.",
+        "quickReference": [
+          { "label": "Dork an organisation", "cmd": "gitdorks_go -gd dorks.txt -nws 20 -target target -tf tokens.txt" },
+          { "label": "Dork a domain", "cmd": "gitdorks_go -gd dorks.txt -target target.com -tf tokens.txt" }
+        ],
+        "sections": [ { "title": "Notes & Tips", "type": "notes", "items": [
+          "Needs one or more GitHub personal access tokens to avoid rate limiting.",
+          "Validate every hit by hand — dorks are noisy and produce false positives."
+        ] } ]
+      },
+      {
+        "id": "spoofcheck",
+        "name": "spoofcheck",
+        "url": "https://github.com/BishopFox/spoofcheck",
+        "description": "Check whether a domain's SPF and DMARC records allow email spoofing.",
+        "brief": "spoofcheck evaluates a domain's SPF and DMARC policies and reports whether mail can be spoofed as that domain — a weak or missing policy enables convincing phishing from the organisation's own name.",
+        "quickReference": [
+          { "label": "Check a domain", "cmd": "python spoofcheck.py target.com" }
+        ]
+      },
+      {
         id: "hunter-io",
         name: "Hunter.io",
         url: "https://hunter.io/",
@@ -5492,6 +5645,210 @@ var TOOLKIT = [
   {
     category: "Web Application",
     tools: [
+      {
+        "id": "httpx",
+        "name": "httpx",
+        "url": "https://github.com/projectdiscovery/httpx",
+        "description": "Fast, multi-purpose HTTP toolkit for probing hosts at scale.",
+        "brief": "httpx (ProjectDiscovery) takes a list of hosts or subdomains and quickly reports which are alive, with status code, title, technologies, CNAME, and more. It is the standard 'is it live?' stage that sits between subdomain enumeration and active testing.",
+        "quickReference": [
+          { "label": "Probe a subdomain list", "cmd": "httpx -l subs.txt -silent" },
+          { "label": "Rich output for triage", "cmd": "httpx -l subs.txt -title -sc -tech-detect -cname" },
+          { "label": "Pipe straight from subfinder", "cmd": "subfinder -d target.com -silent | httpx -silent" }
+        ],
+        "sections": [ { "title": "Useful Flags", "type": "table", "columns": ["Flag", "Description"], "rows": [
+          ["-sc", "Show HTTP status code"],
+          ["-title", "Grab the page title"],
+          ["-tech-detect", "Fingerprint technologies (Wappalyzer)"],
+          ["-cname", "Print the CNAME (spot takeover candidates)"],
+          ["-location", "Follow and show redirects"],
+          ["-mc / -fc", "Match / filter by status code"]
+        ] } ]
+      },
+      {
+        "id": "puredns",
+        "name": "puredns",
+        "url": "https://github.com/d3mondev/puredns",
+        "description": "Fast subdomain bruteforce and resolver with wildcard filtering.",
+        "brief": "puredns resolves huge subdomain wordlists quickly using massdns, and — crucially — filters out wildcard DNS responses that would otherwise flood results with false positives. It handles both brute-forcing new names and validating an existing list.",
+        "quickReference": [
+          { "label": "Bruteforce a domain", "cmd": "puredns bruteforce all.txt target.com -r resolvers.txt" },
+          { "label": "Resolve/validate a list", "cmd": "puredns resolve subs.txt -r resolvers.txt" }
+        ],
+        "sections": [ { "title": "Notes & Tips", "type": "notes", "items": [
+          "Use a fresh, trusted resolver list — stale public resolvers cause missed or wrong results.",
+          "Pair with a large permutation/brute wordlist (e.g. six2dez lists) for coverage."
+        ] } ]
+      },
+      {
+        "id": "gotator",
+        "name": "gotator",
+        "url": "https://github.com/Josue87/gotator",
+        "description": "Generate DNS permutation wordlists from known subdomains.",
+        "brief": "gotator takes the subdomains you already found plus a permutation wordlist and produces new candidate names (dev-, staging-, -v2, numbering) to resolve. It feeds a resolver like puredns to catch predictable hosts that never appear publicly.",
+        "quickReference": [
+          { "label": "Generate permutations", "cmd": "gotator -sub subs.txt -perm perms.txt -depth 1 -numbers 5 -mindup -adv -md > out.txt" },
+          { "label": "Then resolve them", "cmd": "puredns resolve out.txt -r resolvers.txt" }
+        ]
+      },
+      {
+        "id": "ripgen",
+        "name": "ripgen",
+        "url": "https://github.com/resyncgg/ripgen",
+        "description": "Fast, rules-based subdomain permutation generator.",
+        "brief": "ripgen derives permutation rules from a set of known subdomains and generates new candidates extremely quickly. It is a faster alternative to gotator/altdns for producing a permutation list to resolve.",
+        "quickReference": [
+          { "label": "Generate from a list", "cmd": "ripgen -d subs.txt > permutations.txt" },
+          { "label": "Pipe form", "cmd": "cat subs.txt | ripgen | puredns resolve -r resolvers.txt" }
+        ]
+      },
+      {
+        "id": "gowitness",
+        "name": "gowitness",
+        "url": "https://github.com/sensepost/gowitness",
+        "description": "Take screenshots of web hosts from the command line for visual triage.",
+        "brief": "gowitness uses headless Chrome to screenshot a list of hosts or URLs and stores the results in a searchable report, so hundreds of targets can be triaged by eye — logins, dashboards, and default pages jump out fast.",
+        "quickReference": [
+          { "label": "Screenshot a host list", "cmd": "gowitness scan file -f live.txt" },
+          { "label": "One URL", "cmd": "gowitness scan single -u https://target.com" },
+          { "label": "View the report", "cmd": "gowitness report server   # then open the local UI" }
+        ]
+      },
+      {
+        "id": "aquatone",
+        "name": "aquatone",
+        "url": "https://github.com/michenriksen/aquatone",
+        "description": "Screenshot and report on a large set of hosts from stdin.",
+        "brief": "aquatone reads hosts or URLs from stdin, screenshots them, and builds an HTML report that clusters similar pages — a quick way to visually cover a wide attack surface. gowitness is the more actively maintained alternative.",
+        "quickReference": [
+          { "label": "From a host list", "cmd": "cat hosts.txt | aquatone" },
+          { "label": "Scan more ports", "cmd": "cat hosts.txt | aquatone -ports large" }
+        ]
+      },
+      {
+        "id": "wafw00f",
+        "name": "wafw00f",
+        "url": "https://github.com/EnableSecurity/wafw00f",
+        "description": "Identify and fingerprint the WAF protecting a website.",
+        "brief": "wafw00f sends a series of crafted requests and analyses the responses to identify which Web Application Firewall (if any) sits in front of a site. Knowing the WAF tells you what will block payloads and how to shape them.",
+        "quickReference": [
+          { "label": "Fingerprint a site", "cmd": "wafw00f https://target.com" },
+          { "label": "List detectable WAFs", "cmd": "wafw00f -l" },
+          { "label": "From a URL list", "cmd": "wafw00f -i urls.txt" }
+        ]
+      },
+      {
+        "id": "whatwaf",
+        "name": "WhatWaf",
+        "url": "https://github.com/Ekultek/WhatWaf",
+        "description": "Detect WAFs/IPS and suggest tamper-based bypasses.",
+        "brief": "WhatWaf detects firewalls and protection systems and, unlike wafw00f, also proposes tamper techniques that may bypass the detected protection — useful when a WAF is blocking your test payloads.",
+        "quickReference": [
+          { "label": "Detect on a URL", "cmd": "whatwaf -u https://target.com" },
+          { "label": "With a random user-agent", "cmd": "whatwaf -u https://target.com --ra" }
+        ]
+      },
+      {
+        "id": "gau",
+        "name": "gau (getallurls)",
+        "url": "https://github.com/lc/gau",
+        "description": "Fetch known URLs for a domain from Wayback, Common Crawl, OTX, and URLScan.",
+        "brief": "gau pulls every URL that public archives already know about for a domain — old endpoints, parameters, and files that may still work but are no longer linked. It is the fastest way to build a large URL list for parameter and pattern analysis.",
+        "quickReference": [
+          { "label": "All URLs for a domain", "cmd": "gau target.com" },
+          { "label": "Include subdomains", "cmd": "gau --subs target.com" },
+          { "label": "From a domain list", "cmd": "cat domains.txt | gau --threads 5 | tee urls.txt" }
+        ]
+      },
+      {
+        "id": "gospider",
+        "name": "gospider",
+        "url": "https://github.com/jaeles-project/gospider",
+        "description": "Fast web spider that crawls a site and extracts links, JS, and forms.",
+        "brief": "gospider actively crawls a target, following links and pulling out URLs, JavaScript files, forms, and third-party sources. Where gau reads archives, gospider walks the live site, so the two complement each other.",
+        "quickReference": [
+          { "label": "Crawl one site", "cmd": "gospider -s https://target.com -d 2" },
+          { "label": "Crawl a list with extra sources", "cmd": "gospider -S urls.txt -c 10 -d 1 --other-source" }
+        ]
+      },
+      {
+        "id": "gf-patterns",
+        "name": "gf-patterns",
+        "url": "https://github.com/1ndianl33t/Gf-Patterns",
+        "description": "gf patterns to grep a URL list for likely vulnerable parameters.",
+        "brief": "gf is a wrapper around grep with reusable pattern files; the gf-patterns set flags URLs whose parameters commonly carry specific bugs — xss, ssrf, lfi, sqli, redirect, and more — so a huge URL list narrows to the ones worth testing.",
+        "quickReference": [
+          { "label": "Find XSS candidates", "cmd": "cat urls.txt | gf xss" },
+          { "label": "SSRF candidates", "cmd": "gau target.com | gf ssrf" },
+          { "label": "List available patterns", "cmd": "gf -list" }
+        ]
+      },
+      {
+        "id": "broken-link-checker",
+        "name": "broken-link-checker",
+        "url": "https://github.com/stevenvachon/broken-link-checker",
+        "description": "Crawl a site for broken links — candidates for broken-link hijacking.",
+        "brief": "blc crawls a website and reports broken links. Links pointing at expired external domains or de-provisioned resources can be re-registered by an attacker to serve content in the site's trust context (broken-link hijacking).",
+        "quickReference": [
+          { "label": "Recursive, ordered scan", "cmd": "blc https://target.com -ro" },
+          { "label": "Recursive, filter internal noise", "cmd": "blc -r --filter-level 3 https://target.com" }
+        ]
+      },
+      {
+        "id": "subjs",
+        "name": "subjs",
+        "url": "https://github.com/lc/subjs",
+        "description": "Extract JavaScript file URLs from a list of hosts.",
+        "brief": "subjs takes URLs or live hosts and returns the JavaScript files they reference. Those JS files are the raw material for endpoint and secret discovery, so subjs is the collection step before analysis with xnLinkFinder or JSA.",
+        "quickReference": [
+          { "label": "From a URL list", "cmd": "cat urls.txt | subjs" },
+          { "label": "Chain from httpx", "cmd": "cat hosts.txt | httpx -silent | subjs | tee js_files.txt" }
+        ]
+      },
+      {
+        "id": "xnlinkfinder",
+        "name": "xnLinkFinder",
+        "url": "https://github.com/xnl-h4ck3r/xnLinkFinder",
+        "description": "Discover endpoints and parameters from JS, URLs, and Burp exports.",
+        "brief": "xnLinkFinder parses JavaScript, URL lists, and Burp/ZAP exports to extract endpoints and parameter names, expanding the attack surface with routes the crawler never linked. It can also output a parameter list for fuzzing.",
+        "quickReference": [
+          { "label": "From a domain + subdomains", "cmd": "xnLinkFinder -i target.com -sf subs.txt" },
+          { "label": "From a Burp export", "cmd": "xnLinkFinder -i burpfile -o endpoints.txt -op parameters.txt" }
+        ]
+      },
+      {
+        "id": "jsa",
+        "name": "JSA (JS Analysis)",
+        "url": "https://github.com/w9w/JSA",
+        "description": "Analyse JavaScript files to pull out endpoints and links.",
+        "brief": "JSA extracts links and endpoints from JavaScript, helping map an application's hidden routes and API calls from its front-end bundles. It is one of several JS-analysis tools you would run over the files collected with subjs.",
+        "quickReference": [
+          { "label": "Analyse one file", "cmd": "python3 jsa.py -f app.js" },
+          { "label": "Analyse a list of JS URLs", "cmd": "python3 jsa.py -l js_files.txt" }
+        ]
+      },
+      {
+        "id": "corsy",
+        "name": "Corsy",
+        "url": "https://github.com/s0md3v/Corsy",
+        "description": "Scan URLs for CORS misconfigurations.",
+        "brief": "Corsy tests endpoints for common CORS misconfigurations — reflected origins, null origin, weak allow-list logic — that can let a malicious site read authenticated responses. It reports the specific misconfiguration class per URL.",
+        "quickReference": [
+          { "label": "Scan one URL", "cmd": "python3 corsy.py -u https://target.com" },
+          { "label": "Scan a list", "cmd": "python3 corsy.py -i urls.txt -t 10" }
+        ]
+      },
+      {
+        "id": "corscanner",
+        "name": "CORScanner",
+        "url": "https://github.com/chenjj/CORScanner",
+        "description": "Fast scanner for CORS misconfigurations.",
+        "brief": "CORScanner checks a target for CORS misconfigurations at speed, covering reflected origins, null origin, and prefix/suffix allow-list bugs. It complements Corsy as a second opinion on cross-origin policy.",
+        "quickReference": [
+          { "label": "Scan one URL", "cmd": "python3 cors_scan.py -u https://target.com" },
+          { "label": "Scan a list, many threads", "cmd": "python3 cors_scan.py -i urls.txt -t 100" }
+        ]
+      },
       {
         id: "ffuf",
         name: "FFUF",

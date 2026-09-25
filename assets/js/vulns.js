@@ -4213,6 +4213,65 @@ var VULNS = [
     category: "Misconfigurations",
     vulns: [
       {
+        "id": "subdomain-takeover",
+        "name": "Subdomain Takeover",
+        "severity": "High",
+        "ref": "https://github.com/EdOverflow/can-i-take-over-xyz",
+        "description": "A DNS record still points at a third-party service that has been de-provisioned, so an attacker can register that service and serve their own content from the trusted subdomain.",
+        "brief": "A subdomain takeover happens when a CNAME (or A/NS) record points at an external service — a cloud host, CDN, SaaS page, or storage bucket — that no longer has the resource claimed. The DNS entry is left dangling: it still resolves, but the provider returns an 'unclaimed / not found' state. Anyone who can register that resource on the same provider then controls whatever the subdomain serves.\n\nImpact ranges from convincing phishing and malware hosting on a trusted hostname to stealing cookies scoped to the parent domain, bypassing CORS/CSP allow-lists, and hijacking OAuth redirects — the browser still trusts app.target.com even though a stranger now owns it.",
+        "quickReference": [
+          { "label": "Find the dangling CNAME", "cmd": "dig CNAME app.target.com +short\n# -> points at an external provider (e.g. s3.amazonaws.com, github.io)" },
+          { "label": "Read the fingerprint", "cmd": "curl -s https://app.target.com | grep -i 'no such\\|not found\\|no bucket\\|there isn'" },
+          { "label": "Bulk-scan a subdomain list", "cmd": "subzy run --targets subs.txt\nnuclei -l subs.txt -t http/takeovers/" },
+          { "label": "Confirm what is claimable", "cmd": "check  can-i-take-over-xyz  for per-provider takeover status" }
+        ],
+        "sections": [
+          { "title": "How It's Observed", "type": "commands", "commands": [
+            { "label": "1. List the subdomains and their DNS targets", "cmd": "dig CNAME app.target.com +short\n# a live subdomain whose CNAME points at an external provider is the candidate" },
+            { "label": "2. Check whether the target resource is unclaimed", "cmd": "curl -sI https://app.target.com        # status code + Server header\ncurl -s  https://app.target.com | head    # look for a provider 'not found' page" },
+            { "label": "3. Match the response against a known fingerprint", "cmd": "# AWS S3:        NoSuchBucket\n# GitHub Pages:  There isn't a GitHub Pages site here\n# Heroku:        No such app\n# Azure:         404 Web Site not found\n# a matching fingerprint on a host that still resolves = takeover candidate" }
+          ]},
+          { "title": "Testing Steps", "type": "commands", "commands": [
+            { "label": "1. Collect every subdomain and its CNAME (see Recon)", "cmd": "subfinder -d target.com -all -silent | httpx -silent -cname -o live_cnames.txt" },
+            { "label": "2. Flag dangling records automatically", "cmd": "subzy run --targets live_cnames.txt --hide_fails\nnuclei -l subs.txt -t http/takeovers/          # ProjectDiscovery takeover templates" },
+            { "label": "3. Verify manually before acting", "cmd": "dig CNAME <candidate> +short                 # confirm it still points at the service\ncurl -s https://<candidate>                    # confirm the unclaimed fingerprint" },
+            { "label": "4. Prove impact (with written authorisation only)", "cmd": "# register the resource on the SAME provider the CNAME points to\n# (e.g. create the S3 bucket / GitHub Pages repo / Heroku app of that exact name),\n# publish a harmless proof file, then load https://<candidate>/proof.txt\n# never host malicious content — a benign PoC page is enough to demonstrate the issue" }
+          ]},
+          { "title": "Common Vulnerable Services", "type": "table", "columns": ["Service", "Unclaimed fingerprint"], "rows": [
+            ["AWS S3", "'The specified bucket does not exist' / NoSuchBucket"],
+            ["GitHub Pages", "\"There isn't a GitHub Pages site here.\""],
+            ["Heroku", "'No such app' / default Heroku error page"],
+            ["Azure (cloudapp / trafficmanager / blob)", "'404 Web Site not found'"],
+            ["Fastly", "'Fastly error: unknown domain'"],
+            ["Shopify / Zendesk / Tumblr / Surge", "provider 'not found' or closed-page fingerprint"]
+          ]},
+          { "title": "Why It Matters", "type": "table", "columns": ["Abuse", "Impact"], "rows": [
+            ["Phishing on a trusted host", "Credential harvesting that survives eye and URL checks"],
+            ["Cookie theft", "Reading or setting cookies scoped to *.target.com"],
+            ["CORS / CSP allow-list bypass", "The subdomain is already trusted by the main app's policy"],
+            ["OAuth redirect hijack", "Stealing tokens if the host is a whitelisted redirect_uri"],
+            ["Malware / defacement", "Serving attacker content under the organisation's brand"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Use"], "rows": [
+            ["subfinder / amass", "Enumerate the subdomains to test"],
+            ["httpx", "Resolve, probe, and print the CNAME of every live host"],
+            ["nuclei (http/takeovers)", "Template-based detection at scale"],
+            ["subzy / subjack", "Fingerprint dangling records against known services"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "can-i-take-over-xyz — per-service takeover status", "url": "https://github.com/EdOverflow/can-i-take-over-xyz" },
+            { "label": "OWASP WSTG — Test for Subdomain Takeover", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/10-Test_for_Subdomain_Takeover" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Remove the DNS record the moment the service it points to is decommissioned — make DNS cleanup part of every teardown.",
+            "Audit CNAME, A, and NS records regularly for targets that no longer resolve to a claimed resource.",
+            "Claim the resource before creating the DNS record, and delete the DNS record before releasing the resource, so a dangling window never exists.",
+            "Prefer provider features that bind a hostname to your account (verified custom domains) so the name cannot be re-registered by anyone else.",
+            "Monitor continuously with automated takeover scanning in CI or an external attack-surface management tool."
+          ]}
+        ]
+      },
+      {
         id: "smb-signing-disabled",
         name: "SMB Signing Not Required",
         severity: "High",
