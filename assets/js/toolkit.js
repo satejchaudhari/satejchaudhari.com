@@ -5646,6 +5646,28 @@ var TOOLKIT = [
     category: "Web Application",
     tools: [
       {
+        "id": "upload-scanner",
+        "name": "UploadScanner (Burp)",
+        "url": "https://github.com/portswigger/upload-scanner",
+        "description": "Burp Suite extension that automates testing of file-upload functionality.",
+        "brief": "UploadScanner is a Burp Suite extension that takes a single upload request and fires a large battery of malicious variations at it — dangerous extensions and content types, oversized and malformed files, image parsers (ImageTragick), polyglots, XXE-in-image, SSRF and RCE payloads — then reports which the server accepted. It turns the tedious, error-prone manual matrix of upload tests into one automated pass.",
+        "quickReference": [
+          { "label": "Install", "cmd": "Burp -> Extensions -> BApp Store -> UploadScanner" },
+          { "label": "Run against an upload", "cmd": "right-click the multipart upload request -> Extensions -> UploadScanner" },
+          { "label": "Configure the download path", "cmd": "set where uploaded files are served back so the scanner can confirm hits" }
+        ],
+        "sections": [ { "title": "What It Tests", "type": "table", "columns": ["Class", "Examples"], "rows": [
+          ["Extension / content-type", "Double extensions, disallowed types, magic-byte mismatch"],
+          ["Image parsers", "ImageTragick, XXE-in-SVG, pixel-flood DoS"],
+          ["Server-side execution", "Web shells, .htaccess/.jsp/.php tricks -> RCE"],
+          ["SSRF / XXE", "Payloads inside SVG, XML, and office formats"],
+          ["Limits", "Oversized files, path traversal in the filename"]
+        ] }, { "title": "Notes & Tips", "type": "notes", "items": [
+          "Tell it where uploaded files are retrievable so it can verify which payloads actually landed and are served.",
+          "Pair the findings with the Unrestricted File Upload write-up to build the concrete exploitation chain."
+        ] } ]
+      },
+      {
         "id": "httpx",
         "name": "httpx",
         "url": "https://github.com/projectdiscovery/httpx",
@@ -7422,6 +7444,30 @@ var TOOLKIT = [
   {
     category: "Wordlists",
     tools: [
+      {
+        "id": "cewl",
+        "name": "CeWL",
+        "url": "https://github.com/digininja/CeWL",
+        "description": "Crawl a target site to build a custom wordlist from its own content.",
+        "brief": "CeWL (Custom Word List generator) spiders a website to a chosen depth and harvests the unique words it finds, producing a wordlist tuned to that organisation — product names, jargon, employee names, locations. Because people build passwords from words they see every day, a CeWL list frequently beats a generic dictionary for targeted spraying and cracking. It can also collect email addresses and file metadata along the way.",
+        "quickReference": [
+          { "label": "Build a wordlist", "cmd": "cewl -d 2 -m 5 -w wordlist.txt https://target.com" },
+          { "label": "Also harvest emails", "cmd": "cewl -e --email_file emails.txt https://target.com" },
+          { "label": "Pull metadata (authors, software)", "cmd": "cewl -a --meta_file meta.txt https://target.com" }
+        ],
+        "sections": [ { "title": "Useful Flags", "type": "table", "columns": ["Flag", "Description"], "rows": [
+          ["-d <n>", "Crawl depth (default 2)"],
+          ["-m <n>", "Minimum word length to keep"],
+          ["-w <file>", "Write the wordlist to a file"],
+          ["-e / --email_file", "Extract email addresses too"],
+          ["-a / --meta_file", "Extract document metadata (authors, software)"],
+          ["--lowercase", "Force words to lowercase"],
+          ["-c", "Show a count of each word (rank by frequency)"]
+        ] }, { "title": "Notes & Tips", "type": "notes", "items": [
+          "Feed the output to hashcat rules or a password sprayer — combine with mangling (e.g. hashcat -r best64.rule) for real-world variants.",
+          "Respect scope and rate limits; deep crawls of a live site generate noticeable traffic."
+        ] } ]
+      },
       {
         id: "seclists",
         name: "SecLists",
