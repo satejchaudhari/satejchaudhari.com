@@ -977,22 +977,31 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   .site-nav { display: none; }
   .nav-toggle { display: flex; }
 
-  /* full-width, left-aligned dropdown menu — proper mobile nav */
+  /* full-width, left-aligned dropdown menu — proper mobile nav.
+     Same translucency + blur as the desktop header bar. */
   .site-nav.open {
     display: flex;
     position: absolute;
     top: 64px;
     left: 0;
     right: 0;
-    background: color-mix(in srgb, var(--bg) 97%, transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: var(--header-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border);
     box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
     flex-direction: column;
     align-items: stretch;
     padding: 10px 16px 14px;
     gap: 2px;
+  }
+  /* The header's own backdrop-filter makes it a backdrop root, which would
+     starve the dropdown's blur (it would only see the 64px bar, not the page).
+     Drop the header's filter while the menu is open so the dropdown blurs the
+     actual page content behind it, like the desktop bar does. */
+  .site-header:has(.site-nav.open) {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
   .site-nav.open a {
     display: block;
