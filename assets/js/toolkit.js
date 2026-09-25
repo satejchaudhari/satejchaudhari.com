@@ -6594,6 +6594,44 @@ var TOOLKIT = [
         ]
       },
       {
+        id: "parameth",
+        name: "parameth",
+        url: "https://github.com/maK-/parameth",
+        description: "Brute-forces GET and POST parameters to reveal hidden, unlinked inputs.",
+        brief: "parameth discovers valid GET and POST parameters that an endpoint accepts but never advertises. Like Arjun, it works from the observation that undocumented parameters — debug switches, admin toggles, legacy filters, injection sinks — are among the highest-value findings in a web test precisely because nobody links to them and nobody validates them. parameth sends a large wordlist of candidate parameter names and watches for responses that deviate from a learned baseline.\n\nIt is a lightweight Python tool that fits neatly into a discovery pipeline: point it at an endpoint, collect the parameters it flags, then feed those into fuzzing and injection testing. It complements Arjun well — running both and diffing their results catches parameters one tool misses.",
+        quickReference: [
+          { label: "Discover GET parameters", cmd: "python parameth.py -u https://target.com/page.php" },
+          { label: "Test POST parameters", cmd: "python parameth.py -u https://target.com/page.php -p" },
+          { label: "Custom wordlist", cmd: "python parameth.py -u https://target.com/page.php -w params.txt" },
+          { label: "Adjust threads", cmd: "python parameth.py -u https://target.com/page.php -t 25" }
+        ],
+        sections: [
+          {
+            title: "Options",
+            type: "table",
+            columns: ["Flag", "Description"],
+            rows: [
+              ["-u <url>", "Target endpoint to test"],
+              ["-p", "Test POST parameters instead of GET"],
+              ["-w <wordlist>", "Custom parameter-name wordlist"],
+              ["-t <n>", "Number of threads"],
+              ["-o <file>", "Write discovered parameters to a file"],
+              ["-v", "Verbose output for debugging false positives"]
+            ]
+          },
+          {
+            title: "Where It Fits",
+            type: "notes",
+            items: [
+              "Run it alongside Arjun and diff the results — each tool's wordlist and detection heuristics catch parameters the other misses.",
+              "Match GET versus POST to the endpoint: a form handler that only reads POST bodies will reveal nothing when tested as query strings.",
+              "Every parameter it finds is a fresh input — pipe them into sqlmap, dalfox, and manual mass-assignment / access-control testing.",
+              "Baseline noise causes false positives; confirm each hit by hand before trusting it, and prefer a smaller, targeted wordlist on flaky endpoints."
+            ]
+          }
+        ]
+      },
+      {
         id: "nuclei",
         name: "Nuclei",
         url: "https://github.com/projectdiscovery/nuclei",
