@@ -977,14 +977,17 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   .site-nav { display: none; }
   .nav-toggle { display: flex; }
 
-  /* full-width, left-aligned dropdown menu — proper mobile nav.
-     Same translucency + blur as the desktop header bar. */
+  /* Full-width mobile dropdown. It covers the WHOLE open header (the bar at
+     the top plus the menu) as a single frosted panel, so both are frosted the
+     same way — you can't nest two backdrop-filters, so one panel does both.
+     The bar's brand + toggles float on top of it via z-index. */
   .site-nav.open {
     display: flex;
     position: absolute;
-    top: 64px;
+    top: 0;
     left: 0;
     right: 0;
+    z-index: 1;
     background: var(--header-bg);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -992,16 +995,22 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
     box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
     flex-direction: column;
     align-items: stretch;
-    padding: 10px 16px 14px;
+    padding: 74px 16px 14px;   /* clear the 64px bar, then list the links */
     gap: 2px;
   }
-  /* The header's own backdrop-filter makes it a backdrop root, which would
-     starve the dropdown's blur (it would only see the 64px bar, not the page).
-     Drop the header's filter while the menu is open so the dropdown blurs the
-     actual page content behind it, like the desktop bar does. */
+  /* The header's own backdrop-filter would make it a backdrop root and starve
+     the panel's blur (it would only see the 64px bar). While the menu is open,
+     let the panel supply the frost for everything instead. */
   .site-header:has(.site-nav.open) {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    background: transparent;
+  }
+  .site-header:has(.site-nav.open) .brand,
+  .site-header:has(.site-nav.open) .theme-toggle,
+  .site-header:has(.site-nav.open) .nav-toggle {
+    position: relative;
+    z-index: 2;
   }
   .site-nav.open a {
     display: block;
