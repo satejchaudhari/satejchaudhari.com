@@ -5683,39 +5683,74 @@ var VULNS = [
         "severity": "High",
         "ref": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/",
         "description": "Sensitive data (cards, credentials, personal or health data, tokens) is transmitted, stored, logged, or displayed without adequate protection.",
-        "brief": "Sensitive data exposure is not a single injection bug but a class of handling failures: card numbers or CVVs passing through and being stored by the application instead of tokenised to a processor; passwords stored with weak or no hashing; personal data returned in API responses beyond what the UI needs; secrets and tokens embedded in URLs (and therefore in browser history, Referer headers, proxy logs, and access logs); or sensitive pages cached by browsers and shared proxies.\n\nThe damage rarely comes from a clever exploit - it comes from the data simply being reachable, cacheable, or loggable by someone who should not have it. It underpins large breaches and carries direct regulatory weight (PCI-DSS for card data, GDPR/HIPAA for personal and health data).",
+        "brief": "Sensitive data exposure (OWASP now frames the underlying cause as Cryptographic Failures) is not one injection bug but a class of data-handling failures where information that should be protected is instead transmitted, stored, logged, cached, or displayed in a way that lets the wrong party read it. Because the harm comes from the data simply being reachable rather than from a clever exploit, it is easy to overlook and it underpins many of the largest breaches — and it carries direct regulatory weight (PCI-DSS for card data, GDPR/HIPAA for personal and health data).\n\nThe recurring failure points: card numbers or CVVs passing through (and being stored by) the application instead of being tokenised straight to a payment processor; passwords stored with weak, fast, unsalted, or no hashing (MD5/SHA1) so a database leak becomes wholesale account compromise; personal data returned in API responses beyond what the UI shows (the classic 'the app hides it, the JSON doesn't'); secrets and tokens embedded in URLs (leaking via browser history, the Referer header, proxy and access logs); sensitive authenticated pages cached by browsers or shared proxies and later served to another user; and plaintext or mixed-content transmission that is readable on the wire or downgradeable.\n\nThe tester's job is largely observational: watch the traffic, read the responses, and check the storage/transport controls. The impact is disclosure of exactly the data an organisation is most obligated to protect.",
         "quickReference": [
-          { "label": "Card data in the request", "cmd": "check whether the PAN / CVV hit YOUR backend at all, or go straight to the processor's iframe/token" },
-          { "label": "Secrets in the URL", "cmd": "look for ?token= / ?reset= / ?api_key= in links, redirects, and history" },
-          { "label": "Caching of private pages", "cmd": "curl -sI https://target/account | grep -i 'cache-control\\|pragma\\|expires'" },
-          { "label": "Over-exposed API fields", "cmd": "diff what the API returns against what the UI shows (password hashes, other users' PII)" }
+          { "label": "Card data in the request", "cmd": "does the PAN/CVV hit YOUR backend, or go to the processor's iframe/token?" },
+          { "label": "Secrets in the URL", "cmd": "look for ?token= / ?reset= / ?api_key= / ?sessionid= in links, redirects, history" },
+          { "label": "Caching of private pages", "cmd": "curl -sI https://target/account -H 'Cookie: s=..' | grep -i 'cache-control|pragma|expires'" },
+          { "label": "Over-exposed API fields", "cmd": "diff the JSON the API returns against what the UI shows (hashes, other users' PII)" }
         ],
         "sections": [
-          { "title": "How It's Observed", "type": "commands", "commands": [
-            { "label": "1. Inspect transmission", "cmd": "# proxy the payment/login flow and read the raw requests\n# does the PAN/CVV/password appear in a request to the app's own domain?\n# is everything over HTTPS with HSTS, or is any leg plaintext?" },
-            { "label": "2. Hunt secrets in URLs", "cmd": "# tokens in the query string leak via Referer, history, and logs\ngrep -rEi 'token=|reset=|api_?key=|sessionid=' <collected-urls>" },
-            { "label": "3. Check caching of sensitive responses", "cmd": "curl -sI https://target/account -H 'Cookie: session=...' | grep -i 'cache-control\\|expires\\|pragma'\n# no-store/no-cache/private expected on authenticated pages" },
-            { "label": "4. Compare API output to need", "cmd": "# request a profile/object and look for fields the UI never shows:\n# password hashes, internal ids, other users' PII, full card data" }
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "The data is protected inconsistently: encrypted in one place but plaintext in another (a log, a URL, a cache, an over-broad API field), so the weakest handling point defines the exposure.",
+            "'Cryptographic failures' covers not just missing encryption but wrong choices: fast/unsalted password hashes, weak ciphers, hardcoded or reused keys, and disabled certificate validation.",
+            "Card/PII data that merely passes through the app expands its compliance scope and breach blast radius even if 'not stored' — tokenisation exists to keep it out entirely.",
+            "APIs commonly over-return: the front-end renders a subset, but the response carries internal ids, other users' fields, or password hashes to anyone who reads the raw JSON.",
+            "URLs and caches are silent leak channels: query-string secrets propagate to logs/Referer/history, and a cacheable authenticated page can be served to the next user of a shared proxy."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Payment and checkout flows: whether card data touches the app's own domain, and how it is transported/stored.",
+            "Authentication and account pages: password storage hints (reset emails echoing the password = plaintext storage), and cache headers on authenticated responses.",
+            "API responses vs the UI: request objects directly and compare fields; look for hashes, tokens, internal flags, and other users' data.",
+            "URLs everywhere: links, redirects, emails, and collected wayback/JS URLs for tokens and keys in the query string.",
+            "Transport: TLS configuration (see Weak TLS), HSTS, and any mixed-content or plaintext leg; and application/access logs for sensitive values."
+          ]},
+          { "title": "Step 1 — Inspect Transport & Storage", "type": "commands", "commands": [
+            { "label": "Watch the payment/login traffic", "cmd": "# proxy the flow and read raw requests:\n# does PAN/CVV/password appear in a request to the app's own domain (vs a processor iframe/token)?\n# is every leg HTTPS with HSTS, or is any request plaintext/mixed-content?" },
+            { "label": "Probe password-storage strength", "cmd": "# tells of weak/plaintext storage:\n# - the reset email contains your CURRENT password (plaintext storage)\n# - a leaked/dumped hash is MD5/SHA1/unsalted (crackable wholesale)\n# - password length is capped very low (may indicate an odd storage scheme)" },
+            { "label": "Check TLS/HSTS", "cmd": "curl -sI https://target | grep -i strict-transport-security\ntestssl.sh target        # weak ciphers/protocols (see Weak TLS)" }
+          ]},
+          { "title": "Step 2 — Hunt Leaks in URLs, APIs, Caches", "type": "commands", "commands": [
+            { "label": "Secrets in URLs", "cmd": "# collect URLs and grep for query-string secrets:\ngau target.com | grep -Ei 'token=|reset=|api_?key=|sessionid=|auth='\n# these leak via Referer (to third-party scripts), history, and access logs" },
+            { "label": "Over-exposed API fields", "cmd": "# request an object/profile directly and compare to the UI:\ncurl -s https://target/api/users/me -H 'Cookie: s=..' | jq\n# look for passwordHash, internalId, other users' PII, full card data, tokens" },
+            { "label": "Caching of sensitive responses", "cmd": "curl -sI https://target/account -H 'Cookie: session=...' | grep -i 'cache-control|expires|pragma'\n# expect no-store / no-cache / private on authenticated pages;\n# public/max-age on personal data = shared-cache leak" },
+            { "label": "Referer leakage test", "cmd": "# on a page whose URL holds a token, check outbound requests carry it in Referer\n# (third-party analytics/CDN) — confirms the token leaves your origin" }
           ]},
           { "title": "Common Failure Points", "type": "table", "columns": ["Location", "Exposure"], "rows": [
             ["Card data through the app", "PCI scope + breach risk; should be tokenised to the processor"],
             ["Secrets in the URL", "Leak via history, Referer, proxy and server logs"],
-            ["Weak/absent hashing", "Stored passwords cracked wholesale after any DB leak"],
+            ["Weak/absent password hashing", "MD5/SHA1/unsalted -> cracked wholesale after any DB leak"],
+            ["Plaintext storage", "Reset email echoes the password; total compromise on leak"],
             ["Over-broad API responses", "PII and internal fields returned beyond the UI's need"],
             ["Cacheable private pages", "Personal data served to the next user of a shared cache"],
-            ["Plaintext / mixed content", "Data readable on the wire; downgrade attacks"]
+            ["Plaintext / mixed content / weak TLS", "Data readable on the wire; downgrade attacks"]
+          ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Observe transport, storage, URLs, API, caches", "Locate an unprotected handling point"],
+            ["2", "Extract the exposed data", "PII / card data / credentials / tokens obtained"],
+            ["3", "Crack weak hashes or replay leaked tokens", "Account access"],
+            ["4", "Aggregate at scale (API/cache/log)", "Mass data breach + regulatory impact"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite", "Inspect raw requests/responses, cache headers, and API field exposure"],
+            ["gau / waybackurls", "Collect historical URLs to grep for query-string secrets"],
+            ["testssl.sh / sslscan", "Assess TLS strength and HSTS (transport protection)"],
+            ["hashcat / John", "Demonstrate crackability of weak password hashes"],
+            ["jq", "Diff API JSON against what the UI actually renders"]
           ]},
           { "title": "References", "type": "references", "items": [
-            { "label": "OWASP - Sensitive Data Exposure / Cryptographic Failures", "url": "https://owasp.org/Top10/A02_2021-Cryptographic_Failures/" },
-            { "label": "OWASP WSTG - Testing for Weak Cryptography", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/" }
+            { "label": "OWASP — Cryptographic Failures (A02:2021)", "url": "https://owasp.org/Top10/A02_2021-Cryptographic_Failures/" },
+            { "label": "OWASP WSTG — Testing for Weak Cryptography", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/" },
+            { "label": "OWASP — Password Storage Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html" },
+            { "label": "OWASP — Transport Layer Security Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html" }
           ]},
           { "title": "Remediation", "type": "notes", "items": [
-            "Never let raw card data touch the application - use the processor's hosted fields or tokenisation so the app only ever sees a token.",
-            "Keep secrets and tokens out of URLs; pass them in headers or POST bodies, and give them short lifetimes.",
-            "Encrypt sensitive data in transit (TLS everywhere, HSTS) and at rest, and hash passwords with a strong, salted, adaptive algorithm (bcrypt/argon2).",
-            "Return only the fields each response needs; do not lean on the UI to hide data the API still sends.",
-            "Set Cache-Control: no-store (and matching Pragma/Expires) on every authenticated or sensitive response.",
-            "Scrub sensitive values from application, access, and error logs."
+            "Never let raw card data touch the application — use the processor's hosted fields / tokenisation so the app only ever handles a token, keeping it out of PCI scope.",
+            "Hash passwords with a strong, salted, adaptive algorithm (argon2id, bcrypt, scrypt); never MD5/SHA1/unsalted, and never store or email the plaintext.",
+            "Keep secrets and tokens out of URLs — pass them in headers or POST bodies, give them short lifetimes, and set Referrer-Policy to limit leakage.",
+            "Encrypt sensitive data in transit (TLS everywhere, HSTS, no mixed content) and at rest, with properly managed, rotated keys and certificate validation enabled.",
+            "Return only the fields each response needs (explicit DTOs/serializers); never rely on the UI to hide data the API still sends.",
+            "Set Cache-Control: no-store (plus Pragma: no-cache / past Expires) on every authenticated or sensitive response, and scrub sensitive values from application, access, and error logs."
           ]}
         ]
       },
@@ -5764,36 +5799,70 @@ var VULNS = [
         "severity": "High",
         "ref": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/11-Test_Cloud_Storage",
         "description": "Cloud storage buckets (S3, GCS, Azure Blob) are readable, listable, or writable by anyone, exposing or allowing tampering with stored data.",
-        "brief": "Applications increasingly serve assets and store uploads in cloud object storage. When the bucket's access policy is too permissive, the consequences scale with the data it holds. Public list permission lets anyone enumerate every object; public read exposes documents, backups, and user uploads directly; and - the most dangerous - public write lets an attacker overwrite the files the site serves, planting malicious JavaScript, defacing content, or replacing downloads with malware, all from a trusted origin.\n\nBuckets are discoverable from asset URLs, JavaScript, and predictable names based on the organisation, so they are a routine, high-yield check. Misconfiguration is a configuration failure rather than a code bug, which is why it is so common and so often overlooked.",
+        "brief": "Applications increasingly serve static assets and store uploads in cloud object storage — AWS S3, Google Cloud Storage, Azure Blob, DigitalOcean Spaces. Each bucket/container has an access policy (ACLs plus a bucket policy or IAM), and when that policy is more permissive than intended, the impact scales with the data the bucket holds. This is a configuration failure, not a code bug, which is why it is both extremely common and easy to overlook.\n\nThe damage tiers by permission: public LIST lets anyone enumerate every object name (a map of what exists); public READ exposes documents, database backups, and user uploads directly; and — the most dangerous — public WRITE lets an attacker overwrite the very files the site serves, planting malicious JavaScript, defacing pages, or swapping a download for malware, all delivered from the application's own trusted origin. Broader ACL/policy write can hand over the whole bucket.\n\nBuckets are highly discoverable — their hostnames appear in served asset URLs and JavaScript, and names are guessable from the organisation (targetcorp-assets, target-backups) — so testing them is a routine, high-yield check. Because content served from the bucket is often trusted by the app (same-origin scripts, CDN), a writable bucket frequently escalates to stored XSS or supply-chain compromise.",
         "quickReference": [
-          { "label": "Test S3 listing", "cmd": "curl -s https://<bucket>.s3.amazonaws.com/   (XML listing = public list)" },
+          { "label": "Test S3 listing", "cmd": "curl -s https://<bucket>.s3.amazonaws.com/   (XML ListBucketResult = public list)" },
           { "label": "Test read on an object", "cmd": "curl -s https://<bucket>.s3.amazonaws.com/<key> -o out && file out" },
-          { "label": "Test write (most critical)", "cmd": "curl -s -X PUT https://<bucket>.s3.amazonaws.com/poc.txt -d 'poc'  ->  then GET it back" },
-          { "label": "Discover buckets", "cmd": "cloud_enum -k <org>   /   check asset hostnames in page + JS" }
+          { "label": "Test write (most critical)", "cmd": "curl -sX PUT https://<bucket>.s3.amazonaws.com/poc.txt -d poc  then GET it back" },
+          { "label": "Discover buckets", "cmd": "cloud_enum -k <org>  ;  grep asset hostnames in page + JS" }
         ],
         "sections": [
-          { "title": "How It's Tested", "type": "commands", "commands": [
-            { "label": "1. Find the buckets", "cmd": "# from served assets and JavaScript, and by guessing org-based names\ncloud_enum -k targetcorp -k target-corp -k targetcdn" },
-            { "label": "2. Test anonymous list and read", "cmd": "aws s3 ls s3://<bucket> --no-sign-request\naws s3 cp s3://<bucket>/<key> . --no-sign-request\n# or plain curl to the bucket URL" },
-            { "label": "3. Test anonymous write (with authorisation)", "cmd": "echo poc > poc.txt\naws s3 cp poc.txt s3://<bucket>/poc.txt --no-sign-request\n# success = attacker can replace served content" },
-            { "label": "4. Check ACLs / policy", "cmd": "aws s3api get-bucket-acl --bucket <bucket> --no-sign-request\naws s3api get-bucket-policy --bucket <bucket> --no-sign-request" }
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "Object storage access is governed by ACLs plus a bucket/container policy (and IAM); a wildcard principal (AllUsers, AuthenticatedUsers, Principal:*) or a permissive ACL exposes the bucket to the world.",
+            "Impact is proportional to permission: LIST reveals object names, READ downloads content, WRITE lets you replace served files, and ACL/policy write cedes control of the bucket.",
+            "'AuthenticatedUsers' in AWS means any authenticated AWS user (i.e. anyone with a free AWS account) — not just your users — a frequently-misread setting.",
+            "Because the app serves content from the bucket under its own trust (script src, CDN origin), writable storage often becomes stored XSS, defacement, or a supply-chain foothold.",
+            "Buckets leak their own names via asset URLs, JS bundles, and CORS/redirect responses, and org-based names are guessable — so discovery is easy."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Asset and upload hostnames in the page and JavaScript: *.s3.amazonaws.com, *.storage.googleapis.com, *.blob.core.windows.net, CDN CNAMEs fronting a bucket.",
+            "Guessable names from the org: <org>, <org>-assets, <org>-backups, <org>-dev, <org>-media, <org>-static.",
+            "Upload features — where do user files land, and is that bucket world-readable/listable?",
+            "Backup/export and log buckets, which often hold the most sensitive data with the weakest policies.",
+            "CORS and redirect responses that disclose the underlying bucket endpoint."
+          ]},
+          { "title": "Step 1 — Discover Buckets", "type": "commands", "commands": [
+            { "label": "From the app", "cmd": "# asset URLs and JS reveal bucket hostnames:\ncurl -s https://target | grep -Eo '[a-z0-9.-]+(s3[.-][a-z0-9-]*\\.amazonaws\\.com|storage\\.googleapis\\.com|blob\\.core\\.windows\\.net)'\n# and scan collected JS for storage URLs" },
+            { "label": "Guess org-based names", "cmd": "cloud_enum -k targetcorp -k target-corp -k targetcdn\n# also S3Scanner, GCPBucketBrute; try -assets/-backups/-dev/-static suffixes" }
+          ]},
+          { "title": "Step 2 — Test Permissions", "type": "commands", "commands": [
+            { "label": "List", "cmd": "aws s3 ls s3://<bucket> --no-sign-request\ncurl -s https://<bucket>.s3.amazonaws.com/        # XML listing = public LIST\ngsutil ls gs://<bucket>                          # GCS\naz storage blob list --container-name <c> --account-name <a> --auth-mode login" },
+            { "label": "Read", "cmd": "aws s3 cp s3://<bucket>/<key> . --no-sign-request\ncurl -s https://<bucket>.s3.amazonaws.com/<key> -o out && file out" },
+            { "label": "Write (most critical — with authorisation)", "cmd": "echo poc > poc.txt\naws s3 cp poc.txt s3://<bucket>/poc.txt --no-sign-request\ncurl -sX PUT https://<bucket>.s3.amazonaws.com/poc.txt -d poc\n# success + the file served back = attacker can replace served content" },
+            { "label": "Inspect ACL / policy", "cmd": "aws s3api get-bucket-acl --bucket <bucket> --no-sign-request\naws s3api get-bucket-policy --bucket <bucket> --no-sign-request\n# look for AllUsers / AuthenticatedUsers / Principal:* grants" }
           ]},
           { "title": "Permission Impact", "type": "table", "columns": ["Public permission", "Impact"], "rows": [
-            ["List", "Enumerate every object name in the bucket"],
-            ["Read", "Download documents, backups, and user uploads"],
-            ["Write", "Overwrite served files - stored XSS, defacement, malware delivery from a trusted origin"],
-            ["Full control / ACL", "Take over the bucket entirely"]
+            ["List", "Enumerate every object name — a map of documents, backups, keys"],
+            ["Read", "Download documents, database backups, and user uploads"],
+            ["Write", "Overwrite served files -> stored XSS, defacement, malware from a trusted origin"],
+            ["WRITE_ACP / PutBucketPolicy", "Rewrite ACLs/policy -> full bucket takeover"],
+            ["AuthenticatedUsers grant", "Open to ANY AWS account, not just your users"]
+          ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Discover the bucket from assets/JS/guessing", "Candidate storage target"],
+            ["2", "Test list/read/write anonymously", "Confirmed misconfiguration"],
+            ["3", "Read backups/uploads", "Sensitive data / secret disclosure"],
+            ["4", "Overwrite a served JS/asset (if writable)", "Stored XSS / defacement / malware delivery"],
+            ["5", "Leak cloud keys from an object -> use them", "Broader cloud compromise"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["cloud_enum", "Enumerate AWS/GCP/Azure buckets from org keywords"],
+            ["S3Scanner / GCPBucketBrute", "Discover and test bucket permissions at scale"],
+            ["aws / gsutil / az CLI", "Directly test list/read/write and inspect ACLs/policies"],
+            ["Nuclei (exposures/)", "Template-based detection of open buckets"]
           ]},
           { "title": "References", "type": "references", "items": [
-            { "label": "OWASP WSTG - Test Cloud Storage", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/11-Test_Cloud_Storage" },
-            { "label": "AWS - S3 Security Best Practices", "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html" }
+            { "label": "OWASP WSTG — Test Cloud Storage", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/11-Test_Cloud_Storage" },
+            { "label": "AWS — S3 Security Best Practices", "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html" },
+            { "label": "AWS — Blocking public access to S3", "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html" }
           ]},
           { "title": "Remediation", "type": "notes", "items": [
-            "Block public access at the account and bucket level by default (e.g. S3 Block Public Access) and grant access only through signed URLs or a CDN with an origin-access identity.",
-            "Never grant anonymous write; scope write permissions to specific authenticated principals with least privilege.",
-            "Review bucket ACLs and policies for wildcards (Principal: * / AllUsers / AuthenticatedUsers) and remove them.",
-            "Serve user uploads from a separate, non-executable origin and validate content types so a poisoned object cannot run as script.",
-            "Enable access logging and monitoring so anonymous access attempts are visible."
+            "Block public access at the account and bucket level by default (S3 Block Public Access / GCS uniform bucket-level access / Azure disallow public) and grant access only via signed URLs or a CDN with an origin-access identity.",
+            "Never grant anonymous or AuthenticatedUsers write; scope write to specific authenticated principals with least privilege.",
+            "Audit ACLs and bucket policies for wildcard principals (Principal:*, AllUsers, AuthenticatedUsers) and remove them; prefer IAM policies over object ACLs.",
+            "Serve user uploads from a separate, non-executable origin with correct Content-Type and Content-Disposition so a poisoned object cannot run as script in the app origin.",
+            "Enable versioning and access logging, and use automated posture tooling (AWS Config, Trusted Advisor, Scout Suite) to catch public buckets continuously.",
+            "Keep secrets and backups out of object storage where possible, and encrypt what remains with managed keys."
           ]}
         ]
       },
@@ -5889,6 +5958,13 @@ var VULNS = [
           { "label": "Confirm what is claimable", "cmd": "check  can-i-take-over-xyz  for per-provider takeover status" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "A DNS record (usually a CNAME, sometimes A/NS) points at a third-party resource that has been deleted or was never claimed, so the name resolves but the provider serves an 'unclaimed' state — the record is 'dangling'.",
+            "Ownership on most providers is first-come: whoever registers that exact resource name (an S3 bucket, a GitHub Pages repo, a Heroku/Azure app) receives all traffic the dangling record sends.",
+            "The lifecycle mistake is ordering: releasing the provider resource before deleting the DNS record (or creating the DNS record before claiming the resource) opens the takeover window.",
+            "Impact is amplified because the browser and the app still TRUST the subdomain: it may be inside the cookie scope, a CORS/CSP allow-list, or an OAuth redirect allow-list of the parent domain.",
+            "NS-record takeovers are the most severe — controlling a delegated nameserver lets you answer for the entire subtree."
+          ]},
           { "title": "How It's Observed", "type": "commands", "commands": [
             { "label": "1. List the subdomains and their DNS targets", "cmd": "dig CNAME app.target.com +short\n# a live subdomain whose CNAME points at an external provider is the candidate" },
             { "label": "2. Check whether the target resource is unclaimed", "cmd": "curl -sI https://app.target.com        # status code + Server header\ncurl -s  https://app.target.com | head    # look for a provider 'not found' page" },
@@ -6371,7 +6447,7 @@ var VULNS = [
         severity: "High",
         ref: "https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_credentials",
         description: "Credentials and API keys leaked in client-side code, repos, or responses grant direct access to backends.",
-        brief: "Applications leak secrets in many places: hardcoded in front-end JavaScript, committed to public repositories, left in config files, or returned in API responses and error messages. A single leaked cloud key, database credential, or third-party token gives direct access to backend systems — bypassing the application entirely.\n\nImpact: ranges from abusing a paid API to full cloud-account compromise, depending on the secret. Finding and rotating leaked secrets, and keeping them out of anything client-reachable, is the defence.",
+        brief: "Secrets — API keys, cloud access keys, database credentials, signing keys, OAuth client secrets, and service tokens — are meant to stay server-side. They leak when they are hardcoded into front-end JavaScript, committed to a repository (and left in its history even after 'removal'), embedded in mobile apps, left in exposed config files (/.env, web.config), or echoed in API responses and error messages. Because a secret is a bearer credential, a single leak grants whatever access it holds directly, bypassing the application, its authentication, and its authorization entirely.\n\nThe reason this is so common is that secrets spread: developers paste a key into client code 'temporarily', commit a .env to test, or ship a debug endpoint that returns config. Git history is the quiet culprit — a secret deleted in the latest commit is trivially recovered from an earlier one, so 'we removed it' is rarely enough without rotation. Source maps (.js.map) and mobile-app bundles frequently re-expose secrets developers thought were minified away.\n\nImpact scales with the secret: a third-party API key means abuse of a paid/privileged service; a database credential means direct read/write of data; a JWT signing secret means forging any user's token; and a cloud access key can mean full account compromise. The defence is twofold — keep secrets out of anything the client can reach, and detect-and-rotate the ones that leak.",
         quickReference: [
           { label: "Mine front-end JS", cmd: "grep -oiE '(api[_-]?key|secret|token|bearer)[\"'\\'':= ]+[A-Za-z0-9_\\-]{16,}' app.js" },
           { label: "Public repos", cmd: "GitHub code search: \"target.com\" api_key ; org:target filename:.env" },
@@ -6379,6 +6455,28 @@ var VULNS = [
           { label: "Common locations", cmd: "JS bundles, /.env, config files, source maps (.js.map), API/error responses" }
         ],
         sections: [
+          {
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "A secret is a bearer credential — possession alone grants access — so any place a client, a repo, or a log can reach it is an exposure, regardless of how the app authenticates users.",
+              "The client is not a safe place for secrets: anything shipped to the browser or a mobile app (JS, source maps, bundled resources) is fully readable by the user.",
+              "Git history persists: a secret removed in HEAD is recoverable from earlier commits/branches/tags, so a leaked secret must be rotated, not just deleted.",
+              "Secrets leak through many channels at once: hardcoding, config files, verbose errors/debug endpoints, over-broad API responses, CI logs, and third-party integrations.",
+              "Blast radius depends on scope: an over-privileged, non-expiring, unrestricted key turns a minor leak into a major breach — least privilege limits the damage."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Front-end JavaScript and its source maps (.js.map), inline scripts, and single-page-app config objects (window.__CONFIG__, env.js).",
+              "Public and leaked repositories: the org's GitHub/GitLab, developers' personal repos, forks, gists, and Docker images.",
+              "Exposed files on the host: /.env, /.git/config, config.php.bak, appsettings.json, /actuator/env, and other config/backup paths.",
+              "Responses and errors: API JSON that includes tokens/connection strings, and stack traces that leak credentials.",
+              "Mobile apps (decompile the APK/IPA), CI/CD logs and pipeline files, and historical JS bundles in the Wayback Machine."
+            ]
+          },
           {
             title: "How It's Exploited",
             type: "commands",
