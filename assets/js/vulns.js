@@ -1791,6 +1791,28 @@ var VULNS = [
         ],
         sections: [
           {
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "The app takes a redirect destination from user-controllable input (a parameter, sometimes a header or path) and sends the browser there without validating it against a trusted set.",
+              "On its own the impact is limited to phishing — but the value is that the link lives on the TRUSTED domain, so victims and mail filters see target.com before being bounced to the attacker.",
+              "It becomes serious when chained: a loose OAuth redirect_uri leaks the authorization code/token; a javascript: destination reflected into a sink yields XSS; a server-side follow yields SSRF.",
+              "Redirects happen via HTTP 3xx Location, meta refresh, or client-side location assignment — all are candidate sinks.",
+              "The fix is to never redirect to a raw user-supplied absolute URL: use relative paths or an allow-list of exact destinations, validated with a robust URL parser (not string checks)."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Redirect parameters: next, url, return, returnTo, redirect, redirect_uri, dest, callback, continue, r, u.",
+              "Login/logout flows (post-auth 'next'), SSO/OAuth callbacks, and 'you are being redirected' interstitials.",
+              "Client-side redirects driven by location.hash/search (DOM open redirect).",
+              "Anywhere a URL is reflected into a Location header, a meta refresh, or a link the app auto-follows.",
+              "Collected/wayback URLs carrying redirect-style parameters."
+            ]
+          },
+          {
             title: "How It's Exploited",
             type: "commands",
             commands: [
@@ -6273,6 +6295,20 @@ var VULNS = [
           { "label": "Solve it", "cmd": "run weak text captchas through an OCR/solver to defeat anti-automation" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "A CAPTCHA is an anti-automation gate; it is only as strong as the server-side check around it, and it fails at the implementation level far more often than the challenge itself is 'solved'.",
+            "Core failure modes: the solved token is not single-use (replay), validation is client-side only (remove/skip it), the check is wired to one handler/method/content-type but not another, or the challenge is weak enough for OCR/solver services.",
+            "The CAPTCHA is never the real target — it guards a valuable action (registration, login, reset, mail send), so impact is judged by what the bypass unlocks, not by the CAPTCHA.",
+            "This is why severity is generally Low on its own but rises with the protected function (a bypass on a login enables credential stuffing).",
+            "Robust design validates server-side on every path, makes tokens single-use and short-lived, and adds rate limiting so the CAPTCHA is not the sole defence."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Registration, login, password-reset, contact/mail, and comment endpoints gated by a CAPTCHA.",
+            "The verification request/response — is the token checked server-side, single-use, and bound to the session?",
+            "Alternate handlers for the same action (GET vs POST, JSON vs form, mobile API) that may skip the check.",
+            "The challenge itself: home-grown text images (OCR-able), reused images, or answers embedded in the response.",
+            "Whether the underlying action is ALSO rate-limited independently of the CAPTCHA."
+          ]},
           { "title": "How It's Tested", "type": "commands", "commands": [
             { "label": "1. Test token reuse", "cmd": "# solve once, capture the value, then replay it on repeated requests\n# also try the same value paired with its original session id" },
             { "label": "2. Test server-side enforcement", "cmd": "# remove the captcha parameter, send an empty value, or block the\n# captcha script/image from loading - does the action still succeed?" },
@@ -6285,6 +6321,11 @@ var VULNS = [
             ["Per-handler validation", "Switch method or content-type"],
             ["Weak image", "OCR / automated solver"],
             ["Predictable/reused image", "Request by path; map image to known answer"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite (Repeater/Intruder)", "Replay tokens, remove the param, switch method/type, then automate the action"],
+            ["OCR / solver services", "Test whether a weak image challenge is machine-solvable"],
+            ["curl", "Send crafted requests without/with reused CAPTCHA values"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "OWASP - Automated Threats to Web Applications", "url": "https://owasp.org/www-project-automated-threats-to-web-applications/" },
@@ -6971,6 +7012,28 @@ var VULNS = [
         ],
         sections: [
           {
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "Detailed diagnostics meant for developers (stack traces, SQL, file paths, versions, debug pages) are left enabled in production, so any error hands the attacker internal detail.",
+              "Individually low severity, but it is a force-multiplier: it confirms blind bugs (a DB error proves SQLi), reveals versions for targeted CVEs, and exposes paths/hostnames for traversal and internal recon.",
+              "The worst case is an interactive debug console (e.g. Werkzeug) reachable in production, which can be code execution.",
+              "Related disclosure channels: verbose headers (Server, X-Powered-By), generator tags, directory listing, and status/monitoring endpoints (/server-status, /actuator).",
+              "Fix by showing generic errors to users and logging detail server-side, plus disabling debug mode and version banners in production."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Error responses to malformed input, wrong types, bad paths, and unexpected methods (do they leak a stack trace or SQL?).",
+              "Framework debug pages: Django DEBUG, Flask/Werkzeug debugger, ASP.NET yellow screen, Rails error, Symfony profiler, PHP Whoops.",
+              "Response headers: Server, X-Powered-By, X-AspNet-Version, and HTML generator meta tags.",
+              "Exposed status/debug endpoints: /server-status, /actuator/*, /debug, /phpinfo.php, source maps.",
+              "500 responses on any injection probe — the error body often confirms the underlying bug."
+            ]
+          },
+          {
             title: "How It's Exploited",
             type: "commands",
             commands: [
@@ -7049,6 +7112,28 @@ var VULNS = [
           { label: "Cookie flags too", cmd: "Set-Cookie: Secure; HttpOnly; SameSite" }
         ],
         sections: [
+          {
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "Browsers provide opt-in, defence-in-depth protections (CSP, HSTS, nosniff, frame-ancestors) that only activate when the server sends the corresponding response header; omit the header and the protection is simply off.",
+              "No single missing header is itself an exploit — the impact is that OTHER bugs become worse: no CSP turns a small XSS into full session theft; no frame-ancestors/X-Frame-Options enables clickjacking; no HSTS enables SSL-strip.",
+              "Cookie flags are part of the same posture: missing HttpOnly (XSS reads the cookie), Secure (sent over http), and SameSite (cross-site delivery / CSRF).",
+              "It is pure hardening: cheap to set, and best judged against the app's actual risks (CSP quality matters far more than mere presence).",
+              "Assessment is fully external — just read the response headers."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "The response headers on authenticated and sensitive pages (not just the root): CSP, HSTS, X-Content-Type-Options, X-Frame-Options/frame-ancestors, Referrer-Policy, Permissions-Policy.",
+              "CSP QUALITY, not just presence: unsafe-inline, unsafe-eval, or wildcard sources largely defeat it.",
+              "HSTS attributes: max-age length, includeSubDomains, preload.",
+              "Set-Cookie flags on session cookies: Secure, HttpOnly, SameSite.",
+              "Pair each gap with the bug it amplifies (CSP→XSS, frame-ancestors→clickjacking, HSTS→weak TLS)."
+            ]
+          },
           {
             title: "How It's Exploited",
             type: "commands",
