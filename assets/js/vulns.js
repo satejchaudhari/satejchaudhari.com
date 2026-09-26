@@ -1509,14 +1509,36 @@ var VULNS = [
         severity: "Medium",
         ref: "https://portswigger.net/web-security/clickjacking",
         description: "The target page is framed invisibly so the victim's clicks land on it, triggering unintended actions.",
-        brief: "Clickjacking (UI redress) loads the target site in a transparent or disguised iframe over attacker-controlled content, so the victim thinks they are interacting with the attacker's page while their clicks actually hit the framed target. Combined with the victim's active session, this drives state-changing actions.\n\nImpact: unintended actions performed as the victim — enabling a setting, confirming a payment, granting an OAuth scope. The defence is to refuse to be framed by untrusted origins, via frame-ancestors CSP or the legacy X-Frame-Options header.",
+        brief: "Clickjacking (UI redressing) tricks a victim into clicking something different from what they perceive. The attacker loads the target site in an iframe, makes that iframe transparent (opacity:0) or otherwise disguises it, and positions it precisely over decoy content on their own page. The victim sees and clicks the decoy ('Claim your prize'), but the click actually lands on a control inside the framed target — and because the victim's browser carries their active session to the framed site, that click performs a real, authenticated action.\n\nThe attack works only when the target allows itself to be framed by other origins. Modern browsers honour two controls: the Content-Security-Policy frame-ancestors directive (the robust, current defence) and the legacy X-Frame-Options header (DENY/SAMEORIGIN). If neither is present on a sensitive page, it is framable and potentially clickjackable. JavaScript 'frame-busting' is not a reliable defence — the iframe sandbox attribute can neutralise it.\n\nImpact is any one-click (or, with cursor/drag variants, multi-step) state change performed as the victim: toggling a security setting, confirming a payment or transfer, granting an OAuth consent, deleting content, or liking/following. It is rated moderate because it needs victim interaction and a suitable one-click action, but on the right target (an admin toggle, a fund transfer, an OAuth grant) the consequences are serious.",
         quickReference: [
           { label: "Test: can the page be framed?", cmd: "<iframe src=\"https://target.com/sensitive\"></iframe>  — does it render?" },
-          { label: "Missing protections", cmd: "No  X-Frame-Options  and no  Content-Security-Policy: frame-ancestors" },
-          { label: "Overlay concept", cmd: "Position a transparent iframe (opacity:0) above a decoy button" },
-          { label: "Variant", cmd: "Drag-and-drop / cursor-jacking for multi-step actions" }
+          { label: "Missing protections", cmd: "no X-Frame-Options and no Content-Security-Policy: frame-ancestors" },
+          { label: "Overlay concept", cmd: "transparent iframe (opacity:0) aligned over a decoy button" },
+          { label: "Variant", cmd: "drag-and-drop / cursor-jacking for multi-step actions" }
         ],
         sections: [
+          {
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "By default a page can be embedded in an <iframe> by any origin; clickjacking exists when a sensitive page does not forbid cross-origin framing.",
+              "The attacker overlays the transparent framed target over a visible decoy so the victim's perceived click and actual click differ (UI redressing).",
+              "The victim's ambient session is what makes it dangerous — the framed action is authenticated as them, like CSRF but driven by a real click (so it passes some CSRF token checks tied to a genuine page load).",
+              "Two controls stop it: CSP frame-ancestors (modern, granular) and X-Frame-Options (legacy). Absence of both on a page = framable.",
+              "JavaScript frame-busting is bypassable (iframe sandbox without allow-top-navigation), so it is not a real defence."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Sensitive one-click actions: enable/disable a security setting, turn off 2FA, confirm a payment/transfer, delete account/content, grant OAuth consent, follow/subscribe.",
+              "Pages served WITHOUT X-Frame-Options and without CSP frame-ancestors (check per-page, not just the root).",
+              "OAuth consent screens and any 'confirm' page reachable in one click while authenticated.",
+              "Pages that rely on JavaScript frame-busting instead of headers.",
+              "Multi-step flows exploitable via cursorjacking/drag-and-drop."
+            ]
+          },
           {
             title: "How It's Exploited",
             type: "commands",
@@ -1749,35 +1771,67 @@ var VULNS = [
         "severity": "Medium",
         "ref": "https://owasp.org/www-community/vulnerabilities/Weak_password_requirements",
         "description": "The application accepts weak, common, or predictable passwords, making accounts easy to guess or brute-force.",
-        "brief": "A password policy is the set of rules an application enforces on the passwords users choose. It is weak when it permits short passwords, common passwords (password, 123456, the username itself), or has no defence against automated guessing. The problem is compounded when the rules are only enforced in the browser and never re-checked on the server.\n\nImpact: weak policies turn a leaked username list into compromised accounts through credential stuffing, password spraying, and simple online guessing — the single most common cause of account takeover.",
+        "brief": "A password policy is the set of rules an application enforces on the passwords users may choose, plus the controls that limit how many guesses an attacker gets. It is weak when it permits short passwords, common or breached passwords (password, 123456, the username itself, Company2024!), or provides no defence against automated guessing (no rate limiting, no lockout, no MFA). It is doubly weak when the rules are enforced only in the browser and never re-checked server-side, so an attacker who posts straight to the API sidesteps them entirely.\n\nThe reason this matters so much is the scale of credential attacks. Massive breach corpora and username lists are freely available, so attackers rarely 'crack' a specific password — they replay known passwords across many accounts (credential stuffing) or try a few common passwords against a whole user list (password spraying, which stays under per-account lockout thresholds). A weak policy turns those bulk techniques into successful account takeovers.\n\nImpact is direct account compromise at scale, and it is consistently among the most common real-world causes of breach. Testing it is partly about what the app ACCEPTS (weak/breached passwords, username==password, client-only checks) and partly about what it PERMITS an attacker to DO (unlimited guessing without lockout, CAPTCHA, or MFA).",
         "quickReference": [
-          { "label": "Try obviously weak passwords", "cmd": "password, 123456, qwerty12, <username>, <company>123, Password1!" },
-          { "label": "Check where the rule is enforced", "cmd": "# strip client-side JS validation, submit a 1-char password directly to the API" },
-          { "label": "Spray one password across many users", "cmd": "for u in $(cat users.txt); do curl -s -d \"user=$u&pass=Winter2024!\" https://target/login; done" }
+          { "label": "Try obviously weak passwords", "cmd": "password  123456  qwerty12  <username>  <company>123  Password1!" },
+          { "label": "Check where the rule is enforced", "cmd": "strip client-side JS validation; POST a 1-char password directly to the API" },
+          { "label": "Password spraying (one pw, many users)", "cmd": "for u in $(cat users.txt); do curl -s -d \"user=$u&pass=Winter2024!\" https://target/login; done" },
+          { "label": "No lockout?", "cmd": "fire many wrong passwords for one account; still allowed = unlimited guessing" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "Security depends on both password strength (what users may pick) and guess-resistance (how many attempts an attacker gets); a gap in either is exploitable.",
+            "Client-only enforcement is no enforcement: any check that lives in JavaScript is bypassed by posting to the API directly.",
+            "The dominant real-world threats are credential stuffing (replaying breached user:pass pairs) and password spraying (one common password across many accounts to dodge per-account lockout) — both beat a weak policy without 'cracking' anything.",
+            "Modern guidance (NIST 800-63B) favours length and breached-password screening over arbitrary composition rules and forced periodic rotation.",
+            "MFA is the backstop: it makes a single guessed/stuffed password insufficient on its own."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Registration and change-password endpoints — what minimum length/complexity is actually enforced server-side?",
+            "The login endpoint — rate limiting, account lockout, and CAPTCHA/MFA after repeated failures (per account AND per source IP).",
+            "Password-reset 'set new password' — is the policy enforced there too, or only at registration?",
+            "Whether the account-recovery/OTP paths have their own guessing limits.",
+            "Error/timing differences that also enable username enumeration (feeds spraying)."
+          ]},
           { "title": "How It's Tested", "type": "commands", "commands": [
-            { "label": "1. Probe the accepted complexity server-side", "cmd": "# bypass the browser and post directly to the registration/change-password API\ncurl -s -X POST https://target/register -d 'email=t@t.com&password=a'\n# accepted 1-char password = no server-side policy" },
-            { "label": "2. Try known-weak and context passwords", "cmd": "# common list + words from the site (company name, product, season+year)\npassword, 123456, 111111, abcabc, qwerty12, <username>, <company>2024" },
-            { "label": "3. Password spraying (one password, many users)", "cmd": "# slow and wide beats fast and narrow — avoids per-account lockout\nnetexec http target -u users.txt -p 'Spring2024!' --continue-on-success\n# web: replay the login request in Burp Intruder across the username list" }
+            { "label": "1. Probe accepted complexity server-side", "cmd": "# bypass the browser and post directly to registration/change-password:\ncurl -s -X POST https://target/register -d 'email=t@t.com&password=a'\n# accepted 1-char password = no (or client-only) server-side policy" },
+            { "label": "2. Try known-weak and context passwords", "cmd": "# common list + words from the site (company, product, season+year):\npassword  123456  111111  qwerty12  <username>  <company>2024  Welcome1" },
+            { "label": "3. Test lockout / rate limiting", "cmd": "# fire many wrong passwords for ONE account:\nffuf -w passwords.txt -X POST -d 'user=admin&pass=FUZZ' -u https://target/login -mc all\n# no lockout / no CAPTCHA after N tries = online brute force viable" },
+            { "label": "4. Password spraying (avoids lockout)", "cmd": "# one password, many users, slow and wide:\nnetexec http target -u users.txt -p 'Spring2024!' --continue-on-success\n# web: Burp Intruder over the username list with a single common password" }
           ]},
           { "title": "What a Weak Policy Allows", "type": "table", "columns": ["Weakness", "Consequence"], "rows": [
             ["No minimum length / very short", "Fast offline and online brute force"],
-            ["No common-password blocklist", "Credential stuffing and spraying succeed"],
+            ["No breached/common-password blocklist", "Credential stuffing and spraying succeed"],
             ["username == password permitted", "Trivial mass compromise"],
             ["No rate limit or lockout", "Unlimited online guessing"],
-            ["Client-side-only enforcement", "Policy bypassed by posting to the API directly"]
+            ["Lockout per-account only", "Password spraying across users evades it"],
+            ["Client-side-only enforcement", "Bypassed by posting to the API directly"],
+            ["No MFA", "A single guessed password = full access"]
+          ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Confirm weak accepted passwords / no lockout", "Guessing is viable"],
+            ["2", "Enumerate usernames (if possible)", "Target list for spraying"],
+            ["3", "Credential-stuff or spray", "Valid credentials found at scale"],
+            ["4", "Log in (no MFA)", "Account takeover across many users"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite (Intruder)", "Test accepted complexity, lockout, and spray a login form"],
+            ["Hydra / Medusa", "Online password guessing against services"],
+            ["NetExec", "Credential spraying across hosts/protocols"],
+            ["Pwned Passwords (HIBP) list / SecLists", "Common and breached password wordlists"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "OWASP — Weak Password Requirements", "url": "https://owasp.org/www-community/vulnerabilities/Weak_password_requirements" },
+            { "label": "OWASP — Authentication Cheat Sheet (password policy)", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html" },
             { "label": "NIST SP 800-63B — Authenticator (password) guidance", "url": "https://pages.nist.gov/800-63-3/sp800-63b.html" }
           ]},
           { "title": "Remediation", "type": "notes", "items": [
-            "Enforce a minimum length (12+ characters) and check candidates against a breached-password blocklist (e.g. Have I Been Pwned Pwned Passwords).",
-            "Always validate the policy server-side; client-side checks are a UX aid only.",
-            "Rate-limit and lock out (or step up with CAPTCHA/MFA) after repeated failures, per account and per source.",
-            "Prefer length and passphrases over arbitrary composition rules, and encourage a password manager.",
-            "Layer multi-factor authentication so a guessed password alone is not enough."
+            "Enforce a minimum length (12+ characters) and screen every candidate against a breached-password blocklist (e.g. HIBP Pwned Passwords); reject username==password and trivial patterns.",
+            "Always validate the policy server-side on registration, change-password, AND reset; treat client-side checks as UX only.",
+            "Rate-limit and lock out (or step up with CAPTCHA/MFA) after repeated failures — per account AND per source IP — to blunt brute force and spraying.",
+            "Prefer length and passphrases over arbitrary composition rules; do not force periodic rotation without cause (per NIST).",
+            "Offer and encourage MFA so a guessed or stuffed password alone is not enough, and detect/monitor credential-stuffing patterns.",
+            "Return generic, timing-equal login errors to prevent username enumeration that feeds spraying."
           ]}
         ]
       },
@@ -1787,36 +1841,64 @@ var VULNS = [
         "severity": "Medium",
         "ref": "https://cwe.mitre.org/data/definitions/287.html",
         "description": "The application trusts an email address before it is proven to belong to the user, enabling account takeover and abuse.",
-        "brief": "Many flows assume the person registering, or changing their address, actually controls that mailbox. When verification is missing, skippable, or bypassable, an attacker can bind an account to a victim's address, use an unverified account for privileged actions, or pre-register a victim's email so a later legitimate signup merges into the attacker's account (pre-account-takeover).\n\nImpact: account takeover, spoofed identity, spam and abuse from unverified accounts, and privilege inheritance where an email domain grants trust (e.g. @company.com auto-joins an internal tenant).",
+        "brief": "Email verification is the step that proves the person registering (or changing their address) actually controls the mailbox they claimed — normally by emailing a one-time link/code they must use. Insufficient email verification is any weakness where that proof is missing, skippable, bypassable, or applied inconsistently, so the application trusts an address it has not confirmed.\n\nThe consequences follow from what trust the email confers. If accounts are usable before verification, attackers create throwaway/abuse accounts and bypass onboarding controls. If an account can be bound to a victim's address without proof, later password-reset or notification flows deliver to (or trust) that account. The subtle and severe case is pre-account-takeover: the attacker registers a local account with victim@corp.com before the victim signs up; when the victim later authenticates via SSO ('Sign in with Google') using that same email, a poorly-designed app merges the two identities — leaving the attacker with a known password on the victim's account. Address-parsing tricks (null bytes, CRLF, extra @, quoted local parts) can also make the validator check one address while mail is delivered to another.\n\nImpact: account takeover, identity spoofing, spam/abuse from unverified accounts, and privilege inheritance where an email domain grants trust (e.g. @company.com auto-joining an internal tenant).",
         "quickReference": [
-          { "label": "Is the account usable before verifying?", "cmd": "# register, DON'T click the link, then try to log in / act" },
-          { "label": "Null-byte / encoding trick", "cmd": "victim@target.com%00@attacker.com   (validation reads one part, delivery another)" },
-          { "label": "Pre-account-takeover", "cmd": "# register victim@corp.com first; wait for them to sign in via SSO -> merges into your account" },
-          { "label": "Change-email without re-verify", "cmd": "# change address; is the new one trusted before the confirmation link is clicked?" }
+          { "label": "Usable before verifying?", "cmd": "register, DON'T click the link, then try to log in / act" },
+          { "label": "Address-parsing trick", "cmd": "victim@target.com%00@attacker.com  (validator reads one part, mailer sends to another)" },
+          { "label": "Pre-account-takeover", "cmd": "register victim@corp.com first; victim later SSO-signs-in -> merges into your account" },
+          { "label": "Change-email without re-verify", "cmd": "change address; is the new one trusted before the confirmation link is used?" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "The app treats an email address as proven when it is not — because verification is optional, enforced only in the UI, skippable, or bypassable via address parsing.",
+            "Trust conferred by the (unverified) email is what causes harm: login, password reset, notifications, SSO identity matching, and domain-based tenant membership all key off it.",
+            "Pre-account-takeover exploits identity MERGING: a pre-existing local account with the victim's email is joined to their later SSO login instead of being rejected.",
+            "Address canonicalisation matters: validators and mailers can disagree on which address a crafted string represents (null byte, CRLF, multiple @, quoted local part), so the confirmed and delivered addresses differ.",
+            "Verification must gate meaningful actions and be re-run on every address change — not just at first signup."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Registration: can the account perform meaningful/privileged actions before the email is confirmed?",
+            "Change-email flow: is the new address trusted before its confirmation link is used? Is the old address notified?",
+            "SSO/social linking: does the app link/merge by email without requiring the local email to be verified (pre-account-takeover)?",
+            "Address validation: null-byte/CRLF/second-@/quoted-local-part smuggling between validator and mailer.",
+            "Domain-based trust: does registering user@company.com auto-grant tenant/workspace membership or roles?"
+          ]},
           { "title": "How It's Exploited", "type": "commands", "commands": [
-            { "label": "1. Skip verification entirely", "cmd": "# create the account, never confirm, then exercise authenticated features\n# if it works, verification is decorative" },
-            { "label": "2. Smuggle a second address past validation", "cmd": "# the validator checks the first token, the mailer sends to the second:\nvictim@target.com%00@attacker.com\nvictim@target.com%0a@attacker.com\n\"victim@target.com\"@attacker.com" },
-            { "label": "3. Pre-account-takeover via SSO merge", "cmd": "# 1) attacker registers a local account with victim@corp.com (no verify enforced)\n# 2) victim later 'Sign in with Google' using the same address\n# 3) app merges the identities -> attacker keeps their known password" },
-            { "label": "4. Trust an unverified corporate domain", "cmd": "# register bob@target.com — does it auto-join the target's internal workspace/tenant?" }
+            { "label": "1. Skip verification entirely", "cmd": "# create the account, never confirm, then exercise authenticated/privileged features\n# if it works, verification is decorative" },
+            { "label": "2. Smuggle a second address past validation", "cmd": "# validator checks the first token, mailer sends to the second (or vice versa):\nvictim@target.com%00@attacker.com\nvictim@target.com%0a@attacker.com\n\"victim@target.com\"@attacker.com" },
+            { "label": "3. Pre-account-takeover via SSO merge", "cmd": "# 1) attacker registers a LOCAL account with victim@corp.com (no verify enforced)\n# 2) victim later 'Sign in with Google' using the same address\n# 3) app MERGES the identities -> attacker keeps their known password on the victim's account" },
+            { "label": "4. Trust an unverified corporate domain", "cmd": "# register bob@target.com — does it auto-join the target's internal workspace/tenant\n# or grant a role, without proving control of the mailbox?" }
           ]},
           { "title": "Where It Bites", "type": "table", "columns": ["Scenario", "Impact"], "rows": [
             ["Account usable pre-verification", "Spam/abuse accounts, bypassed onboarding controls"],
-            ["Email bound to a victim address", "Password reset then flows to the account = takeover"],
-            ["Pre-account-takeover + SSO merge", "Persistent access after the victim joins"],
+            ["Email bound to a victim address", "Reset/notification flows trust the account -> takeover"],
+            ["Pre-account-takeover + SSO merge", "Persistent attacker access after the victim joins"],
+            ["Address-parsing mismatch", "Mail delivered to attacker while the app shows the victim's address"],
             ["Domain-based auto-trust", "Unauthorised access to internal tenants/roles"]
+          ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Register/change to a victim's email or smuggle an address", "Unproven address trusted"],
+            ["2", "Skip or bypass verification", "Account bound without control of the mailbox"],
+            ["3", "Wait for SSO merge / trigger a trust flow", "Attacker identity joins the victim's"],
+            ["4", "Use the retained credential / inherited trust", "Account takeover or unauthorised access"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite", "Tamper email fields, test address-parsing tricks, and skip verification steps"],
+            ["A disposable-mail / catch-all domain", "Register and receive verification mail during testing"],
+            ["Two test accounts", "Reproduce the pre-account-takeover / SSO-merge sequence"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "PortSwigger — Authentication vulnerabilities", "url": "https://portswigger.net/web-security/authentication" },
-            { "label": "Microsoft/Okta — pre-account-takeover research", "url": "https://portswigger.net/daily-swig/account-takeover" }
+            { "label": "OWASP — Authentication Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html" },
+            { "label": "OWASP WSTG — Testing for Account Enumeration and Registration", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/03-Identity_Management_Testing/" }
           ]},
           { "title": "Remediation", "type": "notes", "items": [
-            "Require a verified email before the account can perform any meaningful or privileged action.",
-            "Re-verify on every email change, and do not trust the new address until the confirmation link is used.",
-            "Normalise and strictly parse addresses (reject null bytes, CRLF, multiple @, and quoted local parts) before storing or mailing.",
-            "When linking social/SSO identities, match on a verified email only, and never silently merge a local account into an SSO login.",
-            "Do not grant trust or tenant membership from an email domain without an out-of-band check."
+            "Require a verified email before the account can perform any meaningful or privileged action, and gate this server-side.",
+            "Re-verify on every email change, do not trust the new address until the confirmation link/code is used, and notify the old address of the change.",
+            "Normalise and strictly parse addresses (reject null bytes, CRLF, multiple @, and quoted local parts) so the validated address is exactly the one mailed.",
+            "When linking social/SSO identities, match only on a provider-verified email, and never silently merge a pre-existing local account into an SSO login — require explicit re-authentication.",
+            "Do not grant trust, roles, or tenant membership from an email domain without an out-of-band check.",
+            "Use single-use, expiring verification tokens bound to the specific account and address."
           ]}
         ]
       },
@@ -2058,6 +2140,20 @@ var VULNS = [
           { "label": "Fixate then hijack", "cmd": "# plant a known id in the victim's browser, wait for them to log in, reuse the id" }
         ],
         "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "The core flaw is that the application keeps the SAME session identifier across the authentication boundary instead of issuing a fresh one at login — so a value known before login remains valid after it.",
+            "Attack shape: the attacker obtains/plants a valid session id, causes the victim to authenticate under it, then reuses that id to ride the victim's now-authenticated session.",
+            "It differs from session hijacking (stealing a live id): here the attacker CHOOSES the id in advance, so no theft is needed if they can make the victim adopt it.",
+            "Planting the id needs a vector: the app accepting an id from a URL/param, a cookie settable from a sibling subdomain, or an XSS — session fixation often chains with those.",
+            "The single decisive defence is session regeneration on every privilege change; most other controls only limit the window."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "The login flow: compare the session cookie value immediately before and after authentication (unchanged = vulnerable).",
+            "Whether the app accepts a session id from a URL parameter, form field, or path (not only a cookie).",
+            "Cookie scope/attributes: parent-domain cookies a sibling subdomain could set; missing Secure/HttpOnly.",
+            "Any privilege change (e.g. step-up to admin) — is a fresh id issued there too?",
+            "Logout: is the old id fully invalidated server-side?"
+          ]},
           { "title": "How It's Exploited", "type": "commands", "commands": [
             { "label": "1. Confirm the id survives login", "cmd": "# grab the pre-auth cookie:\ncurl -s -i https://target/login | grep -i set-cookie\n# log in reusing that exact cookie, then check the post-auth cookie is UNCHANGED" },
             { "label": "2. Plant a known session id in the victim", "cmd": "# if the app accepts an attacker-supplied id (URL param, subdomain cookie, XSS):\nhttps://target/?sessionid=KNOWN123\n# or set a cookie for the parent domain from a sibling subdomain" },
@@ -2067,18 +2163,31 @@ var VULNS = [
             ["No session regeneration on login", "The pre-login id becomes the authenticated id"],
             ["Session id accepted from URL/param", "Attacker can set the id without any cookie access"],
             ["Cookies scoped to the parent domain", "A sibling subdomain can fixate the cookie"],
+            ["Cookie settable via XSS/meta", "Client-side planting of a known id"],
             ["Long session lifetime / no re-auth", "The fixated session stays useful for longer"]
+          ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Obtain/choose a valid session id", "A known id to fixate"],
+            ["2", "Plant it in the victim's browser", "Victim will use the attacker's id"],
+            ["3", "Victim authenticates (id not regenerated)", "The known id is now authenticated"],
+            ["4", "Reuse the id", "Full session hijack / account takeover"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite", "Compare pre/post-login cookies; test id-from-URL acceptance"],
+            ["Browser dev tools", "Inspect and set cookies; test scope/attributes"],
+            ["curl", "Replay a fixed session id before and after login"]
           ]},
           { "title": "References", "type": "references", "items": [
             { "label": "OWASP — Session fixation", "url": "https://owasp.org/www-community/attacks/Session_fixation" },
-            { "label": "OWASP — Session Management Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html" }
+            { "label": "OWASP — Session Management Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html" },
+            { "label": "OWASP WSTG — Testing for Session Fixation", "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/06-Session_Management_Testing/03-Testing_for_Session_Fixation" }
           ]},
           { "title": "Remediation", "type": "notes", "items": [
-            "Regenerate the session identifier on every privilege change, especially at login (and invalidate the old one).",
-            "Only accept session ids from a Secure, HttpOnly cookie — never from URL parameters or request bodies.",
-            "Scope cookies tightly (host-only where possible) so sibling subdomains cannot set them.",
+            "Regenerate the session identifier on every privilege change, especially at login, and invalidate the old one — this is the decisive fix.",
+            "Only accept session ids from a Secure, HttpOnly cookie — never from URL parameters, form fields, or request bodies.",
+            "Scope cookies tightly (host-only where possible, correct domain/path) so sibling subdomains cannot set them.",
             "Set sensible idle and absolute session timeouts and require re-authentication for sensitive actions.",
-            "Bind sessions to reasonable attributes and invalidate them fully on logout."
+            "Bind sessions to reasonable attributes, set SameSite, and invalidate them fully server-side on logout."
           ]}
         ]
       },
@@ -2567,6 +2676,28 @@ var VULNS = [
           { label: "State confusion", cmd: "Cancel-after-fulfil, refund + keep, concurrent requests (see Race Conditions)" }
         ],
         sections: [
+          {
+            title: "Root Cause & Concepts",
+            type: "notes",
+            items: [
+              "Business logic flaws are gaps between what the developers ASSUMED users would do and what the application actually PERMITS — each request is well-formed, but their combination or sequence produces an outcome the business never intended.",
+              "They are not injection/encoding bugs, so there is no malformed payload to detect; the 'exploit' is a legitimate-looking request that violates a business rule.",
+              "The method is invariant-driven: state what must always be true (you pay before fulfilment; a coupon is single-use; totals are non-negative), then find a request sequence that breaks it.",
+              "Common enablers: trusting client-supplied prices/quantities/totals, enforcing limits only in the UI, not verifying step preconditions, and weak value validation (negatives, overflow, currency/unit confusion).",
+              "Because they are context-specific, scanners miss them — they are found by understanding the domain and thinking adversarially about the workflow."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Checkout and payment: price/quantity/total/currency/discount handling, and whether payment precedes fulfilment.",
+              "Discounts, coupons, gift cards, referrals, loyalty points — reuse, stacking, and per-account caps.",
+              "Multi-step workflows (KYC, onboarding, transfers, approvals) — step skipping, replay, and out-of-order requests.",
+              "Any limit or quota (withdrawals, votes, API usage, free-tier caps) enforced server-side vs only client-side.",
+              "Actions that combine badly under concurrency (see Race Conditions), and roles/permissions changed mid-workflow."
+            ]
+          },
           {
             title: "How It's Exploited",
             type: "commands",
