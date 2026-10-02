@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vulnhub: Grotesque 1 — Satej Chaudhari</title>
+  <meta name="description" content="Vulnhub Grotesque 1 walkthrough (to the user flag) — a WordPress password that is the MD5 of a song lyric, a reverse shell planted in the theme&#x27;s 404.php, and credential reuse from wp-config.php to reach the user flag.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Vulnhub</span>
+        <h1 class="post-title">Vulnhub: Grotesque 1</h1>
+        <p class="post-meta">
+          <time datetime="2026-01-10">2026-01-10</time>
+          <span>&middot; 8 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p><strong>Grotesque 1</strong> runs its foothold through a WordPress site whose password is the MD5 of a song lyric, a reverse shell dropped into the theme's <code>404.php</code>, and credential reuse from <code>wp-config.php</code> to reach the user flag. <em>This writeup covers the box up to the user flag.</em></p>
+
+        <h2>Reconnaissance</h2>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image1.png" alt="netdiscover showing the target at 192.168.0.121">
+          <figcaption>Target located at <code>192.168.0.121</code> with <code>netdiscover</code>.</figcaption>
+        </figure>
+
+        <p><code>nmap</code> enumerates the services.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image2.png" alt="nmap scan of the target">
+          <figcaption>Scanning the target with <code>nmap</code>.</figcaption>
+        </figure>
+
+        <p>Ports 66 and 80 are open, both HTTP.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image3.png" alt="nmap results showing ports 66 and 80 open">
+          <figcaption><strong>66</strong> and <strong>80</strong>, both HTTP.</figcaption>
+        </figure>
+
+        <p>Port 80 shows nothing immediately, but port 66 serves a file, which is downloaded for later.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image4.png" alt="Port 66 serving a downloadable file">
+          <figcaption>A file waiting on port 66.</figcaption>
+        </figure>
+
+        <p>The port 66 page source carries a comment containing encoded text.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image5.png" alt="Encoded comment in the page source">
+          <figcaption>An encoded blob hidden in a comment.</figcaption>
+        </figure>
+
+        <p>Research identifies it as <strong>Brainfuck</strong>, so it is run through a decoder.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image6.png" alt="Decoding the Brainfuck comment">
+          <figcaption>Decoding the Brainfuck.</figcaption>
+        </figure>
+
+        <p>It decodes to what looks like a path, <code>/sshpasswd.pn</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image7.png" alt="Decoded output giving the /sshpasswd.pn path">
+          <figcaption>Decoded: the path <code>/sshpasswd.pn</code>.</figcaption>
+        </figure>
+
+        <p>The bare path 404s; adding a <code>g</code> to make <code>/sshpasswd.png</code> returns an image — but nothing useful comes out of it, even with <code>steghide</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image8.png" alt="sshpasswd.png image, a dead end">
+          <figcaption><code>sshpasswd.png</code> — a dead end this time.</figcaption>
+        </figure>
+
+        <h2>The downloaded file &amp; WordPress hint</h2>
+
+        <p>Back to the file pulled from port 66 — time to see what it actually is.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image9.png" alt="Inspecting the file downloaded from port 66">
+          <figcaption>Examining the downloaded file.</figcaption>
+        </figure>
+
+        <p>Listing, searching and sorting through its contents…</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image10.png" alt="Listing directories within the file">
+          <figcaption>Walking its directory listing.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image11.png" alt="Searching and sorting the contents">
+          <figcaption>Searching and sorting for anything useful.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image12.png" alt="Further filtering of the contents">
+          <figcaption>Narrowing it down.</figcaption>
+        </figure>
+
+        <p>…turns up a hint: a WordPress site on port 80, with a file path to follow.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image13.png" alt="Hint pointing to a WordPress path on port 80">
+          <figcaption>A pointer to WordPress on port 80.</figcaption>
+        </figure>
+
+        <h2>Foothold: a lyric-as-password</h2>
+
+        <p>That page is full of song lyrics and little else, so <code>dirb</code> enumerates further — it finds a WordPress login plus a password hint that points back to the lyrics page.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image14.png" alt="Lyrics page on the WordPress site">
+          <figcaption>The lyrics page.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image15.png" alt="dirb finding the WordPress login and a password hint">
+          <figcaption><code>dirb</code> surfaces the login and a &ldquo;back to lyrics&rdquo; hint.</figcaption>
+        </figure>
+
+        <blockquote>Per the walkthrough, the password is one of the song lyrics hashed as MD5. Each set of lyrics is saved to its own text file to test them all.</blockquote>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image16.png" alt="Saving each song&#x27;s lyrics to a text file">
+          <figcaption>Each lyric captured to its own file…</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image17.png" alt="More lyric files prepared">
+          <figcaption>…across the songs on the page.</figcaption>
+        </figure>
+
+        <p>Each file is reduced to its MD5 sum — the candidate passwords — paired with the song's author as the username.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image18.png" alt="Converting the lyric files to MD5 sums">
+          <figcaption>MD5-summing the lyrics into candidate passwords.</figcaption>
+        </figure>
+
+        <p>One author/MD5 pair logs straight into WordPress.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image19.png" alt="Successful WordPress login">
+          <figcaption>Authenticated to WordPress.</figcaption>
+        </figure>
+
+        <h2>Reverse shell via 404.php</h2>
+
+        <p>The active theme has an unconfigured, default <code>404.php</code> — an ideal place to plant code.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image20.png" alt="Default unconfigured 404.php in the theme editor">
+          <figcaption>The theme's stock <code>404.php</code>.</figcaption>
+        </figure>
+
+        <p>A PHP reverse shell from GitHub is pasted into <code>404.php</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image21.png" alt="Pasting a PHP reverse shell into 404.php">
+          <figcaption>Dropping a reverse shell into the template.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image22.png" alt="The reverse shell code in place">
+          <figcaption>The payload saved to <code>404.php</code>.</figcaption>
+        </figure>
+
+        <p>The callback IP and port are set to the Kali host.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image23.png" alt="Setting the reverse shell IP and port">
+          <figcaption>Pointing the shell back at Kali.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image24.png" alt="Reverse shell configuration saved">
+          <figcaption>Configuration in place.</figcaption>
+        </figure>
+
+        <p>A listener is started and <code>404.php</code> is requested; the shell fires automatically.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image25.png" alt="Listener started, catching the shell on 404.php load">
+          <figcaption>Visiting the page triggers the callback.</figcaption>
+        </figure>
+
+        <p>The shell lands as <code>www-data</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image26.png" alt="Shell received as www-data">
+          <figcaption>Foothold as <code>www-data</code>.</figcaption>
+        </figure>
+
+        <h2>Credential reuse to the user flag</h2>
+
+        <p>This is a restricted shell with little room to move, so the goal becomes reading <code>wp-config.php</code> — easiest via a WordPress file-manager plugin installed from the admin panel.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image27.png" alt="Installing a file manager plugin in WordPress">
+          <figcaption>Adding a file-manager plugin to browse the filesystem.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image28.png" alt="Browsing to wp-config.php with the plugin">
+          <figcaption>Navigating to <code>wp-config.php</code>.</figcaption>
+        </figure>
+
+        <p>It holds the credentials for the user <code>raphael</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image29.png" alt="wp-config.php revealing raphael&#x27;s credentials">
+          <figcaption><code>raphael</code>'s username and password in <code>wp-config.php</code>.</figcaption>
+        </figure>
+
+        <p>Reusing that password, <code>su raphael</code> gives a proper shell.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-grotesque-1/image30.png" alt="Switching to raphael and reading user.txt">
+          <figcaption><code>su raphael</code>, then <code>user.txt</code> — the user flag.</figcaption>
+        </figure>
+
+        <blockquote>That is the user flag. Root is left for another day: <code>raphael</code>'s home holds a <code>.chadroot.kdbx</code> KeePass database — the next objective — but cracking it is out of scope for this writeup.</blockquote>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

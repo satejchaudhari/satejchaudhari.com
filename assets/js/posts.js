@@ -69,6 +69,15 @@ var POSTS = [
     readTime: "9 min read"
   },
   {
+    title: "Vulnhub: Matrix 1",
+    url: "posts/2026-01-10-vulnhub-matrix-1.html",
+    date: "2026-01-10",
+    type: "writeup",
+    tag: "Vulnhub",
+    description: "A base64-then-Brainfuck clue chain leaks a partial SSH password, crunch and hydra finish it, a vi restricted-shell escape gives a real shell, and a passwordless sudo rule gives root.",
+    readTime: "8 min read"
+  },
+  {
     title: "Vulnhub: Matrix 2",
     url: "posts/2026-01-10-vulnhub-matrix-2.html",
     date: "2026-01-10",
@@ -94,5 +103,14 @@ var POSTS = [
     tag: "Vulnhub",
     description: "A vulnerable WordPress File Manager plugin for the foothold, database credentials that crack a user's WordPress hash, and a writable root-run backup script for the root shell.",
     readTime: "9 min read"
+  },
+  {
+    title: "Vulnhub: Grotesque 1",
+    url: "posts/2026-01-10-vulnhub-grotesque-1.html",
+    date: "2026-01-10",
+    type: "writeup",
+    tag: "Vulnhub",
+    description: "To the user flag — a WordPress password that is the MD5 of a song lyric, a reverse shell planted in the theme's 404.php, and credential reuse from wp-config.php to reach user.txt.",
+    readTime: "8 min read"
   }
 ];

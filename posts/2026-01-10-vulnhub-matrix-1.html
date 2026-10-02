@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vulnhub: Matrix 1 — Satej Chaudhari</title>
+  <meta name="description" content="Vulnhub Matrix 1 walkthrough — a base64-then-Brainfuck clue chain leaks a partial SSH password, crunch and hydra finish it, a vi restricted-shell escape gives a real shell, and a passwordless sudo rule gives root.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Vulnhub</span>
+        <h1 class="post-title">Vulnhub: Matrix 1</h1>
+        <p class="post-meta">
+          <time datetime="2026-01-10">2026-01-10</time>
+          <span>&middot; 8 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p><strong>Matrix 1</strong> is the original of the series. The path: a base64-then-brainfuck clue chain that leaks a partial SSH password, <code>crunch</code>+<code>hydra</code> to finish it, a restricted-shell escape through <code>vi</code>, and a passwordless <code>sudo</code> for root.</p>
+
+        <h2>Reconnaissance</h2>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image1.png" alt="Matrix 1 VM booted to a login prompt">
+          <figcaption>The Matrix 1 VM at its login page.</figcaption>
+        </figure>
+
+        <p><code>netdiscover</code> on the Kali host finds the target.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image2.png" alt="netdiscover showing the target at 192.168.145.133">
+          <figcaption>Target identified as <code>192.168.145.133</code>.</figcaption>
+        </figure>
+
+        <p><code>nmap</code> shows SSH (22) and HTTP (80), plus an unusual HTTP port 31337. Port 80 greets us with the hint &ldquo;follow the white rabbit.&rdquo;</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image3.png" alt="nmap results showing ports 22, 80 and 31337">
+          <figcaption>SSH, HTTP, and HTTP on the non-standard <strong>31337</strong>.</figcaption>
+        </figure>
+
+        <p>A <code>nikto</code> scan of port 80 finds nothing obviously exploitable.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image4.png" alt="nikto scan against port 80">
+          <figcaption><code>nikto</code> on port 80 — nothing actionable.</figcaption>
+        </figure>
+
+        <h2>The clue chain</h2>
+
+        <p>Moving to port 31337, the page's only heading is &ldquo;Cypher.&rdquo; A <code>dirb</code> scan (and another <code>nikto</code>) looks for anything cipher-related.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image5.png" alt="Port 31337 page showing only a Cypher heading">
+          <figcaption>Port 31337 — just a &ldquo;Cypher&rdquo; heading.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image6.png" alt="dirb scan against port 31337">
+          <figcaption>Directory brute-forcing the service…</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image7.png" alt="nikto scan against port 31337">
+          <figcaption>…and a <code>nikto</code> pass alongside it.</figcaption>
+        </figure>
+
+        <p><code>dirb</code> finds an <code>assets</code> directory.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image8.png" alt="dirb finding an assets directory">
+          <figcaption>An <code>assets</code> directory appears.</figcaption>
+        </figure>
+
+        <p>Inside is a file named <code>port_31337.png</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image9.png" alt="assets directory listing with port_31337.png">
+          <figcaption>The file <code>port_31337.png</code>.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image10.png" alt="Opening port_31337.png">
+          <figcaption>Fetching the image.</figcaption>
+        </figure>
+
+        <p>It is a white rabbit — confirming we are on track — and its filename (the port) nudges us back to the page itself.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image11.png" alt="White rabbit image named after port 31337">
+          <figcaption>The white rabbit: right path, keep looking.</figcaption>
+        </figure>
+
+        <p>Revisiting port 31337 and viewing the source reveals a commented-out ciphertext:</p>
+
+        <pre><code>&lt;!--p class=&quot;service__text&quot;&gt;ZWNobyAiVGhlbiB5b3UnbGwgc2VlLCB0aGF0IGl0IGlzIG5vdCB0aGUgc3Bvb24gdGhhdCBiZW5kcywgaXQgaXMgb25seSB5b3Vyc2VsZi4gIiA+IEN5cGhlci5tYXRyaXg=&lt;/p--&gt;</code></pre>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image12.png" alt="Hidden base64 ciphertext in the page source">
+          <figcaption>The base64 blob hidden in an HTML comment.</figcaption>
+        </figure>
+
+        <p>Decoding the base64 in CyberChef yields a message ending in <code>Cypher.matrix</code> — which looks like a filename, so the URL is modified to request it.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image13.png" alt="Decoding the base64 to a Cypher.matrix reference">
+          <figcaption>Decoded: a reference to <code>Cypher.matrix</code>.</figcaption>
+        </figure>
+
+        <p>The server immediately offers a file named <code>Cypher.matrix</code> for download. Its contents are a string of odd characters.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image14.png" alt="Downloaded Cypher.matrix file of strange characters">
+          <figcaption><code>Cypher.matrix</code> — an unfamiliar character soup.</figcaption>
+        </figure>
+
+        <p>The characters are <strong>Brainfuck</strong>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image15.png" alt="Identifying the content as Brainfuck">
+          <figcaption>Recognising the Brainfuck language.</figcaption>
+        </figure>
+
+        <p>An online Brainfuck interpreter reveals the message: the login username is <code>guest</code>, and the password is <code>K1ll0r</code> followed by two unknown characters.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image16.png" alt="Decoded Brainfuck message leaking a partial password">
+          <figcaption>Username <code>guest</code>; password <code>K1ll0r??</code> — last two characters unknown.</figcaption>
+        </figure>
+
+        <h2>Finishing the password &amp; SSH</h2>
+
+        <p><code>crunch</code> generates every 8-character candidate with the known <code>K1ll0r</code> prefix.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image17.png" alt="crunch generating an 8-character wordlist">
+          <figcaption>Building the candidate wordlist with <code>crunch</code>.</figcaption>
+        </figure>
+
+        <p><code>hydra</code> brute-forces SSH against that list.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image18.png" alt="hydra brute-forcing SSH with the generated list">
+          <figcaption>Spraying the list at SSH with <code>hydra</code>.</figcaption>
+        </figure>
+
+        <p>It recovers the password: <code>k1ll0r7n</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image19.png" alt="hydra returning the password k1ll0r7n">
+          <figcaption>The full password: <code>k1ll0r7n</code>.</figcaption>
+        </figure>
+
+        <h2>Restricted-shell escape &amp; root</h2>
+
+        <p>SSH drops us into a restricted bash. <code>export</code> shows the environment and the current path.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image20.png" alt="Restricted bash shell after SSH login">
+          <figcaption>A locked-down <code>rbash</code> on login.</figcaption>
+        </figure>
+
+        <p>The path <code>/home/guest/prog</code> is readable, so its contents are inspected.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image21.png" alt="Inspecting /home/guest/prog">
+          <figcaption>Looking at what lives in <code>/home/guest/prog</code>.</figcaption>
+        </figure>
+
+        <p>It is <code>vi</code> — a classic restricted-shell escape.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image22.png" alt="Discovering vi is runnable">
+          <figcaption><code>vi</code> is available — a known escape route.</figcaption>
+        </figure>
+
+        <p>From within <code>vi</code>, <code>:!/bin/bash</code> spawns a full shell.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image23.png" alt="Escaping the restricted shell via vi :!/bin/bash">
+          <figcaption><code>:!/bin/bash</code> breaks out to a real shell.</figcaption>
+        </figure>
+
+        <p>After resetting <code>PATH</code> so standard commands work, <code>sudo -l</code> shows root is available directly.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image24.png" alt="Resetting PATH in the new shell">
+          <figcaption>Restoring a usable <code>PATH</code>.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image25.png" alt="sudo giving root and flag.txt in /root">
+          <figcaption><code>sudo</code> → root; <code>flag.txt</code> waits in <code>/root</code>.</figcaption>
+        </figure>
+
+        <p>Opening it gives the flag, and the box is done.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-1/image26.png" alt="The root flag contents">
+          <figcaption>The root flag — box complete.</figcaption>
+        </figure>
+
+        <blockquote>Matrix 1 is pure clue-following: base64 → Brainfuck → a half-known password finished with <code>crunch</code>/<code>hydra</code>, then a textbook <code>vi</code> breakout and an open <code>sudo</code> rule. Enumeration does all the heavy lifting.</blockquote>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>
