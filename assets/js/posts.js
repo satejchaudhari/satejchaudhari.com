@@ -95,12 +95,12 @@ var POSTS = [
     readTime: "36 min read"
   },
   {
-    title: "Vintage:  HackTheBox",
+    title: "Vintage: HackTheBox",
     url: "posts/2026-07-03-VintageHTB.html",
     date: "2026-07-03",
     type: "writeup",
     tag: "HackTheBox",
-    description: "Writeup for a Active Directory machine on HackTheBox.",
+    description: "Writeup for an Active Directory machine on HackTheBox.",
     readTime: "20 min read"
   },
   {
