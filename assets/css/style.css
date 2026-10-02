@@ -1425,3 +1425,17 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 }
 .about-compact .about-body { font-size: 0.95rem; max-width: none; margin-top: 14px; }
 .about-compact .about-body p { margin: 0 0 12px; }
+
+/* Related-reading list at the foot of theory pages */
+.post-body h2 + .related-list { margin-top: 0.6em; }
+.related-list { list-style: none; padding-left: 0; display: grid; gap: 0; }
+.related-list li { margin: 0; border-top: 1px solid var(--border); }
+.related-list li:last-child { border-bottom: 1px solid var(--border); }
+.related-list a {
+  display: block;
+  padding: 0.7em 0.2em;
+  text-decoration: none;
+  font-weight: 500;
+}
+.related-list a::after { content: " \2192"; opacity: 0.45; }
+.related-list a:hover { padding-left: 0.5em; transition: padding-left 0.12s ease; }

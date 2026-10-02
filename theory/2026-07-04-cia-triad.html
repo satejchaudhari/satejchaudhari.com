@@ -113,6 +113,42 @@
           whenever you're evaluating a benchmark item.
         </p>
 
+        <h2>Beyond the three — authentication, authorisation, and non-repudiation</h2>
+        <p>
+          The triad is the core, but three supporting properties come up constantly in findings,
+          and naming them keeps you from forcing everything into C, I, or A:
+        </p>
+        <ul>
+          <li>
+            <strong>Authentication</strong> — proving an identity really is who it claims to be.
+            A weak or missing authentication control (default credentials, no MFA on an external
+            portal) is usually the gateway that later breaks confidentiality or integrity.
+          </li>
+          <li>
+            <strong>Authorisation</strong> — deciding what an authenticated identity is allowed
+            to do. Broken-access-control and privilege-escalation findings live here, and the
+            damage they cause is normally described back in terms of C or I.
+          </li>
+          <li>
+            <strong>Non-repudiation</strong> — ensuring an action can't later be denied, typically
+            through tamper-evident logging and digital signatures. "Audit logging disabled on the
+            domain controller" is a non-repudiation and integrity concern at the same time.
+          </li>
+        </ul>
+        <p>
+          Authentication and authorisation are often abbreviated <strong>AuthN</strong> and
+          <strong>AuthZ</strong>; combined with accounting (logging), they form the
+          <strong>AAA</strong> model you'll see throughout network and identity products.
+        </p>
+
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+            <li><a href="2026-08-18-ad-fundamentals.html">Active Directory Fundamentals</a></li>
+            <li><a href="2026-08-18-windows-credential-storage.html">Windows Credential Storage</a></li>
+            <li><a href="2026-08-18-osint-fundamentals.html">OSINT Fundamentals</a></li>
+        </ul>
+
       </div>
     </article>
   </main>
@@ -130,5 +166,7 @@
     </div>
   </footer>
 
+
+  <script src="../assets/js/main.js"></script>
 </body>
 </html>

@@ -259,6 +259,47 @@
           of that approach used today.
         </p>
 
+        <h2>Why It Matters for Security</h2>
+
+        <p>
+          On a security site this isn't just background. The same ideas show up on both sides
+          of the fence:
+        </p>
+
+        <ul>
+          <li>
+            <strong>Defence.</strong> Modern EDR, SIEM, and anti-spam engines lean on supervised
+            and unsupervised ML for malware classification, anomaly detection, and behavioural
+            baselining — which is also why evasion research targets the specific
+            <em>features</em> a model relies on.
+          </li>
+          <li>
+            <strong>Attacks against models.</strong> Adversarial ML treats the model itself as
+            the target: evasion (crafting inputs that are deliberately misclassified), data
+            poisoning (corrupting the training set), and model inversion or extraction
+            (recovering training data or cloning the model).
+          </li>
+          <li>
+            <strong>LLM-specific risks.</strong> Transformer-based LLMs add their own attack
+            surface — prompt injection, jailbreaks, insecure tool and plugin use, and
+            training-data leakage. The OWASP Top 10 for LLM Applications is the standard
+            reference for these.
+          </li>
+        </ul>
+
+        <p>
+          Knowing whether a system learns from labelled data, clusters unlabelled data, or
+          generates output with a transformer tells you immediately where its weaknesses are
+          likely to be.
+        </p>
+
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+            <li><a href="2026-07-04-cia-triad.html">The CIA Triad</a></li>
+            <li><a href="2026-08-18-osint-fundamentals.html">OSINT Fundamentals</a></li>
+        </ul>
+
       </div>
     </article>
   </main>
