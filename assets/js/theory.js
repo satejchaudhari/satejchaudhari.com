@@ -20,6 +20,14 @@
 
 var THEORY = [
   {
+    title: "How Enterprise Security Is Built",
+    url: "theory/2026-10-02-enterprise-security-architecture.html",
+    date: "2026-10-02",
+    tag: "Blue Team",
+    description: "How security is actually architected in a large, high-stakes organisation — the control model, governance, identity, network segmentation, endpoint, the SOC, data, cloud and app security, resilience, and the hard design trade-offs, with the tooling mapped to each layer.",
+    readTime: "24 min read"
+  },
+  {
     title: "SCCM / MECM Abuse",
     url: "theory/2026-09-24-sccm-mecm-abuse.html",
     date: "2026-09-24",
