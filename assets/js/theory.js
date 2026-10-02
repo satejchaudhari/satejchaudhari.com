@@ -20,6 +20,22 @@
 
 var THEORY = [
   {
+    title: "Active Directory Hardening & Tiering",
+    url: "theory/2026-10-02-ad-hardening-tiering.html",
+    date: "2026-10-02",
+    tag: "AD",
+    description: "The defensive mirror of the AD attack map — why AD is the crown jewel, tiering / the Enterprise Access Model, and a hardening playbook mapping each attack (credential theft, relay, roasting, delegation, ACL/GPO abuse, ticket forgery, fast-path CVEs) to the control that stops it.",
+    readTime: "19 min read"
+  },
+  {
+    title: "Privileged Access & the Enterprise Access Model",
+    url: "theory/2026-10-02-privileged-access-eam.html",
+    date: "2026-10-02",
+    tag: "AD",
+    description: "How privileged access is designed to survive credential theft — the problem of standing admin and reuse, the Enterprise Access Model (Control/Management/Data planes), PAWs, PAM with just-in-time elevation, and how it breaks the AD attack chain.",
+    readTime: "17 min read"
+  },
+  {
     title: "Zero Trust Architecture in Practice",
     url: "theory/2026-10-02-zero-trust-architecture.html",
     date: "2026-10-02",

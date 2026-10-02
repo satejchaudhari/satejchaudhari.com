@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Active Directory Hardening &amp; Tiering — Satej Chaudhari</title>
+  <meta name="description" content="The defensive mirror of the AD attack map — why AD is the crown jewel, the tiering / Enterprise Access Model, and a hardening playbook mapping each attack (credential theft, relay, roasting, delegation, ACL and GPO abuse, ticket forgery, fast-path CVEs) to the control that stops it.">
+
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Active Directory Hardening &amp; Tiering">
+  <meta property="og:description" content="The defensive mirror of the AD attack map — why AD is the crown jewel, the tiering / Enterprise Access Model, and a hardening playbook mapping each attack (credential theft, relay, roasting, delegation, ACL and GPO abuse, ticket forgery, fast-path CVEs) to the control that stops it.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-02-ad-hardening-tiering.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-02">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Active Directory Hardening &amp; Tiering">
+  <meta name="twitter:description" content="The defensive mirror of the AD attack map — why AD is the crown jewel, the tiering / Enterprise Access Model, and a hardening playbook mapping each attack (credential theft, relay, roasting, delegation, ACL and GPO abuse, ticket forgery, fast-path CVEs) to the control that stops it.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+        <h1 class="post-title">Active Directory Hardening &amp; Tiering</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; 19 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>Active Directory is the single most valuable asset in most enterprises: it is the trust fabric that decides who can do what, everywhere. Whoever owns the directory owns the organisation — which is why nearly every page in the <a href="../ad-map.html">AD attack-path map</a> ends at Domain Admin or a domain controller. This page is the <strong>defensive mirror</strong> of that map: for each attack class, the concrete control that breaks it.</p>
+
+        <p>None of this is exotic. AD compromise is overwhelmingly a story of configuration and credential hygiene, not zero-days — so hardening is overwhelmingly about closing well-known paths, reducing standing privilege, and watching the directory. Deep privileged-access design has its own page, <a href="2026-10-02-privileged-access-eam.html">Privileged Access & the Enterprise Access Model</a>; this page is the broader hardening playbook.</p>
+
+        <h2>Why AD is the crown jewel</h2>
+
+        <p>AD authenticates users, issues <a href="2026-08-18-kerberos.html">Kerberos tickets</a>, stores every object and its permissions in <a href="2026-08-18-ldap.html">LDAP</a>, and pushes configuration through <a href="2026-08-18-group-policy.html">Group Policy</a>. Compromise a domain controller and you can <a href="2026-08-18-dcsync.html">DCSync</a> every credential in the domain, including <code>krbtgt</code> — which lets you forge <a href="2026-08-18-ticket-attacks.html">golden tickets</a> and persist indefinitely. That is why the whole design goal is to keep the attacker away from Tier-0 and to make every step toward it loud.</p>
+
+        <h2>The foundation: tiering & the Enterprise Access Model</h2>
+
+        <p>The structural control that underpins everything else is <strong>administrative tiering</strong> — now expressed as Microsoft's <strong>Enterprise Access Model</strong> (Control / Management / Data-Workload planes, superseding the legacy Tier 0/1/2 and the old ESAE &ldquo;Red Forest&rdquo;). The golden rule: <strong>a higher-tier credential never authenticates to a lower-tier, exposed asset</strong>, because that downward credential flow is exactly how one phished laptop becomes Domain Admin. The full design — planes, PAWs, PAM, just-in-time — is covered in <a href="2026-10-02-privileged-access-eam.html">Privileged Access & the Enterprise Access Model</a>.</p>
+
+        <blockquote>Tiering is the control attackers hate most, because it breaks the <em>chain</em> rather than any single technique: even a successful credential theft on a workstation yields a workstation-tier credential that is useless against the domain controllers in Tier-0.</blockquote>
+
+        <h2>The hardening playbook — attack &rarr; control</h2>
+
+        <p>The most useful way to harden AD is to walk the attack map and close each path. This table is the two-sided reference: each attack links to its page, each control is the thing that stops it.</p>
+
+        <table>
+          <thead><tr><th>Attack class (on this site)</th><th>Hardening control(s)</th></tr></thead>
+          <tbody>
+            <tr><td><a href="2026-08-18-windows-credential-storage.html">Credential theft</a> / <a href="../vuln-detail.html?vuln=lsass-dumping">LSASS dumping</a></td><td>Credential Guard (VBS), run LSASS as PPL, Protected Users group for admins, disable WDigest, no cached creds / interactive admin logon on servers</td></tr>
+            <tr><td><a href="2026-08-18-ntlm.html">Pass-the-hash</a> / lateral movement</td><td>LAPS (unique local-admin passwords), deny network/interactive logon for privileged accounts across tiers, host firewall blocking workstation-to-workstation, <a href="2026-10-02-network-segmentation.html">segmentation</a></td></tr>
+            <tr><td><a href="2026-08-18-coercion-ntlm-relay.html">Coercion & NTLM relay</a> (<a href="../vuln-detail.html?vuln=ntlm-relay-vuln">relay</a>)</td><td>Enforce SMB signing and LDAP signing + channel binding, enable Extended Protection for Authentication (EPA), disable the WebClient service, remove NTLM where possible</td></tr>
+            <tr><td><a href="2026-08-18-kerberoasting.html">Kerberoasting</a></td><td>gMSA/dMSA for service accounts (auto-rotated 120-char passwords), long random SPN passwords, AES-only (disable RC4), a honeypot SPN as a tripwire</td></tr>
+            <tr><td><a href="2026-08-18-asrep-roasting.html">AS-REP roasting</a></td><td>Never set &ldquo;do not require Kerberos pre-authentication&rdquo;; audit for it continuously</td></tr>
+            <tr><td><a href="2026-08-18-delegation.html">Kerberos delegation</a> (<a href="../vuln-detail.html?vuln=unconstrained-delegation">unconstrained</a> / <a href="../vuln-detail.html?vuln=rbcd">RBCD</a>)</td><td>Remove unconstrained delegation; mark admins &ldquo;account is sensitive and cannot be delegated&rdquo; (or Protected Users); audit msDS-AllowedToDelegateTo and msDS-AllowedToActOnBehalfOfOtherIdentity; guard SeEnableDelegationPrivilege</td></tr>
+            <tr><td><a href="2026-08-18-acls-dacls.html">ACL / DACL abuse</a> (<a href="../vuln-detail.html?vuln=ad-acl-abuse">dangerous ACEs</a>)</td><td>Run BloodHound against your own estate; remove unjustified GenericAll/WriteDacl/ForceChangePassword; protect Tier-0 object ACLs; enable the AdminSDHolder protections</td></tr>
+            <tr><td><a href="2026-08-18-adcs.html">AD CS abuse</a> (<a href="../vuln-detail.html?vuln=adcs-esc">ESC1-ESC8</a>)</td><td>Harden certificate templates (no client-auth EKU + enrollee-supplied-subject), require manager approval, disable NTLM on the CA and enforce EPA, treat AD CS as a Tier-0 asset</td></tr>
+            <tr><td><a href="2026-08-18-group-policy.html">GPO abuse</a> (<a href="../vuln-detail.html?vuln=gpp-passwords">GPP / edit rights</a>)</td><td>Restrict who can edit GPOs, monitor SYSVOL for scheduled-task/script writes, remove any legacy Group Policy Preferences passwords (cpassword)</td></tr>
+            <tr><td><a href="2026-08-18-ticket-attacks.html">Golden / silver tickets</a></td><td>Double-rotate krbtgt regularly; AES keys; alert on anomalous TGT lifetimes and on tickets for non-existent accounts</td></tr>
+            <tr><td><a href="2026-09-24-fast-path-cves.html">Fast-path CVEs</a> (<a href="../vuln-detail.html?vuln=zerologon">Zerologon</a>, <a href="../vuln-detail.html?vuln=nopac">noPac</a>, <a href="../vuln-detail.html?vuln=printnightmare">PrintNightmare</a>)</td><td>Patch promptly, enforce DC secure-channel signing, disable the Print Spooler on DCs, monitor for the known exploitation signatures</td></tr>
+            <tr><td><a href="../vuln-detail.html?vuln=llmnr-nbtns">LLMNR / NBT-NS / mDNS poisoning</a></td><td>Disable LLMNR, NBT-NS and mDNS via GPO; this also removes the easiest relay trigger</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Baselines & attack-surface reduction</h2>
+
+        <p>On top of the targeted controls, apply the broad baselines so defaults are safe and drift is visible:</p>
+
+        <ul>
+          <li><strong>Microsoft Security Baselines</strong> (via the Security Compliance Toolkit) and <strong>CIS Benchmarks / DISA STIGs</strong> for DCs, servers, and workstations — unnecessary services off, secure protocols on, with drift monitoring.</li>
+          <li><strong>Attack Surface Reduction (ASR) rules</strong> and <a href="2026-09-23-defense-evasion.html">exploit protection</a> on endpoints to block the common execution and credential-theft behaviours.</li>
+          <li><strong>Remove legacy</strong>: SMBv1, unconstrained delegation, RC4, print spooler on DCs, and stale/privileged accounts.</li>
+          <li><strong>Patch the identity plane first</strong> — DCs, AD CS, and Entra Connect are Tier-0; their CVEs are domain-ending.</li>
+        </ul>
+
+        <h2>Monitoring: hardening you can't see is hardening you can't trust</h2>
+
+        <p>Prevention always eventually fails, so AD must be instrumented. The detections live in the <a href="2026-10-02-soc-detection-response.html">SOC</a> and are built by <a href="2026-10-02-detection-engineering-attack.html">detection engineering</a> on top of <a href="2026-09-23-windows-telemetry-logging.html">Windows auditing</a>: 4769 patterns for <a href="2026-08-18-kerberoasting.html">kerberoasting</a>, directory-replication from a non-DC for <a href="2026-08-18-dcsync.html">DCSync</a>, anomalous logons for <a href="2026-08-18-ntlm.html">pass-the-hash</a>, and honey-token/decoy-object hits as high-fidelity tripwires. Microsoft Defender for Identity, Semperis, or Tenable Identity Exposure watch the directory specifically.</p>
+
+        <h2>Assume-breach: tested forest recovery</h2>
+
+        <p>If the domain is ever fully compromised, rebuilding trust is the critical path — and AD <strong>forest recovery</strong> is slow and error-prone if practised for the first time during the incident. So it is rehearsed: clean backups of system state, a documented recovery runbook, krbtgt rotation, and tooling (Semperis ADFR) to automate it. This is the AD-specific slice of the broader <a href="2026-10-02-soc-detection-response.html">incident-response</a> plan.</p>
+
+        <h2>Key takeaways</h2>
+
+        <ul>
+          <li>AD is the crown jewel; hardening is mostly closing well-known paths and cutting standing privilege, not chasing zero-days.</li>
+          <li>Tiering / the Enterprise Access Model is the structural control — it breaks the chain, not just one technique.</li>
+          <li>Walk the attack map and close each path: credential theft, relay, roasting, delegation, ACLs, GPO, tickets, fast-path CVEs, legacy protocols.</li>
+          <li>Instrument the directory and rehearse forest recovery — assume the attacker will eventually get a foothold.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-02-privileged-access-eam.html">Privileged Access & the Enterprise Access Model</a></li>
+          <li><a href="2026-08-18-acls-dacls.html">ACLs & DACLs in Active Directory</a></li>
+          <li><a href="2026-08-18-coercion-ntlm-relay.html">Coercion & NTLM Relay</a></li>
+          <li><a href="2026-10-02-detection-engineering-attack.html">Detection Engineering with MITRE ATT&CK</a></li>
+          <li><a href="2026-10-02-zero-trust-architecture.html">Zero Trust Architecture in Practice</a></li>
+          <li><a href="../ad-map.html">AD Attack-Path Map</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>
