@@ -1439,3 +1439,95 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 }
 .related-list a::after { content: " \2192"; opacity: 0.45; }
 .related-list a:hover { padding-left: 0.5em; transition: padding-left 0.12s ease; }
+
+/* ============================================================
+   Reading niceties for writeups & theory (post-enhance.js)
+   ============================================================ */
+
+/* --- copy buttons on code blocks --- */
+.post-body pre { position: relative; }
+.post-body pre .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 5px 9px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.post-body pre:hover .copy-btn,
+.post-body pre .copy-btn:focus-visible { opacity: 1; }
+.post-body pre .copy-btn:hover { color: var(--accent); border-color: var(--accent-border); }
+.post-body pre .copy-btn.copied { color: var(--accent); border-color: var(--accent-border); opacity: 1; }
+@media (hover: none) { .post-body pre .copy-btn { opacity: 1; } }
+
+/* --- table of contents: shared list styling --- */
+.post-toc-list { list-style: none; margin: 0; padding: 0; }
+.post-toc-list li { margin: 0; }
+.post-toc-list a {
+  display: block;
+  padding: 3px 0;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  color: var(--muted);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  padding-left: 10px;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.post-toc-list a:hover { color: var(--text); }
+.post-toc-list a.active { color: var(--accent); border-left-color: var(--accent); }
+.post-toc-list li.toc-h3 a { padding-left: 24px; font-size: 0.8rem; }
+
+/* --- floating panel (wide screens only) --- */
+.post-toc-float { display: none; }
+@media (min-width: 1240px) {
+  .post-toc-float {
+    display: block;
+    position: fixed;
+    top: 140px;
+    /* sit just left of the centred 780px content column */
+    left: calc(50% - 390px - 24px - 212px);
+    width: 212px;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+  .post-toc-inline { display: none; }
+}
+.post-toc-title {
+  font-family: var(--display);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 8px 10px;
+}
+
+/* --- inline collapsible (narrow screens) --- */
+.post-toc-inline {
+  margin: 0 0 28px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 4px 14px;
+}
+.post-toc-inline summary {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 8px 0;
+  list-style: none;
+}
+.post-toc-inline summary::-webkit-details-marker { display: none; }
+.post-toc-inline summary::before { content: "☰ "; color: var(--muted); }
+.post-toc-inline[open] summary { border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.post-toc-inline .post-toc-list { padding: 4px 0 10px; }
