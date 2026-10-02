@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A Six-Segment IDS Lab with Linux Namespaces &amp; Suricata — Satej Chaudhari</title>
+  <meta name="description" content="Building an isolated six-segment network out of Linux namespaces, forcing every packet through an inline Suricata sensor, and writing per-subnet rules that detect (and block) SQL injection, anonymous FTP, SSH brute force, LDAP honeypot enumeration, and password spraying.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Blue Team</span>
+        <h1 class="post-title">A Six-Segment IDS Lab with Linux Namespaces &amp; Suricata</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; 18 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <h2>Introduction</h2>
+        <p>
+          This writeup documents the design, implementation, and testing of a network-monitoring
+          environment built entirely on one host. The goal was a functional lab of six isolated
+          network segments with <strong>all traffic routed through a single Suricata sensor</strong>
+          before it reaches a target service, and five distinct attacks detected using per-subnet
+          Suricata rules.
+        </p>
+        <p>
+          Rather than deploying a single service, the target namespace hosts four — HTTP, FTP, SSH,
+          and LDAP — so each source namespace can demonstrate a meaningfully different class of
+          attack and a correspondingly different detection approach. That spread covers
+          application-layer content inspection (SQL injection, anonymous FTP), connection-behaviour
+          analysis (SSH brute force), and LDAP-specific keyword and response-code matching (honeypot
+          enumeration and password spraying).
+        </p>
+        <p>
+          Every section below follows the same shape: environment setup, Suricata rule development
+          with its rationale, attack execution, and the confirmed alert. Section&nbsp;4 goes a step
+          further and shows Suricata running <strong>inline as an IPS</strong> via Linux NFQUEUE,
+          actively dropping traffic rather than only alerting on it.
+        </p>
+
+        <h2>Section 1 · Network Design &amp; Setup</h2>
+
+        <h3>1.1 Environment</h3>
+        <p>
+          The base is a clean Ubuntu Server VM (a desktop environment was added for convenience but
+          is not required), with the latest version of Suricata installed.
+        </p>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image1.png" alt="Ubuntu Server VM prepared as the lab host">
+          <figcaption>A clean Ubuntu Server host — the whole lab lives inside it.</figcaption>
+        </figure>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image2.png" alt="Installing the latest Suricata release on the host">
+          <figcaption>Installing the latest Suricata build.</figcaption>
+        </figure>
+
+        <h3>1.2 Architecture overview</h3>
+        <p>
+          The lab is seven Linux network namespaces: five <em>source</em> segments, one
+          <em>IDS</em> segment, and one <em>target</em>. Each source namespace connects to
+          <code>ids</code> through a dedicated veth pair. The <code>ids</code> namespace holds one
+          interface per source subnet plus a separate interface toward <code>target</code>, which
+          makes it the sole forwarding path every packet must traverse.
+        </p>
+        <table>
+          <thead><tr><th>Namespace</th><th>Role</th><th>Subnet / address</th></tr></thead>
+          <tbody>
+            <tr><td><code>ns1</code></td><td>Source — SQL injection</td><td>10.1.1.0/24 (host .2)</td></tr>
+            <tr><td><code>ns2</code></td><td>Source — anonymous FTP</td><td>10.2.2.0/24 (host .2)</td></tr>
+            <tr><td><code>ns3</code></td><td>Source — SSH brute force</td><td>10.3.3.0/24 (host .2)</td></tr>
+            <tr><td><code>ns4</code></td><td>Source — LDAP honeypot enum</td><td>10.4.4.0/24 (host .2)</td></tr>
+            <tr><td><code>ns5</code></td><td>Source — LDAP password spray</td><td>10.5.5.0/24 (host .2)</td></tr>
+            <tr><td><code>ids</code></td><td>Inline sensor / router</td><td>.1 on every subnet above + 192.168.100.1</td></tr>
+            <tr><td><code>target</code></td><td>Victim services (HTTP/FTP/SSH/LDAP)</td><td>192.168.100.2/24</td></tr>
+          </tbody>
+        </table>
+
+        <h3>1.3 Why Linux namespaces?</h3>
+        <p>
+          Linux network namespaces give complete kernel-level isolation: each namespace has its own
+          interfaces, routing table, firewall rules, and ARP table, with zero shared state between
+          them. Unlike virtual machines there is no hypervisor overhead — and these are the same
+          primitive that Docker and Kubernetes use internally. That makes them ideal for simulating a
+          multi-segment network entirely on one machine.
+        </p>
+
+        <h3>1.4 Step-by-step creation</h3>
+
+        <h3>1.4.1 Create all seven namespaces</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image3.png" alt="ip netns add creating seven namespaces and ip netns list confirming them">
+          <figcaption>Seven namespaces created and confirmed with <code>ip netns list</code>.</figcaption>
+        </figure>
+        <p>
+          <code>ip netns add</code> registers a new, isolated network namespace with the kernel. At
+          this point each namespace contains only an inactive loopback interface and has no external
+          connectivity.
+        </p>
+
+        <h3>1.4.2 Create the veth pairs in the root namespace</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image4.png" alt="Creating six veth pairs in the root namespace">
+          <figcaption>Six veth pairs created in the root namespace before being distributed.</figcaption>
+        </figure>
+        <p>
+          A veth (virtual Ethernet) pair behaves like a virtual patch cable — any packet sent into
+          one end immediately appears on the other. Six pairs are created: one for each
+          source-to-IDS link (<code>veth1/ids1</code> through <code>veth5/ids5</code>) and one for
+          the IDS-to-target link (<code>veth-target/ids-target</code>). All six are created in the
+          root namespace first, then handed out.
+        </p>
+
+        <h3>1.4.3 Move each interface into its namespace</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image5.png" alt="Moving veth interfaces into their respective namespaces with ip link set netns">
+          <figcaption>Each interface is moved into its namespace with <code>ip link set &lt;iface&gt; netns &lt;ns&gt;</code>.</figcaption>
+        </figure>
+        <p>
+          The move is permanent: afterwards <code>veth1</code> is only visible inside <code>ns1</code>,
+          <code>ids1</code> only inside <code>ids</code>, and so on. The <code>ids</code> namespace
+          ends up holding six interfaces — one facing each source subnet and one facing the target.
+        </p>
+
+        <h3>1.4.4 Assign IP addresses</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image6.png" alt="Assigning a unique /24 subnet to each source namespace">
+          <figcaption>Each source namespace lives on its own unique /24.</figcaption>
+        </figure>
+        <p>
+          Giving every source its own subnet is deliberate: it lets Suricata tell exactly which
+          source a packet came from by inspecting the source IP, which is what makes per-subnet rule
+          sets possible later. The target segment uses <code>192.168.100.0/24</code> to keep it
+          clearly distinct from source traffic.
+        </p>
+
+        <h3>1.4.5 Bring up the source-side interfaces</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image7.png" alt="Bringing up loopback and veth interfaces in the source namespaces; ids addr output still DOWN">
+          <figcaption>Loopback and veth brought up in each source namespace. On the right, the
+            <code>ids</code> side shows its IPs assigned but still <code>DOWN</code> — its interfaces
+            haven't been brought up yet.</figcaption>
+        </figure>
+        <p>
+          Interfaces are <code>DOWN</code> by default after being moved into a namespace, so both the
+          loopback (<code>lo</code>) and the veth interface must be brought up explicitly.
+        </p>
+
+        <h3>1.4.6 Bring up the IDS-side interfaces</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image8.png" alt="IDS interfaces transitioning to UP with the LOWER_UP flag set">
+          <figcaption><code>ids1</code>/<code>ids2</code> transition to
+            <code>BROADCAST,MULTICAST,UP,LOWER_UP</code> — <code>LOWER_UP</code> confirms the veth
+            link is established end to end.</figcaption>
+        </figure>
+
+        <h3>1.4.7 Bring up the target interface</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image9.png" alt="Target interface up with 192.168.100.2 and ids-target peer confirmed">
+          <figcaption><code>ids-target</code> is <code>UP,LOWER_UP</code> with
+            <code>192.168.100.1/24</code>, and <code>link-netns target</code> confirms the peer sits
+            in the target namespace.</figcaption>
+        </figure>
+
+        <h3>1.4.8 Add default routes</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image10.png" alt="Adding default routes in each namespace pointing at the ids namespace">
+          <figcaption>Default routes so every segment reaches the others only through <code>ids</code>.</figcaption>
+        </figure>
+        <p>
+          Each source namespace needs a default gateway pointing at <code>ids</code> so that all
+          traffic — including packets for <code>192.168.100.2</code> — is forwarded through
+          <code>ids</code> rather than dropped. The target namespace needs a default route via
+          <code>192.168.100.1</code> so response packets can get back. Without that return route,
+          connections would be one-way only.
+        </p>
+
+        <h3>1.4.9 Enable IP forwarding on the IDS and verify</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image11.png" alt="Enabling net.ipv4.ip_forward and a ping showing ttl=63 with zero packet loss">
+          <figcaption>Forwarding enabled, then verified: <code>ttl=63</code> and 0% loss end to end.</figcaption>
+        </figure>
+        <p>
+          By default Linux drops packets that arrive on one interface but are destined for a
+          different network. Setting <code>net.ipv4.ip_forward=1</code> turns the <code>ids</code>
+          namespace into a router, letting packets arriving on <code>ids1</code>–<code>ids5</code> be
+          forwarded out <code>ids-target</code> toward <code>target</code>. This is the step that
+          completes the forwarding path.
+        </p>
+        <blockquote>
+          A <code>ttl=63</code> (decremented from 64) confirms the packet was forwarded through one
+          hop — the <code>ids</code> namespace — exactly as intended. 0% packet loss confirms the
+          full bidirectional path <code>ns1 → ids → target → ids → ns1</code> works.
+        </blockquote>
+
+        <h3>1.5 Network diagram</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image12.png" alt="Diagram of five source namespaces routing through the ids namespace to the target">
+          <figcaption>Every source namespace must pass through <code>ids</code> — there is no direct
+            path to <code>target</code>.</figcaption>
+        </figure>
+        <p>
+          This inline placement is exactly what lets Suricata both detect and, in the next phase,
+          block traffic.
+        </p>
+
+        <h2>Section 2 · SQL Injection (ns1)</h2>
+
+        <h3>2.1 Setting up the vulnerable environment</h3>
+        <p>
+          A deliberately vulnerable PHP web application was deployed inside the target namespace
+          (<code>192.168.100.2</code>) to simulate a login service. It authenticates against an
+          SQLite database and concatenates user input straight into the query, so it is vulnerable to
+          SQL injection. It is the target for traffic from <code>ns1</code>.
+        </p>
+
+        <h3>2.1.1 Enter the target namespace and verify identity</h3>
+        <pre><code>sudo ip netns exec target bash
+ip a</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image13.png" alt="Inside the target namespace, ip a shows veth-target with 192.168.100.2/24">
+          <figcaption><code>veth-target</code> holds <code>192.168.100.2/24</code> and is up.</figcaption>
+        </figure>
+
+        <h3>2.1.2 Create the vulnerable PHP application</h3>
+        <p>
+          The page takes <code>user</code> and <code>pass</code> from HTTP GET parameters and inserts
+          them directly into the SQL query — no parameterisation, so it is injectable.
+        </p>
+        <pre><code>&lt;?php
+$db = new SQLite3('users.db');
+$username = $_GET['user'];
+$password = $_GET['pass'];
+$query = "SELECT * FROM users WHERE username='$username' AND password='$password'";
+echo "&lt;b&gt;Executing Query:&lt;/b&gt;&lt;br&gt;";
+echo htmlspecialchars($query);
+echo "&lt;hr&gt;";
+$result = $db-&gt;query($query);
+if ($result-&gt;fetchArray()) {
+    echo "Login Successful";
+} else {
+    echo "Login Failed";
+}
+?&gt;</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image14.png" alt="The vulnerable PHP login page source">
+          <figcaption>The injectable login page.</figcaption>
+        </figure>
+
+        <h3>2.1.3 Create and populate the SQLite database</h3>
+        <pre><code>sqlite3 users.db
+CREATE TABLE users(username TEXT, password TEXT);
+INSERT INTO users VALUES('admin','admin123');
+INSERT INTO users VALUES('satej','satej123');
+INSERT INTO users VALUES('rudra','rudra123');
+.quit</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image15.png" alt="Creating the users table and inserting three accounts in SQLite">
+          <figcaption>Three accounts seeded — the data the login page queries against.</figcaption>
+        </figure>
+
+        <h3>2.1.4 Start the PHP built-in web server</h3>
+        <pre><code>php -S 192.168.100.2:80</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image16.png" alt="Starting PHP's built-in web server bound to 192.168.100.2:80">
+          <figcaption>The service listening on <code>192.168.100.2:80</code>.</figcaption>
+        </figure>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image17.png" alt="Valid credentials return Login Successful, invalid return Login Failed">
+          <figcaption>Baseline behaviour: valid credentials succeed, invalid ones fail — so a later
+            bypass is provably the result of exploitation, not misconfiguration.</figcaption>
+        </figure>
+
+        <h3>2.2 Suricata rule development</h3>
+        <p>
+          A custom rule was added to <code>/etc/suricata/rules/local.rules</code> to inspect HTTP
+          traffic bound for the app and alert on a common injection pattern.
+        </p>
+        <pre><code>alert http 10.1.1.0/24 any -&gt; 192.168.100.2 80 (
+    msg:"NS1 SQL Injection";
+    content:"OR";
+    sid:100001;
+    rev:1;
+)</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image18.png" alt="The NS1 SQL injection rule in local.rules">
+          <figcaption>The <code>sid:100001</code> rule, scoped to the ns1 subnet.</figcaption>
+        </figure>
+        <p>
+          The rule watches HTTP from <code>10.1.1.0/24</code> to <code>192.168.100.2:80</code> and
+          fires if the string <code>OR</code> appears in the inspected payload. It was then validated
+          before deployment:
+        </p>
+        <pre><code>sudo suricata -T -c /etc/suricata/suricata.yaml -S /etc/suricata/rules/local.rules</code></pre>
+        <blockquote>
+          This signature is intentionally simplified for the demo. Matching only the bare string
+          <code>OR</code> would be noisy in production because the keyword appears in plenty of
+          legitimate requests. A robust signature would inspect SQL metacharacters, URL-encoded
+          payloads, and contextual patterns instead.
+        </blockquote>
+
+        <h3>2.3 IDS deployment and monitoring</h3>
+        <p>
+          Suricata was launched inside the <code>ids</code> namespace on <code>ids1</code>, the
+          interface that receives all <code>ns1</code> traffic.
+        </p>
+        <pre><code>sudo ip netns exec ids suricata -i ids1 -S /etc/suricata/rules/local.rules -v</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image19.png" alt="Suricata starting on interface ids1 and beginning live capture">
+          <figcaption>Suricata initialised and monitoring live traffic on <code>ids1</code>.</figcaption>
+        </figure>
+
+        <h3>2.4 Attack execution and detection</h3>
+
+        <h3>2.4.1 Executing the attack</h3>
+        <pre><code>curl "http://192.168.100.2/sqli/?user=admin&amp;pass=%27%20OR%201=1--"</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image20.png" alt="curl sending the URL-encoded OR 1=1 payload from ns1">
+          <figcaption>The payload <code>%27%20OR%201=1--</code> decodes to <code>' OR 1=1--</code>.</figcaption>
+        </figure>
+        <p>
+          The injected <code>OR 1=1</code> makes the <code>WHERE</code> clause always true, so the app
+          returns <em>Login Successful</em> with no valid password — authentication bypassed.
+        </p>
+
+        <h3>2.4.2 Alert generation</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image21.png" alt="fast.log entry showing the NS1 SQL Injection alert with sid 100001">
+          <figcaption>The alert recorded in <code>fast.log</code>.</figcaption>
+        </figure>
+        <p>
+          The entry shows source <code>10.1.1.2</code> (ns1) → <code>192.168.100.2:80</code>, message
+          <em>NS1 SQL Injection</em>, rule <code>100001</code>. The attack produced its intended
+          effect (bypass) <em>and</em> tripped the IDS — detection confirmed.
+        </p>
+
+        <h2>Section 3 · Anonymous FTP Access (ns2)</h2>
+
+        <h3>3.1 Setting up the FTP environment</h3>
+        <h3>3.1.1 Install and configure vsftpd</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image22.png" alt="Installing the vsftpd FTP server on the target">
+          <figcaption>vsftpd installed on the target.</figcaption>
+        </figure>
+        <p>The config (<code>/etc/vsftpd.conf</code>) was set to allow anonymous access:</p>
+        <pre><code>listen=YES
+listen_ipv6=NO
+anonymous_enable=YES
+local_enable=YES
+write_enable=YES
+anon_root=/srv/ftp</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image23.png" alt="vsftpd.conf with anonymous_enable set to YES and anon_root /srv/ftp">
+          <figcaption>Anonymous access enabled; <code>/srv/ftp</code> presented to anonymous users.</figcaption>
+        </figure>
+
+        <h3>3.1.2 Start the FTP service</h3>
+        <pre><code>/usr/sbin/vsftpd /etc/vsftpd.conf</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image24.png" alt="Starting the vsftpd service">
+          <figcaption>vsftpd running.</figcaption>
+        </figure>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image25.png" alt="Anonymous login succeeding and listing test.txt">
+          <figcaption>Anonymous login works and the test file is visible.</figcaption>
+        </figure>
+
+        <h3>3.2 Suricata rule development</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image26.png" alt="The NS2 FTP access rule in local.rules">
+          <figcaption>The <code>sid:100002</code> FTP rule.</figcaption>
+        </figure>
+        <pre><code>alert ftp 10.2.2.0/24 any -&gt; 192.168.100.2 21 (
+    msg:"NS2 FTP ACCESS";
+    ftp.command_data;
+    content:"anonymous";
+    sid:100002;
+    rev:1;
+)</code></pre>
+        <p>
+          The rule inspects FTP control traffic from <code>10.2.2.0/24</code> and fires whenever the
+          username <code>anonymous</code> appears during authentication.
+        </p>
+
+        <h3>3.3 Start Suricata on ids2</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image27.png" alt="Suricata starting on interface ids2">
+          <figcaption>Suricata now inspecting FTP traffic on the ns2 path.</figcaption>
+        </figure>
+
+        <h3>3.4 Detecting the access</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image28.png" alt="Anonymous FTP session from ns2 and the resulting fast.log alert">
+          <figcaption>The anonymous login from ns2 and its matching alert.</figcaption>
+        </figure>
+        <p>
+          The transmitted username matched <code>content:"anonymous"</code>; Suricata logged source
+          <code>10.2.2.2</code> (ns2) → <code>192.168.100.2:21</code>, message <em>NS2 FTP ACCESS</em>,
+          rule <code>100002</code> — protocol-aware inspection of the FTP authentication exchange.
+        </p>
+
+        <h2>Section 4 · SSH Brute Force &amp; Inline Blocking (ns3)</h2>
+
+        <h3>4.1 Setting up the vulnerable environment</h3>
+        <h3>4.1.1 Create a test user</h3>
+        <pre><code>sudo ip netns exec target bash
+useradd -m satejssh
+passwd satejssh</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image29.png" alt="Creating the satejssh user account in the target namespace">
+          <figcaption>A target account for the brute-force simulation.</figcaption>
+        </figure>
+
+        <h3>4.1.2 Configure and start SSH</h3>
+        <p>
+          Password authentication was enabled, and <code>MaxAuthTries</code> was reduced to 1 so each
+          attempt opens a fresh connection (which is what the behaviour-based rule counts).
+        </p>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image30.png" alt="sshd_config edited to allow password authentication">
+          <figcaption><code>sshd_config</code> — password auth on.</figcaption>
+        </figure>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image31.png" alt="sshd_config MaxAuthTries set to 1">
+          <figcaption><code>MaxAuthTries 1</code>.</figcaption>
+        </figure>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image32.png" alt="Starting sshd and verifying login from ns3 with valid credentials">
+          <figcaption>Daemon started and reachability verified from ns3.</figcaption>
+        </figure>
+
+        <h3>4.2 Suricata rule development</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image33.png" alt="The threshold-based NS3 SSH brute force rule">
+          <figcaption>The <code>sid:100003</code> threshold rule.</figcaption>
+        </figure>
+        <pre><code>alert tcp 10.3.3.0/24 any -&gt; 192.168.100.2 22 (
+    msg:"NS3 SSH BRUTE FORCE";
+    flags:S;
+    flow:to_server;
+    threshold:type threshold, track by_src, count 3, seconds 60;
+    sid:100003;
+    rev:1;
+)</code></pre>
+        <blockquote>
+          SSH encrypts authentication once the connection is up, so Suricata can't read usernames,
+          passwords, or failures directly. Detection therefore relies on <em>connection behaviour</em>:
+          <code>flags:S</code> matches only TCP SYN packets (new-connection attempts), and the
+          threshold fires after three from the same source IP within 60 seconds — enough to flag a
+          brute force while keeping false positives down.
+        </blockquote>
+
+        <h3>4.3 Start Suricata on ids3</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image34.png" alt="Suricata starting on ids3 with the brute-force rule loaded">
+          <figcaption>Rule loaded, engine up on <code>ids3</code>.</figcaption>
+        </figure>
+
+        <h3>4.4 Detecting the brute force</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image35.png" alt="fast.log entry for NS3 SSH BRUTE FORCE after three attempts">
+          <figcaption>Alert after three attempts inside the window.</figcaption>
+        </figure>
+        <p>
+          Source <code>10.3.3.2</code> (ns3) → <code>192.168.100.2:22</code>, message <em>NS3 SSH
+          BRUTE FORCE</em>, rule <code>100003</code>. Requiring multiple attempts before alerting is
+          what makes the signature representative of real-world detection.
+        </p>
+
+        <h3>4.5 NFQUEUE setup for blocking (IPS mode)</h3>
+        <p>
+          With detection working, Suricata was switched to IPS mode using Linux NFQUEUE so it can
+          drop matching traffic. An iptables rule in the <code>ids</code> namespace diverts SSH
+          packets on the forwarding path into the queue:
+        </p>
+        <pre><code>iptables -I FORWARD -p tcp --dport 22 -j NFQUEUE --queue-num 0</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image36.png" alt="iptables FORWARD rule sending SSH traffic to NFQUEUE queue 0">
+          <figcaption>SSH packets routed into NFQUEUE for inspect-then-verdict handling.</figcaption>
+        </figure>
+        <p>The companion rule uses the <code>drop</code> action rather than <code>alert</code>:</p>
+        <pre><code>drop tcp 10.3.3.0/24 any -&gt; 192.168.100.2 22 (
+    msg:"NS3 SSH BLOCKED";
+    flags:S;
+    flow:to_server;
+    threshold:type threshold, track by_src, count 3, seconds 60;
+    sid:200003;
+    rev:1;
+)</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image37.png" alt="Suricata started in NFQUEUE/IPS mode with the drop rule loaded">
+          <figcaption>Suricata running inline with the blocking rule.</figcaption>
+        </figure>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image38.png" alt="Suricata drop event generated for blocked SSH traffic">
+          <figcaption>A drop event — the packet never reaches the target.</figcaption>
+        </figure>
+        <blockquote>
+          This threshold rule drops the packet that trips it but does not blacklist the host, so later
+          attempts may still get through — in practice roughly every fourth attempt is dropped. For
+          durable blocking, a small script could tail <code>fast.log</code> and dynamically insert an
+          iptables rule to ban the source IP for a set period.
+        </blockquote>
+
+        <h2>Section 5 · LDAP Honeypot Enumeration (ns4)</h2>
+
+        <h3>5.1 LDAP environment setup</h3>
+        <p>
+          An OpenLDAP service was deployed in the target namespace. LDAP is a good choice here because
+          attackers routinely query it during internal recon to enumerate users, computers, and other
+          directory objects.
+        </p>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image39.png" alt="Installing OpenLDAP packages on the target">
+          <figcaption>OpenLDAP packages installed.</figcaption>
+        </figure>
+        <pre><code>slapd
+ss -tulpn | grep 389</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image40.png" alt="slapd running and listening on port 389">
+          <figcaption>The directory service listening on 389.</figcaption>
+        </figure>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image41.png" alt="A test LDAP query from ns4 succeeding against the target">
+          <figcaption>Connectivity from ns4 confirmed; the default <code>dc=nodomain</code> tree was
+            kept.</figcaption>
+        </figure>
+
+        <h3>5.2 Create the honeypot object</h3>
+        <p>A decoy computer object, <code>FINANCE-PC</code>, was added as bait:</p>
+        <pre><code>dn: cn=FINANCE-PC,dc=nodomain
+objectClass: top
+objectClass: device
+cn: FINANCE-PC
+description: Decoy Workstation</code></pre>
+        <pre><code>ldapadd -x -D "cn=admin,dc=nodomain" -W -f decoy.ldif</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image42.png" alt="Importing the decoy FINANCE-PC object with ldapadd">
+          <figcaption>The decoy imported into the directory.</figcaption>
+        </figure>
+        <pre><code>ip netns exec ns4 ldapsearch -x -H ldap://192.168.100.2 \
+  -b "dc=nodomain" "(cn=FINANCE-PC)"</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image43.png" alt="ldapsearch returning the FINANCE-PC decoy object and its attributes">
+          <figcaption>The decoy is discoverable through normal LDAP enumeration.</figcaption>
+        </figure>
+
+        <h3>5.3 Rule development and deployment</h3>
+        <pre><code>alert tcp 10.4.4.0/24 any -&gt; 192.168.100.2 389 (
+    msg:"NS4 LDAP DECOY ENUMERATION";
+    content:"FINANCE-PC";
+    nocase;
+    sid:100004;
+    rev:1;
+)</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image44.png" alt="The NS4 LDAP decoy enumeration rule">
+          <figcaption>The <code>sid:100004</code> rule matches the honeypot name in any query.</figcaption>
+        </figure>
+        <pre><code>sudo ip netns exec ids suricata -i ids4 -S /etc/suricata/rules/local.rules -v</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image45.png" alt="Suricata started on interface ids4">
+          <figcaption>Monitoring ns4 traffic on <code>ids4</code>.</figcaption>
+        </figure>
+
+        <h3>5.4 Detecting the enumeration</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image46.png" alt="ldapsearch for FINANCE-PC from ns4 triggering the Suricata match">
+          <figcaption>The search filter carries <code>FINANCE-PC</code> across <code>ids4</code>.</figcaption>
+        </figure>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image47.png" alt="fast.log entry for NS4 LDAP DECOY ENUMERATION">
+          <figcaption>The alert: source <code>10.4.4.2</code> → <code>192.168.100.2:389</code>, rule
+            <code>100004</code>.</figcaption>
+        </figure>
+        <blockquote>
+          Any touch of a decoy like <code>FINANCE-PC</code> is inherently high-signal: legitimate
+          users have no reason to query a planted reconnaissance trap, so a single hit is worth
+          escalating.
+        </blockquote>
+
+        <h2>Section 6 · LDAP Password Spray (ns5)</h2>
+
+        <h3>6.1 Create LDAP user accounts</h3>
+        <p>
+          Several accounts — ordinary users and service accounts — were added so a single password
+          could be sprayed across them. An abbreviated view of the LDIF:
+        </p>
+        <pre><code>dn: ou=People,dc=nodomain
+objectClass: organizationalUnit
+ou: People
+
+dn: uid=jsmith,ou=People,dc=nodomain
+objectClass: inetOrgPerson
+cn: John Smith
+sn: Smith
+uid: jsmith
+mail: john.smith@company.local
+title: IT Administrator
+userPassword: Summer2025!
+
+# ...adoe, rpatel, mjones, finance.svc, backup.svc — all with userPassword: Summer2025!</code></pre>
+        <pre><code>ldapadd -x -D "cn=admin,dc=nodomain" -W -f users.ldif</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image48.png" alt="Importing the six user accounts with ldapadd">
+          <figcaption>Six accounts imported under <code>ou=People</code>.</figcaption>
+        </figure>
+
+        <h3>6.2 Build the spray</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image49.png" alt="users.txt containing the target usernames">
+          <figcaption><code>users.txt</code> — the target list.</figcaption>
+        </figure>
+        <pre><code>while read user
+do
+  ldapwhoami \
+    -x \
+    -D "uid=$user,ou=People,dc=nodomain" \
+    -w Winter2025! \
+    -H ldap://192.168.100.2
+  sleep 2
+done &lt; users.txt</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image50.png" alt="The password-spray bind loop running against each account">
+          <figcaption>One password (<code>Winter2025!</code>) tried against every account — the
+            opposite of a per-account brute force, and a common way to dodge lockout policies.</figcaption>
+        </figure>
+
+        <h3>6.3 Rule development and deployment</h3>
+        <pre><code>alert tcp 192.168.100.2 389 -&gt; 10.5.5.0/24 any (
+    msg:"NS5 LDAP Password Spraying Detected";
+    ldap.responses.result_code:invalid_credentials;
+    threshold:type threshold, track by_dst, count 5, seconds 60;
+    sid:100005;
+    rev:1;
+)</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image51.png" alt="The NS5 LDAP password spraying rule keyed on invalid_credentials responses">
+          <figcaption>The <code>sid:100005</code> rule watches the <em>server's</em>
+            <code>invalid_credentials</code> responses, not the requests.</figcaption>
+        </figure>
+        <pre><code>sudo ip netns exec ids suricata -i ids5 -S /etc/suricata/rules/local.rules -v</code></pre>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image52.png" alt="Suricata started on interface ids5">
+          <figcaption>Monitoring ns5 traffic on <code>ids5</code>.</figcaption>
+        </figure>
+
+        <h3>6.4 Detecting the spray</h3>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image53.png" alt="The password spray executing from ns5 against multiple accounts">
+          <figcaption>Repeated failed binds across accounts with the same password.</figcaption>
+        </figure>
+        <figure>
+          <img src="../assets/img/linux-namespaces-suricata/image54.png" alt="fast.log entry for NS5 LDAP Password Spraying Detected">
+          <figcaption>Alert once five <code>invalid_credentials</code> responses land inside the
+            window.</figcaption>
+        </figure>
+        <blockquote>
+          Keying on the server's result codes rather than individual login attempts is what lets the
+          rule distinguish a spray — many accounts, same password — from the occasional genuine
+          mistyped login, keeping false positives low.
+        </blockquote>
+
+        <h2>Conclusion</h2>
+        <p>
+          The lab stood up a complete monitoring environment from nothing but Linux primitives: seven
+          namespaces modelling five isolated source networks, one inspection point, and a target host,
+          with every packet between source and target forced through the <code>ids</code> namespace
+          for centralised monitoring and enforcement.
+        </p>
+        <p>Five attack scenarios were built and detected, each with a purpose-written, subnet-scoped rule:</p>
+        <ul>
+          <li>SQL injection against a vulnerable PHP app — HTTP content inspection.</li>
+          <li>Anonymous FTP access — protocol-aware control-channel matching.</li>
+          <li>SSH brute force — connection-behaviour thresholding, then inline blocking via NFQUEUE.</li>
+          <li>LDAP honeypot enumeration — decoy-object keyword matching.</li>
+          <li>LDAP password spray — server-side response-code thresholding.</li>
+        </ul>
+        <p>
+          Together they show the same sensor covering three detection styles — application-layer
+          content, connection behaviour, and protocol response codes — and the step from passive IDS
+          to active IPS, all on a single host.
+        </p>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

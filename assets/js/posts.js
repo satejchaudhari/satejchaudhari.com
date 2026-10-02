@@ -24,6 +24,15 @@
 
 var POSTS = [
   {
+    title: "A Six-Segment IDS Lab with Linux Namespaces & Suricata",
+    url: "posts/2026-10-02-linux-namespaces-suricata-ids.html",
+    date: "2026-10-02",
+    type: "writeup",
+    tag: "Blue Team",
+    description: "Building an isolated six-segment network from Linux namespaces, forcing every packet through an inline Suricata sensor, and writing per-subnet rules that detect and block SQL injection, anonymous FTP, SSH brute force, LDAP honeypot enumeration, and password spraying.",
+    readTime: "18 min read"
+  },
+  {
     title: "Setting Up Active Directory Domain Services (AD DS)",
     url: "posts/2026-10-02-adds-setup.html",
     date: "2026-10-02",
