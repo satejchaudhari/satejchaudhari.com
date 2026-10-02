@@ -78,6 +78,21 @@
 
       <div class="post-body">
 
+        <!-- deepened -->
+
+        <p><strong>Grotesque 1</strong> runs its foothold through a WordPress site whose password is the MD5 of a song lyric, a reverse shell dropped into the theme's <code>404.php</code>, and credential reuse from <code>wp-config.php</code> to reach the user flag. <em>This writeup covers the box up to the user flag.</em> It is a good study in turning admin access to a CMS into code execution via the theme editor.</p>
+
+        <h2>Attack chain at a glance</h2>
+
+        <ul>
+          <li><strong>Recon</strong> — two HTTP services (80, 66); a Brainfuck comment and a downloaded file eventually point at a WordPress site on port 80.</li>
+          <li><strong>Foothold</strong> — a <code>dirb</code> scan finds the WordPress login plus a hint pointing back to a lyrics page; the password is the MD5 of a song lyric, with the author as the username (<a href="../vuln-detail.html?vuln=weak-password-policy">weak/guessable credentials</a>).</li>
+          <li><strong>RCE</strong> — with admin access, paste a PHP reverse shell into the theme's default <code>404.php</code> via the editor (<a href="../vuln-detail.html?vuln=file-upload">write-to-web-root → RCE</a>); visiting the page returns a shell as <code>www-data</code>.</li>
+          <li><strong>User</strong> — the restricted shell can read <code>wp-config.php</code> (via a file-manager plugin), which leaks <code>raphael</code>'s credentials; <code>su raphael</code> and read <code>user.txt</code>.</li>
+        </ul>
+
+        <blockquote>Techniques in play: multi-encoding recon (Brainfuck), guessable CMS credentials derived from site content, turning WordPress admin into RCE through the theme editor (editing <code>404.php</code>), and <a href="../vuln-detail.html?vuln=secrets-exposure">credential reuse</a> from <code>wp-config.php</code>. Root (a <code>.chadroot.kdbx</code> KeePass database) is out of scope for this writeup.</blockquote>
+
         <p><strong>Grotesque 1</strong> runs its foothold through a WordPress site whose password is the MD5 of a song lyric, a reverse shell dropped into the theme's <code>404.php</code>, and credential reuse from <code>wp-config.php</code> to reach the user flag. <em>This writeup covers the box up to the user flag.</em></p>
 
         <h2>Reconnaissance</h2>
@@ -285,6 +300,15 @@
         </figure>
 
         <blockquote>That is the user flag. Root is left for another day: <code>raphael</code>'s home holds a <code>.chadroot.kdbx</code> KeePass database — the next objective — but cracking it is out of scope for this writeup.</blockquote>
+
+        <h2>Defender's notes</h2>
+
+        <ul>
+          <li>Don't derive passwords from public site content — a lyric's MD5 is not a secret (<a href="../vuln-detail.html?vuln=weak-password-policy">weak password policy</a>).</li>
+          <li>Restrict the WordPress theme/plugin editor in production (<code>DISALLOW_FILE_EDIT</code>) so admin access can't be turned into code execution.</li>
+          <li>Protect <code>wp-config.php</code> and never reuse its DB password for an OS account (<a href="../vuln-detail.html?vuln=secrets-exposure">sensitive data exposure</a>).</li>
+          <li>Run the web server as a low-privilege user and segment it from credential stores.</li>
+        </ul>
 
       </div>
     </article>

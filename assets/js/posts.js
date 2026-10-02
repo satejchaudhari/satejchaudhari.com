@@ -110,7 +110,7 @@ var POSTS = [
     type: "writeup",
     tag: "Vulnhub",
     description: "A hash hidden in page source, an FTP foothold, a chain of encoded clues to a Subrion CMS 4.2.1 login, a public CMS exploit for the shell, and a wide-open sudo rule for root.",
-    readTime: "9 min read"
+    readTime: "11 min read"
   },
   {
     title: "Vulnhub: Matrix 1",
@@ -119,7 +119,7 @@ var POSTS = [
     type: "writeup",
     tag: "Vulnhub",
     description: "A base64-then-Brainfuck clue chain leaks a partial SSH password, crunch and hydra finish it, a vi restricted-shell escape gives a real shell, and a passwordless sudo rule gives root.",
-    readTime: "8 min read"
+    readTime: "10 min read"
   },
   {
     title: "Vulnhub: Matrix 2",
@@ -128,7 +128,7 @@ var POSTS = [
     type: "writeup",
     tag: "Vulnhub",
     description: "A robots.txt hint and an unauthenticated POST leak usernames, a cracked .htpasswd hash and a steghide-hidden password lead in, and a sudo-runnable gawk binary gives root.",
-    readTime: "7 min read"
+    readTime: "9 min read"
   },
   {
     title: "Vulnhub: Matrix 3",
@@ -137,7 +137,7 @@ var POSTS = [
     type: "writeup",
     tag: "Vulnhub",
     description: "A white-rabbit directory maze hides a crackable hash, a Windows binary reversed in Ghidra leaks SSH credentials, and two chained sudo rules walk the way to root.",
-    readTime: "8 min read"
+    readTime: "10 min read"
   },
   {
     title: "Vulnhub: Aragog (HackingHP)",
@@ -146,7 +146,7 @@ var POSTS = [
     type: "writeup",
     tag: "Vulnhub",
     description: "A vulnerable WordPress File Manager plugin for the foothold, database credentials that crack a user's WordPress hash, and a writable root-run backup script for the root shell.",
-    readTime: "9 min read"
+    readTime: "11 min read"
   },
   {
     title: "Vulnhub: Grotesque 1",
@@ -155,6 +155,6 @@ var POSTS = [
     type: "writeup",
     tag: "Vulnhub",
     description: "To the user flag — a WordPress password that is the MD5 of a song lyric, a reverse shell planted in the theme's 404.php, and credential reuse from wp-config.php to reach user.txt.",
-    readTime: "8 min read"
+    readTime: "10 min read"
   }
 ];

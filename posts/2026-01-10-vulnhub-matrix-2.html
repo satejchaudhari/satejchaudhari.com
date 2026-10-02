@@ -78,6 +78,22 @@
 
       <div class="post-body">
 
+        <!-- deepened -->
+
+        <p><strong>Matrix 2</strong> is about reading hints literally. A <code>robots.txt</code> entry and an unauthenticated POST leak two usernames, a crackable <code>.htpasswd</code> hash gives a password, a passphrase hidden in plain sight (a name styled bold and red) unlocks a steghide-embedded secret, and the box ends on a <code>sudo</code>-runnable <code>gawk</code> — a GTFOBins instant win.</p>
+
+        <h2>Attack chain at a glance</h2>
+
+        <ul>
+          <li><strong>Recon</strong> — HTTP on 80 plus four unusual HTTP ports (1337, 12320-12322); 1337 and 12320 are credential-gated.</li>
+          <li><strong>Leak</strong> — <code>dirb</code> finds a <code>robots.txt</code> pointing at a blank PHP page; an unauthenticated <code>curl --insecure</code> POST to it returns two usernames (<code>n30</code>, <code>testuser</code>) — <a href="../vuln-detail.html?vuln=secrets-exposure">information disclosure</a>.</li>
+          <li><strong>Foothold</strong> — <code>testuser:testuser</code> opens a web shell; browsing its filesystem finds a <code>.htpasswd</code> hash that John cracks to <code>Tr1n17y</code>.</li>
+          <li><strong>Pivot</strong> — those creds unlock port 1337, which serves <code>hidden.jpg</code>; the bold-red <code>n30</code> hint is the steghide passphrase, extracting a password.</li>
+          <li><strong>Root</strong> — login as <code>n30</code>; linpeas shows <code>n30</code> can run <code>/usr/bin/Morpheus</code> (which calls <code>gawk</code>) as root — the <code>gawk</code> GTFOBins trick drops a root shell.</li>
+        </ul>
+
+        <blockquote>Techniques in play: content discovery (<code>dirb</code>, <code>robots.txt</code>), unauthenticated info disclosure, offline hash cracking (John), steganography (<code>steghide</code>) with a cleverly-signalled passphrase, and a <code>sudo</code>-runnable interpreter (<code>gawk</code>) — a GTFOBins classic.</blockquote>
+
         <p><strong>Matrix 2</strong> chains a <code>robots.txt</code> hint and an unauthenticated POST to leak usernames, a crackable <code>.htpasswd</code> hash, a steghide-protected image whose passphrase is hidden in plain sight, and finally a <code>gawk</code> <code>sudo</code> rule for root.</p>
 
         <h2>Reconnaissance</h2>
@@ -253,6 +269,15 @@
         </figure>
 
         <blockquote>Matrix 2 rewards reading the hints literally — the disallowed page, the colour-coded <code>n30</code>, and GTFOBins-style knowledge that a <code>sudo</code>-runnable <code>gawk</code> is game over.</blockquote>
+
+        <h2>Defender's notes</h2>
+
+        <ul>
+          <li><code>robots.txt</code> advertises paths — never use it to &ldquo;hide&rdquo; sensitive endpoints, and don't leave a debug endpoint that dumps usernames (<a href="../vuln-detail.html?vuln=secrets-exposure">sensitive data exposure</a>).</li>
+          <li>Store passwords with a slow, salted hash so a leaked <code>.htpasswd</code> isn't trivially cracked.</li>
+          <li>Steganography is obscurity, not security; and don't telegraph the passphrase in the page.</li>
+          <li>Never let a non-admin run an interpreter (<code>gawk</code>, <code>awk</code>, <code>perl</code>, <code>vim</code>) via <code>sudo</code> — it is equivalent to granting root.</li>
+        </ul>
 
       </div>
     </article>

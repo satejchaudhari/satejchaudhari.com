@@ -78,6 +78,22 @@
 
       <div class="post-body">
 
+        <!-- deepened -->
+
+        <p><strong>Aragog</strong> (a Harry&nbsp;Potter-themed box) is a clean mirror of a real engagement: a vulnerable WordPress plugin for entry, credential reuse from a looted database, and a writable root-run backup script to finish. Every step is the natural consequence of the last, which is exactly how web-to-root compromises unfold in practice.</p>
+
+        <h2>Attack chain at a glance</h2>
+
+        <ul>
+          <li><strong>Recon</strong> — only SSH (22) and HTTP (80); directory scanning shows the site is WordPress.</li>
+          <li><strong>Foothold</strong> — a Metasploit scan flags the <strong>wp-file-manager</strong> plugin; the public exploit uploads a PHP reverse shell (an authenticated/unauth <a href="../vuln-detail.html?vuln=file-upload">arbitrary file upload → RCE</a>) landing a shell as <code>www-data</code>; first flag under <code>hagrid98</code>.</li>
+          <li><strong>Loot</strong> — linpeas recovers database credentials; the WordPress <code>users</code> table holds <code>hagrid98</code>'s password hash, cracked with John to <code>password123</code>.</li>
+          <li><strong>Lateral</strong> — reuse those creds to become <code>hagrid98</code> (and switch to SSH).</li>
+          <li><strong>Root</strong> — <code>pspy</code> reveals a root-run backup script that is world-writable; inject a reverse shell into it and catch root on the next scheduled run; second flag.</li>
+        </ul>
+
+        <blockquote>Techniques in play: WordPress enumeration (Metasploit's wpscan auxiliary), a known-plugin file-upload exploit, database looting and <a href="../vuln-detail.html?vuln=secrets-exposure">credential reuse</a>, and the single most common Linux privesc after <code>sudo</code> — a writable file executed by a privileged scheduled task, found with <code>pspy</code> (process monitoring without root).</blockquote>
+
         <p><strong>Aragog</strong> (a Harry&nbsp;Potter-themed box) runs a WordPress site with a vulnerable File Manager plugin for the foothold, leaks database credentials that crack a user's WordPress hash, and finishes with a writable, root-run backup script for the root shell.</p>
 
         <h2>Reconnaissance</h2>
@@ -308,6 +324,15 @@
         </figure>
 
         <blockquote>Aragog is a clean mirror of a real engagement: a vulnerable plugin for entry, credential reuse from a looted database, and a writable root cron/backup script to finish — each step the natural consequence of the last.</blockquote>
+
+        <h2>Defender's notes</h2>
+
+        <ul>
+          <li>Keep WordPress core and plugins patched — wp-file-manager had a critical unauthenticated file-upload RCE (<a href="../vuln-detail.html?vuln=file-upload">file upload</a>).</li>
+          <li>Don't reuse the database/application password for an OS account; rotate and segregate credentials.</li>
+          <li>Any script run by root on a timer must be owned by root and writable only by root — a world-writable cron/backup script is a direct root primitive.</li>
+          <li>Store WordPress hashes you can't avoid exposing behind strong policy; <code>password123</code> falls to rockyou instantly.</li>
+        </ul>
 
       </div>
     </article>

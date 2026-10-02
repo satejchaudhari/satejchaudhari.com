@@ -78,6 +78,24 @@
 
       <div class="post-body">
 
+        <!-- deepened -->
+
+        <p><strong>Venom</strong> is a Linux boot-to-root that rewards patient enumeration over clever exploitation. The whole first half is a treasure hunt — a hash hidden in page source, an FTP foothold, and a chain of encodings that eventually spits out a CMS admin password — and the back half is a public exploit for an outdated CMS followed by a wide-open <code>sudo</code> rule. The lesson of the box is that most of the work in a real assessment is reading carefully, not launching exploits.</p>
+
+        <p>The walkthrough below shows every step with screenshots; this intro frames what each phase is actually doing and why it works.</p>
+
+        <h2>Attack chain at a glance</h2>
+
+        <ul>
+          <li><strong>Recon</strong> — nmap finds FTP (21), HTTP (80), SMB (139) and HTTPS (443).</li>
+          <li><strong>Clue chain</strong> — a hash commented into the port-80 page cracks to a username; that logs into FTP, where <code>hit.txt</code> holds a further chain of encodings that decodes to the domain and the CMS admin password (<a href="../vuln-detail.html?vuln=secrets-exposure">information disclosure</a>).</li>
+          <li><strong>Foothold</strong> — logging into Subrion CMS 4.2.1 and running the public Exploit-DB exploit for that version gives a shell as <code>www-data</code> (an authenticated <a href="../vuln-detail.html?vuln=file-upload">file-upload / RCE</a> flaw).</li>
+          <li><strong>User</strong> — pivot to <code>hostinger</code>, run linpeas, read the user flag out of a backup file.</li>
+          <li><strong>Root</strong> — pivot to <code>Nathan</code>, whose <code>sudo -l</code> allows <code>sudo bash</code> directly — an instant root shell.</li>
+        </ul>
+
+        <blockquote>Techniques in play: layered-encoding clue chains (base64 and friends — decode one layer at a time), a known-version CMS exploit, and the single most common Linux privilege escalation of all — a permissive <code>sudo</code> rule. Enumeration tooling: nmap, FTP, an online hash cracker, Exploit-DB, and linpeas.</blockquote>
+
         <p><strong>Venom</strong> is a beginner-to-intermediate Vulnhub box. The path runs through a hash hidden in page source, an FTP foothold, a chain of encoded clues leading to a Subrion CMS login, a public CMS exploit for the shell, and finally a trivial <code>sudo</code> misconfiguration for root.</p>
 
         <h2>Reconnaissance</h2>
@@ -303,6 +321,15 @@
         </figure>
 
         <blockquote>Venom is a clue-chasing box: the real work is enumeration and patiently decoding one layer at a time. The actual exploitation — a public CMS exploit and a wide-open <code>sudo</code> rule — is straightforward once the credentials are in hand.</blockquote>
+
+        <h2>Defender's notes</h2>
+
+        <ul>
+          <li>Never leave hashes, hostnames, or credentials in HTML comments or world-readable files — that is textbook <a href="../vuln-detail.html?vuln=secrets-exposure">sensitive data exposure</a>.</li>
+          <li>Lock down anonymous FTP and don't reuse a discovered name as a login.</li>
+          <li>Patch or replace end-of-life CMS software; Subrion 4.2.1 has a public authenticated-RCE exploit.</li>
+          <li>Audit <code>sudo</code> rules — <code>ALL</code>/<code>sudo bash</code> for a non-admin user is full root. Grant least privilege and log <code>sudo</code> use.</li>
+        </ul>
 
       </div>
     </article>

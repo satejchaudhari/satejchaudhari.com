@@ -78,6 +78,22 @@
 
       <div class="post-body">
 
+        <!-- deepened -->
+
+        <p><strong>Matrix 3</strong> stacks two puzzles: a patience-testing web crawl that ends in a crackable hash, and a Windows binary reversed in Ghidra to leak SSH credentials — then a tidy two-step <code>sudo</code> chain to root. It is a good exercise in automation (letting DirBuster walk a generated directory maze) and in static analysis.</p>
+
+        <h2>Attack chain at a glance</h2>
+
+        <ul>
+          <li><strong>Recon</strong> — HTTP on 80 and 7331, SSH on the non-standard 6466; the site says &ldquo;follow the white rabbit.&rdquo;</li>
+          <li><strong>Web crawl</strong> — a rabbit image names the next path, which opens into a maze of generated directories; DirBuster finds a <code>secret</code> file deep inside holding a hash.</li>
+          <li><strong>Crack</strong> — an online cracker resolves the hash to <code>passwd</code>, which unlocks the basic-auth prompt on port 7331.</li>
+          <li><strong>Reversing</strong> — a <code>robots.txt</code> disallow leads to a Windows binary (<code>data</code>); Ghidra static analysis reveals embedded SSH credentials.</li>
+          <li><strong>Root</strong> — SSH in as <code>guest</code>; a passwordless <code>sudo /bin/cp</code> is used to plant an SSH key for <code>trinity</code>; a second passwordless <code>sudo</code> rule (as <code>oracle</code>) drops a root shell.</li>
+        </ul>
+
+        <blockquote>Techniques in play: directory brute-forcing at scale (DirBuster), offline/online hash cracking, static binary analysis with Ghidra, and chaining <code>sudo</code> file-write primitives — a passwordless <code>cp</code> is enough to bootstrap full access by writing an <code>authorized_keys</code> file. (One credential-recovery screenshot in this writeup is from a public walkthrough, noted inline.)</blockquote>
+
         <p><strong>Matrix 3</strong> is a breadcrumb hunt: a rabbit-hole of generated directories hides a crackable hash, a Windows binary analysed in Ghidra leaks SSH credentials, and two chained <code>sudo</code> rules (<code>cp</code> then a passwordless shell) walk the way to root.</p>
 
         <h2>Reconnaissance</h2>
@@ -269,6 +285,15 @@
         </figure>
 
         <blockquote>Matrix 3 is two puzzles stacked: a patience-testing web crawl to a binary, then a tidy privilege-escalation chain where a single passwordless <code>cp</code> is enough to bootstrap full access.</blockquote>
+
+        <h2>Defender's notes</h2>
+
+        <ul>
+          <li>Don't rely on obscure, unguessable paths — directory brute-forcing finds them; require real authentication.</li>
+          <li>Never ship secrets inside distributed binaries; strings and decompilers recover them in minutes.</li>
+          <li>A passwordless <code>sudo</code> on a file-copy utility (<code>cp</code>) is a write-anywhere-as-root primitive — scope <code>sudo</code> rules tightly and avoid file-manipulation binaries.</li>
+          <li>Use strong, salted password hashes.</li>
+        </ul>
 
       </div>
     </article>

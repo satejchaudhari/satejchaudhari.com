@@ -78,6 +78,22 @@
 
       <div class="post-body">
 
+        <!-- deepened -->
+
+        <p><strong>Matrix 1</strong> is the original of the series and a clean lesson in clue-following plus restricted-shell escape. A base64 blob in page source points at a file encoded in Brainfuck, which leaks most of an SSH password; <code>crunch</code> and <code>hydra</code> finish the rest. The shell that credential opens is a restricted <code>rbash</code>, escaped through <code>vi</code>, and root is a single permissive <code>sudo</code> rule away.</p>
+
+        <h2>Attack chain at a glance</h2>
+
+        <ul>
+          <li><strong>Recon</strong> — SSH (22), HTTP (80), and an extra HTTP service on 31337; the pages hint &ldquo;follow the white rabbit / Cypher.&rdquo;</li>
+          <li><strong>Clue chain</strong> — a base64 comment decodes to a reference to <code>Cypher.matrix</code>; that file is Brainfuck, which decodes to a username (<code>guest</code>) and a partial password (<code>K1ll0r??</code>).</li>
+          <li><strong>Credential</strong> — <code>crunch</code> generates the 8-char candidates, <code>hydra</code> brute-forces SSH (<a href="../vuln-detail.html?vuln=weak-password-policy">weak/guessable password</a>) to <code>k1ll0r7n</code>.</li>
+          <li><strong>Foothold</strong> — SSH drops into a restricted <code>rbash</code>; escape it through <code>vi</code>'s <code>:!/bin/bash</code>.</li>
+          <li><strong>Root</strong> — reset <code>PATH</code>, then <code>sudo -l</code> allows a direct root shell.</li>
+        </ul>
+
+        <blockquote>Techniques in play: multi-layer decoding (base64 → Brainfuck), targeted wordlist generation with <code>crunch</code> + online/offline brute force with <code>hydra</code>, the classic <code>vi</code> restricted-shell breakout (a GTFOBins staple), and a permissive <code>sudo</code> rule.</blockquote>
+
         <p><strong>Matrix 1</strong> is the original of the series. The path: a base64-then-brainfuck clue chain that leaks a partial SSH password, <code>crunch</code>+<code>hydra</code> to finish it, a restricted-shell escape through <code>vi</code>, and a passwordless <code>sudo</code> for root.</p>
 
         <h2>Reconnaissance</h2>
@@ -263,6 +279,15 @@
         </figure>
 
         <blockquote>Matrix 1 is pure clue-following: base64 → Brainfuck → a half-known password finished with <code>crunch</code>/<code>hydra</code>, then a textbook <code>vi</code> breakout and an open <code>sudo</code> rule. Enumeration does all the heavy lifting.</blockquote>
+
+        <h2>Defender's notes</h2>
+
+        <ul>
+          <li>Don't hide credentials in client-side encodings — encoding is not encryption; anyone can decode a comment or a served file.</li>
+          <li>Enforce strong, non-patterned passwords so a partial leak plus <code>crunch</code>/<code>hydra</code> can't finish the job (<a href="../vuln-detail.html?vuln=weak-password-policy">weak password policy</a>).</li>
+          <li>A restricted shell (<code>rbash</code>) is not a security boundary when interpreters like <code>vi</code>/<code>vim</code>, <code>less</code>, or <code>awk</code> are reachable — restrict <code>PATH</code> and the available binaries, or don't rely on it.</li>
+          <li>Review <code>sudo</code> rules for least privilege.</li>
+        </ul>
 
       </div>
     </article>
