@@ -40,6 +40,8 @@
 </head>
 <body>
 
+
+  <a class="skip-link" href="#main">Skip to main content</a>
   <header class="site-header">
     <div class="wrap-wide">
       <a class="brand" href="index.html">
@@ -50,7 +52,7 @@
         <a href="index.html">Home</a>
         <a href="theory.html">Theory</a>
         <a href="toolkit.html">Toolkit</a>
-        <a href="vulns.html" class="current">Vulns &amp; Misconfigs</a>
+        <a href="vulns.html" class="current" aria-current="page">Vulns &amp; Misconfigs</a>
         <a href="writeups.html">Writeups</a>
       </nav>
       <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
@@ -63,7 +65,7 @@
     </div>
   </header>
 
-  <main>
+  <main id="main" tabindex="-1">
     <div class="page-head wrap" id="vuln-detail-root">
       <!-- populated automatically by vuln-detail.js based on ?vuln= in the URL -->
     </div>

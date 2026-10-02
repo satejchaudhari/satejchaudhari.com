@@ -81,6 +81,36 @@
 
   document.title = found.name + " — Toolkit — Satej Chaudhari";
 
+  /* per-item SEO / social meta — so every ?tool=<id> URL has its own
+     title, description, Open Graph/Twitter card, and canonical link
+     instead of the generic placeholders in the static HTML. */
+  (function setMeta() {
+    const url = "https://satejchaudhari.com/tool-detail.html?tool=" + encodeURIComponent(id);
+    const desc = found.description || ("Reference, commands and notes for " + found.name + ".");
+    const meta = {
+      'meta[name="description"]': desc,
+      'meta[property="og:type"]': "article",
+      'meta[property="og:title"]': found.name,
+      'meta[property="og:description"]': desc,
+      'meta[property="og:url"]': url,
+      'meta[name="twitter:title"]': found.name,
+      'meta[name="twitter:description"]': desc
+    };
+    Object.keys(meta).forEach(function (sel) {
+      let el = document.head.querySelector(sel);
+      if (!el) {
+        el = document.createElement("meta");
+        const m = sel.match(/\[(name|property)="([^"]+)"\]/);
+        if (m) el.setAttribute(m[1], m[2]);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", meta[sel]);
+    });
+    let canon = document.head.querySelector('link[rel="canonical"]');
+    if (!canon) { canon = document.createElement("link"); canon.setAttribute("rel", "canonical"); document.head.appendChild(canon); }
+    canon.setAttribute("href", url);
+  })();
+
   const sections = Array.isArray(found.sections) ? found.sections : [];
   const quickRef = Array.isArray(found.quickReference) ? found.quickReference : [];
 

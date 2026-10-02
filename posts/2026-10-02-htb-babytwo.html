@@ -40,6 +40,8 @@
 </head>
 <body>
 
+
+  <a class="skip-link" href="#main">Skip to main content</a>
   <header class="site-header">
     <div class="wrap-wide">
       <a class="brand" href="../index.html">
@@ -51,7 +53,7 @@
         <a href="../theory.html">Theory</a>
         <a href="../toolkit.html">Toolkit</a>
         <a href="../vulns.html">Vulns &amp; Misconfigs</a>
-        <a href="../writeups.html">Writeups</a>
+        <a href="../writeups.html" aria-current="page">Writeups</a>
       </nav>
       <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -63,7 +65,7 @@
     </div>
   </header>
 
-  <main class="wrap post">
+  <main id="main" tabindex="-1" class="wrap post">
     <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
 
     <article>

@@ -1021,7 +1021,8 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
     color: var(--text);
   }
   .site-nav.open a:hover { background: var(--surface); }
-  .site-nav.open a.current { color: var(--accent); background: var(--accent-soft); }
+  .site-nav.open a.current,
+  .site-nav.open a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
   .site-nav.open a.nav-external {
     border: none;
     margin: 6px 0 0;
@@ -1531,3 +1532,33 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 .post-toc-inline summary::before { content: "☰ "; color: var(--muted); }
 .post-toc-inline[open] summary { border-bottom: 1px solid var(--border); margin-bottom: 6px; }
 .post-toc-inline .post-toc-list { padding: 4px 0 10px; }
+
+/* ============================================================
+   Accessibility: skip link + active-nav indicator
+   ============================================================ */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -48px;
+  z-index: 1000;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+.skip-link:focus { top: 8px; outline: 2px solid var(--text); outline-offset: 2px; }
+#main:focus { outline: none; }
+
+/* current page in the primary nav */
+.site-nav a[aria-current="page"] { color: var(--accent); }
+.site-nav a[aria-current="page"]::after {
+  content: "";
+  display: block;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin-top: 2px;
+}
