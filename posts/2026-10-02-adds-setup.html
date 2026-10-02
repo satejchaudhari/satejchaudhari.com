@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Setting Up Active Directory Domain Services (AD DS) — Satej Chaudhari</title>
+  <meta name="description" content="A step-by-step walkthrough of building an Active Directory lab: installing the AD DS role, promoting a domain controller for a new forest, creating users, joining a client, and importing and linking the Windows 11 security-baseline GPO.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap-wide">
+    <a class="brand" href="../index.html">
+      <span class="brand-mark">SC</span>
+      <span class="brand-name">Satej Chaudhari</span>
+    </a>
+
+    <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+    <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap post">
+  <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+  <article>
+    <header class="post-header">
+      <span class="tag">AD</span>
+
+      <h1 class="post-title">
+        Setting Up Active Directory Domain Services (AD DS)
+      </h1>
+
+      <p class="post-meta">
+        <time datetime="2026-10-02">2026-10-02</time>
+        <span>&middot; 7 min read</span>
+      </p>
+    </header>
+
+    <div class="post-body">
+
+      <p>
+        Almost every Active Directory attack path starts from a working domain,
+        so being comfortable building one is worthwhile — both to understand how
+        the pieces fit together and to stand up a lab for practising the
+        techniques covered elsewhere on this site. This writeup walks through a
+        complete AD DS build: installing the role, promoting the first domain
+        controller for a brand-new forest, creating a user, joining a client,
+        verifying the domain is healthy, and finally importing and linking
+        Microsoft's Windows 11 security-baseline Group Policy.
+      </p>
+
+      <blockquote>
+        <strong>Environment</strong><br><br>
+        Domain controller: WIN-PVE0V3E6E2T (Windows Server)<br>
+        Forest / domain: schome.local<br>
+        Client: HP-Envy (Windows 11)<br>
+        DC IP: 192.168.29.39
+      </blockquote>
+
+      <h2>Installing the AD DS Role</h2>
+
+      <p>
+        With a fresh Windows Server installed, open <strong>Server Manager</strong>
+        and choose <em>Manage &rarr; Add Roles and Features</em>. Step through the
+        wizard to the <em>Server Roles</em> page and select
+        <strong>Active Directory Domain Services</strong>, then let the role (and
+        its required features) install.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-1.png" alt="Add Roles and Features Wizard with Active Directory Domain Services selected">
+        <figcaption>Selecting the Active Directory Domain Services role in the Add Roles and Features Wizard.</figcaption>
+      </figure>
+
+      <h2>Promoting the Server to a Domain Controller</h2>
+
+      <p>
+        Installing the role does not create a domain on its own. Once it finishes,
+        Server Manager shows a post-deployment notification. Click the flag icon
+        and select <strong>Promote this server to a domain controller</strong> to
+        launch the configuration wizard.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-2.png" alt="Post-deployment configuration prompt to promote the server to a domain controller">
+        <figcaption>The post-deployment task prompts us to promote the server to a domain controller.</figcaption>
+      </figure>
+
+      <p>
+        Because this is the first domain controller, choose
+        <strong>Add a new forest</strong> and set the root domain name. Here the
+        forest and domain are <code>schome.local</code>. Continue through the
+        wizard &mdash; set a Directory Services Restore Mode (DSRM) password on the
+        Domain Controller Options page, accept the DNS and default path options,
+        let the prerequisites check pass, and install. The server reboots when the
+        promotion completes.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-3.png" alt="Deployment Configuration page adding a new forest named schome.local">
+        <figcaption>Creating a new forest with the root domain <code>schome.local</code>.</figcaption>
+      </figure>
+
+      <h2>Creating a User in Active Directory</h2>
+
+      <p>
+        After the reboot the server is a domain controller. Open
+        <strong>Active Directory Users and Computers (ADUC)</strong> from the
+        <em>Tools</em> menu in Server Manager.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-4.png" alt="Server Manager Tools menu with Active Directory Users and Computers highlighted">
+        <figcaption>Opening ADUC from the Tools menu.</figcaption>
+      </figure>
+
+      <p>
+        The new domain already contains the default containers and built-in
+        groups. To add a user, right-click the <strong>Users</strong> container
+        and choose <em>New &rarr; User</em>.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-5.png" alt="Creating a new user object in the Users container in ADUC">
+        <figcaption>Creating a new user object under <code>schome.local/Users</code>.</figcaption>
+      </figure>
+
+      <p>
+        Fill in the account details and logon name. In this lab the account is
+        <code>satej.chaudhari</code>, which becomes
+        <code>satej.chaudhari@schome.local</code> (or the pre-Windows 2000 form
+        <code>SCHOME\satej.chaudhari</code>). Set a password on the next page to
+        finish creating the account.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-6.png" alt="New Object - User dialog with the account details filled in">
+        <figcaption>Specifying the user's name and logon name.</figcaption>
+      </figure>
+
+      <h2>Joining a Client to the Domain</h2>
+
+      <p>
+        Next, join a workstation to the domain. The one important prerequisite is
+        DNS: the client's preferred DNS server must point at the domain
+        controller (192.168.29.39), because domain join and Kerberos rely on DNS
+        to locate the DC. On the client, run <code>sysdm.cpl</code>, open
+        <em>Change</em>, select <strong>Domain</strong>, and enter
+        <code>schome.local</code>. After supplying domain credentials, the
+        machine joins and a "Welcome to the schome.local domain" message is shown.
+        Reboot to complete the join.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-7.png" alt="System Properties showing the HP-Envy client joined to the schome.local domain">
+        <figcaption>The HP-Envy client successfully joins the <code>schome.local</code> domain.</figcaption>
+      </figure>
+
+      <h2>Verifying the Domain</h2>
+
+      <p>
+        From the client, <code>nltest</code> confirms the domain controller is
+        reachable and advertising the expected services. A healthy response lists
+        the DC, its address, the domain and forest names, and flags such as
+        <code>PDC GC DS LDAP KDC</code>.
+      </p>
+
+      <pre><code>nltest /dsgetdc:schome.local</code></pre>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-8.png" alt="nltest output confirming the domain controller for schome.local">
+        <figcaption><code>nltest /dsgetdc</code> confirms the DC and that the command completed successfully.</figcaption>
+      </figure>
+
+      <h2>Creating an Organizational Unit</h2>
+
+      <p>
+        Group Policy is applied to Organizational Units (OUs), so to test a policy
+        cleanly it helps to create a dedicated OU. Back on the DC, create a new OU
+        &mdash; here named <strong>GPO-Test</strong> &mdash; leaving
+        <em>Protect container from accidental deletion</em> ticked.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-9.png" alt="Creating a new Organizational Unit named GPO-Test">
+        <figcaption>Creating the <code>GPO-Test</code> Organizational Unit.</figcaption>
+      </figure>
+
+      <p>
+        Move the client's computer object (<code>HP-ENVY</code>) out of the
+        default Computers container and into the new OU so any policy linked to
+        <code>GPO-Test</code> will apply to it. ADUC warns that moving objects can
+        change how policy applies &mdash; which is exactly the intent here &mdash;
+        so confirm the move.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-10.png" alt="Moving the HP-ENVY computer object into the GPO-Test OU">
+        <figcaption>Moving the <code>HP-ENVY</code> computer account into the <code>GPO-Test</code> OU.</figcaption>
+      </figure>
+
+      <h2>Importing the Windows 11 Security Baseline</h2>
+
+      <p>
+        Rather than hand-configure hardening settings, we can import Microsoft's
+        published security baseline. Download the Windows 11 security baseline from
+        the Microsoft Security Compliance Toolkit and extract it; the
+        <code>GPOs</code> folder contains the baseline exported as GPO backups
+        (GUID-named folders plus a <code>manifest.xml</code>).
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-11.png" alt="Windows 11 security baseline GPO backup folders in File Explorer">
+        <figcaption>The Windows 11 (25H2) security-baseline GPO backups.</figcaption>
+      </figure>
+
+      <p>
+        In the <strong>Group Policy Management Console (GPMC)</strong>, create a
+        new GPO under <em>Group Policy Objects</em> &mdash; here named
+        <strong>Win11 25H2 Baseline Test</strong>.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-12.png" alt="Creating a new GPO named Win11 25H2 Baseline Test in GPMC">
+        <figcaption>Creating an empty GPO to receive the imported baseline settings.</figcaption>
+      </figure>
+
+      <p>
+        Right-click the new GPO and choose <strong>Import Settings</strong>. The
+        wizard asks for a backup location and then lists the backed-up GPOs it
+        found. Select the appropriate <em>MSFT Windows 11</em> baseline entry
+        (for example the domain/member computer policy) as the source.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-13.png" alt="Selecting Import Settings on the new GPO">
+        <figcaption>Starting the Import Settings wizard on the new GPO.</figcaption>
+      </figure>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-14.png" alt="Import Settings wizard listing the backed-up MSFT Windows 11 baseline GPOs">
+        <figcaption>Choosing the source baseline GPO to import from.</figcaption>
+      </figure>
+
+      <h2>Linking and Applying the GPO</h2>
+
+      <p>
+        Creating the GPO does not apply it &mdash; it has to be linked to an OU.
+        Right-click the <strong>GPO-Test</strong> OU and choose
+        <strong>Link an Existing GPO</strong>, then select the baseline GPO.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-15.png" alt="Linking an existing GPO to the GPO-Test OU">
+        <figcaption>Linking the baseline GPO to the <code>GPO-Test</code> OU.</figcaption>
+      </figure>
+
+      <p>
+        The OU's <em>Linked Group Policy Objects</em> tab now shows the baseline
+        with its link enabled, so it will apply to the computer we moved into the
+        OU.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-16.png" alt="GPO-Test OU showing the linked Win11 25H2 Baseline Test GPO">
+        <figcaption>The baseline GPO is linked to the OU and enabled.</figcaption>
+      </figure>
+
+      <p>
+        On the client, force a policy refresh and confirm the logged-on user to
+        verify everything is working. Both the computer and user policy should
+        update successfully.
+      </p>
+
+      <pre><code>gpupdate
+whoami</code></pre>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-17.png" alt="gpupdate completing successfully and whoami returning the domain user">
+        <figcaption>Policy applies on the client, and <code>whoami</code> confirms the domain account <code>schome\satej.chaudhari</code>.</figcaption>
+      </figure>
+
+      <h2>Reviewing and Extending the Baseline</h2>
+
+      <p>
+        It is worth opening the GPO in the <strong>Group Policy Management
+        Editor</strong> to see what the baseline actually sets. Under
+        <em>Computer Configuration &rarr; Windows Settings &rarr; Security
+        Settings</em> you can review the enforced account policies, audit policy,
+        and system-service states (for example, the startup mode of the Remote
+        Registry service).
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-18.png" alt="Group Policy Management Editor showing the baseline's System Services settings">
+        <figcaption>Reviewing the baseline's enforced System Services settings.</figcaption>
+      </figure>
+
+      <p>
+        The same editor is where you extend the policy for the environment. For
+        instance, under <em>Windows Defender Firewall with Advanced Security &rarr;
+        Inbound Rules</em>, the New Inbound Rule Wizard can add a predefined rule
+        &mdash; such as allowing Windows Management Instrumentation (WMI) &mdash;
+        to support remote management.
+      </p>
+
+      <figure>
+        <img src="../assets/img/adds-setup/image-19.png" alt="New Inbound Rule Wizard adding a predefined WMI firewall rule via GPO">
+        <figcaption>Adding a predefined firewall inbound rule (WMI) through the GPO.</figcaption>
+      </figure>
+
+      <h2>Conclusion</h2>
+
+      <p>
+        That completes a working Active Directory environment: a new forest and
+        domain controller, a domain user, a domain-joined client, and a security
+        baseline delivered through Group Policy. From here the same lab is a
+        foundation for practising enumeration and the attack paths covered in the
+        other Active Directory material on this site.
+      </p>
+
+      <p>
+        A couple of points are worth remembering. DNS is the quiet prerequisite
+        for almost everything &mdash; domain join, Kerberos, and GPO application
+        all depend on clients resolving the DC &mdash; so point client DNS at the
+        domain controller first. And Group Policy only takes effect once a GPO is
+        both linked to an OU and applied to objects within it, which the
+        <code>gpupdate</code> step confirms.
+      </p>
+
+    </div>
+  </article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap-wide">
+    <p>&copy; 2026 Satej Chaudhari</p>
+    <div class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+      <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

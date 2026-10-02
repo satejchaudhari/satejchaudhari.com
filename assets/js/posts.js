@@ -24,6 +24,15 @@
 
 var POSTS = [
   {
+    title: "Setting Up Active Directory Domain Services (AD DS)",
+    url: "posts/2026-10-02-adds-setup.html",
+    date: "2026-10-02",
+    type: "writeup",
+    tag: "Active Directory",
+    description: "A step-by-step build of an AD lab: installing the AD DS role, promoting a domain controller for a new forest, creating users, joining a client, and importing and linking the Windows 11 security-baseline GPO.",
+    readTime: "7 min read"
+  },
+  {
     title: "OSINT From a Single Domain: A Red Team Methodology",
     url: "posts/2026-08-18-osint-methodology.html",
     date: "2026-08-18",
