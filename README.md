@@ -1,4 +1,10 @@
 
+> **Adding or editing content (tool, vuln, theory, writeup, checklist, AD map)?**
+> Read **[`CONTENT_SPEC.md`](CONTENT_SPEC.md)** first — it is the canonical schema
+> and section-by-section baseline for every content type on this site. Humans and
+> AI assistants should treat it as the first reference for any "create/extend X"
+> task.
+
 ## How the site is put together
 
 ```
