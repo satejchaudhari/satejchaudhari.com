@@ -116,6 +116,31 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://satejchaudhari.com/theory/2026-10-02-zero-trust-architecture.html</loc>
+    <lastmod>2026-10-02</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://satejchaudhari.com/theory/2026-10-02-network-segmentation.html</loc>
+    <lastmod>2026-10-02</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://satejchaudhari.com/theory/2026-10-02-soc-detection-response.html</loc>
+    <lastmod>2026-10-02</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://satejchaudhari.com/theory/2026-10-02-detection-engineering-attack.html</loc>
+    <lastmod>2026-10-02</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://satejchaudhari.com/theory/2026-10-02-edr-xdr-endpoint-detection.html</loc>
+    <lastmod>2026-10-02</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://satejchaudhari.com/theory/2026-10-02-security-stack-end-to-end.html</loc>
     <lastmod>2026-10-02</lastmod>
     <priority>0.6</priority>

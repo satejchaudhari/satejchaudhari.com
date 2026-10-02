@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detection Engineering with MITRE ATT&amp;CK — Satej Chaudhari</title>
+  <meta name="description" content="Detection as an engineering discipline — the ATT&amp;CK matrix as a coverage map, the detection lifecycle, the Pyramid of Pain and why to detect behaviour over IOCs, detections-as-code with Sigma, measuring coverage, and validating with purple teaming and BAS.">
+
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Detection Engineering with MITRE ATT&amp;CK">
+  <meta property="og:description" content="Detection as an engineering discipline — the ATT&amp;CK matrix as a coverage map, the detection lifecycle, the Pyramid of Pain and why to detect behaviour over IOCs, detections-as-code with Sigma, measuring coverage, and validating with purple teaming and BAS.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-02-detection-engineering-attack.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-02">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Detection Engineering with MITRE ATT&amp;CK">
+  <meta name="twitter:description" content="Detection as an engineering discipline — the ATT&amp;CK matrix as a coverage map, the detection lifecycle, the Pyramid of Pain and why to detect behaviour over IOCs, detections-as-code with Sigma, measuring coverage, and validating with purple teaming and BAS.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Blue Team</span>
+        <h1 class="post-title">Detection Engineering with MITRE ATT&amp;CK</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; 16 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>Detection engineering is the discipline of deliberately building, testing, and maintaining the detections a <a href="2026-10-02-soc-detection-response.html">SOC</a> runs on — treated like software, not like clicking &ldquo;enable&rdquo; on a vendor's default rules. It is the highest-leverage blue-team skill, and it is the exact inverse of the offensive content on this site: every technique in the <a href="../ad-map.html">AD attack-path map</a> is a detection opportunity waiting to be engineered.</p>
+
+        <p>The shift it represents: from <em>buying</em> detection (and inheriting a vendor's blind spots and false positives) to <em>owning</em> it — knowing precisely which adversary behaviours you can see, proving it, and improving it over time.</p>
+
+        <h2>MITRE ATT&amp;CK as the map</h2>
+
+        <p><a href="https://attack.mitre.org/" target="_blank" rel="noopener">MITRE ATT&amp;CK</a> is a curated, community knowledge base of real adversary behaviour, organised as:</p>
+
+        <ul>
+          <li><strong>Tactics</strong> — the <em>why</em> (the adversary's goal in a phase): Initial Access, Execution, Persistence, Privilege Escalation, Defense Evasion, Credential Access, Discovery, Lateral Movement, Collection, C2, Exfiltration, Impact.</li>
+          <li><strong>Techniques &amp; sub-techniques</strong> — the <em>how</em> (e.g. T1558.003 Kerberoasting, T1003.001 LSASS memory).</li>
+          <li><strong>Procedures</strong> — the specific real-world implementations seen in the wild.</li>
+        </ul>
+
+        <p>Used as a <strong>coverage map</strong>, ATT&amp;CK lets you answer the only question that matters: <em>which adversary behaviours can we actually detect, and where are the holes?</em> The ATT&amp;CK Navigator is the standard way to colour that heat-map.</p>
+
+        <h2>The Pyramid of Pain — detect behaviour, not just IOCs</h2>
+
+        <p>David Bianco's Pyramid of Pain ranks indicators by how much it <em>hurts the attacker</em> when you detect at that level. Low down, they swap trivially; high up, they have to rebuild their tradecraft.</p>
+
+        <table>
+          <thead><tr><th>Indicator</th><th>Pain to attacker</th><th>Durability of your detection</th></tr></thead>
+          <tbody>
+            <tr><td>Hash values</td><td>Trivial</td><td>Breaks on any file change</td></tr>
+            <tr><td>IP addresses</td><td>Easy</td><td>Rotated constantly</td></tr>
+            <tr><td>Domain names</td><td>Simple</td><td>Cheap to re-register</td></tr>
+            <tr><td>Network/host artifacts</td><td>Annoying</td><td>Tooling-specific</td></tr>
+            <tr><td>Tools</td><td>Challenging</td><td>Forces a tool change</td></tr>
+            <tr><td><strong>TTPs (behaviour)</strong></td><td><strong>Tough</strong></td><td><strong>Survives IOC rotation</strong></td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>The lesson: a detection for &ldquo;this hash&rdquo; dies the moment the attacker recompiles. A detection for the <em>behaviour</em> — &ldquo;a non-DC asked to replicate directory secrets&rdquo; (<a href="2026-08-18-dcsync.html">DCSync</a>) — survives, because the attacker can't achieve the goal without the behaviour. Engineer toward the top of the pyramid.</blockquote>
+
+        <h2>The detection lifecycle</h2>
+
+        <pre><code>  (1) HYPOTHESIS      -- what adversary behaviour do we want to catch?
+        |                (pick an ATT&amp;CK technique)
+        v
+  (2) DATA SOURCES    -- do we even collect the needed telemetry?
+        |                (EDR? Sysmon? 4688? LDAP logs?)
+        v
+  (3) LOGIC           -- write the detection (Sigma rule / query)
+        |
+        v
+  (4) TEST            -- fire the real technique (Atomic Red Team) &amp; confirm
+        |
+        v
+  (5) TUNE            -- cut false positives against real baselines
+        |
+        v
+  (6) DEPLOY          -- version-controlled, peer-reviewed, into the SIEM
+        |
+        v
+  (7) MAINTAIN        -- revisit as the environment &amp; TTPs change
+        (loop back to 1)</code></pre>
+
+        <h2>Detections-as-code with Sigma</h2>
+
+        <p>Mature teams write detections in <strong>Sigma</strong> — a vendor-agnostic YAML format that compiles to Splunk/Sentinel/Elastic queries — and manage them in Git with peer review and CI, exactly like application code. That gives version history, testing, and portability across SIEMs. A (simplified) Sigma rule for Kerberoasting-style TGS requests:</p>
+
+        <pre><code>title: Potential Kerberoasting (TGS-REQ for many SPNs, RC4)
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4769          # Kerberos service ticket requested
+    TicketEncryptionType: &#x27;0x17&#x27;   # RC4 -- crackable
+  filter:
+    ServiceName|endswith: &#x27;$&#x27;      # machine accounts (noise)
+  condition: selection and not filter
+level: medium
+tags:
+  - attack.credential_access
+  - attack.t1558.003</code></pre>
+
+        <h2>The prerequisite: can you even see it?</h2>
+
+        <p>Every detection depends on a data source being collected and retained. This is why detection engineering is joined at the hip to <a href="2026-09-23-windows-telemetry-logging.html">logging &amp; telemetry</a> and <a href="2026-10-02-edr-xdr-endpoint-detection.html">EDR</a>: a brilliant detection for an event you don't log is fiction. Half of detection engineering is actually <em>log engineering</em> — turning on the right auditing (process creation with command line, script-block logging, LDAP/Kerberos events) before writing a single rule.</p>
+
+        <h2>Mapping the site's attacks to detections</h2>
+
+        <table>
+          <thead><tr><th>Attack (on this site)</th><th>ATT&amp;CK</th><th>Detection idea</th></tr></thead>
+          <tbody>
+            <tr><td><a href="2026-08-18-kerberoasting.html">Kerberoasting</a></td><td>T1558.003</td><td>4769 service-ticket requests with RC4 encryption for user SPNs, in volume from one source</td></tr>
+            <tr><td><a href="2026-08-18-dcsync.html">DCSync</a></td><td>T1003.006</td><td>Directory-replication (DRSUAPI GetNCChanges) from a host that is not a domain controller</td></tr>
+            <tr><td><a href="2026-08-18-ntlm.html">Pass-the-hash</a></td><td>T1550.002</td><td>Logon type 9 / anomalous NTLM auth; new-host access from a credential never used there</td></tr>
+            <tr><td><a href="2026-08-18-asrep-roasting.html">AS-REP roasting</a></td><td>T1558.004</td><td>4768 AS-REQ without pre-auth for accounts, then offline-crackable material</td></tr>
+            <tr><td><a href="2026-09-23-in-memory-tradecraft.html">Process injection</a></td><td>T1055</td><td>EDR/Sysmon: remote-thread creation, suspicious memory permissions (RWX)</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Measuring &amp; validating coverage</h2>
+
+        <ul>
+          <li><strong>ATT&amp;CK Navigator heat-map</strong> — colour techniques by detection confidence to expose the holes.</li>
+          <li><strong>Atomic Red Team</strong> (OSS) — fire individual techniques safely to prove a detection actually triggers.</li>
+          <li><strong>Purple teaming</strong> — red executes a TTP, blue confirms (or builds) the detection, in a tight loop.</li>
+          <li><strong>Breach &amp; Attack Simulation</strong> (AttackIQ, SafeBreach, Cymulate) — automated, continuous validation that controls and detections still work.</li>
+        </ul>
+
+        <blockquote>&ldquo;We have 2,000 detection rules&rdquo; is not a metric; &ldquo;we have tested detections for 140 of the ATT&amp;CK techniques relevant to our estate, validated monthly by BAS&rdquo; is. Coverage you have proven beats coverage you assume.</blockquote>
+
+        <h2>Key takeaways</h2>
+
+        <ul>
+          <li>Detection engineering = building, testing, and maintaining detections like software.</li>
+          <li>Use ATT&amp;CK as a coverage map; engineer toward the top of the Pyramid of Pain (behaviour, not IOCs).</li>
+          <li>Follow the lifecycle: hypothesis &rarr; data &rarr; logic &rarr; test &rarr; tune &rarr; deploy &rarr; maintain.</li>
+          <li>Half the job is log engineering; validate coverage with Atomic Red Team, purple teaming, and BAS.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-02-soc-detection-response.html">Building a SOC — Detection to Response</a></li>
+          <li><a href="2026-10-02-edr-xdr-endpoint-detection.html">EDR/XDR — How Endpoint Detection Works</a></li>
+          <li><a href="<a href="2026-09-23-windows-telemetry-logging.html">Windows Telemetry &amp; Logging</a>">Windows Telemetry &amp; Logging</a></li>
+          <li><a href="<a href="2026-09-23-defense-evasion.html">Windows Defense Evasion</a>">Windows Defense Evasion</a></li>
+          <li><a href="<a href="../ad-map.html">ad-map.html</a>">AD Attack-Path Map</a></li>
+          <li><a href="<a href="../vulns.html">vulns.html</a>">Vulns &amp; Misconfigs</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

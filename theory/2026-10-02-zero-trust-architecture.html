@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zero Trust Architecture in Practice — Satej Chaudhari</title>
+  <meta name="description" content="What Zero Trust actually means beyond the buzzword — NIST 800-207&#x27;s tenets and the PDP/PEP logical model, the CISA pillars and maturity stages, what it looks like per domain, how to migrate to it, and the attack paths it breaks.">
+
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Zero Trust Architecture in Practice">
+  <meta property="og:description" content="What Zero Trust actually means beyond the buzzword — NIST 800-207&#x27;s tenets and the PDP/PEP logical model, the CISA pillars and maturity stages, what it looks like per domain, how to migrate to it, and the attack paths it breaks.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-02-zero-trust-architecture.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-02">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Zero Trust Architecture in Practice">
+  <meta name="twitter:description" content="What Zero Trust actually means beyond the buzzword — NIST 800-207&#x27;s tenets and the PDP/PEP logical model, the CISA pillars and maturity stages, what it looks like per domain, how to migrate to it, and the attack paths it breaks.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Blue Team</span>
+        <h1 class="post-title">Zero Trust Architecture in Practice</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; 16 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>&ldquo;Zero Trust&rdquo; is the most over-marketed phrase in security and one of the most important ideas in it. Stripped of vendor spin, it is a single principle — <strong>never trust, always verify</strong> — and an architecture for enforcing it: no access is granted because of <em>where</em> a request comes from (an &ldquo;internal&rdquo; IP, the corporate LAN, the VPN), only because of <em>who</em> and <em>what</em> is asking, proven every time. The authoritative definition is <a href="https://csrc.nist.gov/pubs/sp/800/207/final" target="_blank" rel="noopener">NIST SP&nbsp;800-207</a>; this page turns it into something you can actually build.</p>
+
+        <p>It matters because the old model — a hard perimeter around a soft, trusted interior — is how almost every breach on this site's <a href="../writeups.html">writeups</a> and <a href="../ad-map.html">AD attack-path map</a> succeeds: get one foothold inside, and the flat, trusting interior does the rest. Zero Trust is the structural answer to that.</p>
+
+        <h2>The core tenets (NIST 800-207)</h2>
+
+        <p>NIST frames Zero Trust as seven tenets. They are worth reading literally, because most &ldquo;ZT&rdquo; products only implement one or two:</p>
+
+        <ul>
+          <li>All data sources and computing services are <strong>resources</strong> to be protected — including the device making the request.</li>
+          <li>All communication is secured <strong>regardless of network location</strong>; being &ldquo;on the LAN&rdquo; grants nothing.</li>
+          <li>Access is granted <strong>per-session</strong>, to one resource, with least privilege.</li>
+          <li>Access is determined by <strong>dynamic policy</strong> — identity, device posture, behaviour, and other attributes — not a static rule.</li>
+          <li>The enterprise <strong>measures the integrity and security posture</strong> of all owned and associated assets (no device is trusted by default).</li>
+          <li>Authentication and authorization are <strong>dynamic and strictly enforced</strong> before access — and continually re-evaluated.</li>
+          <li>The enterprise <strong>collects data</strong> on asset, network, and communication state and uses it to improve policy.</li>
+        </ul>
+
+        <h2>The logical model: PDP and PEP</h2>
+
+        <p>The mechanism underneath every Zero-Trust implementation is a split between <strong>deciding</strong> and <strong>enforcing</strong>:</p>
+
+        <ul>
+          <li><strong>Policy Decision Point (PDP)</strong> — the brain. It is a <em>Policy Engine</em> (runs the trust algorithm and decides grant/deny) plus a <em>Policy Administrator</em> (establishes/tears down the session). Conditional Access in Entra / Okta policy is a PDP.</li>
+          <li><strong>Policy Enforcement Point (PEP)</strong> — the gate in the data path that actually allows or blocks the connection (a ZTNA connector, an identity-aware proxy, a next-gen firewall, a service mesh sidecar).</li>
+          <li><strong>Trust algorithm inputs</strong> — the PDP consults many signals: identity &amp; entitlements (IdP/IGA), device posture (MDM/EDR), threat intel, activity logs/SIEM, PKI, and data sensitivity.</li>
+        </ul>
+
+        <pre><code>                 signals feed the decision
+   +---------------------------------------------------+
+   | IdP/IGA   Device posture   Threat intel   SIEM    |
+   | PKI       Data sensitivity                        |
+   +------------------------+--------------------------+
+                            |
+                            v
+   [ Subject ] --request--&gt; [ PEP ] --?--&gt; [ Resource/App ]
+   (user+device)              ^
+                              | allow / deny / re-auth
+                     [ PDP: Policy Engine + Administrator ]
+
+   The PEP never lets the subject reach the resource until the PDP
+   says yes -- and the decision is re-evaluated continuously, not once.</code></pre>
+
+        <blockquote>The single most important shift: authentication is no longer a one-time gate at the edge. The PDP re-evaluates the session continuously, so a device that falls out of compliance or an identity whose risk score jumps mid-session can be cut off — the opposite of a VPN, which trusts you for hours once you connect.</blockquote>
+
+        <h2>The five pillars and maturity stages (CISA)</h2>
+
+        <p>NIST gives the theory; <a href="https://www.cisa.gov/zero-trust-maturity-model" target="_blank" rel="noopener">CISA's Zero Trust Maturity Model</a> gives a roadmap. It scores five pillars across four stages, over three cross-cutting capabilities (Visibility &amp; Analytics, Automation &amp; Orchestration, Governance). You raise each pillar independently:</p>
+
+        <table>
+          <thead><tr><th>Pillar</th><th>Traditional &rarr; Optimal looks like</th></tr></thead>
+          <tbody>
+            <tr><td>Identity</td><td>Passwords &rarr; phishing-resistant MFA, continuous, risk-based, least-privilege</td></tr>
+            <tr><td>Devices</td><td>Unmanaged &rarr; every device enrolled, posture is an access signal, continuous compliance</td></tr>
+            <tr><td>Networks</td><td>Flat, perimeter-trusted &rarr; micro-segmented, encrypted, ZTNA per-app</td></tr>
+            <tr><td>Applications &amp; workloads</td><td>Public, implicitly trusted &rarr; per-request authorised, workload identity (mTLS)</td></tr>
+            <tr><td>Data</td><td>Unclassified, open &rarr; classified, encrypted, access governed by sensitivity</td></tr>
+          </tbody>
+        </table>
+
+        <h2>What Zero Trust means per domain, in practice</h2>
+
+        <table>
+          <thead><tr><th>Domain</th><th>The Zero-Trust move</th><th>On this site</th></tr></thead>
+          <tbody>
+            <tr><td>Identity</td><td>Phishing-resistant MFA (FIDO2/passkeys), Conditional Access, least privilege, no standing admin</td><td>the real perimeter — see the <a href="2026-10-02-enterprise-security-architecture.html">enterprise guide</a></td></tr>
+            <tr><td>Device</td><td>Only compliant, managed, healthy devices get a token (MDM + <a href="2026-10-02-edr-xdr-endpoint-detection.html">EDR</a> posture)</td><td>device posture as a PDP input</td></tr>
+            <tr><td>Network</td><td>ZTNA replaces flat VPN; <a href="2026-10-02-network-segmentation.html">micro-segmentation</a> controls east-west</td><td>the <a href="2026-10-02-network-segmentation.html">segmentation</a> page</td></tr>
+            <tr><td>Workload</td><td>Per-request authorisation; service identity and mTLS between services</td><td>landing zones &amp; service mesh</td></tr>
+            <tr><td>Data</td><td>Classify, encrypt, and gate by sensitivity — so a bypass still yields unusable data</td><td>data security in the <a href="2026-10-02-security-stack-end-to-end.html">end-to-end guide</a></td></tr>
+          </tbody>
+        </table>
+
+        <h2>Deploying it: you migrate, you don't rip-and-replace</h2>
+
+        <p>NIST describes three implementation approaches — identity-centric (enhanced identity governance), micro-segmentation, and network-infrastructure/software-defined perimeters — and real programmes blend all three. Nobody buys Zero Trust in a quarter. A defensible sequence:</p>
+
+        <ol>
+          <li><strong>Identity first</strong> — one IdP, phishing-resistant MFA everywhere, kill legacy/basic auth, Conditional Access. This alone removes most credential-based intrusion.</li>
+          <li><strong>Device posture</strong> — enrol and attest devices so compliance becomes an access signal.</li>
+          <li><strong>Pilot ZTNA</strong> for a set of apps, running alongside the VPN, then expand and retire VPN.</li>
+          <li><strong>Segment the crown jewels</strong> — <a href="2026-10-02-network-segmentation.html">micro-segment</a> the highest-value assets before boiling the ocean.</li>
+          <li><strong>Instrument everything</strong> — the Visibility pillar feeds the PDP and the <a href="2026-10-02-soc-detection-response.html">SOC</a>; Zero Trust without telemetry is just friction.</li>
+        </ol>
+
+        <h2>Where teams go wrong</h2>
+
+        <ul>
+          <li><strong>Treating ZT as a product.</strong> A vendor &ldquo;Zero Trust&rdquo; box is a PEP, not an architecture. ZT is a strategy the whole estate implements.</li>
+          <li><strong>ZTNA &ne; Zero Trust.</strong> Replacing the VPN with ZTNA is one pillar; if the app still trusts anything that reaches it, you've moved the flat network inward.</li>
+          <li><strong>Authenticate-once-then-trust.</strong> If the session isn't continuously evaluated, it isn't Zero Trust — it's SSO with extra steps.</li>
+          <li><strong>Forgetting workloads.</strong> Service-to-service traffic is where attackers pivot; machine identity and mTLS matter as much as user MFA.</li>
+        </ul>
+
+        <h2>Red team &harr; blue team: what Zero Trust actually breaks</h2>
+
+        <p>Trace Zero Trust against the attack techniques elsewhere on this site — each tenet removes a step:</p>
+
+        <table>
+          <thead><tr><th>Attack path</th><th>How Zero Trust breaks it</th></tr></thead>
+          <tbody>
+            <tr><td><a href="2026-08-18-ntlm.html">Pass-the-hash</a> / lateral movement</td><td>No implicit network trust + micro-segmentation: a stolen hash can't freely reach other hosts; per-resource auth re-checks every hop</td></tr>
+            <tr><td><a href="../vuln-detail.html?vuln=llmnr-nbtns">LLMNR/NBT-NS poisoning</a> &amp; <a href="2026-08-18-coercion-ntlm-relay.html">relay</a></td><td>Segmentation and signed/authenticated channels shrink the broadcast domain and the relay target set</td></tr>
+            <tr><td>Flat VPN foothold</td><td>ZTNA exposes only the one entitled app, never the LAN — there is no &ldquo;flat network&rdquo; to land on</td></tr>
+            <tr><td>Over-privileged standing admin</td><td>Least-privilege + just-in-time elevation + continuous evaluation collapse the window a stolen admin token is useful</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>Zero Trust is not a wall that stops the first click — phishing still works. It is the architecture that ensures the first click doesn't become domain compromise, by refusing every implicit trust the attacker needs for step two onward.</blockquote>
+
+        <h2>Key takeaways</h2>
+
+        <ul>
+          <li>Zero Trust = never trust, always verify, per-session, least-privilege, continuously re-evaluated.</li>
+          <li>The machinery is PDP (decide) + PEP (enforce) fed by identity, device, and behaviour signals.</li>
+          <li>It's a strategy across five pillars, built by migration — identity first, then device, network, workload, data.</li>
+          <li>Its value is removing the implicit trust that turns one foothold into a breach.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-02-network-segmentation.html">Network Segmentation &amp; Micro-segmentation</a></li>
+          <li><a href="2026-10-02-edr-xdr-endpoint-detection.html">EDR/XDR — How Endpoint Detection Works</a></li>
+          <li><a href="2026-10-02-soc-detection-response.html">Building a SOC — Detection to Response</a></li>
+          <li><a href="2026-10-02-enterprise-security-architecture.html">How Security Is Designed for a 100,000-User Enterprise</a></li>
+          <li><a href="2026-10-02-security-stack-end-to-end.html">How Security Is Built End-to-End</a></li>
+          <li><a href="<a href="../ad-map.html">ad-map.html</a>">AD Attack-Path Map</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Network Segmentation &amp; Micro-segmentation — Satej Chaudhari</title>
+  <meta name="description" content="How defenders carve a network to limit blast radius — zones, VLANs, north-south vs east-west, the micro-segmentation approaches and vendors, how to roll it out without causing outages, PCI scope reduction, and how it breaks lateral movement.">
+
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Network Segmentation &amp; Micro-segmentation">
+  <meta property="og:description" content="How defenders carve a network to limit blast radius — zones, VLANs, north-south vs east-west, the micro-segmentation approaches and vendors, how to roll it out without causing outages, PCI scope reduction, and how it breaks lateral movement.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-02-network-segmentation.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-02">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Network Segmentation &amp; Micro-segmentation">
+  <meta name="twitter:description" content="How defenders carve a network to limit blast radius — zones, VLANs, north-south vs east-west, the micro-segmentation approaches and vendors, how to roll it out without causing outages, PCI scope reduction, and how it breaks lateral movement.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Blue Team</span>
+        <h1 class="post-title">Network Segmentation &amp; Micro-segmentation</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; 15 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>Segmentation is the control that decides whether a single compromised machine is an incident or a catastrophe. Its whole purpose is <strong>blast-radius containment</strong>: carve the network so that owning one host does not grant the attacker free movement to everything else. It is the defensive counterpart to almost every lateral-movement technique in the <a href="../ad-map.html">AD attack-path map</a>.</p>
+
+        <p>The problem it solves is the <strong>flat network</strong>: historically, once you were &ldquo;inside,&rdquo; you could reach almost anything. Modern attacks — and modern ransomware especially — turn that flatness into domain-wide encryption in hours. Segmentation makes the interior hostile to movement.</p>
+
+        <h2>North-south vs east-west</h2>
+
+        <p>The single most useful lens. <strong>North-south</strong> traffic crosses the perimeter (in/out of the org) and has always been inspected by firewalls and proxies. <strong>East-west</strong> traffic moves <em>laterally</em> between internal systems — and in a flat network it is almost entirely uninspected. East-west is where attackers live after the first foothold, so it is the modern battleground.</p>
+
+        <pre><code>  NORTH-SOUTH (always inspected)        EAST-WEST (the real battle)
+  Internet                               app01 ---- app02
+     |                                     |  \      /  |
+  [ perimeter FW / proxy / WAF ]          |   \    /   |
+     |                                   db01 -- file01 -- dc01
+  internal                                (flat = attacker moves freely;
+                                           segmented = each hop is a wall)</code></pre>
+
+        <h2>Granularities of segmentation</h2>
+
+        <table>
+          <thead><tr><th>Level</th><th>Mechanism</th><th>Granularity</th></tr></thead>
+          <tbody>
+            <tr><td>Physical / air-gap</td><td>Separate hardware/networks</td><td>Coarsest; for OT, crown-jewel, or classified</td></tr>
+            <tr><td>VLAN / subnet + firewall</td><td>Layer-2/3 zones with inter-zone rules</td><td>Per subnet/zone</td></tr>
+            <tr><td>Security zones</td><td>DMZ / internal / restricted / management</td><td>Per trust tier</td></tr>
+            <tr><td>Micro-segmentation</td><td>Per-workload allow policy (host- or fabric-based)</td><td>Per workload / process</td></tr>
+            <tr><td>Identity-based</td><td>ZTNA / identity-aware proxy</td><td>Per user+app session (see <a href="2026-10-02-zero-trust-architecture.html">Zero Trust</a>)</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Security zones (the macro layout)</h2>
+
+        <table>
+          <thead><tr><th>Zone</th><th>Purpose</th><th>Typical controls</th></tr></thead>
+          <tbody>
+            <tr><td>DMZ</td><td>Internet-facing / proxied services</td><td>WAF, reverse proxy, no inbound to internal</td></tr>
+            <tr><td>Internal</td><td>General corporate &amp; app tiers</td><td>Default-deny between tiers, NAC on access</td></tr>
+            <tr><td>Restricted</td><td>Crown jewels — PCI CDE, PII, payments, <a href="2026-08-18-ad-fundamentals.html">Tier-0 identity</a></td><td>Micro-segmented, strict allowlist, heavy logging</td></tr>
+            <tr><td>Management / OOB</td><td>Out-of-band device management (iLO/iDRAC, jump hosts)</td><td>Physically/logically isolated; never reachable from user space</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>A dedicated out-of-band management network is the control attackers hate most: it means a foothold on the user LAN cannot reach the management plane of the infrastructure — the firewalls, hypervisors, and domain controllers that own everything.</blockquote>
+
+        <h2>Micro-segmentation: approaches &amp; tooling</h2>
+
+        <table>
+          <thead><tr><th>Approach</th><th>Leading tools</th><th>Notes &amp; trade-offs</th></tr></thead>
+          <tbody>
+            <tr><td>Host/agent-based</td><td>Illumio, Akamai Guardicore</td><td>Workload-aware, cloud-portable, no re-IP — best for brownfield. Burden is policy authoring; start in visualise-only mode.</td></tr>
+            <tr><td>Fabric/network-based</td><td>Cisco Secure Workload / ACI, VMware NSX</td><td>Powerful in a homogeneous DC; vendor lock-in and cost are the downsides.</td></tr>
+            <tr><td>Cloud-native</td><td>Security groups / NSGs, service mesh mTLS (Istio/Linkerd)</td><td>Native and cheap, but policy sprawls across accounts — govern with CNAPP.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Rolling it out without causing outages</h2>
+
+        <p>The number-one way micro-segmentation projects fail is going straight to <em>enforce</em> and breaking a business-critical flow nobody documented. The safe sequence:</p>
+
+        <ol>
+          <li><strong>Map &amp; visualise</strong> — run the tool in observe mode for weeks to learn the real traffic graph (you will be surprised what talks to what).</li>
+          <li><strong>Ring-fence the crown jewels first</strong> — the CDE, payments, Tier-0 — rather than boiling the ocean.</li>
+          <li><strong>Model policies &amp; test in alert-only</strong> before enforcing.</li>
+          <li><strong>Default-deny, then enforce</strong> zone by zone, with a fast rollback path.</li>
+          <li><strong>Keep it alive</strong> — segmentation drifts as apps change; treat policy as code and review it.</li>
+        </ol>
+
+        <h2>A high-value side effect: PCI scope reduction</h2>
+
+        <p>For a card-handling business, segmentation isn't only security — it shrinks the <strong>cardholder-data environment (CDE)</strong>, and therefore the PCI&nbsp;DSS audit scope, to the smallest possible set of systems. Everything provably isolated from the CDE falls out of scope. That audit-cost reduction is often what finally funds a segmentation programme.</p>
+
+        <h2>Red team &harr; blue team: segmentation vs lateral movement</h2>
+
+        <table>
+          <thead><tr><th>Attacker technique</th><th>How segmentation blunts it</th></tr></thead>
+          <tbody>
+            <tr><td><a href="2026-08-18-ntlm.html">Pass-the-hash</a> to neighbouring hosts</td><td>East-west allowlist: the stolen hash has nowhere to go — the peer ports are blocked</td></tr>
+            <tr><td><a href="2026-08-18-coercion-ntlm-relay.html">Coercion &amp; relay</a> / <a href="../vuln-detail.html?vuln=llmnr-nbtns">poisoning</a></td><td>Smaller broadcast/segment domains shrink the set of coerce-able and relay-able targets</td></tr>
+            <tr><td>Ransomware worming</td><td>Default-deny east-west caps encryption to one segment instead of the estate</td></tr>
+            <tr><td>Reaching a <a href="2026-08-18-ad-fundamentals.html">domain controller</a></td><td>DCs in a restricted zone, reachable only from PAWs via jump hosts, not from user space</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Trade-offs &amp; failure modes</h2>
+
+        <ul>
+          <li><strong>Operational friction.</strong> Every new app needs policy; without automation this becomes a ticket queue that teams route around.</li>
+          <li><strong>Over-segmentation.</strong> Micro-segmenting everything is rarely worth it — target the crown jewels, accept coarser control elsewhere.</li>
+          <li><strong>Stale policy.</strong> Segmentation that isn't maintained silently rots into either outages or quiet allow-all exceptions.</li>
+          <li><strong>Visibility gaps.</strong> You can only segment what you can see — asset discovery is a prerequisite.</li>
+        </ul>
+
+        <h2>Key takeaways</h2>
+
+        <ul>
+          <li>Segmentation = blast-radius containment; the point is to make lateral movement expensive.</li>
+          <li>North-south has always been inspected; east-west is the modern battle.</li>
+          <li>Micro-segment the crown jewels, observe before you enforce, and treat policy as code.</li>
+          <li>It is the direct defensive answer to the lateral-movement half of nearly every AD attack.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-02-zero-trust-architecture.html">Zero Trust Architecture in Practice</a></li>
+          <li><a href="2026-10-02-soc-detection-response.html">Building a SOC — Detection to Response</a></li>
+          <li><a href="<a href="2026-08-18-coercion-ntlm-relay.html">Coercion &amp; NTLM Relay</a>">Coercion &amp; NTLM Relay</a></li>
+          <li><a href="2026-10-02-security-stack-end-to-end.html">How Security Is Built End-to-End</a></li>
+          <li><a href="<a href="../ad-map.html">ad-map.html</a>">AD Attack-Path Map</a></li>
+          <li><a href="<a href="../web-map.html">web-map.html</a>">Web Pentest Checklist</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

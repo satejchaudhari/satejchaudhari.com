@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EDR/XDR — How Endpoint Detection Works — Satej Chaudhari</title>
+  <meta name="description" content="What endpoint detection &amp; response actually does under the hood — the sensor telemetry, behavioural analytics and cloud backend, response actions, the EDR/EPP/XDR/MDR distinctions, the detection surfaces attackers evade, and how it&#x27;s run at fleet scale.">
+
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="EDR/XDR — How Endpoint Detection Works">
+  <meta property="og:description" content="What endpoint detection &amp; response actually does under the hood — the sensor telemetry, behavioural analytics and cloud backend, response actions, the EDR/EPP/XDR/MDR distinctions, the detection surfaces attackers evade, and how it&#x27;s run at fleet scale.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-02-edr-xdr-endpoint-detection.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-02">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="EDR/XDR — How Endpoint Detection Works">
+  <meta name="twitter:description" content="What endpoint detection &amp; response actually does under the hood — the sensor telemetry, behavioural analytics and cloud backend, response actions, the EDR/EPP/XDR/MDR distinctions, the detection surfaces attackers evade, and how it&#x27;s run at fleet scale.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Blue Team</span>
+        <h1 class="post-title">EDR/XDR — How Endpoint Detection Works</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; 16 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>Endpoints are where users — and therefore attackers — actually land, so the endpoint agent is the defender's richest sensor and fastest kill-switch. <strong>EDR</strong> (Endpoint Detection &amp; Response) records what happens on a machine, detects malicious behaviour from it, and lets a responder isolate the host with one click. This page is how it works under the hood, and it is the direct counterpart to the <a href="2026-09-23-defense-evasion.html">Defense Evasion</a> and <a href="2026-09-23-in-memory-tradecraft.html">in-memory tradecraft</a> pages, which are about beating exactly this.</p>
+
+        <h2>How EDR works, end to end</h2>
+
+        <pre><code>  [ Endpoint ]
+    kernel + user-mode sensors collect:
+    - process creation + full command line
+    - file / registry writes
+    - network connections
+    - image/DLL loads, driver loads
+    - API/syscall + AMSI + ETW events
+         |
+         v  (stream telemetry)
+  [ EDR cloud backend ]
+    - behavioural analytics / ML / detection rules
+    - correlate into a process-tree &#x27;story&#x27;
+    - threat-intel + cross-machine context
+         |
+         v
+  [ Console / SOC ]  ---response---&gt;  isolate host, kill process,
+                                      quarantine file, collect forensics</code></pre>
+
+        <p>The key idea is <strong>behaviour over signatures</strong>. Classic antivirus asked &ldquo;does this file match known-bad?&rdquo; EDR asks &ldquo;does this <em>sequence of actions</em> look like an attack?&rdquo; — Word spawning PowerShell spawning a network connection that injects into another process is malicious regardless of file hashes. That process-tree reconstruction is what lets it catch novel and fileless attacks.</p>
+
+        <h2>The alphabet soup: EPP vs EDR vs XDR vs MDR</h2>
+
+        <table>
+          <thead><tr><th>Term</th><th>What it is</th></tr></thead>
+          <tbody>
+            <tr><td>EPP / NGAV</td><td>Endpoint Protection Platform / next-gen antivirus — prevention (block known &amp; ML-classified bad). The gate.</td></tr>
+            <tr><td>EDR</td><td>Detection &amp; response — records behaviour, detects, enables investigation and host isolation. The eyes + kill-switch.</td></tr>
+            <tr><td>XDR</td><td>Extended DR — correlates endpoint with identity, email, network, and cloud telemetry for one cross-domain story.</td></tr>
+            <tr><td>MDR</td><td>Managed DR — a vendor/MSSP operates the EDR/XDR and responds on your behalf (24&times;7 coverage without the headcount).</td></tr>
+          </tbody>
+        </table>
+
+        <p>Leading platforms: <strong>CrowdStrike Falcon</strong> (premium default), <strong>Microsoft Defender for Endpoint</strong> (compelling with E5 licensing), <strong>SentinelOne</strong>, <strong>Palo&nbsp;Alto Cortex XDR</strong>. Open-source/DFIR adjacents: <strong>Wazuh</strong>, <strong>osquery</strong>, and <strong>Velociraptor</strong> for hunting and forensics.</p>
+
+        <h2>The detection surfaces</h2>
+
+        <p>EDR watches several layers at once — and each is a surface attackers try to blind. These map directly to the evasion content on this site:</p>
+
+        <table>
+          <thead><tr><th>Surface</th><th>What EDR does</th><th>What attackers do</th></tr></thead>
+          <tbody>
+            <tr><td>Static</td><td>Hash/signature/ML on files on disk</td><td>Pack, obfuscate, or go fileless entirely</td></tr>
+            <tr><td>Behavioural</td><td>Process-tree &amp; action sequences</td><td>Live-off-the-land (LOLBins), mimic normal tools</td></tr>
+            <tr><td>In-memory</td><td>Scan for injected/unbacked executable memory</td><td>In-memory-only payloads, <a href="2026-09-23-in-memory-tradecraft.html">injection, module stomping</a></td></tr>
+            <tr><td>Userland hooks</td><td>Hook ntdll APIs to see calls</td><td>Unhook / direct syscalls to bypass the hooks</td></tr>
+            <tr><td>AMSI / ETW</td><td>In-process instrumentation of scripts &amp; runtime</td><td>Patch AMSI, blind ETW in-process</td></tr>
+            <tr><td>Kernel / driver</td><td>Protected sensor, tamper protection</td><td>BYOVD — bring a vulnerable driver to kill the sensor</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>This is an arms race, and that's the point of running <a href="2026-09-23-defense-evasion.html">Defense Evasion</a> and <a href="2026-09-23-windows-telemetry-logging.html">telemetry</a> as companion pages: the defender's job is to make evasion expensive and noisy, and to catch the <em>evasion itself</em> (an unhook, an AMSI patch, a driver load) as a high-fidelity signal.</blockquote>
+
+        <h2>Running EDR at fleet scale</h2>
+
+        <p>Buying EDR is easy; operating it across 150,000 endpoints is the hard part, and where real posture is won or lost:</p>
+
+        <ul>
+          <li><strong>Coverage &amp; agent health.</strong> An unmonitored 2% is thousands of blind endpoints — fleet health (install %, agents reporting, version drift) is its own ops discipline.</li>
+          <li><strong>Tamper protection.</strong> The agent must resist being disabled by an attacker who gains local admin.</li>
+          <li><strong>Performance.</strong> A heavy sensor on latency-sensitive systems (trading, DBs) gets exclusions — and exclusions are exactly what attackers hunt for.</li>
+          <li><strong>Tuning.</strong> Out of the box, EDR is noisy; detections are tuned to the environment or analysts drown (see <a href="2026-10-02-soc-detection-response.html">the SOC</a>).</li>
+          <li><strong>Single-vendor &amp; update risk.</strong> One agent on every machine is a systemic dependency — a bad sensor update can take the fleet down, so staged rollout rings matter.</li>
+        </ul>
+
+        <h2>Response &amp; integration</h2>
+
+        <p>EDR's &ldquo;R&rdquo; is what makes it more than a fancy AV: <strong>network-isolate</strong> a host (it can still talk to the EDR cloud, nothing else), <strong>kill</strong> a process, <strong>quarantine</strong> a file, and <strong>collect</strong> forensic artefacts remotely. In a mature shop these are driven by <a href="2026-10-02-soc-detection-response.html">SOAR playbooks</a> — an alert auto-isolates the host while a human investigates — and the telemetry feeds the <a href="2026-10-02-detection-engineering-attack.html">detection-engineering</a> loop and the XDR correlation across identity and cloud.</p>
+
+        <h2>Red team &harr; blue team</h2>
+
+        <p>Nearly every post-exploitation technique on this site is, from the defender's chair, an EDR detection problem: <a href="2026-09-23-command-and-control.html">C2 implants</a> must run code and call home (behaviour + network), <a href="2026-08-18-windows-credential-storage.html">LSASS dumping</a> (<a href="../vuln-detail.html?vuln=lsass-dumping">T1003.001</a>) is a hallmark EDR detection, and <a href="2026-09-23-in-memory-tradecraft.html">fileless tradecraft</a> exists specifically to dodge the static surface. Understanding what EDR sees is what tells an attacker — and a defender — where the real friction is.</p>
+
+        <h2>Key takeaways</h2>
+
+        <ul>
+          <li>EDR = behaviour-based endpoint telemetry + detection + remote response (isolate/kill/quarantine).</li>
+          <li>It detects the <em>sequence of actions</em>, which is why it catches novel and fileless attacks AV misses.</li>
+          <li>Know the surfaces (static, behavioural, memory, hooks, AMSI/ETW, kernel) — each is an evasion battleground.</li>
+          <li>At scale the challenge is coverage, tamper protection, tuning, and single-vendor/update risk.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="<a href="2026-09-23-defense-evasion.html">Windows Defense Evasion</a>">Windows Defense Evasion — AV, EDR &amp; ASR</a></li>
+          <li><a href="<a href="2026-09-23-in-memory-tradecraft.html">In-Memory Tradecraft</a>">In-Memory Post-Exploitation Tradecraft</a></li>
+          <li><a href="<a href="2026-09-23-windows-telemetry-logging.html">Windows Telemetry &amp; Logging</a>">Windows Telemetry &amp; Logging</a></li>
+          <li><a href="2026-10-02-detection-engineering-attack.html">Detection Engineering with MITRE ATT&amp;CK</a></li>
+          <li><a href="2026-10-02-soc-detection-response.html">Building a SOC — Detection to Response</a></li>
+          <li><a href="2026-10-02-zero-trust-architecture.html">Zero Trust Architecture in Practice</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Building a SOC — Detection to Response — Satej Chaudhari</title>
+  <meta name="description" content="How a Security Operations Centre is built and run end to end — telemetry sources, the log pipeline and tiering, SIEM and detection content, UEBA and threat intel, SOAR automation, the Tier 1/2/3 analyst workflow, the incident-response lifecycle, and the metrics that matter.">
+
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Building a SOC — Detection to Response">
+  <meta property="og:description" content="How a Security Operations Centre is built and run end to end — telemetry sources, the log pipeline and tiering, SIEM and detection content, UEBA and threat intel, SOAR automation, the Tier 1/2/3 analyst workflow, the incident-response lifecycle, and the metrics that matter.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-02-soc-detection-response.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-02">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Building a SOC — Detection to Response">
+  <meta name="twitter:description" content="How a Security Operations Centre is built and run end to end — telemetry sources, the log pipeline and tiering, SIEM and detection content, UEBA and threat intel, SOAR automation, the Tier 1/2/3 analyst workflow, the incident-response lifecycle, and the metrics that matter.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Blue Team</span>
+        <h1 class="post-title">Building a SOC — Detection to Response</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; 17 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>&ldquo;Assume breach&rdquo; is only a strategy if you can actually <em>see</em> the breach. The Security Operations Centre is the function that turns an estate's torrent of telemetry into a small number of investigated, contained incidents. It is <strong>people + process + a data pipeline</strong>, run continuously — and its quality is mostly the quality of its detection content, not the brand on the SIEM.</p>
+
+        <p>This page walks the SOC end to end, from a raw event on an endpoint to a contained incident and the lesson that improves the next detection. It is where the <a href="2026-09-23-command-and-control.html">C2</a> and <a href="2026-09-23-defense-evasion.html">evasion</a> tradecraft elsewhere on this site is meant to be caught.</p>
+
+        <h2>The detection-to-response pipeline</h2>
+
+        <pre><code>  SOURCES          PIPELINE             BRAIN              ACTION
+  -------          --------             -----              ------
+  Endpoint/EDR \
+  Network/NDR   \   collect +           SIEM (hot)          Tier 1 triage
+  Identity      +-&gt; normalise  -----&gt;   + detections  ---&gt;  Tier 2 investigate
+  Cloud         /   (Cribl/              mapped to ATT&amp;CK    Tier 3 hunt / IR
+  App/DB       /    forwarders)          UEBA + threat intel     |
+                     |                       |                   v
+                     v                       +-------------&gt;  SOAR playbook:
+                 Data lake (cold)                            enrich -&gt; contain
+                 retention + search                          (isolate host,
+                                                              disable account)
+                                                                   |
+                                                                   v
+                                           NIST IR: contain -&gt; eradicate -&gt;
+                                           recover -&gt; lessons learned</code></pre>
+
+        <h2>1. Telemetry — what gets collected</h2>
+
+        <table>
+          <thead><tr><th>Source</th><th>What it tells you</th><th>Examples</th></tr></thead>
+          <tbody>
+            <tr><td>Endpoint</td><td><a href="2026-10-02-edr-xdr-endpoint-detection.html">EDR</a>, process/file/registry, Sysmon</td><td>process trees, <a href="2026-09-23-in-memory-tradecraft.html">injection</a>, persistence</td></tr>
+            <tr><td>Network</td><td>NGFW, proxy, <a href="2026-09-23-command-and-control.html">DNS, NDR</a>, flow</td><td>beaconing, lateral movement, exfil</td></tr>
+            <tr><td>Identity</td><td>AD/Entra sign-ins, PAM, <a href="2026-09-23-windows-telemetry-logging.html">auth logs</a></td><td>anomalous logons, <a href="2026-08-18-kerberoasting.html">kerberoasting</a>, impossible travel</td></tr>
+            <tr><td>Cloud</td><td>CloudTrail, Azure Activity, GuardDuty</td><td>IAM changes, resource abuse</td></tr>
+            <tr><td>App / data</td><td>WAF, DAM, app logs</td><td>injection, sensitive-data access</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>The hardest, least glamorous SOC problem is visibility: you cannot detect what you do not collect. A detection idea is worthless if the data source isn't onboarded — see <a href="2026-09-23-windows-telemetry-logging.html">Windows telemetry &amp; logging</a> for what to turn on and why.</blockquote>
+
+        <h2>2. The log pipeline &amp; tiering</h2>
+
+        <p>At enterprise scale this is <strong>hundreds of thousands of events per second and tens of terabytes per day</strong>, so you cannot keep everything hot in a premium SIEM. The pipeline <strong>tiers</strong> the data:</p>
+
+        <ul>
+          <li><strong>Hot tier</strong> — high-value, detection-relevant logs in the SIEM for real-time correlation, short retention.</li>
+          <li><strong>Cold / data-lake tier</strong> — the bulk routed cheaply (Cribl, object storage) for compliance retention and search-on-demand.</li>
+          <li><strong>Normalisation at ingest</strong> — structured, relevant data into the SIEM, not raw firehose; this is where most SIEM cost is won or lost.</li>
+        </ul>
+
+        <h2>3. The brain — SIEM, detections, UEBA, threat intel</h2>
+
+        <ul>
+          <li><strong>SIEM</strong> (Splunk ES, Microsoft Sentinel, Google SecOps, Elastic) correlates everything and raises alerts.</li>
+          <li><strong>Detection content</strong> is the heart — written and tuned as code, mapped to <a href="2026-10-02-detection-engineering-attack.html">MITRE ATT&amp;CK</a> (its own page).</li>
+          <li><strong>UEBA</strong> baselines normal and flags the anomalous (a service account suddenly interactive) — catching credential abuse that signatures miss.</li>
+          <li><strong>Threat intelligence</strong> enriches alerts with context (is this IP/hash/TTP known-bad, who uses it) and drives proactive blocking and hunting.</li>
+        </ul>
+
+        <h2>4. SOAR — automation is mandatory, not optional</h2>
+
+        <p>With default rule-sets producing roughly <strong>70% false positives</strong> at around <strong>15 minutes of triage each</strong>, you cannot hire your way out of the volume. <strong>SOAR</strong> (Palo&nbsp;Alto XSOAR, Splunk SOAR, Tines, Torq) runs playbooks that auto-enrich an alert, auto-contain (isolate host, disable account), and auto-close known noise — so analysts spend time on judgement, not toil.</p>
+
+        <h2>5. The analyst workflow</h2>
+
+        <table>
+          <thead><tr><th>Tier</th><th>Role</th><th>Typical SLA / focus</th></tr></thead>
+          <tbody>
+            <tr><td>Tier 1</td><td>Triage — validate &amp; prioritise alerts, close known FPs, escalate real ones</td><td>Acknowledge P1 in minutes; high throughput</td></tr>
+            <tr><td>Tier 2</td><td>Investigation — scope across tools, pivot through telemetry, contain, eradicate</td><td>Hours; owns the incident</td></tr>
+            <tr><td>Tier 3</td><td>Threat hunting &amp; IR — hypothesis-driven hunts, forensics, major-incident lead</td><td>Proactive; deepest skill</td></tr>
+          </tbody>
+        </table>
+
+        <p>A <strong>follow-the-sun</strong> model (regional SOCs hand off around the clock) gives 24&times;7 coverage; an <strong>MDR/MSSP</strong> augments for surge and after-hours. You staff for the median and burst to the partner for the peak.</p>
+
+        <h2>6. Incident response lifecycle</h2>
+
+        <p>Confirmed incidents follow the <a href="https://csrc.nist.gov/pubs/sp/800/61/r2/final" target="_blank" rel="noopener">NIST SP&nbsp;800-61</a> lifecycle:</p>
+
+        <ol>
+          <li><strong>Preparation</strong> — tooling, runbooks, retainers, and rehearsals <em>before</em> the event.</li>
+          <li><strong>Detection &amp; analysis</strong> — confirm, scope, and classify.</li>
+          <li><strong>Containment</strong> — stop the spread (isolate, disable), short- and long-term.</li>
+          <li><strong>Eradication</strong> — remove the foothold, persistence, and root cause.</li>
+          <li><strong>Recovery</strong> — restore cleanly, monitor for re-infection.</li>
+          <li><strong>Lessons learned</strong> — feed the gaps back into detections and controls (the loop that makes the SOC better).</li>
+        </ol>
+
+        <h2>7. The metrics that matter</h2>
+
+        <table>
+          <thead><tr><th>Metric</th><th>What it measures</th></tr></thead>
+          <tbody>
+            <tr><td>MTTD</td><td>Mean time to detect — how long an attacker dwells unseen</td></tr>
+            <tr><td>MTTR</td><td>Mean time to respond/contain — how fast you stop the bleed</td></tr>
+            <tr><td>Dwell time</td><td>Total intruder-present time; the headline risk number</td></tr>
+            <tr><td>Detection coverage</td><td>% of relevant ATT&amp;CK techniques with a tested detection</td></tr>
+            <tr><td>False-positive rate</td><td>Alert quality; drives analyst burnout and automation need</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote>Beware vanity metrics. &ldquo;10 million events blocked&rdquo; says nothing; MTTD/MTTR, dwell time, and ATT&amp;CK coverage are the leading indicators of whether the SOC actually reduces risk.</blockquote>
+
+        <h2>Red team &harr; blue team</h2>
+
+        <p>The SOC is the function that catches what the offensive pages do: <a href="2026-09-23-command-and-control.html">C2 beaconing</a> shows up as periodic egress to a rare destination; <a href="2026-09-23-defense-evasion.html">evasion</a> is an arms race against the <a href="2026-10-02-edr-xdr-endpoint-detection.html">EDR</a> and <a href="2026-09-23-windows-telemetry-logging.html">logging</a> sources above; <a href="2026-08-18-dcsync.html">DCSync</a> is directory-replication from a non-DC. Every attack technique has a detection opportunity — building those is <a href="2026-10-02-detection-engineering-attack.html">detection engineering</a>.</p>
+
+        <h2>Key takeaways</h2>
+
+        <ul>
+          <li>The SOC is a pipeline: sources &rarr; tiered logging &rarr; SIEM/detection/UEBA/TI &rarr; SOAR &rarr; tiered analysts &rarr; IR &rarr; lessons learned.</li>
+          <li>Visibility is the hard part — you can't detect what you don't collect.</li>
+          <li>Automation (SOAR) is mandatory at scale, not a luxury.</li>
+          <li>Measure MTTD/MTTR, dwell time, and ATT&amp;CK coverage — not blocked-event counts.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-02-detection-engineering-attack.html">Detection Engineering with MITRE ATT&amp;CK</a></li>
+          <li><a href="2026-10-02-edr-xdr-endpoint-detection.html">EDR/XDR — How Endpoint Detection Works</a></li>
+          <li><a href="<a href="2026-09-23-windows-telemetry-logging.html">Windows Telemetry &amp; Logging</a>">Windows Telemetry &amp; Logging</a></li>
+          <li><a href="<a href="2026-09-23-command-and-control.html">Command &amp; Control (C2)</a>">Command &amp; Control (C2)</a></li>
+          <li><a href="2026-10-02-security-stack-end-to-end.html">How Security Is Built End-to-End</a></li>
+          <li><a href="<a href="../writeups.html">writeups.html</a>">Writeups (incl. the Suricata IDS lab)</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>
