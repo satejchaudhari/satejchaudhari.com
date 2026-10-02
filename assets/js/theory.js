@@ -25,7 +25,7 @@ var THEORY = [
     date: "2026-10-02",
     tag: "AD",
     description: "The defensive mirror of the AD attack map — why AD is the crown jewel, tiering / the Enterprise Access Model, and a hardening playbook mapping each attack (credential theft, relay, roasting, delegation, ACL/GPO abuse, ticket forgery, fast-path CVEs) to the control that stops it.",
-    readTime: "19 min read"
+    readTime: "10 min read"
   },
   {
     title: "Privileged Access & the Enterprise Access Model",
@@ -33,7 +33,7 @@ var THEORY = [
     date: "2026-10-02",
     tag: "AD",
     description: "How privileged access is designed to survive credential theft — the problem of standing admin and reuse, the Enterprise Access Model (Control/Management/Data planes), PAWs, PAM with just-in-time elevation, and how it breaks the AD attack chain.",
-    readTime: "17 min read"
+    readTime: "8 min read"
   },
   {
     title: "Zero Trust Architecture in Practice",
@@ -41,7 +41,7 @@ var THEORY = [
     date: "2026-10-02",
     tag: "Blue Team",
     description: "What Zero Trust actually means beyond the buzzword — NIST 800-207's tenets and the PDP/PEP model, the CISA pillars and maturity stages, what it looks like per domain, how to migrate to it, and the attack paths it breaks.",
-    readTime: "16 min read"
+    readTime: "9 min read"
   },
   {
     title: "Network Segmentation & Micro-segmentation",
@@ -49,7 +49,7 @@ var THEORY = [
     date: "2026-10-02",
     tag: "Blue Team",
     description: "How defenders carve a network to limit blast radius — zones, VLANs, north-south vs east-west, the micro-segmentation approaches and vendors, how to roll it out without outages, PCI scope reduction, and how it breaks lateral movement.",
-    readTime: "15 min read"
+    readTime: "8 min read"
   },
   {
     title: "Building a SOC — Detection to Response",
@@ -57,7 +57,7 @@ var THEORY = [
     date: "2026-10-02",
     tag: "Blue Team",
     description: "How a Security Operations Centre is built and run end to end — telemetry sources, the log pipeline and tiering, SIEM and detection content, UEBA and threat intel, SOAR, the Tier 1/2/3 workflow, the IR lifecycle, and the metrics that matter.",
-    readTime: "17 min read"
+    readTime: "9 min read"
   },
   {
     title: "Detection Engineering with MITRE ATT&CK",
@@ -65,7 +65,7 @@ var THEORY = [
     date: "2026-10-02",
     tag: "Blue Team",
     description: "Detection as an engineering discipline — the ATT&CK matrix as a coverage map, the detection lifecycle, the Pyramid of Pain, detections-as-code with Sigma, mapping the site's own attacks to detections, and validating with purple teaming and BAS.",
-    readTime: "16 min read"
+    readTime: "9 min read"
   },
   {
     title: "EDR/XDR — How Endpoint Detection Works",
@@ -73,7 +73,7 @@ var THEORY = [
     date: "2026-10-02",
     tag: "Blue Team",
     description: "What endpoint detection & response does under the hood — sensor telemetry, behavioural analytics and the cloud backend, response actions, the EDR/EPP/XDR/MDR distinctions, the detection surfaces attackers evade, and running it at fleet scale.",
-    readTime: "16 min read"
+    readTime: "8 min read"
   },
   {
     title: "How Security Is Built End-to-End in a Large High-Stakes Environment",
