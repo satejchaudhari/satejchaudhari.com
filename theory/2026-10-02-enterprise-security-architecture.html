@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>How Enterprise Security Is Built — Satej Chaudhari</title>
-  <meta name="description" content="How security is actually architected in a large, high-stakes organisation — the control model, governance, identity, network segmentation, endpoint, the SOC, data, cloud and app security, resilience, and the hard design trade-offs — with the tooling landscape mapped to each layer.">
+  <title>Architecting Security for a 100,000-User Enterprise — Satej Chaudhari</title>
+  <meta name="description" content="A security architect's blueprint for a 100,000+ user, multi-site, PII-regulated enterprise — scenario and constraints, the Zero-Trust pillar model, identity and the Enterprise Access Model, network segmentation at scale, data residency, the SOC's log-volume math, resilience, the decision register of hard trade-offs, and a maturity roadmap.">
 
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
-  <meta property="og:title" content="How Enterprise Security Is Built">
-  <meta property="og:description" content="How security is actually architected in a large, high-stakes organisation — the control model, governance, identity, network segmentation, endpoint, the SOC, data, cloud and app security, resilience, and the hard design trade-offs — with the tooling landscape mapped to each layer.">
+  <meta property="og:title" content="Architecting Security for a 100,000-User Enterprise">
+  <meta property="og:description" content="A security architect's blueprint for a 100,000+ user, multi-site, PII-regulated enterprise — Zero-Trust pillars, the Enterprise Access Model, segmentation at scale, data residency, the SOC's log-volume math, resilience, and the decision register of hard trade-offs.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-02-enterprise-security-architecture.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-02">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="How Enterprise Security Is Built">
-  <meta name="twitter:description" content="How security is actually architected in a large, high-stakes organisation — the control model, governance, identity, network segmentation, endpoint, the SOC, data, cloud and app security, resilience, and the hard design trade-offs.">
+  <meta name="twitter:title" content="Architecting Security for a 100,000-User Enterprise">
+  <meta name="twitter:description" content="A security architect's blueprint for a 100,000+ user, multi-site, PII-regulated enterprise — Zero-Trust pillars, the Enterprise Access Model, segmentation at scale, data residency, the SOC's log-volume math, and the hard trade-offs.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -70,444 +70,479 @@
     <article>
       <header class="post-header">
         <span class="tag">Blue Team</span>
-        <h1 class="post-title">How Enterprise Security Is Built</h1>
+        <h1 class="post-title">Architecting Security for a 100,000-User Enterprise</h1>
         <p class="post-meta">
           <time datetime="2026-10-02">2026-10-02</time>
-          <span>&middot; 24 min read</span>
+          <span>&middot; 34 min read</span>
         </p>
       </header>
 
       <div class="post-body">
 
         <p>
-          Most of this site looks at security from the attacker's side — a single vulnerability, a
-          single technique, a single box. This page zooms all the way out and asks the opposite
-          question: <strong>how is a large, high-stakes organisation actually defended?</strong>
-          What does the whole machine look like — the layers, the tooling, and above all the
-          <em>decisions</em> (especially networking decisions) that a bank, a hospital, or a
-          government department makes when being breached is measured in lives, money, or national
-          impact.
+          This is a security architect's walkthrough of how you actually defend a very large,
+          high-stakes organisation — not a list of products, but the reasoning: the scenario and its
+          constraints, the reference models the design hangs on, and the <em>decisions</em> (above
+          all the networking and identity decisions) you make when you are responsible for 100,000+
+          people, their devices, and the regulated personal data they handle across many countries.
         </p>
         <p>
-          The short version: security is not a product you buy, it is a <strong>system you
-          engineer</strong>. It is a stack of overlapping controls, governed by risk, built on an
-          identity and network fabric, watched continuously, and designed from the start to survive
-          failure. The sections below walk that stack from the top (governance) to the ground
-          (the network and endpoint), then look at the hard trade-offs that define real high-stakes
-          designs.
+          To keep it concrete, everything below is designed for one fictional organisation,
+          <strong>Meridian Group</strong>. The numbers are illustrative but realistic — they're the
+          order of magnitude that changes <em>what the right answer is</em>. At this scale, the hard
+          part is rarely knowing the control exists; it is making it work across hundreds of
+          thousands of objects, dozens of jurisdictions, and an operating budget that cannot buy
+          its way out of every risk.
         </p>
 
-        <blockquote>
-          Two ideas run through everything here. <strong>Defense in depth</strong>: never trust a
-          single control, because every control fails eventually — layer them so an attacker has to
-          defeat many. <strong>Assume breach</strong>: design as though the attacker is already
-          inside, which is what turns a hard shell into a resilient, segmented, monitored interior.
-        </blockquote>
-
-        <h2>1. The mental model: controls, layers, and trust</h2>
-        <p>
-          Before any tool, there is a model. Security controls are usually described in two
-          dimensions, and a mature programme deliberately covers every cell of the grid rather than
-          over-investing in one.
-        </p>
+        <h2>1. The brief: the environment we're defending</h2>
         <table>
-          <thead><tr><th>By function &rarr;<br>By type &darr;</th><th>Preventive (stop it)</th><th>Detective (see it)</th><th>Responsive / corrective (fix it)</th></tr></thead>
+          <thead><tr><th>Dimension</th><th>Meridian Group (illustrative)</th></tr></thead>
           <tbody>
-            <tr><td><strong>Administrative</strong> (people &amp; process)</td><td>Policy, standards, training, least privilege</td><td>Access reviews, audit, risk assessments</td><td>Incident response plan, DR runbooks</td></tr>
-            <tr><td><strong>Technical</strong> (the stack)</td><td>Firewalls, MFA, encryption, allowlisting</td><td>EDR, SIEM, IDS, UEBA</td><td>SOAR auto-isolation, backups, patching</td></tr>
-            <tr><td><strong>Physical</strong></td><td>Badges, locks, guards, mantraps</td><td>CCTV, door sensors</td><td>Fire suppression, site failover</td></tr>
+            <tr><td>Workforce</td><td>~120,000 employees + ~25,000 contractors/partners &rarr; <strong>&gt;140,000 identities</strong></td></tr>
+            <tr><td>Endpoints</td><td>~150,000 managed (Windows, macOS, mobile) + BYOD</td></tr>
+            <tr><td>Servers / workloads</td><td>~12,000 VMs &amp; hosts on-prem + tens of thousands of cloud workloads &amp; containers</td></tr>
+            <tr><td>Footprint</td><td>4 regional data centres, Azure + AWS (multi-cloud), offices in 40+ countries</td></tr>
+            <tr><td>Data</td><td>Customer &amp; employee <strong>PII</strong>, payment-card data (PCI), some health data, financial records, IP</td></tr>
+            <tr><td>Regulatory</td><td>GDPR (EU), India DPDP, US state privacy + HIPAA (one unit), PCI&nbsp;DSS, SOX, sector regulators</td></tr>
+            <tr><td>Identity estate</td><td>Hybrid: on-prem Active Directory + Microsoft Entra ID, plus SaaS federation</td></tr>
+            <tr><td>Business reality</td><td>Growth by acquisition (frequent M&amp;A), legacy &amp; OT in some sites, 24&times;7 operations, mergers add unknown estates overnight</td></tr>
           </tbody>
         </table>
         <p>
-          Layered on top of this is a shift in <em>architecture philosophy</em>. The old model was
-          <strong>perimeter security</strong>: a hard outer wall (the firewall) and a soft,
-          trusted interior. That model is dead in a modern enterprise — remote work, cloud, SaaS,
-          and contractors mean there is no clean &ldquo;inside.&rdquo; The replacement is
-          <strong>Zero Trust</strong>: <em>never trust, always verify</em>. Every request — user,
-          device, service — is authenticated, authorised, and encrypted based on identity and
-          device posture, regardless of network location. Everything that follows is, in effect,
-          an implementation of those two ideas.
+          Those facts are the architecture's actual inputs. Scale (100k+) kills anything that
+          depends on manual effort per object. Multi-jurisdiction turns &ldquo;encrypt the
+          data&rdquo; into &ldquo;encrypt it <em>and</em> keep EU data in the EU and prove it.&rdquo;
+          M&amp;A means the estate is never fully known. The architect's job is to make choices that
+          survive all three.
         </p>
-
-        <h2>2. Governance: the layer above the tools</h2>
-        <p>
-          In a high-stakes environment the first thing that exists is not a firewall — it is a
-          <strong>risk and governance function</strong> that decides what matters and why. Tools
-          without this produce noise; governance is what turns spending into risk reduction.
-        </p>
-        <ul>
-          <li><strong>Frameworks.</strong> The programme is anchored to one or more standards:
-            <strong>NIST Cybersecurity Framework</strong> (Identify, Protect, Detect, Respond,
-            Recover — the mental spine of this whole page), <strong>ISO/IEC 27001</strong> (a
-            certifiable management system), the <strong>CIS Critical Security Controls</strong> (a
-            prioritised, concrete to-do list), and <strong>MITRE ATT&amp;CK</strong> (a catalogue
-            of real adversary techniques used to measure detection coverage).</li>
-          <li><strong>Risk management.</strong> Threats are enumerated, impact and likelihood are
-            scored, and controls are chosen to reduce risk to an accepted level. Not everything can
-            be fixed; the job is to spend finite budget where it buys the most risk reduction —
-            tied back to the <a href="2026-07-04-cia-triad.html">CIA triad</a> (what are we
-            protecting: confidentiality, integrity, or availability?).</li>
-          <li><strong>Compliance.</strong> High-stakes sectors inherit hard requirements — PCI&nbsp;DSS
-            (cards), HIPAA (health), SOX (financial reporting), GDPR/DPDP (privacy), and sector
-            regulators. Compliance is a floor, not a ceiling: it forces a baseline but never equals
-            being secure.</li>
-          <li><strong>Policy &amp; standards.</strong> Written rules (acceptable use, access
-            control, encryption, data classification) that make expectations enforceable and
-            auditable — the administrative-preventive column above.</li>
-        </ul>
-
-        <h2>3. Identity: the real perimeter</h2>
-        <p>
-          In a Zero-Trust world, <strong>identity is the new perimeter</strong>. If the network is
-          no longer a trust boundary, then <em>who you are</em> and <em>what device you're on</em>
-          become the primary gate. This is also where the overwhelming majority of real breaches
-          begin — phished credentials, a reused password, an over-privileged account — so it gets
-          disproportionate investment.
-        </p>
-        <ul>
-          <li><strong>Central identity provider (IdP).</strong> One authoritative source of
-            identity and single sign-on — Microsoft Entra ID (Azure AD), Okta, Ping. Consolidating
-            auth means one place to enforce policy and one place to cut access off.</li>
-          <li><strong>Phishing-resistant MFA.</strong> Multi-factor everywhere, moving from SMS/OTP
-            (phishable) to FIDO2 security keys and passkeys (bound to the origin, so they can't be
-            relayed). This single control stops most credential-based intrusions.</li>
-          <li><strong>Least privilege &amp; RBAC/ABAC.</strong> People get the minimum access their
-            role needs, granted by role or attributes rather than one-by-one, and reviewed
-            regularly through an identity-governance (IGA) process that also handles joiners,
-            movers, and leavers.</li>
-          <li><strong>Privileged Access Management (PAM).</strong> Admin accounts are the crown
-            jewels, so they are vaulted (CyberArk, Delinea), checked out <strong>just-in-time</strong>
-            for a task, time-boxed, and fully recorded. Standing admin rights are minimised.</li>
-          <li><strong>Tiered administration.</strong> In an Active Directory estate this is the
-            single most important design choice: admin accounts and the machines they log into are
-            split into tiers (Tier&nbsp;0 = domain controllers and identity, Tier&nbsp;1 = servers,
-            Tier&nbsp;2 = workstations), and credentials are never allowed to flow <em>down</em> a
-            tier. It exists specifically to stop the lateral-movement and credential-theft paths
-            that most of the <a href="2026-08-18-ad-fundamentals.html">Active Directory</a> content
-            on this site exploits — things like
-            <a href="2026-08-18-windows-credential-storage.html">LSASS credential theft</a> and
-            <a href="2026-08-18-coercion-ntlm-relay.html">coercion &amp; relay</a>.</li>
-          <li><strong>Conditional access.</strong> The policy engine that ties it together: allow
-            this identity to reach this app only from a compliant, managed device, from an expected
-            location, at an acceptable risk score — otherwise step up auth or block.</li>
-        </ul>
         <blockquote>
-          If you only had budget for one thing in a modern enterprise, you would spend it here:
-          strong identity, phishing-resistant MFA, least privilege, and AD tiering collapse the
-          attack surface more than any network appliance.
+          The non-negotiable design stance at this scale: <strong>assume breach</strong> (someone is
+          already inside — design the interior accordingly), <strong>Zero Trust</strong> (never trust
+          by network location; verify identity and device posture every time — per
+          <a href="https://csrc.nist.gov/pubs/sp/800/207/final" target="_blank" rel="noopener">NIST SP&nbsp;800-207</a>),
+          and <strong>defense in depth</strong> (no single control is load-bearing). Everything else
+          is implementation detail of these three.
         </blockquote>
 
-        <h2>4. Network architecture &amp; segmentation</h2>
+        <h2>2. The reference models the design hangs on</h2>
         <p>
-          This is where the hard <strong>networking decisions</strong> live — and in a high-stakes
-          environment they are made deliberately, not by accident of how the network grew. The
-          guiding principle is <strong>segmentation</strong>: carve the network into zones so that a
-          compromise in one does not become a compromise of everything (limiting
-          <em>blast radius</em>). The depth of that segmentation is the single biggest
-          architecture trade-off on the network side.
+          A programme this size is not invented from scratch; it is assembled from established
+          models so it is defensible to auditors, boards, and regulators, and so new architects can
+          read it. The ones that actually shape the drawings:
         </p>
-        <h3>Zoning and the macro layout</h3>
         <ul>
-          <li><strong>Security zones.</strong> Classic tiers — untrusted internet &rarr; DMZ
-            (internet-facing services) &rarr; internal &rarr; restricted/secure enclaves (card data,
-            PII, OT/ICS, domain controllers). Traffic between zones is forced through inspection
-            points; the most sensitive zones are the most isolated.</li>
-          <li><strong>Segmentation vs. micro-segmentation.</strong> Coarse segmentation uses VLANs
-            and firewall rules between subnets. <strong>Micro-segmentation</strong> (Illumio,
-            Guardicore, NSX, or cloud security groups) pushes policy down to the individual
-            workload, controlling <em>east-west</em> (server-to-server) traffic so a foothold on one
-            host can't freely talk to its neighbours. East-west control is what most attackers rely
-            on and what most legacy networks lack.</li>
-          <li><strong>Next-generation firewalls (NGFW).</strong> Palo Alto, Fortinet, Cisco — not
-            just port/IP rules but application-aware, user-aware, TLS-inspecting policy enforcement
-            at zone boundaries.</li>
-          <li><strong>Network Access Control (NAC).</strong> 802.1X / Cisco ISE decides what a
-            device may reach the moment it plugs in, based on identity and posture — an unmanaged
-            laptop lands in a quarantine VLAN, not on the server segment.</li>
+          <li><strong>NIST CSF 2.0</strong> — the organising spine (Govern, Identify, Protect,
+            Detect, Respond, Recover). Every programme area maps to a function.</li>
+          <li><strong>CISA Zero Trust Maturity Model v2</strong> — the structure this page follows:
+            five pillars — <strong>Identity, Devices, Networks, Applications &amp; Workloads,
+            Data</strong> — over three cross-cutting capabilities (<strong>Visibility &amp;
+            Analytics, Automation &amp; Orchestration, Governance</strong>), scored across four
+            stages (Traditional &rarr; Initial &rarr; Advanced &rarr; Optimal). It gives the
+            roadmap a shared language of &ldquo;how mature is each pillar.&rdquo;</li>
+          <li><strong>Microsoft Enterprise Access Model</strong> — the modern privileged-access
+            design (Control / Management / Data-&amp;-Workload planes) that supersedes the legacy
+            Tier&nbsp;0/1/2 model and the old ESAE &ldquo;Red Forest.&rdquo; Central to a hybrid AD
+            + Entra estate.</li>
+          <li><strong>ISO/IEC 27001</strong> for the certifiable management system,
+            <strong>CIS Controls v8</strong> for a prioritised implementation checklist, and
+            <strong>MITRE ATT&amp;CK</strong> to measure detection coverage against real adversary
+            behaviour.</li>
+          <li><strong>SABSA / TOGAF</strong> for the business-driven architecture method — every
+            control traces up to a business requirement and down to an implementation, so spend is
+            justifiable.</li>
+          <li><strong>Cloud shared-responsibility</strong> models — the dividing line of who secures
+            what in Azure/AWS, which is itself a design artefact at this scale.</li>
         </ul>
-        <h3>The modern, de-perimeterised layer</h3>
+        <p>
+          The rest of this page is organised by the five Zero-Trust pillars, then the three
+          cross-cutting capabilities, then resilience, then the decision register and roadmap — the
+          same order an architect briefs the design.
+        </p>
+
+        <h2>3. Pillar 1 — Identity (the real perimeter at 140,000 accounts)</h2>
+        <p>
+          With no network perimeter to trust, identity is the primary control plane — and it is also
+          where almost every real breach of an org this size begins. At 140,000 identities the
+          problems are <em>lifecycle</em> and <em>privilege</em>, not login screens.
+        </p>
+        <h3>Identity fabric</h3>
         <ul>
-          <li><strong>ZTNA over VPN.</strong> Zero-Trust Network Access replaces the old
-            &ldquo;connect to the VPN and you're on the LAN&rdquo; model with per-application,
-            identity-brokered access — users reach only the specific apps they're entitled to, never
-            the whole network.</li>
-          <li><strong>SASE / SD-WAN.</strong> Secure Access Service Edge converges networking and
-            security in the cloud (SWG + CASB + ZTNA + FWaaS), so a branch office or a remote user
-            gets the same policy and inspection wherever they are.</li>
-          <li><strong>Secure web gateway &amp; proxies.</strong> All outbound web traffic flows
-            through a proxy that enforces category/URL policy, inspects TLS, and blocks known-bad
-            destinations.</li>
-          <li><strong>DNS security &amp; egress filtering.</strong> DNS is both a chokepoint and a
-            favourite exfiltration/C2 channel, so enterprises monitor and filter it (Cisco
-            Umbrella, Protective DNS) and <strong>default-deny egress</strong> — outbound
-            connections are allowlisted, which strangles
-            <a href="2026-09-23-command-and-control.html">command-and-control</a> and data theft.
-            A tightly controlled egress is one of the most under-rated defensive wins.</li>
-          <li><strong>Encryption in transit everywhere.</strong> TLS internally as well as
-            externally, so sniffing a segment yields nothing — and so that relay attacks lose their
-            cleartext.</li>
+          <li><strong>One authoritative IdP</strong> (Entra ID) fronting SSO for thousands of apps,
+            with on-prem AD synchronised for legacy. Consolidation means one policy engine and one
+            kill-switch — critical when you must disable a compromised account across 2,000 SaaS
+            apps at once.</li>
+          <li><strong>Phishing-resistant MFA</strong> as the default, not an add-on: FIDO2 /
+            passkeys bound to the origin so credentials can't be relayed or replayed. SMS/OTP is
+            retired. This single move removes the majority of credential-based intrusions.</li>
+          <li><strong>Conditional Access</strong> as the real policy surface: allow this identity to
+            this app only from a compliant, managed, low-risk device and expected location —
+            otherwise step-up or block. Device compliance (from the endpoint pillar) is an input
+            here, which is what ties identity and device together.</li>
+          <li><strong>Identity Governance (IGA)</strong> is the control that scale <em>demands</em>:
+            automated joiner/mover/leaver from the HR system of record, access certifications,
+            and role mining (SailPoint/Saviynt). Manual provisioning does not exist at 140k; orphaned
+            and over-entitled accounts are the slow leak that IGA plugs.</li>
+          <li><strong>External identity (B2B)</strong> for the 25k contractors/partners — scoped,
+            time-boxed, sponsored, and auto-expired, kept distinct from employee identity.</li>
+          <li><strong>Workload &amp; service identity</strong> — managed identities and short-lived
+            tokens instead of static service-account passwords; secrets in a vault (HashiCorp Vault /
+            cloud secret stores), never in code. Stale service accounts with
+            <a href="2026-08-18-kerberoasting.html">kerberoastable</a> passwords are a classic way
+            these estates fall.</li>
         </ul>
+        <h3>Privileged access — the Enterprise Access Model</h3>
+        <p>
+          The crown jewels are the accounts that control the estate, so they get their own
+          architecture. Meridian implements the <strong>Enterprise Access Model</strong>: assets are
+          classified into the <strong>Control plane</strong> (identity and infrastructure control —
+          domain controllers, Entra global admin, Azure root management groups,
+          <a href="2026-08-18-adcs.html">AD CS</a>), the <strong>Management plane</strong> (server and
+          workload administration), and the <strong>Data/Workload plane</strong> (the apps and data
+          themselves). The rule that makes it work: <strong>a higher-plane credential never
+          authenticates to a lower-plane, internet-exposed asset</strong>, because that is exactly
+          the path that turns one phished laptop into Domain Admin.
+        </p>
+        <ul>
+          <li><strong>Privileged Access Workstations (PAWs)</strong> — dedicated, hardened,
+            separately-managed devices for Control-plane admin. The population is small (typically
+            5–15 true Tier-0 admins even at this size), so PAWs are affordable for the highest
+            tier and expand outward from there.</li>
+          <li><strong>PAM with just-in-time elevation</strong> (CyberArk/Entra PIM): no standing
+            admin rights; access is requested, approved, time-boxed, and session-recorded. This
+            collapses the window in which a stolen admin token is useful.</li>
+          <li><strong>Tiered/plane isolation enforced by Conditional Access and network</strong> so
+            that administering a DC is only possible from a PAW through a jump host — directly
+            defeating the lateral-movement and
+            <a href="2026-08-18-windows-credential-storage.html">credential-theft</a> paths that the
+            <a href="../ad-map.html">AD attack-path map</a> on this site is built around.</li>
+        </ul>
+        <h3>The directory itself</h3>
+        <p>
+          Design bias is <strong>single forest</strong> (a forest, not a domain, is AD's real
+          security boundary) unless a hard requirement — a regulated or acquired entity needing true
+          isolation — justifies another. Domains are kept few; regional child domains are used only
+          where replication or administrative-boundary needs demand it. Sites and ~2–5 domain
+          controllers per major location give resilience and sane logon locality; read-only DCs
+          serve smaller/edge sites. AD and Entra are treated as the most critical asset in the
+          company, because whoever owns the directory owns everything in it.
+        </p>
         <blockquote>
-          A useful lens: north-south traffic (in/out of the org) has always been inspected; the
-          modern battle is <strong>east-west</strong>. Segmentation and micro-segmentation are how
-          you make lateral movement expensive, which is the difference between &ldquo;one machine
-          owned&rdquo; and &ldquo;the domain owned.&rdquo;
+          If budget were rationed, identity wins. Strong IdP + phishing-resistant MFA + IGA at scale
+          + the Enterprise Access Model shrink the attack surface more than any appliance — and they
+          are the controls an attacker emulating a real adversary will hit first.
         </blockquote>
 
-        <h2>5. Endpoint &amp; workload protection</h2>
+        <h2>4. Pillar 2 — Devices &amp; endpoints (a 150,000-agent fleet)</h2>
         <p>
-          Endpoints are where users, and therefore attackers, actually land. The strategy is harden
-          the platform, watch it closely, and be able to kill it remotely.
+          Endpoints are where users and attackers land. At 150k devices the strategy is
+          <em>managed, measured, and revocable</em>, and device posture feeds straight back into the
+          identity pillar as a Conditional-Access signal.
         </p>
         <ul>
-          <li><strong>EDR / XDR.</strong> Endpoint Detection &amp; Response (CrowdStrike, Microsoft
-            Defender for Endpoint, SentinelOne) records process, file, registry, and network
-            telemetry, detects malicious behaviour, and lets responders isolate a host with one
-            click. XDR extends the same correlation across endpoint, identity, email, and cloud.</li>
-          <li><strong>Hardening &amp; baselines.</strong> Systems are built to CIS Benchmarks /
-            DISA STIGs — unnecessary services off, secure defaults on — and drift is monitored.</li>
-          <li><strong>Application control / allowlisting.</strong> Only approved binaries run
-            (WDAC, AppLocker). This is one of the strongest controls against commodity malware and
-            living-off-the-land binaries, and it directly counters the
-            <a href="2026-09-23-defense-evasion.html">defense-evasion</a> tradecraft attackers
-            use.</li>
-          <li><strong>Patch &amp; configuration management.</strong> A relentless pipeline (SCCM,
-            Intune, Ansible) that keeps systems current — because unpatched, internet-facing
-            services remain the other great breach vector besides identity.</li>
-          <li><strong>Telemetry.</strong> Rich logging (Sysmon, PowerShell script-block logging,
-            auditing) feeds the SOC — see
-            <a href="2026-09-23-windows-telemetry-logging.html">Windows telemetry &amp; logging</a>
-            for exactly what gets recorded and why in-memory tradecraft tries to avoid it.</li>
+          <li><strong>Unified endpoint management</strong> (Intune/MDM + autopilot provisioning) so
+            every device is enrolled, configured to a hardened baseline, and reports compliance —
+            and a non-compliant device is denied access rather than trusted.</li>
+          <li><strong>EDR/XDR on every endpoint and server</strong> (CrowdStrike / Defender XDR /
+            SentinelOne): behavioural detection, one-click isolation, and telemetry feeding the SOC.
+            Fleet management (agent health, coverage gaps) is itself an ops discipline at this
+            size — an unmonitored 2% is 3,000 blind endpoints.</li>
+          <li><strong>Hardening to CIS Benchmarks / STIGs</strong> with drift detection, and
+            <strong>application control / allowlisting</strong> (WDAC/AppLocker) on high-value
+            systems — the strongest counter to commodity malware and the
+            <a href="2026-09-23-defense-evasion.html">defense-evasion</a> and living-off-the-land
+            tradecraft attackers rely on.</li>
+          <li><strong>Patch &amp; vulnerability remediation at scale</strong> via rings (pilot &rarr;
+            broad &rarr; critical) with SLAs tied to exposure — because unpatched internet-facing
+            services are the other great breach vector besides identity.</li>
+          <li><strong>Rich telemetry</strong> (Sysmon, PowerShell script-block logging, auditing) —
+            see <a href="2026-09-23-windows-telemetry-logging.html">Windows telemetry &amp;
+            logging</a> for what gets recorded and why in-memory tradecraft tries to dodge it.</li>
+          <li><strong>OT/IoT &amp; unmanageable devices</strong> (manufacturing, medical, building
+            systems) that can't take an agent are discovered and monitored passively (Claroty/Nozomi)
+            and <strong>isolated aggressively</strong> on the network — the device you can't patch,
+            you contain.</li>
         </ul>
 
-        <h2>6. Email, web, and the human edge</h2>
+        <h2>5. Pillar 3 — Networks (segmentation and access across 40 countries)</h2>
         <p>
-          Phishing is still the number-one initial-access vector, so the mail and web paths are
-          heavily defended, and the people behind them are treated as part of the control set.
+          This is where the big networking decisions live, and at Meridian's scale they are made
+          deliberately. The organising principle is <strong>segmentation to limit blast radius</strong>,
+          and the depth of that segmentation is the single largest network trade-off in the whole
+          design.
+        </p>
+        <h3>User &amp; site access: de-perimeterised by default</h3>
+        <ul>
+          <li><strong>SASE as the access fabric</strong> for 145k users in 40+ countries — Secure
+            Access Service Edge converges SWG, CASB, ZTNA and FWaaS in the cloud so a user in any
+            office or at home gets identical policy and inspection close to them, instead of
+            backhauling traffic to a regional DC.</li>
+          <li><strong>ZTNA replaces VPN.</strong> The old &ldquo;on the VPN = on the LAN&rdquo; model
+            is gone; users reach only the specific applications they're entitled to, brokered by
+            identity and device posture. No user is ever &ldquo;on the flat network.&rdquo;</li>
+          <li><strong>SD-WAN</strong> connects sites over the internet with policy and resilience,
+            retiring expensive legacy MPLS where it can.</li>
+        </ul>
+        <h3>Data-centre &amp; cloud: segmentation and east-west control</h3>
+        <ul>
+          <li><strong>Security zones</strong>: untrusted &rarr; DMZ &rarr; internal &rarr; restricted
+            enclaves (cardholder-data environment for PCI scope reduction, PII stores, OT, and the
+            Control plane). The most sensitive zones are the most isolated, and PCI scope is
+            deliberately minimised by segmentation to shrink audit burden.</li>
+          <li><strong>Micro-segmentation</strong> (Illumio/NSX/cloud security groups) controls
+            <strong>east-west</strong> (server-to-server) traffic so a foothold on one workload can't
+            freely reach its neighbours. North-south has always been inspected; east-west is the
+            modern battle and the difference between &ldquo;one host owned&rdquo; and &ldquo;the
+            data centre owned.&rdquo;</li>
+          <li><strong>NGFW</strong> (Palo Alto/Fortinet) at zone boundaries — app-aware, user-aware,
+            TLS-inspecting — and <strong>NAC/802.1X</strong> so an unmanaged device lands in
+            quarantine, not on the server segment.</li>
+          <li><strong>Default-deny egress + DNS security.</strong> Outbound is allowlisted and DNS is
+            filtered and monitored (Protective DNS), which strangles
+            <a href="2026-09-23-command-and-control.html">command-and-control</a> and exfiltration.
+            A tightly controlled egress is one of the most under-rated wins at scale.</li>
+          <li><strong>Cloud landing zones</strong>: a standardised, policy-guardrailed account/VNet
+            structure (hub-and-spoke, private endpoints, no public IPs by default) so tens of
+            thousands of cloud workloads inherit segmentation and logging rather than each team
+            inventing its own.</li>
+          <li><strong>Encryption in transit everywhere</strong>, internal included, so sniffing a
+            segment yields nothing and relay attacks lose their cleartext.</li>
+        </ul>
+
+        <h2>6. Pillar 4 — Applications &amp; workloads (DevSecOps + cloud at scale)</h2>
+        <p>
+          Thousands of applications and a multi-cloud estate create new risk daily, so security
+          shifts <strong>left</strong> (into the build) and <strong>right</strong> (into runtime),
+          and is delivered as a platform teams consume rather than a gate they queue for.
         </p>
         <ul>
-          <li><strong>Secure email gateway</strong> (Proofpoint, Mimecast, Defender for Office):
-            attachment sandboxing, URL rewriting/detonation, impersonation protection.</li>
-          <li><strong>Email authentication:</strong> SPF, DKIM, and <strong>DMARC</strong> (enforced
-            at <code>p=reject</code>) to stop spoofing of the org's own domains.</li>
-          <li><strong>Browser isolation &amp; web filtering</strong> for high-risk browsing.</li>
-          <li><strong>Security awareness &amp; phishing simulation</strong> — regular training and
-            simulated campaigns — plus <strong>insider-risk</strong> programmes, because a motivated
-            or careless employee bypasses most technical controls by design.</li>
+          <li><strong>Secure SDLC as a platform</strong>: threat modelling, secure-coding
+            standards, and security gates wired into CI/CD — <strong>SAST, DAST, SCA</strong>
+            (open-source components), <strong>IaC scanning</strong>, and <strong>secrets
+            scanning</strong> running automatically so 1,500 developers get fast feedback instead of
+            a central bottleneck.</li>
+          <li><strong>Software supply chain</strong>: SBOMs, dependency pinning, signed builds, and
+            artefact provenance — the response to a decade of supply-chain compromises.</li>
+          <li><strong>Runtime protection</strong>: WAF and API security (schema validation, rate
+            limiting, bot management) in front of internet-facing apps.</li>
+          <li><strong>Cloud-native protection (CNAPP)</strong> unifying CSPM (misconfiguration),
+            CWPP (workloads/containers), and cloud IAM analysis (Wiz/Prisma) — continuously, because
+            an over-permissive cloud role is the cloud's Domain Admin, and a public storage bucket
+            is the cloud's open file share.</li>
+          <li><strong>Shared-responsibility discipline</strong>: explicit ownership of which controls
+            are the cloud provider's and which are Meridian's, documented per service — the most
+            common cause of cloud breaches is assuming the provider has you covered when they don't.</li>
         </ul>
 
-        <h2>7. Detection &amp; response: the SOC</h2>
+        <h2>7. Pillar 5 — Data (the thing we're actually protecting, across jurisdictions)</h2>
         <p>
-          Assume-breach only works if you can <em>see</em> the breach. The Security Operations
-          Centre is the nervous system — people, process, and a telemetry pipeline that turns
-          billions of events into a handful of investigated incidents.
+          Ultimately the attacker wants data, and Meridian holds regulated PII in many countries, so
+          controls wrap the data itself — the layer that still protects you after every other control
+          is bypassed, and the layer regulators care about most.
         </p>
         <ul>
-          <li><strong>SIEM.</strong> Security Information &amp; Event Management (Splunk, Microsoft
-            Sentinel, Elastic) centralises logs from everything above, correlates them, and raises
-            alerts. The quality of a SOC is mostly the quality of its detection content, not the
-            brand of SIEM.</li>
-          <li><strong>Detection engineering.</strong> Analysts write and tune detections mapped to
-            <strong>MITRE ATT&amp;CK</strong>, measuring coverage technique-by-technique rather than
-            chasing vendor dashboards. Detections-as-code (Sigma rules in version control) is the
-            mature form.</li>
-          <li><strong>SOAR.</strong> Security Orchestration, Automation &amp; Response runs the
-            playbooks — enrich an alert, isolate a host, disable an account — so humans handle
-            judgement, not toil.</li>
-          <li><strong>UEBA.</strong> User &amp; Entity Behaviour Analytics baselines normal and
-            flags the anomalous (impossible travel, a service account suddenly interactive), which
-            catches credential abuse that signature rules miss.</li>
-          <li><strong>Threat intelligence</strong> feeds context (who is targeting this sector, with
-            what TTPs) into both detection and prioritisation.</li>
-          <li><strong>Deception.</strong> Honeypots, honey-tokens, and decoy accounts (like the
-            LDAP honeypot in one of the <a href="../writeups.html">lab writeups</a>) are
-            high-signal, low-noise tripwires: no legitimate user ever touches them, so a single hit
-            is worth escalating.</li>
-          <li><strong>SOC tiers &amp; MDR.</strong> Analysts in tiers (triage &rarr; investigation
-            &rarr; threat hunting), often augmented by a managed detection &amp; response provider
-            for 24&times;7 coverage.</li>
+          <li><strong>Classification taxonomy</strong> (public / internal / confidential /
+            restricted) with labels (Microsoft Purview) that drive encryption, DLP, and sharing.
+            You can't protect — or prove you protect — what you haven't labelled.</li>
+          <li><strong>Data residency &amp; sovereignty</strong>: the multi-jurisdiction twist.
+            EU personal data stays in EU regions, India DPDP and other local rules are honoured, and
+            cross-border transfer is governed — which constrains <em>where</em> workloads, backups,
+            and even SIEM analytics may run. This single requirement reshapes the whole architecture
+            (regional data stores, regional log handling) and is a first-class design input, not an
+            afterthought.</li>
+          <li><strong>Encryption</strong> at rest with keys in a <strong>KMS/HSM</strong> (ideally
+            customer-managed keys for the most sensitive sets) and in transit with TLS; stolen disks
+            or sniffed traffic are then useless.</li>
+          <li><strong>DLP &amp; DSPM</strong>: Data Loss Prevention on email/web/endpoint to stop
+            sensitive data leaving, and Data Security Posture Management to <em>find</em> where
+            regulated data actually sprawled to (the shadow copies in a SharePoint nobody owns).</li>
+          <li><strong>Tokenisation / masking</strong> for the highest-sensitivity fields
+            (card numbers, national IDs) and database activity monitoring on the crown-jewel stores —
+            narrowing PCI scope and limiting what a compromised app can read.</li>
         </ul>
 
-        <h2>8. Data security</h2>
+        <h2>8. Cross-cutting: Visibility &amp; Analytics — the SOC at scale</h2>
         <p>
-          Ultimately the attacker is after data, so controls wrap the data itself — the layer that
-          still protects you when the perimeter, endpoint, and identity controls have all been
-          bypassed.
+          Assume-breach only works if you can <em>see</em> the breach. At Meridian's scale the SOC is
+          an engineering problem before it is a staffing one, because the telemetry is enormous.
+        </p>
+        <h3>The log-volume reality (why you can't just &ldquo;send everything to the SIEM&rdquo;)</h3>
+        <p>
+          Rough back-of-envelope: endpoints with EDR emit on the order of ~0.3 events/sec each and
+          busy servers far more; across ~150k endpoints, ~12k servers, network, identity, and cloud,
+          Meridian generates on the order of <strong>hundreds of thousands of events per second</strong>
+          and <strong>tens of terabytes per day</strong> (a common planning figure is ~1,000 EPS
+          &asymp; 8.6&nbsp;GB/day). You cannot afford to keep all of that hot in a premium SIEM, and
+          you don't need to. So the pipeline is <strong>tiered</strong>:
         </p>
         <ul>
-          <li><strong>Classification</strong> (public / internal / confidential / restricted) drives
-            every downstream control — you can't protect what you haven't labelled.</li>
-          <li><strong>Encryption at rest</strong> with keys held in a <strong>KMS/HSM</strong>, and
-            <strong>in transit</strong> with TLS, so stolen disks or sniffed traffic are useless.</li>
-          <li><strong>DLP</strong> (Data Loss Prevention) watches email, web, and endpoints for
-            sensitive data leaving, and blocks or alerts.</li>
-          <li><strong>Secrets management</strong> (HashiCorp Vault, cloud secret stores) so API keys
-            and credentials live in a vault, not in code or config — the exact failure behind many
-            of the web <a href="../vulns.html">findings</a> on this site.</li>
-          <li><strong>Tokenisation / masking</strong> for the most sensitive fields (card numbers,
-            national IDs), and database activity monitoring on the crown-jewel stores.</li>
+          <li><strong>Hot tier</strong> — high-value, detection-relevant logs in the SIEM
+            (Splunk/Sentinel) for real-time correlation and short retention.</li>
+          <li><strong>Cold / data-lake tier</strong> — the bulk of telemetry routed cheaply
+            (via a pipeline like Cribl) to object storage for compliance retention and
+            search-on-demand during investigations.</li>
+          <li><strong>Normalisation &amp; routing</strong> at ingest so the SIEM sees structured,
+            relevant data, not raw firehose — this is where a large part of SIEM cost is won or
+            lost.</li>
+        </ul>
+        <h3>Turning data into response</h3>
+        <ul>
+          <li><strong>Detection engineering</strong> mapped to <strong>MITRE ATT&amp;CK</strong>,
+            written as code (Sigma rules in version control) and measured by technique coverage, not
+            vendor dashboards. Quality of content, not brand of SIEM, defines a SOC.</li>
+          <li><strong>SOAR &amp; automation are mandatory, not optional</strong>: with default
+            rule-sets producing ~70% false positives at ~15 minutes of triage each, you cannot hire
+            your way out — playbooks must auto-enrich, auto-isolate, and auto-close so humans spend
+            time on judgement.</li>
+          <li><strong>UEBA</strong> to catch credential abuse signatures miss (impossible travel, a
+            service account suddenly interactive).</li>
+          <li><strong>Deception</strong> — honey-tokens and decoy accounts (like the LDAP honeypot in
+            one of the <a href="../writeups.html">lab writeups</a>): zero false positives, so a single
+            touch is a high-confidence incident.</li>
+          <li><strong>Operating model</strong>: a tiered, <strong>follow-the-sun</strong> SOC across
+            regional hubs (also helping with data-residency on where logs are analysed), proactive
+            <strong>threat hunting</strong>, and an <strong>MDR</strong> partner for surge/after-hours
+            — you staff for the median and burst to the partner for the peak.</li>
         </ul>
 
-        <h2>9. Application &amp; cloud security (DevSecOps)</h2>
+        <h2>9. Cross-cutting: Automation &amp; Orchestration</h2>
         <p>
-          Software and cloud are where new risk is created every day, so security shifts
-          <strong>left</strong> (into the build) and <strong>right</strong> (into runtime).
+          Nothing at this scale is done by hand twice. Provisioning, hardening, patching,
+          certificate issuance, access certification, and incident response are codified
+          (infrastructure-as-code, policy-as-code, detections-as-code, SOAR playbooks). Automation is
+          both a security control (consistency, no manual drift) and the only way the team keeps up —
+          the ratio of assets to engineers makes manual operation a vulnerability in itself.
+        </p>
+
+        <h2>10. Cross-cutting: Governance, risk &amp; the operating model</h2>
+        <ul>
+          <li><strong>Risk management</strong> as the steering wheel: a live risk register, scored
+            impact/likelihood tied to the <a href="2026-07-04-cia-triad.html">CIA triad</a>, and
+            board-level reporting. Finite budget goes where it buys the most risk reduction; residual
+            risk is formally accepted by a named owner.</li>
+          <li><strong>Compliance mapping once, report many</strong>: a unified control framework
+            mapped to GDPR, DPDP, PCI, HIPAA, SOX and ISO so a single control set satisfies many
+            regimes and audits don't each reinvent evidence.</li>
+          <li><strong>Third-party &amp; supply-chain risk</strong>: vendor assessments, continuous
+            monitoring, and contractual security requirements — at this size, a large share of risk
+            lives in suppliers and SaaS.</li>
+          <li><strong>M&amp;A security</strong>: a repeatable playbook to assess, isolate, and
+            integrate an acquired company's unknown estate without letting its compromise become
+            yours — acquisitions are a top way large enterprises inherit breaches.</li>
+          <li><strong>Security organisation (target operating model)</strong>: a CISO with
+            architecture, GRC, security engineering/platform, SecOps (SOC/IR), identity, AppSec, and
+            offensive teams — federated into business units with central policy. Clear RACI so
+            &ldquo;who owns this control&rdquo; is never ambiguous.</li>
+          <li><strong>Offensive validation</strong>: continuous vulnerability management with
+            <strong>risk-based prioritisation</strong> (CVSS for severity, EPSS for exploit
+            probability, CISA KEV for known-exploited), regular penetration testing,
+            <strong>red teaming</strong>, <strong>purple teaming</strong>, and Breach &amp; Attack
+            Simulation. The <a href="../web-map.html">web pentest checklist</a> and
+            <a href="../ad-map.html">AD attack-path map</a> here are the attacker's side of this loop.</li>
+        </ul>
+
+        <h2>11. Resilience &amp; recovery (when, not if)</h2>
+        <p>
+          At this scale the question is not whether a serious incident happens but how fast you
+          recover, so recoverability is a first-class design goal — and ransomware is the modelled
+          worst case.
         </p>
         <ul>
-          <li><strong>Secure SDLC.</strong> Threat modelling, secure-coding standards, and security
-            gates in the pipeline rather than a review at the end.</li>
-          <li><strong>Automated testing:</strong> <strong>SAST</strong> (source), <strong>DAST</strong>
-            (running app), <strong>SCA</strong> (third-party/open-source components), and
-            <strong>IaC scanning</strong> (Terraform/K8s misconfig) all run in CI.</li>
-          <li><strong>Software supply chain:</strong> SBOMs, dependency pinning, signed builds, and
-            secrets scanning — the response to a decade of supply-chain compromises.</li>
-          <li><strong>Runtime app protection:</strong> <strong>WAF</strong> and API security in
-            front of web apps, bot management, and rate limiting.</li>
-          <li><strong>Cloud posture:</strong> <strong>CSPM</strong> (misconfiguration),
-            <strong>CWPP</strong> (workload), and the converged <strong>CNAPP</strong> continuously
-            check cloud accounts; cloud IAM is governed as tightly as on-prem identity, because an
-            over-permissive role is the cloud equivalent of Domain Admin.</li>
+          <li><strong>Backups that survive the attacker</strong>: 3-2-1 plus <strong>immutable /
+            offline</strong> copies that ransomware can't reach, at petabyte scale, with
+            <strong>tested</strong> restores (an untested backup is a hypothesis).</li>
+          <li><strong>AD forest recovery</strong> as a specific, rehearsed plan — rebuilding the
+            identity fabric is the critical path after a domain-wide compromise, and it is slow and
+            error-prone if practised for the first time during the incident.</li>
+          <li><strong>Multi-region DR</strong> with defined RTO/RPO per service tier, failover
+            exercised, and crown-jewel services designed to fail over cleanly.</li>
+          <li><strong>Incident response at scale</strong>: a defined lifecycle (prepare, detect &amp;
+            analyse, contain, eradicate, recover, learn), a retainer, legal/comms/regulatory-
+            notification playbooks (GDPR's 72-hour clock, etc.), and <strong>tabletop + live
+            exercises</strong> up to board level so the plan is muscle memory, not a document.</li>
         </ul>
 
-        <h2>10. Vulnerability &amp; exposure management</h2>
+        <h2>12. The architect's decision register</h2>
         <p>
-          You cannot defend what you cannot see, so a continuous loop finds weaknesses and proves
-          the controls work.
-        </p>
-        <ul>
-          <li><strong>Asset &amp; attack-surface management</strong> — you must know what you own,
-            internal and external, before anything else.</li>
-          <li><strong>Vulnerability scanning</strong> (Nessus, Qualys, Rapid7) on a cadence, with
-            <strong>risk-based prioritisation</strong>: CVSS tells you severity, but
-            <strong>EPSS</strong> (exploitation probability) and <strong>CISA KEV</strong>
-            (known-exploited) tell you what to actually fix first. Patching everything is
-            impossible; patching the exploitable, exposed, and reachable is the goal.</li>
-          <li><strong>Offensive validation:</strong> penetration testing, <strong>red teaming</strong>
-            (full-scope, objective-based emulation), <strong>purple teaming</strong> (red and blue
-            working together to improve detections), and <strong>Breach &amp; Attack Simulation</strong>
-            (automated, continuous control testing). The
-            <a href="../web-map.html">web pentest checklist</a> and
-            <a href="../ad-map.html">AD attack-path map</a> on this site are the attacker's side of
-            exactly this loop.</li>
-        </ul>
-
-        <h2>11. Resilience &amp; recovery</h2>
-        <p>
-          In a high-stakes environment the assumption is not &ldquo;if&rdquo; but &ldquo;when,&rdquo;
-          so the ability to recover is a first-class design goal — not an afterthought bolted on
-          after the breach.
-        </p>
-        <ul>
-          <li><strong>Backups done right:</strong> the <strong>3-2-1</strong> rule (three copies,
-            two media, one off-site) plus <strong>immutable / offline</strong> copies that
-            ransomware cannot reach or encrypt. Untested backups are a liability, so restores are
-            rehearsed.</li>
-          <li><strong>Incident response</strong> follows a defined lifecycle (NIST: prepare, detect
-            &amp; analyse, contain, eradicate, recover, learn), with a retainer, clear roles, and
-            communication/legal plans ready before the event.</li>
-          <li><strong>BCP/DR:</strong> defined RTO/RPO, failover sites or regions, and the whole
-            thing <strong>exercised</strong> through tabletop and live drills — because a plan that
-            has never been run is a hypothesis.</li>
-        </ul>
-
-        <h2>12. The hard trade-offs in a high-stakes design</h2>
-        <p>
-          Everything above is well understood; the craft is in the <em>decisions</em>, because
-          security always trades against cost, usability, performance, and operational reality.
-          High-stakes environments lean toward the secure end of each of these, but never to the
-          point of making the business unworkable.
+          Everything above is well-understood; the craft is the decisions, because security always
+          trades against cost, usability, performance, and operational reality. These are the big
+          calls at Meridian's scale and the way a high-stakes design usually leans — each one is a
+          conscious trade with governance accepting the residual risk.
         </p>
         <table>
-          <thead><tr><th>Decision</th><th>The tension</th><th>How high-stakes orgs usually lean</th></tr></thead>
+          <thead><tr><th>Decision</th><th>The tension</th><th>How this design leans — and why</th></tr></thead>
           <tbody>
-            <tr><td>Segmentation depth</td><td>Isolation vs. operational friction &amp; cost</td><td>Deeper — micro-segment crown jewels, accept the management overhead</td></tr>
-            <tr><td>Prevention vs. detection</td><td>Blocking breaks things; detection needs people</td><td>Both, but invest heavily in detection &amp; response because prevention always fails eventually</td></tr>
-            <tr><td>Build vs. buy</td><td>Control &amp; fit vs. speed &amp; support</td><td>Buy the platform, build the detection content and integrations</td></tr>
-            <tr><td>Central vs. federated</td><td>Consistency vs. business-unit autonomy</td><td>Central policy &amp; identity, federated execution</td></tr>
+            <tr><td>Single vs. multiple AD forest</td><td>Simplicity &amp; cost vs. hard isolation</td><td>Single forest by default (the real security boundary); a second only for a truly isolated/regulated or freshly-acquired entity</td></tr>
+            <tr><td>Segmentation depth</td><td>Blast-radius control vs. operational friction &amp; cost</td><td>Micro-segment the crown jewels and PCI/PII enclaves; coarser elsewhere — you can't afford to micro-segment everything, so target it</td></tr>
+            <tr><td>Prevention vs. detection</td><td>Blocking breaks business; detection needs people</td><td>Both, but invest heavily in detection &amp; response — prevention always eventually fails</td></tr>
+            <tr><td>SIEM: ingest everything vs. tier</td><td>Visibility vs. multi-million cost</td><td>Tier it — hot SIEM for detection, cheap data lake for retention/search; route at ingest</td></tr>
+            <tr><td>Central vs. regional SOC</td><td>Consistency vs. coverage &amp; data residency</td><td>Follow-the-sun regional hubs under one central detection standard + MDR burst</td></tr>
             <tr><td>Default-deny egress</td><td>Strong C2/exfil control vs. app-team friction</td><td>Default-deny with a managed allowlist — worth the friction</td></tr>
-            <tr><td>TLS inspection</td><td>Visibility vs. privacy, performance, breakage</td><td>Inspect at the perimeter with carve-outs for sensitive/pinned traffic</td></tr>
-            <tr><td>Cloud vs. on-prem</td><td>Elasticity vs. control; shared-responsibility nuance</td><td>Cloud-first, with cloud security (CNAPP/IAM) treated as seriously as the datacentre</td></tr>
-            <tr><td>Legacy &amp; OT</td><td>Can't patch / can't touch vs. exposure</td><td>Isolate aggressively (air-gap or tightly segment), compensate with monitoring</td></tr>
-            <tr><td>Usability vs. lockdown</td><td>Friction drives shadow IT &amp; workarounds</td><td>Make the secure path the easy path (SSO, passkeys) rather than piling on friction</td></tr>
+            <tr><td>TLS inspection</td><td>Visibility vs. privacy, performance, breakage</td><td>Inspect at the edge with carve-outs for privacy-sensitive &amp; certificate-pinned traffic</td></tr>
+            <tr><td>Cloud vs. on-prem</td><td>Elasticity vs. control &amp; residency</td><td>Cloud-first with guardrailed landing zones; cloud security funded like the data centre</td></tr>
+            <tr><td>Data residency vs. central analytics</td><td>Legal localisation vs. one global view</td><td>Keep regulated data/logs regional; correlate on metadata/federated search, not by moving raw PII</td></tr>
+            <tr><td>Legacy &amp; OT</td><td>Can't patch / can't touch vs. exposure</td><td>Isolate aggressively (segment or air-gap) and compensate with passive monitoring</td></tr>
+            <tr><td>Build vs. buy</td><td>Fit &amp; control vs. speed &amp; support</td><td>Buy platforms, build the detection content, integrations, and automation</td></tr>
+            <tr><td>Usability vs. lockdown</td><td>Friction drives shadow IT</td><td>Make the secure path the easy path (SSO, passkeys, self-service) rather than piling on friction</td></tr>
           </tbody>
         </table>
         <blockquote>
-          The recurring theme: there is no &ldquo;secure&rdquo; configuration in the absolute, only
-          an <em>acceptable risk</em> for a given business. The architect's job is to know what is
-          being traded and to make that trade consciously, with governance signing off on the
-          residual risk.
+          The recurring truth: there is no absolute &ldquo;secure&rdquo; configuration, only an
+          <em>acceptable risk</em> for this business. The architect's value is knowing exactly what
+          is being traded and making that trade on purpose — then having the telemetry to know when
+          the trade stops being acceptable.
         </blockquote>
 
-        <h2>13. Putting it together: defense in depth across the kill chain</h2>
+        <h2>13. Sequencing it: a maturity roadmap</h2>
         <p>
-          The point of all these layers is that an attacker has to beat <em>many</em> of them in
-          sequence, and each one is a chance to stop or spot them. Trace a typical intrusion against
-          the stack:
-        </p>
-        <ul>
-          <li><strong>Phishing email</strong> &rarr; secure email gateway, DMARC, user reporting.</li>
-          <li><strong>Malicious attachment runs</strong> &rarr; application allowlisting, EDR
-            behavioural detection, hardened endpoint.</li>
-          <li><strong>Beacon calls home</strong> &rarr; default-deny egress, DNS filtering, proxy
-            inspection, SIEM correlation.</li>
-          <li><strong>Credential theft &amp; lateral movement</strong> &rarr; AD tiering, LSASS
-            protection, micro-segmentation, UEBA on anomalous logons.</li>
-          <li><strong>Privilege escalation to Domain Admin</strong> &rarr; PAM, Tier-0 isolation,
-            honey-tokens, aggressive logging.</li>
-          <li><strong>Data staging &amp; exfiltration</strong> &rarr; DLP, egress control,
-            database monitoring, encryption that makes the loot useless.</li>
-          <li><strong>Impact (ransomware)</strong> &rarr; immutable backups, tested IR and DR,
-            segmentation that caps the blast radius.</li>
-        </ul>
-        <p>
-          No single layer is expected to be perfect. The system is designed so that for the attack
-          to fully succeed, <em>many</em> independent controls have to fail at once — and so that
-          long before that happens, the SOC has seen enough signal to respond.
-        </p>
-
-        <h2>14. The tooling landscape at a glance</h2>
-        <p>
-          Tools follow the layers, not the other way round. A rough map of category to representative
-          tooling (illustrative, not endorsements):
+          You don't build all of this at once; you raise each Zero-Trust pillar through the CISA
+          maturity stages, leading with the controls that cut the most risk per dollar. A defensible
+          sequence for Meridian:
         </p>
         <table>
-          <thead><tr><th>Layer</th><th>Category</th><th>Representative tooling</th></tr></thead>
+          <thead><tr><th>Horizon</th><th>Focus</th><th>Representative moves</th></tr></thead>
           <tbody>
-            <tr><td>Governance</td><td>GRC, risk, frameworks</td><td>NIST CSF, ISO 27001, CIS Controls, MITRE ATT&amp;CK, Archer</td></tr>
-            <tr><td>Identity</td><td>IdP, MFA, PAM, IGA</td><td>Entra ID, Okta, FIDO2/passkeys, CyberArk, SailPoint</td></tr>
-            <tr><td>Network</td><td>NGFW, segmentation, ZTNA/SASE, NAC, DNS</td><td>Palo Alto, Fortinet, Illumio, Zscaler, Cisco ISE, Umbrella</td></tr>
-            <tr><td>Endpoint</td><td>EDR/XDR, allowlisting, patch</td><td>CrowdStrike, Defender XDR, SentinelOne, WDAC, Intune/SCCM</td></tr>
-            <tr><td>Email/Web</td><td>SEG, DMARC, isolation</td><td>Proofpoint, Mimecast, Defender for Office</td></tr>
-            <tr><td>Detection</td><td>SIEM, SOAR, UEBA, deception</td><td>Splunk, Sentinel, Elastic, Sigma, Cortex XSOAR</td></tr>
-            <tr><td>Data</td><td>DLP, encryption/KMS, secrets</td><td>Purview, Vault, cloud KMS/HSM</td></tr>
-            <tr><td>AppSec/Cloud</td><td>SAST/DAST/SCA, WAF, CNAPP</td><td>Semgrep, Burp, Snyk, Wiz, Prisma Cloud</td></tr>
-            <tr><td>Exposure</td><td>Scanning, ASM, offensive</td><td>Nessus, Qualys, EPSS/KEV, BAS, red-team tradecraft</td></tr>
-            <tr><td>Resilience</td><td>Backup, DR, IR</td><td>Immutable backup, runbooks, IR retainer</td></tr>
+            <tr><td><strong>0–6 months</strong> — stop the bleeding</td><td>Identity &amp; visibility</td><td>Phishing-resistant MFA everywhere, kill legacy auth, EDR to full coverage, PAW + PIM for Tier-0, SIEM for the critical log sources, asset inventory</td></tr>
+            <tr><td><strong>6–18 months</strong> — raise the floor</td><td>Segmentation, IGA, DevSecOps</td><td>IGA joiner/mover/leaver, Enterprise Access Model rollout, SASE/ZTNA for users, PCI/PII enclave micro-segmentation, CI/CD security gates, CNAPP</td></tr>
+            <tr><td><strong>18–36 months</strong> — optimise</td><td>Automation &amp; coverage</td><td>SOAR-driven response, detection-as-code with measured ATT&amp;CK coverage, DSPM + data residency controls, purple-team loop, immutable backup + AD-recovery drills</td></tr>
+            <tr><td><strong>Ongoing</strong> — sustain</td><td>Measure &amp; adapt</td><td>Continuous validation (BAS/red team), risk-based patching, M&amp;A integration playbook, board reporting, roadmap refresh</td></tr>
           </tbody>
         </table>
         <p>
-          The attacker-side counterparts to much of this — the tools that test these very controls
-          — live on the <a href="../toolkit.html">Toolkit</a> page, and the weaknesses they hunt for
-          are catalogued under <a href="../vulns.html">Vulns &amp; Misconfigs</a>.
+          Progress is tracked with metrics the board can read: MFA/EDR coverage %, mean time to
+          detect/respond (MTTD/MTTR), % privileged access just-in-time, patch SLA attainment on
+          KEV/EPSS-prioritised vulns, phishing-simulation failure rate, and detection coverage
+          against ATT&amp;CK — leading indicators of risk, not vanity counts of blocked events.
         </p>
 
-        <h2>Why it's worth understanding as an attacker</h2>
+        <h2>Why it matters — even from the attacker's chair</h2>
         <blockquote>
-          Every control on this page is something a red teamer will meet — and the best offensive
-          work comes from understanding the defender's model, not just the next exploit. Knowing
-          <em>why</em> egress is filtered, <em>why</em> AD is tiered, and <em>why</em> the crown
-          jewels are micro-segmented tells you where the real friction will be, where the tripwires
-          are, and which single misconfiguration quietly collapses the whole carefully-built stack.
+          Every control here is something a red teamer will meet, and the best offensive work comes
+          from understanding the defender's model rather than just the next exploit. Knowing
+          <em>why</em> egress is filtered, <em>why</em> the directory is the crown jewel, <em>why</em>
+          privileged access is plane-isolated, and <em>why</em> the PII enclave is micro-segmented
+          tells you where the friction and tripwires are — and which single misconfiguration quietly
+          collapses a carefully-built, hundred-thousand-user stack.
         </blockquote>
+
+        <h2>References &amp; further reading</h2>
+        <ul>
+          <li><a href="https://csrc.nist.gov/pubs/sp/800/207/final" target="_blank" rel="noopener">NIST SP&nbsp;800-207 — Zero Trust Architecture</a></li>
+          <li><a href="https://www.cisa.gov/zero-trust-maturity-model" target="_blank" rel="noopener">CISA — Zero Trust Maturity Model v2</a></li>
+          <li><a href="https://learn.microsoft.com/en-us/security/privileged-access-workstations/privileged-access-access-model" target="_blank" rel="noopener">Microsoft — Enterprise Access Model</a></li>
+          <li><a href="https://www.nist.gov/cyberframework" target="_blank" rel="noopener">NIST Cybersecurity Framework 2.0</a></li>
+          <li><a href="https://www.cisecurity.org/controls" target="_blank" rel="noopener">CIS Critical Security Controls v8</a></li>
+          <li><a href="https://attack.mitre.org/" target="_blank" rel="noopener">MITRE ATT&amp;CK</a></li>
+        </ul>
 
         <h2>Related reading</h2>
         <ul class="related-list">
           <li><a href="2026-07-04-cia-triad.html">The CIA Triad</a></li>
           <li><a href="2026-08-18-ad-fundamentals.html">Active Directory Fundamentals</a></li>
+          <li><a href="2026-08-18-windows-credential-storage.html">Windows Credential Storage</a></li>
           <li><a href="2026-09-23-defense-evasion.html">Windows Defense Evasion — AV, EDR &amp; ASR</a></li>
-          <li><a href="2026-09-23-windows-telemetry-logging.html">Windows Telemetry &amp; Logging</a></li>
           <li><a href="2026-09-23-command-and-control.html">Command &amp; Control (C2) Frameworks</a></li>
-          <li><a href="../web-map.html">Web Pentest Checklist</a></li>
+          <li><a href="../ad-map.html">AD Attack-Path Map</a></li>
         </ul>
 
       </div>

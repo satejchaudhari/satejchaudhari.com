@@ -20,12 +20,12 @@
 
 var THEORY = [
   {
-    title: "How Enterprise Security Is Built",
+    title: "Architecting Security for a 100,000-User Enterprise",
     url: "theory/2026-10-02-enterprise-security-architecture.html",
     date: "2026-10-02",
     tag: "Blue Team",
-    description: "How security is actually architected in a large, high-stakes organisation — the control model, governance, identity, network segmentation, endpoint, the SOC, data, cloud and app security, resilience, and the hard design trade-offs, with the tooling mapped to each layer.",
-    readTime: "24 min read"
+    description: "A security architect's blueprint for a 100,000+ user, multi-site, PII-regulated enterprise — the Zero-Trust pillar model, identity and the Enterprise Access Model, segmentation at scale, data residency, the SOC's log-volume math, resilience, and the decision register of hard trade-offs.",
+    readTime: "34 min read"
   },
   {
     title: "SCCM / MECM Abuse",
