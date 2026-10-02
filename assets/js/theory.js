@@ -20,6 +20,14 @@
 
 var THEORY = [
   {
+    title: "How Security Is Built End-to-End in a Large High-Stakes Environment",
+    url: "theory/2026-10-02-security-stack-end-to-end.html",
+    date: "2026-10-02",
+    tag: "Blue Team",
+    description: "A principal architect's end-to-end reference for the full security stack of a global bank — the network foundation in depth, identity, data, endpoint, cloud/app, the SOC workflow, offensive security, email, GRC and BCDR — naming the real tools in each category with placement, rationale, and trade-offs.",
+    readTime: "48 min read"
+  },
+  {
     title: "Architecting Security for a 100,000-User Enterprise",
     url: "theory/2026-10-02-enterprise-security-architecture.html",
     date: "2026-10-02",

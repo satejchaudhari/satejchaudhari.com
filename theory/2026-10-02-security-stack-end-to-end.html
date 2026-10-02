@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Built End-to-End in a High-Stakes Enterprise — Satej Chaudhari</title>
+  <meta name="description" content="A principal architect's end-to-end reference for the full security stack of a global bank: the network foundation in depth, identity, data, endpoint, cloud/app, the SOC workflow, vuln/offensive, email, GRC and BCDR — with the real tools in each category, where they sit, why they're chosen, and the trade-offs.">
+
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="How Security Is Built End-to-End in a Large High-Stakes Environment">
+  <meta property="og:description" content="A principal architect's end-to-end reference for the full security stack of a global bank — the network foundation in depth, identity, data, endpoint, cloud/app, the SOC workflow, vuln/offensive, email, GRC and BCDR — with the real tools, placement, rationale, and trade-offs.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-02-security-stack-end-to-end.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-02">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="How Security Is Built End-to-End in a High-Stakes Enterprise">
+  <meta name="twitter:description" content="A principal architect's end-to-end reference for the full security stack of a global bank — network, identity, data, endpoint, cloud, SOC, offensive, GRC and BCDR — with real tools, placement, rationale, and trade-offs.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Blue Team</span>
+        <h1 class="post-title">How Security Is Built End-to-End in a Large High-Stakes Environment</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; 48 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          This is an internal-architecture-reference-style walkthrough of how the entire security
+          stack of a large, high-stakes organisation is actually designed and operated — the network
+          foundation, every major security domain, the specific tools in each, and how it all ties
+          together operationally. It is written from the chair of someone who has had to make the
+          build-vs-buy, placement, and segmentation calls in production, so it names real vendors and
+          is honest about cost, operational burden, and where teams commonly regret a choice.
+        </p>
+        <p>
+          It is a companion to the more conceptual
+          <a href="2026-10-02-enterprise-security-architecture.html">100,000-user architect's
+          blueprint</a> — that page is the <em>why</em> and the operating model; this one is the
+          <em>what</em>, down to the tooling in each layer.
+        </p>
+
+        <h2>0. The environment we're defending (assumptions)</h2>
+        <p>
+          Unless stated otherwise, model a <strong>global bank / financial institution</strong> — the
+          archetype of &ldquo;high-stakes.&rdquo; Concretely:
+        </p>
+        <ul>
+          <li><strong>50,000+ employees</strong> across many countries, plus large contractor and
+            third-party populations.</li>
+          <li><strong>Multiple physical data centres</strong> + heavy <strong>hybrid/multi-cloud</strong>
+            (AWS + Azure primary, some GCP).</li>
+          <li><strong>Hundreds of branches</strong>, a large remote/hybrid workforce, and constant
+            BYOD pressure.</li>
+          <li><strong>Severe regulatory exposure</strong>: PCI&nbsp;DSS (cards), SOX (financial
+            reporting integrity), GDPR (EU privacy), <strong>DORA</strong> (EU operational
+            resilience), GLBA (US financial privacy), plus national regulators.</li>
+          <li>Very high uptime SLAs, near-zero tolerance for blast radius, and a mature threat model
+            that explicitly includes <strong>nation-state</strong> and <strong>insider</strong>
+            threats.</li>
+        </ul>
+        <blockquote>
+          <strong>How &ldquo;high-stakes&rdquo; shapes every decision.</strong> Four forces recur,
+          and I call them out throughout: <strong>Regulation</strong> (a control must be provable to
+          an auditor, not just effective), <strong>Uptime</strong> (security cannot be the thing that
+          takes trading offline — fail-open vs. fail-closed is a real debate), <strong>Blast
+          radius</strong> (assume any single node is compromised; the design limits what that
+          costs), and <strong>Auditability</strong> (every privileged action is logged, immutable,
+          and attributable). These are why a bank's answer differs from a start-up's even when the
+          threat is identical.
+        </blockquote>
+
+        <h2>1. Guiding principles &amp; architecture philosophy</h2>
+        <p>
+          Before any box on a diagram, the programme commits to a small set of principles that every
+          later decision is checked against:
+        </p>
+        <ul>
+          <li><strong>Defense in depth.</strong> No control is load-bearing alone; an attacker must
+            defeat many independent layers. Every layer below assumes the ones around it will
+            sometimes fail.</li>
+          <li><strong>Zero Trust (per <a href="https://csrc.nist.gov/pubs/sp/800/207/final" target="_blank" rel="noopener">NIST&nbsp;800-207</a>).</strong>
+            In practice this means: no implicit trust from network location; every access is
+            authenticated, authorised, and encrypted based on identity + device posture + context;
+            access is least-privilege and continually re-evaluated. It is a direction of travel, not
+            a product — the network, identity, and endpoint sections are all implementations of it.</li>
+          <li><strong>Least privilege &amp; assume-breach.</strong> Standing privilege is minimised;
+            the interior is designed as though the attacker is already in it (which is what makes
+            segmentation and monitoring non-negotiable).</li>
+          <li><strong>Segmentation of blast radius.</strong> The single most important structural
+            idea — carve everything so one compromise is contained.</li>
+          <li><strong>Secure-by-design &amp; resilience.</strong> Security and recoverability are
+            designed in, not bolted on; BCDR and ransomware recovery are first-class.</li>
+          <li><strong>Auditability &amp; provable control.</strong> Regulation turns &ldquo;we are
+            secure&rdquo; into &ldquo;prove it, continuously&rdquo; — so logging, evidence, and
+            change control are architecture, not paperwork.</li>
+        </ul>
+
+        <h2>2. Network architecture &amp; design</h2>
+        <p>
+          This is the deepest section, because the network is the substrate every other control sits
+          on and the place segmentation lives or dies. I'll build it from the physical fabric
+          outward to the user edge, then trace an end-to-end traffic flow.
+        </p>
+
+        <h3>2.1 Overall topology</h3>
+        <p>
+          <strong>Data-centre fabric.</strong> Modern DCs are built as a <strong>spine-leaf</strong>
+          (Clos) fabric rather than the old core/distribution/access three-tier, because east-west
+          (server-to-server) traffic now dominates and spine-leaf gives predictable, non-blocking,
+          low-latency any-to-any paths. Leaf switches connect workloads; every leaf connects to every
+          spine; an overlay (<strong>VXLAN/EVPN</strong>, or Cisco ACI / Arista / Juniper fabrics)
+          carries tenant segmentation on top. The classic three-tier core/distribution/access model
+          still appears in campus/branch LANs.
+        </p>
+        <p>
+          <strong>Cloud connectivity.</strong> On-prem joins cloud over private circuits —
+          <strong>AWS Direct Connect</strong> and <strong>Azure ExpressRoute</strong> (never the
+          public internet for production data-plane traffic) — landing in a <strong>transit
+          gateway / hub</strong>. Each cloud is organised as a <strong>landing zone</strong> (AWS
+          Control Tower / Azure Landing Zones) with a hub-and-spoke VNet/VPC design: a central hub
+          holds shared security services (firewalls, inspection, DNS, egress), spokes hold workloads,
+          and spoke-to-spoke traffic is forced through the hub for inspection rather than peered
+          flat.
+        </p>
+        <p><strong>Topology pattern:</strong> hub-and-spoke for control and inspection; selective mesh only where latency demands it.</p>
+
+        <h3>2.2 Segmentation &amp; micro-segmentation (the core of the design)</h3>
+        <p>
+          Segmentation is enforced at multiple granularities, from coarse zones to per-workload
+          policy:
+        </p>
+        <ul>
+          <li><strong>Security zones</strong> (coarse, firewall-enforced): Internet &rarr;
+            <strong>DMZ</strong> (internet-facing/proxied services) &rarr; <strong>Internal</strong>
+            &rarr; <strong>Restricted</strong> (the PCI <em>cardholder-data environment</em>, PII
+            stores, the SWIFT/payments zone) &rarr; <strong>Management / OOB</strong> (a physically
+            or logically separate out-of-band network for device management, iLO/iDRAC, jump hosts —
+            never reachable from user space). A dedicated OOB network is a bank staple: it means an
+            attacker on the user LAN cannot reach the management plane of the infrastructure.</li>
+          <li><strong>VLANs + firewall rules</strong> segment subnets; inter-zone traffic always
+            crosses a firewall with explicit allow rules (default-deny).</li>
+          <li><strong>Micro-segmentation</strong> (fine, per-workload): host-based or fabric-based
+            policy so each workload only talks to the specific peers it must, killing lateral
+            movement even <em>within</em> a zone. This is where PCI scope is reduced and where
+            ransomware is contained.</li>
+        </ul>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>Open-source / alternative</th><th>Notes &amp; trade-offs</th></tr></thead>
+          <tbody>
+            <tr><td>Host-based micro-segmentation</td><td>Illumio, Akamai Guardicore Segmentation</td><td>Cilium/eBPF (containers), host firewalls</td><td>Agent-based, workload-aware, cloud-portable; best for brownfield because it doesn't require re-IP. Operational burden is policy authoring — start in "visualise" mode for weeks before enforcing.</td></tr>
+            <tr><td>Fabric/network-based</td><td>Cisco Secure Workload (ex-Tetration), Cisco ACI, VMware NSX</td><td>—</td><td>Tight to the infrastructure vendor; powerful in a homogeneous DC, lock-in and cost are the downsides. NSX shines where VMware is the compute platform.</td></tr>
+            <tr><td>Cloud-native</td><td>Security groups / NSGs, AWS/Azure firewall, service mesh</td><td>Istio/Linkerd mTLS</td><td>Free-ish and native, but policy sprawls across accounts — needs CNAPP (§6) to govern. Service mesh adds mTLS identity between services.</td></tr>
+          </tbody>
+        </table>
+        <blockquote>
+          <strong>High-stakes lens:</strong> micro-segmentation is where <em>blast radius</em> is
+          actually bought. You rarely micro-segment everything (the policy burden is real) — you
+          ring-fence the crown jewels (CDE, payments, Tier-0 identity, PII) hard and accept coarser
+          control elsewhere. Teams most often regret going straight to <em>enforce</em> without a
+          long <em>observe</em> phase and outage-causing deny rules.
+        </blockquote>
+
+        <h3>2.3 Remote access: from VPN to ZTNA/SASE</h3>
+        <p>
+          Legacy remote access was <strong>IPsec site-to-site</strong> (branch&rarr;DC) and
+          <strong>SSL/remote-access VPN</strong> (user&rarr;DC concentrator: Cisco AnyConnect,
+          Palo&nbsp;Alto GlobalProtect, Fortinet FortiClient). The fatal flaw of VPN is that it drops
+          the user onto the <em>network</em> — once connected, they can reach far more than the one
+          app they needed, which is exactly the flat-access lateral-movement problem Zero Trust
+          attacks. So VPN is being replaced by <strong>ZTNA</strong> (per-application, identity- and
+          posture-brokered access; the app is never exposed, and the user never joins the LAN),
+          delivered as part of <strong>SASE/SSE</strong> (Secure Access Service Edge / Security
+          Service Edge) which converges ZTNA + SWG + CASB + FWaaS in the cloud, close to the user.
+        </p>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>Alternative</th><th>Notes &amp; trade-offs</th></tr></thead>
+          <tbody>
+            <tr><td>ZTNA / SSE</td><td>Zscaler (ZIA + ZPA), Netskope, Palo&nbsp;Alto Prisma Access</td><td>Cloudflare One, Cato Networks, Cisco Umbrella+Duo</td><td>Zscaler is the enterprise default for scale; Netskope is strong on data/CASB; Cato is a single-vendor SASE favoured by leaner teams. Trade-off: you route all traffic through a vendor cloud — latency, privacy, and vendor-dependency become architecture concerns, and TLS inspection there is contentious.</td></tr>
+            <tr><td>Remote-access VPN (legacy/fallback)</td><td>Palo&nbsp;Alto GlobalProtect, Cisco AnyConnect, Fortinet</td><td>OpenVPN, WireGuard</td><td>Kept as break-glass and for thick/legacy apps ZTNA can't front yet. VPN concentrators are themselves a prized target (many 2020s breaches started on an unpatched VPN appliance).</td></tr>
+            <tr><td>SD-WAN</td><td>Cisco Catalyst SD-WAN (Viptela), VMware VeloCloud, Fortinet Secure SD-WAN, HPE Aruba EdgeConnect (ex-Silver Peak)</td><td>—</td><td>Replaces costly MPLS with policy-driven internet/hybrid transport for branches; security overlays via the SASE PoP. Classic WAN optimisers (Riverbed) still appear for latency-bound legacy apps.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.4 Inter-site &amp; cross-DC communication</h3>
+        <p>
+          Between data centres, encryption-in-transit is mandatory even on &ldquo;private&rdquo;
+          links: <strong>MACsec</strong> at layer&nbsp;2 on dark-fibre/metro links, and
+          <strong>IPsec</strong> overlays over any shared/MPLS/internet underlay. The underlay choice
+          is a resilience/cost trade: <strong>dark fibre</strong> (max control, bandwidth, lowest
+          latency; expensive, limited routes), <strong>MPLS</strong> (reliable, SLA-backed; costly,
+          slow to provision), or <strong>internet underlay with SD-WAN</strong> (cheap, flexible;
+          needs overlay encryption and careful SLA engineering). Banks typically run
+          <strong>diverse paths from different carriers</strong> for the crown-jewel DCs so a single
+          fibre cut or carrier outage never isolates a site.
+        </p>
+
+        <h3>2.5 Perimeter &amp; edge</h3>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>Open-source / alternative</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Next-gen firewall (NGFW)</td><td>Palo&nbsp;Alto PAN-OS, Fortinet FortiGate, Check Point, Cisco Secure Firewall</td><td>pfSense/OPNsense (small sites)</td><td>App-ID/user-ID/TLS-inspecting policy at zone edges. Palo&nbsp;Alto is the enterprise benchmark; Fortinet wins on price/throughput at the branch. Firewalls are also a top CVE target — patch discipline on the security kit itself matters.</td></tr>
+            <tr><td>IDS/IPS</td><td>Integrated in NGFW; Cisco Firepower</td><td>Suricata, Snort, Zeek</td><td>Inline IPS at the perimeter; Suricata/Zeek also feed the SOC as sensors (see the <a href="../writeups.html">Suricata IDS lab writeup</a>).</td></tr>
+            <tr><td>DDoS protection</td><td>Cloudflare, Akamai Prolexic, NETSCOUT Arbor, AWS Shield Advanced</td><td>—</td><td>Volumetric scrubbing upstream + on-prem for low-and-slow. Always-on for a bank's public services; "fail-open to availability" is the design bias.</td></tr>
+            <tr><td>Load balancer / ADC</td><td>F5 BIG-IP, Citrix NetScaler, cloud LBs</td><td>HAProxy, NGINX, Envoy</td><td>TLS termination, WAF insertion point, and a place attackers probe; F5 is ubiquitous in banks and, being in-path, a high-value target to patch promptly.</td></tr>
+            <tr><td>Secure web gateway / proxy / DNS</td><td>Zscaler ZIA, Netskope, Cisco Umbrella</td><td>Squid + Pi-hole/RPZ</td><td>All egress through a proxy with category/TLS policy; <strong>default-deny egress</strong> + DNS filtering strangle <a href="2026-09-23-command-and-control.html">C2</a> and exfil — one of the highest-ROI controls.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.6 Wireless &amp; NAC</h3>
+        <p>
+          Corporate Wi-Fi is <strong>WPA3-Enterprise with 802.1X / EAP-TLS</strong> (certificate-based,
+          no shared passwords), with separate guest and corporate SSIDs and rogue-AP/WIPS detection.
+          <strong>Network Access Control (NAC)</strong> gates what any device can reach the moment it
+          connects, based on identity and posture, and drives <strong>dynamic segmentation</strong>
+          (an unmanaged or non-compliant device is dropped into a quarantine VLAN automatically).
+        </p>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>NAC</td><td>Cisco ISE, Aruba ClearPass, Forescout</td><td>ISE if you're a Cisco shop (deep but complex); Forescout is strong on agentless discovery incl. OT/IoT; ClearPass is multi-vendor-friendly. NAC projects are notoriously long — posture + 802.1X everywhere is a multi-year programme.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.7 Network Detection &amp; Response (NDR)</h3>
+        <p>
+          NGFW/IPS see north-south; <strong>NDR</strong> gives the east-west and encrypted-traffic
+          visibility the SOC otherwise lacks, using behavioural/ML analytics on network metadata to
+          catch lateral movement, beaconing, and data staging that signature tools miss. It feeds the
+          SIEM/SOC.
+        </p>
+        <table>
+          <thead><tr><th>Leading tools</th><th>Open-source / alternative</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Darktrace, Vectra AI, ExtraHop Reveal(x), Corelight</td><td>Zeek (Corelight is commercial Zeek), Arkime, Suricata</td><td>Vectra leans to identity/attacker-behaviour; ExtraHop to high-fidelity decode; Darktrace to unsupervised anomaly (noisy without tuning). Corelight/Zeek give the richest, most portable metadata for a detection-engineering-led SOC. Trade-off: NDR is a sensor-placement and data-volume problem — you tap the chokepoints (DC core, cloud mirror/VPC traffic mirroring), not everything.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.8 End-to-end traffic flow (described diagram)</h3>
+        <p>A remote user reaching an internal banking app, traced through the stack:</p>
+        <pre><code>  [ User device ]
+      |  (device posture + cert checked by MDM/NAC; identity required)
+      v
+  [ SASE / SSE PoP ]  --  SWG category+TLS policy, CASB, DLP inline
+      |                   ZTNA broker: "is THIS identity+device allowed THIS app?"
+      v
+  [ ZTNA connector in the app's segment ]   (app never exposed to internet)
+      |
+      v
+  [ NGFW / zone boundary ]  --  default-deny, App-ID, IPS, logs -> SIEM
+      |
+      v
+  [ Micro-seg policy (Illumio/NSX) ]  --  only this app tier may talk to this DB tier
+      |
+      v
+  [ Load balancer / WAF ]  --  TLS, OWASP rules, API schema checks
+      |
+      v
+  [ Application tier ] --(mTLS)--> [ Database tier ]
+                                        |
+                                        v
+                                  [ DAM (Guardium) watches privileged/sensitive queries ]
+
+  In parallel, EVERY hop mirrors telemetry:
+    NGFW/proxy/DNS logs, NDR metadata, EDR events, identity logs, cloud logs
+        -->  log pipeline  -->  SIEM + data lake  -->  SOC (detect -> respond)</code></pre>
+        <p>
+          The point of the diagram: an attacker who phishes the user still has to beat device
+          posture, the ZTNA broker, the zone firewall, micro-segmentation, the WAF, and mTLS — and
+          every one of those is also emitting the telemetry that lets the SOC catch them.
+        </p>
+
+        <h2>3. Identity &amp; Access Management (IAM)</h2>
+        <p>
+          In Zero Trust, identity is the primary control plane — and Active Directory/Entra is the
+          literal crown jewel, since whoever owns the directory owns the bank. IAM is split into
+          authentication, directory, privilege, governance, and machine secrets.
+        </p>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>Alternative / OSS</th><th>Role &amp; trade-offs</th></tr></thead>
+          <tbody>
+            <tr><td>IdP / SSO / MFA</td><td>Microsoft Entra ID, Okta, Ping Identity</td><td>ForgeRock/PingAM, Keycloak (OSS)</td><td>One IdP federating thousands of apps (SAML/OIDC/SCIM) with Conditional Access and phishing-resistant MFA (FIDO2/passkeys). Entra if Microsoft-centric; Okta as a neutral broker across many SaaS. Keycloak only where you can own the ops burden.</td></tr>
+            <tr><td>Directory &amp; AD security</td><td>Active Directory + Entra; Microsoft Defender for Identity, Semperis, Tenable Identity Exposure (ex-AD)</td><td>BloodHound/BloodHound CE (OSS, attacker &amp; defender)</td><td>AD is legacy but load-bearing; these tools find the dangerous ACLs/paths (<a href="2026-08-18-acls-dacls.html">DACL abuse</a>, <a href="2026-08-18-kerberoasting.html">kerberoasting</a>) and give AD-forest recovery (Semperis). Running BloodHound against your <em>own</em> estate is table stakes.</td></tr>
+            <tr><td>Privileged Access Mgmt (PAM)</td><td>CyberArk, BeyondTrust, Delinea (ex-Thycotic)</td><td>Teleport (modern, infra-focused)</td><td>Vaulting, session recording, just-in-time elevation, break-glass. CyberArk is the bank default (and heavy/expensive to run); Teleport is the cloud-native challenger for infra/SSH/K8s access.</td></tr>
+            <tr><td>Identity Governance (IGA)</td><td>SailPoint, Saviynt</td><td>Omada, Microsoft Entra ID Governance</td><td>Joiner/mover/leaver automation, access certifications, and <strong>Segregation-of-Duties</strong> enforcement — SoD is a SOX/audit requirement in a bank, not a nicety. IGA programmes are long and political but are where over-entitlement is fixed at scale.</td></tr>
+            <tr><td>Machine/app secrets</td><td>HashiCorp Vault, CyberArk Conjur, cloud KMS/secret managers</td><td>Vault OSS, SOPS</td><td>Dynamic, short-lived secrets for apps/pipelines so static passwords die. Vault is the de-facto standard; the ops burden (HA, unseal, policy) is real.</td></tr>
+            <tr><td>Cloud entitlements (CIEM)</td><td>Wiz, Microsoft Entra Permissions Mgmt, Sonrai</td><td>—</td><td>Rightsizes the explosion of cloud IAM permissions (the cloud's privilege-creep problem); usually a module of the CNAPP in §6.</td></tr>
+          </tbody>
+        </table>
+        <blockquote>
+          <strong>Identity flow (described):</strong> user &rarr; IdP authenticates with
+          phishing-resistant MFA &rarr; Conditional Access evaluates device compliance (from MDM) +
+          risk + location &rarr; token issued scoped to the app &rarr; for <em>privileged</em>
+          actions, the session is brokered through PAM (just-in-time, recorded) from a hardened
+          admin workstation. Standing admin rights approach zero; every elevation is logged and
+          attributable — the auditability the regulator demands.
+        </blockquote>
+
+        <h2>4. Data security</h2>
+        <p>
+          The thing we're ultimately protecting. Controls wrap the data itself so it survives when
+          perimeter, endpoint, and identity controls fail — and so PCI/GDPR obligations are met.
+        </p>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>Alternative / OSS</th><th>Role &amp; trade-offs</th></tr></thead>
+          <tbody>
+            <tr><td>DLP (endpoint/network/cloud)</td><td>Microsoft Purview DLP, Forcepoint, Broadcom/Symantec, Zscaler DLP</td><td>—</td><td>Stops sensitive data leaving. Purview if Microsoft-centric and data lives in M365; Forcepoint/Symantec for heavy endpoint/network DLP. DLP is notoriously false-positive-heavy — expect a long tuning programme and business friction.</td></tr>
+            <tr><td>Database Activity Monitoring (DAM)</td><td>Imperva, IBM Guardium</td><td>Native DB audit + SIEM</td><td>Watches privileged and sensitive-data queries on crown-jewel databases for compliance and insider detection; a PCI/SOX staple. Agents/taps add DB overhead — placement and scope matter.</td></tr>
+            <tr><td>Classification &amp; discovery (DSPM)</td><td>Microsoft Purview, BigID, Varonis</td><td>—</td><td>Labels drive every downstream control; DSPM finds where regulated data actually sprawled. Varonis is strong on data-access analytics (who can/does touch what).</td></tr>
+            <tr><td>Encryption keys / HSM</td><td>Thales Luna/CipherTrust, Entrust, cloud HSM (CloudHSM / Azure Managed HSM)</td><td>—</td><td>Keys in FIPS-validated HSMs, customer-managed for the most sensitive sets; key lifecycle (rotation, escrow, separation of duties) is itself audited. Tokenisation/masking shrinks PCI scope.</td></tr>
+            <tr><td>CASB (SaaS governance)</td><td>Netskope, Microsoft Defender for Cloud Apps, Zscaler</td><td>—</td><td>Visibility and DLP/policy over sanctioned and shadow SaaS; usually part of the SASE stack, so it co-locates with the proxy.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>5. Endpoint &amp; workload security</h2>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>Alternative / OSS</th><th>Role &amp; trade-offs</th></tr></thead>
+          <tbody>
+            <tr><td>EDR / XDR</td><td>CrowdStrike Falcon, Microsoft Defender for Endpoint, SentinelOne, Palo&nbsp;Alto Cortex XDR</td><td>Wazuh, osquery + Velociraptor (OSS DFIR)</td><td>The endpoint's eyes and kill-switch. CrowdStrike is the premium default; Defender is compelling when you own E5 licensing (cost leverage); SentinelOne/Cortex are strong challengers. XDR extends correlation to identity/email/cloud. Agent performance and single-vendor risk are the debates.</td></tr>
+            <tr><td>NGAV / app control / device control</td><td>Built into EDR; WDAC, AppLocker</td><td>—</td><td>Allowlisting is the strongest control against commodity malware and <a href="2026-09-23-defense-evasion.html">LOLBins</a> — and the hardest to operate without breaking the business.</td></tr>
+            <tr><td>Server/container workload</td><td>CrowdStrike/SentinelOne cloud-workload, Defender for Servers; part of CNAPP</td><td>Falco (OSS runtime), Trivy</td><td>Runtime protection for VMs and K8s; Falco for OSS runtime threat detection in containers.</td></tr>
+            <tr><td>MDM / UEM (managed + BYOD)</td><td>Microsoft Intune, Jamf (Apple), VMware Workspace ONE</td><td>—</td><td>Enrols, hardens, and attests devices; device compliance is the Conditional-Access signal that ties endpoint back to identity. BYOD is handled with MAM/app-protection or containerisation rather than full management.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>6. Cloud &amp; application security</h2>
+        <p>
+          The multi-cloud estate and the app pipeline create new risk daily, so security shifts
+          <strong>left</strong> (build) and <strong>right</strong> (runtime), delivered as a platform
+          developers consume.
+        </p>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>Alternative / OSS</th><th>Role &amp; trade-offs</th></tr></thead>
+          <tbody>
+            <tr><td>CNAPP (CSPM+CWPP+CIEM)</td><td>Wiz, Palo&nbsp;Alto Prisma Cloud, Orca Security, Microsoft Defender for Cloud</td><td>Prowler, CloudQuery, Steampipe (OSS CSPM)</td><td>One platform for misconfig, workload, and entitlement risk across AWS/Azure/GCP. Wiz won the market on agentless speed and an attack-path graph; Defender for Cloud leverages Azure-native integration. The risk is alert overload — prioritise by exploitable attack path, not raw findings.</td></tr>
+            <tr><td>Kubernetes / container</td><td>Wiz/Prisma, Aqua, Sysdig</td><td>Falco, Trivy, Kyverno/OPA Gatekeeper</td><td>Image scanning, admission control (policy-as-code), runtime detection. Sysdig/Falco lead on runtime; OPA/Kyverno enforce guardrails at deploy.</td></tr>
+            <tr><td>AppSec — SAST/DAST/SCA</td><td>Snyk, Checkmarx, Veracode, SonarQube</td><td>Semgrep (OSS SAST), OWASP ZAP (OSS DAST), Dependency-Track</td><td>Wired into CI/CD for fast developer feedback. Snyk owns developer-first SCA; Semgrep is the OSS/low-cost SAST favourite. Gate on <em>new</em> critical findings, not the whole backlog, or developers route around you.</td></tr>
+            <tr><td>WAF</td><td>F5, Imperva, Cloudflare, AWS WAF, Akamai</td><td>ModSecurity + OWASP CRS (OSS)</td><td>In front of web apps at the ADC/CDN. Cloudflare/Akamai at the edge for public apps; F5/Imperva in-DC. Tuning to avoid blocking legit traffic is the ongoing cost.</td></tr>
+            <tr><td>API security</td><td>Salt Security, Akamai API Security (ex-Noname), Traceable</td><td>—</td><td>APIs are the modern attack surface (and a bank is all APIs); these discover shadow APIs and detect abuse/business-logic attacks the WAF misses.</td></tr>
+            <tr><td>Secrets scanning</td><td>GitGuardian, Snyk, native (GitHub Advanced Security)</td><td>Gitleaks, TruffleHog (OSS)</td><td>Catches credentials committed to code — the exact failure behind countless breaches. Cheap, high ROI, run in pre-commit and CI.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>7. The SOC — end-to-end workflow</h2>
+        <p>
+          The Security Operations Centre is where all the telemetry becomes detection and response.
+          It is people + process + a data pipeline, operated 24&times;7. Walk it end to end.
+        </p>
+        <h3>7.1 Telemetry &amp; the log pipeline</h3>
+        <p>
+          Everything emits: endpoint (EDR, Sysmon), network (NGFW, proxy, DNS, NDR, flow),
+          identity (AD/Entra sign-ins, PAM), cloud (CloudTrail, Azure Activity, GuardDuty), app and
+          DB (DAM). At a 50k-employee bank this is <strong>hundreds of thousands of events per second
+          and tens of TB/day</strong>, so the pipeline is <strong>tiered</strong>: a collection/
+          normalisation layer (Cribl Stream, Logstash, or vendor forwarders) routes high-value,
+          detection-relevant data <em>hot</em> into the SIEM and the bulk <em>cold</em> into a cheap
+          data lake (S3/ADLS) for compliance retention and investigation search. Routing at ingest is
+          where most of the SIEM cost is won or lost.
+        </p>
+        <h3>7.2 SIEM &amp; detection engineering</h3>
+        <table>
+          <thead><tr><th>SIEM</th><th>Notes &amp; trade-offs</th></tr></thead>
+          <tbody>
+            <tr><td>Splunk Enterprise Security</td><td>The powerhouse; unmatched flexibility, infamous cost at bank-scale ingest. Still the enterprise default.</td></tr>
+            <tr><td>Microsoft Sentinel</td><td>Cloud-native, strong if you're Azure/M365-heavy; cost scales with ingest, pairs with the cheap data-lake tier.</td></tr>
+            <tr><td>IBM QRadar / Google SecOps (Chronicle) / Elastic Security</td><td>QRadar is a legacy bank mainstay; Chronicle's flat-rate, petabyte-scale search is attractive for high-volume; Elastic (OSS core) for teams that want to own the stack.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>Detection engineering</strong> is the heart of SOC quality: detections are written
+          and tuned as code (Sigma rules in Git), mapped to <strong>MITRE ATT&amp;CK</strong> so
+          coverage is measured technique-by-technique rather than by vendor dashboard, version-
+          controlled, peer-reviewed, and tested. <strong>UEBA</strong> adds behavioural baselines for
+          insider and anomaly detection (critical given the explicit insider threat model).
+        </p>
+        <h3>7.3 Threat intel &amp; SOAR</h3>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>OSS</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td>Threat Intelligence Platform</td><td>Recorded Future, Mandiant (Google), Anomali, ThreatConnect</td><td>MISP, OpenCTI</td><td>Enriches alerts with context (is this IP/hash/TTP known-bad, who uses it) and drives proactive blocking/hunting. MISP is the OSS backbone many banks run alongside a paid feed.</td></tr>
+            <tr><td>SOAR / automation</td><td>Palo&nbsp;Alto XSOAR, Splunk SOAR, Tines, Torq</td><td>Shuffle (OSS)</td><td>Playbooks that auto-enrich, auto-contain (isolate host, disable account), and auto-close noise. Mandatory at scale: with ~70% of default-ruleset alerts being false positives at ~15 min triage each, you cannot hire your way out. Tines/Torq are the modern low-code challengers to XSOAR.</td></tr>
+            <tr><td>Case management</td><td>In-SIEM, ServiceNow SecOps, TheHive (OSS)</td><td>TheHive + Cortex</td><td>Ticketing, evidence, SLA tracking, and metrics.</td></tr>
+          </tbody>
+        </table>
+        <h3>7.4 The analyst workflow &amp; IR lifecycle</h3>
+        <p>
+          A <strong>follow-the-sun</strong> model (regional SOCs hand off around the clock) runs a
+          tiered workflow:
+        </p>
+        <ul>
+          <li><strong>Tier&nbsp;1 — triage:</strong> validate and prioritise alerts, close known
+            false positives, escalate real ones. SLA-driven (e.g. acknowledge P1 in minutes).</li>
+          <li><strong>Tier&nbsp;2 — investigation:</strong> scope the incident across tools, pivot
+            through telemetry, contain (SOAR-assisted), and drive to eradication.</li>
+          <li><strong>Tier&nbsp;3 — threat hunting / IR:</strong> proactive hypothesis-driven hunting
+            (ATT&amp;CK-guided), deep forensics, malware analysis, and leading major incidents.</li>
+        </ul>
+        <p>
+          Incidents follow the <strong>NIST&nbsp;SP&nbsp;800-61 lifecycle</strong>: preparation,
+          detection &amp; analysis, containment, eradication, recovery, and post-incident learning.
+          A retained <strong>IR firm</strong> (Mandiant, Unit&nbsp;42, CrowdStrike Services) is on
+          call for major events, and an <strong>MDR/MSSP</strong> augments the internal SOC for
+          surge, after-hours, or specialised coverage — you staff for the median and burst to the
+          partner for the peak. <strong>Purple teaming</strong> runs continuously so detections are
+          tested against real adversary emulation, not assumed.
+        </p>
+        <h3>7.5 Detection-to-response pipeline (described diagram)</h3>
+        <pre><code>  SOURCES            PIPELINE              BRAIN               ACTION
+  --------           --------              -----               ------
+  EDR   -----\
+  Network ----\     Collect/normalise     SIEM (hot)           Tier 1 triage
+  Identity ----+--> (Cribl/forwarders) -->  + detections  -->  Tier 2 investigate
+  Cloud   ----/      |                      mapped to ATT&amp;CK    Tier 3 hunt/IR
+  App/DB --/         |                      UEBA baselines         |
+                     v                      TI enrichment          v
+                 Data lake (cold)              |             SOAR playbook:
+                 retention + search            +---------->  enrich -> contain
+                                                             (isolate host,
+                                                              disable account)
+                                                                   |
+                                                                   v
+                                                       NIST IR: contain -> eradicate
+                                                       -> recover -> lessons learned
+                                                       (retainer + MDR on surge)</code></pre>
+
+        <h2>8. Vulnerability, exposure &amp; offensive security</h2>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>OSS</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Vulnerability management</td><td>Tenable (Nessus/.io), Qualys, Rapid7 InsightVM</td><td>OpenVAS/Greenbone</td><td>Scan + prioritise. Raw CVSS is not enough at bank scale — prioritise by <strong>EPSS</strong> (exploit probability) and <strong>CISA KEV</strong> (known-exploited) plus asset exposure, or you drown. Patching is the hard operational half.</td></tr>
+            <tr><td>Attack Surface Management</td><td>Microsoft Defender EASM, Censys, Palo&nbsp;Alto Cortex Xpanse</td><td>amass, Shodan</td><td>Finds the internet-facing assets you forgot you had — a top breach vector after M&amp;A.</td></tr>
+            <tr><td>Pen testing &amp; red team</td><td>Internal red team + external firms; Cobalt Strike, Core Impact</td><td>the <a href="../toolkit.html">toolkit</a> here (BloodHound, Impacket, NetExec, Nuclei…)</td><td>Objective-based adversary emulation validates the whole stack end-to-end, not one bug.</td></tr>
+            <tr><td>Breach &amp; Attack Simulation (BAS)</td><td>AttackIQ, SafeBreach, Cymulate</td><td>Atomic Red Team, Caldera (OSS)</td><td>Continuously fires known TTPs to prove controls and detections actually work — closes the loop with detection engineering. Atomic Red Team is the OSS way to test ATT&amp;CK coverage cheaply.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>9. Email &amp; the human layer</h2>
+        <p>
+          Phishing is still the #1 initial-access vector, so mail and people are treated as a control
+          surface.
+        </p>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Email security</td><td>Proofpoint, Mimecast, Abnormal Security, Microsoft Defender for Office&nbsp;365</td><td>Abnormal leads on behavioural BEC/account-takeover detection (the hard, high-loss cases for a bank); Proofpoint/Mimecast are the established SEGs; Defender for O365 is compelling with E5. Enforce <strong>SPF/DKIM/DMARC at p=reject</strong> to stop domain spoofing.</td></tr>
+            <tr><td>Awareness &amp; phishing simulation</td><td>KnowBe4, Proofpoint Security Awareness</td><td>Regular training + simulated campaigns; measured by failure rate as a leading indicator. Pair with a frictionless "report phish" button that feeds the SOC.</td></tr>
+            <tr><td>Insider risk</td><td>Microsoft Purview Insider Risk, DTEX, Forcepoint</td><td>Behavioural signals (plus UEBA and DAM) for the explicit insider threat — balanced carefully against employee privacy and works-council/GDPR constraints.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>10. Governance, Risk &amp; Compliance (GRC)</h2>
+        <p>
+          In a regulated bank, GRC is not back-office — it is what makes the whole programme
+          <em>provable</em>. The job is to operationalise compliance continuously, not scramble
+          annually for the audit.
+        </p>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GRC / IRM platform</td><td>RSA Archer, ServiceNow IRM/GRC, OneTrust, LogicGate</td><td>Risk register, control library, policy, and audit evidence in one place. Archer is the heavyweight bank incumbent; ServiceNow IRM wins where ServiceNow is already the system of record; OneTrust leads on privacy/GDPR.</td></tr>
+            <tr><td>Control mapping</td><td>Map once to NIST CSF/800-53, ISO&nbsp;27001, SOC&nbsp;2, PCI&nbsp;DSS, CIS Controls, DORA</td><td>A <strong>unified control framework</strong> so one control satisfies many regimes and evidence is collected once. Continuous control monitoring (automated evidence from the tools above) replaces point-in-time audits.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>11. Resilience, BCDR &amp; physical/OT</h2>
+        <ul>
+          <li><strong>Backup &amp; ransomware recovery:</strong> immutable/air-gapped backups (Rubrik,
+            Cohesity, Veeam with immutability; Dell PowerProtect Cyber Recovery vault) at scale, with
+            <strong>tested</strong> restores. An untested backup is a hypothesis; a bank rehearses
+            full recovery, including <strong>AD forest recovery</strong>, which is the critical path
+            after a domain-wide compromise.</li>
+          <li><strong>DR strategy:</strong> defined RTO/RPO per service tier, multi-region/active-
+            active for crown-jewel services, and <strong>DORA</strong>-driven operational-resilience
+            testing — regulators now mandate proving you can withstand and recover from severe
+            disruption.</li>
+          <li><strong>Exercises:</strong> tabletop and live incident/DR drills up to board level, so
+            the plan is muscle memory and the crisis-comms/regulatory-notification clocks (GDPR 72h,
+            DORA reporting) are rehearsed.</li>
+          <li><strong>Physical &amp; OT:</strong> data-centre physical security (badging, mantraps,
+            CCTV) is in-scope for audit; where industrial/building systems exist they are isolated and
+            monitored passively (Claroty, Nozomi, Forescout) — the device you can't patch, you
+            contain.</li>
+        </ul>
+
+        <h2>12. How it all fits together</h2>
+        <p>
+          The layers are not independent products; they reinforce each other, and the design's whole
+          value is in the interlocks:
+        </p>
+        <ul>
+          <li><strong>Identity &times; endpoint:</strong> device compliance (MDM) is an input to
+            Conditional Access — a non-compliant device can't get a token, so identity and endpoint
+            enforce each other.</li>
+          <li><strong>Network &times; identity:</strong> ZTNA brokers access by identity, so the
+            network stops being a trust boundary and becomes an enforcement point for identity
+            decisions.</li>
+          <li><strong>Everything &times; the SOC:</strong> every layer emits telemetry; the SOC is
+            the feedback loop that detects when a control failed and drives response — and
+            purple-teaming/BAS feed fixes back into detections.</li>
+          <li><strong>Data &times; all:</strong> classification and encryption mean that even a full
+            bypass of the outer layers still yields unusable data, and DAM/DLP catch the exfiltration
+            attempt.</li>
+        </ul>
+        <p><strong>Biggest single points of failure / trade-offs to watch:</strong></p>
+        <ul>
+          <li><strong>Active Directory / the IdP</strong> is the crown jewel — its compromise is
+            game-over, which is why Tier-0/Enterprise-Access-Model isolation and AD-recovery drills
+            get disproportionate investment.</li>
+          <li><strong>The security vendors themselves</strong> (SASE cloud, EDR, firewall, VPN
+            appliance) are in-path and privileged — their outages or CVEs are now top operational
+            risks (a single bad EDR update can take down the fleet; an unpatched VPN appliance starts
+            a breach).</li>
+          <li><strong>Alert fatigue &amp; tool sprawl:</strong> buying 60 tools you can't operate is
+            a worse posture than running 20 well. Consolidation (XDR, CNAPP, SASE) is partly a
+            response to this.</li>
+          <li><strong>Fail-open vs. fail-closed:</strong> for a bank, availability sometimes wins —
+            architecting where a control fails open (to keep trading up) vs. closed (to stop a
+            breach) is an explicit, risk-accepted decision per control.</li>
+        </ul>
+        <h3>Mature vs. immature</h3>
+        <table>
+          <thead><tr><th>Dimension</th><th>Immature</th><th>Mature</th></tr></thead>
+          <tbody>
+            <tr><td>Access</td><td>Flat VPN, standing admin rights, shared accounts</td><td>ZTNA, JIT PAM, phishing-resistant MFA, near-zero standing privilege</td></tr>
+            <tr><td>Segmentation</td><td>Big flat zones, east-west wide open</td><td>Micro-segmented crown jewels, default-deny east-west</td></tr>
+            <tr><td>Detection</td><td>Vendor default rules, alert triage by hand</td><td>Detection-as-code mapped to ATT&amp;CK, SOAR-automated response, measured coverage</td></tr>
+            <tr><td>Cloud</td><td>Click-ops, no guardrails, findings ignored</td><td>Landing zones, CNAPP by exploitable attack path, policy-as-code</td></tr>
+            <tr><td>Resilience</td><td>Backups untested, no IR plan</td><td>Immutable backups, rehearsed IR/DR incl. AD recovery, DORA-tested</td></tr>
+          </tbody>
+        </table>
+        <h3>Realistic build sequence</h3>
+        <ol>
+          <li><strong>Foundations &amp; visibility first:</strong> asset inventory, EDR everywhere,
+            MFA + kill legacy auth, centralise logs into a SIEM, PAM for Tier-0. You cannot defend
+            what you cannot see or control.</li>
+          <li><strong>Raise the floor:</strong> IGA joiner/mover/leaver, SASE/ZTNA for users,
+            segment the crown jewels, security gates in CI/CD, CNAPP on the cloud.</li>
+          <li><strong>Operationalise &amp; automate:</strong> detection-as-code, SOAR, UEBA, DSPM +
+            data controls, immutable backup and AD-recovery drills.</li>
+          <li><strong>Optimise &amp; prove:</strong> continuous validation (purple team/BAS),
+            risk-based patching, M&amp;A integration playbook, board metrics (MTTD/MTTR, coverage,
+            MFA/EDR %), and a roadmap that keeps moving each pillar up the maturity curve.</li>
+        </ol>
+
+        <blockquote>
+          <strong>The through-line:</strong> no single layer is trusted to be perfect; the system is
+          engineered so that a successful attack has to defeat many independent, overlapping controls
+          <em>and</em> evade the telemetry each one emits — and so that when (not if) something gets
+          through, blast radius is small, detection is fast, and recovery is rehearsed. That is what
+          &ldquo;defense in depth&rdquo; actually buys in a high-stakes environment.
+        </blockquote>
+
+        <h2>References</h2>
+        <ul>
+          <li><a href="https://csrc.nist.gov/pubs/sp/800/207/final" target="_blank" rel="noopener">NIST SP&nbsp;800-207 — Zero Trust Architecture</a></li>
+          <li><a href="https://www.cisa.gov/zero-trust-maturity-model" target="_blank" rel="noopener">CISA — Zero Trust Maturity Model v2</a></li>
+          <li><a href="https://attack.mitre.org/" target="_blank" rel="noopener">MITRE ATT&amp;CK</a></li>
+          <li><a href="https://csrc.nist.gov/pubs/sp/800/61/r2/final" target="_blank" rel="noopener">NIST SP&nbsp;800-61 — Computer Security Incident Handling</a></li>
+          <li><a href="https://www.nist.gov/cyberframework" target="_blank" rel="noopener">NIST Cybersecurity Framework 2.0</a></li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-02-enterprise-security-architecture.html">Architecting Security for a 100,000-User Enterprise</a></li>
+          <li><a href="2026-08-18-ad-fundamentals.html">Active Directory Fundamentals</a></li>
+          <li><a href="2026-09-23-defense-evasion.html">Windows Defense Evasion — AV, EDR &amp; ASR</a></li>
+          <li><a href="2026-09-23-command-and-control.html">Command &amp; Control (C2) Frameworks</a></li>
+          <li><a href="../web-map.html">Web Pentest Checklist</a></li>
+          <li><a href="../ad-map.html">AD Attack-Path Map</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>
