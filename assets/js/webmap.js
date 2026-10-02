@@ -436,6 +436,312 @@ var WEB_MAP = {
           ]
         }
       ]
-    }
+    },
+    {
+      id: "wstg-info",
+      title: "WSTG · Information Gathering",
+      color: "#3b9ee5",
+      tag: "WSTG",
+      desc: "The passive and semi-passive first pass — learn the server, framework, entry points, and what the app leaks before touching it.",
+      groups: [
+        {
+          id: "wstg-info",
+          title: "Information Gathering",
+          scenario: "The passive and semi-passive first pass — learn the server, framework, entry points, and what the app leaks before touching it.",
+          items: [
+            { text: "WSTG-INFO-01 · Search Engine Reconnaissance", desc: "Use search engines and their cached/indexed data to find leaked files, credentials, and pages the site never meant to expose.", tools: [{ n: "Google Dorking", id: "google-dorking" }, { n: "Wayback Machine", id: "wayback-machine" }] },
+            { text: "WSTG-INFO-02 · Fingerprint Web Server", desc: "Identify the web-server product and version from banners, headers, and error pages to narrow down applicable CVEs.", tools: [{ n: "WhatWeb", id: "whatweb" }, { n: "httpx", id: "httpx" }, { n: "Nmap", id: "nmap" }] },
+            { text: "WSTG-INFO-03 · Review Webserver Metafiles for Information Leakage", desc: "Read robots.txt, sitemap.xml, security.txt, and humans.txt for disallowed paths and hints about hidden functionality.", tools: [{ n: "httpx", id: "httpx" }] },
+            { text: "WSTG-INFO-04 · Attack Surface Identification", desc: "Enumerate the applications, virtual hosts, and endpoints reachable on the target so nothing in scope is missed.", tools: [{ n: "Katana", id: "katana" }, { n: "gau (getallurls)", id: "gau" }, { n: "FFUF", id: "ffuf" }] },
+            { text: "WSTG-INFO-05 · Review Web Page Content for Information Leakage", desc: "Inspect HTML comments, metadata, and JavaScript for credentials, internal URLs, API keys, and developer notes.", tools: [{ n: "subjs", id: "subjs" }, { n: "xnLinkFinder", id: "xnlinkfinder" }], vulns: [{ n: "Exposed Secrets & API Keys", id: "secrets-exposure" }] },
+            { text: "WSTG-INFO-06 · Identify Application Entry Points", desc: "Catalogue every request, parameter, header, and cookie the app accepts — the inputs you will later test.", tools: [{ n: "Burp Suite", id: "burpsuite" }] },
+            { text: "WSTG-INFO-07 · Map Execution Paths Through Application", desc: "Walk the app's workflows and navigation so you understand how data moves and where logic decisions are made.", tools: [{ n: "Burp Suite", id: "burpsuite" }, { n: "Katana", id: "katana" }] },
+            { text: "WSTG-INFO-08 · Fingerprint Web Application Framework", desc: "Determine the framework (Django, Laravel, Spring, etc.) from cookies, headers, paths, and error signatures.", tools: [{ n: "WhatWeb", id: "whatweb" }, { n: "httpx", id: "httpx" }] },
+            { text: "WSTG-INFO-09 · Fingerprint Web Application", desc: "Identify the specific application/CMS and version (WordPress, Jira, etc.) to find known vulnerabilities.", tools: [{ n: "WhatWeb", id: "whatweb" }, { n: "WPScan", id: "wpscan" }] },
+            { text: "WSTG-INFO-10 · Map Application Architecture", desc: "Map the components behind the app — proxies, WAFs, load balancers, CDNs, back-end services — that shape later attacks.", tools: [{ n: "wafw00f", id: "wafw00f" }, { n: "Nmap", id: "nmap" }] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "wstg-conf",
+      title: "WSTG · Configuration & Deployment",
+      color: "#e8912e",
+      tag: "WSTG",
+      desc: "Against the hosting environment and deployment — server config, leftover files, admin interfaces, methods, headers, and cloud.",
+      groups: [
+        {
+          id: "wstg-conf",
+          title: "Configuration & Deployment",
+          scenario: "Against the hosting environment and deployment — server config, leftover files, admin interfaces, methods, headers, and cloud.",
+          items: [
+            { text: "WSTG-CONF-01 · Network Infrastructure Configuration", desc: "Review exposed services, ports, and management interfaces for insecure defaults and unnecessary exposure.", tools: [{ n: "Nmap", id: "nmap" }] },
+            { text: "WSTG-CONF-02 · Application Platform Configuration", desc: "Check the app/web server for debug modes, sample files, verbose config, and insecure defaults.", tools: [{ n: "Nikto", id: "nikto" }, { n: "Nuclei", id: "nuclei" }], vulns: [{ n: "Verbose Errors & Info Disclosure", id: "verbose-errors" }] },
+            { text: "WSTG-CONF-03 · File Extensions Handling for Sensitive Information", desc: "Request alternate extensions (.bak, .old, .inc, .zip, .config) to retrieve source or sensitive files the server mis-serves.", tools: [{ n: "FFUF", id: "ffuf" }], vulns: [{ n: "Exposed .git / Source & Backups", id: "exposed-source-backups" }] },
+            { text: "WSTG-CONF-04 · Review Old Backup and Unreferenced Files for Sensitive Information", desc: "Brute-force for backups, archives, and unlinked files that expose source, credentials, or data.", tools: [{ n: "FFUF", id: "ffuf" }, { n: "feroxbuster", id: "feroxbuster" }], vulns: [{ n: "Exposed .git / Source & Backups", id: "exposed-source-backups" }] },
+            { text: "WSTG-CONF-05 · Enumerate Infrastructure and Application Admin Interfaces", desc: "Find admin panels and management endpoints that should not be publicly reachable.", tools: [{ n: "FFUF", id: "ffuf" }, { n: "Gobuster", id: "gobuster" }], vulns: [{ n: "Default Credentials", id: "default-credentials" }] },
+            { text: "WSTG-CONF-06 · HTTP Methods", desc: "Enumerate allowed methods and test PUT/DELETE/TRACE and verb-based access bypasses.", tools: [{ n: "Nmap", id: "nmap" }], vulns: [{ n: "Dangerous HTTP Methods", id: "dangerous-http-methods" }] },
+            { text: "WSTG-CONF-07 · HTTP Strict Transport Security", desc: "Verify HSTS is present with a sound max-age so the site cannot be downgraded (SSL-strip).", tools: [{ n: "testssl.sh", id: "testssl" }], vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }, { n: "Weak TLS / SSL Configuration", id: "weak-tls" }] },
+            { text: "WSTG-CONF-09 · File Permissions", desc: "Check that sensitive files and directories are not world-readable or writable where the app can expose them." },
+            { text: "WSTG-CONF-10 · Subdomain Takeover", desc: "Hunt dangling DNS records pointing at de-provisioned services that an attacker can claim.", tools: [{ n: "Nuclei", id: "nuclei" }, { n: "Subfinder", id: "subfinder" }], vulns: [{ n: "Subdomain Takeover", id: "subdomain-takeover" }] },
+            { text: "WSTG-CONF-11 · Cloud Storage", desc: "Test S3/GCS/Azure buckets for public list, read, and — most critically — write access.", tools: [{ n: "cloud_enum", id: "cloud-enum" }], vulns: [{ n: "Cloud Storage Misconfiguration", id: "cloud-storage-misconfig" }] },
+            { text: "WSTG-CONF-12 · Content Security Policy", desc: "Assess the CSP for absence or weaknesses (unsafe-inline, unsafe-eval, wildcard sources) that fail to contain XSS.", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
+            { text: "WSTG-CONF-13 · Path Confusion", desc: "Probe for inconsistent path handling between proxy and app (encoded slashes, path params) that bypasses controls or poisons caches." },
+            { text: "WSTG-CONF-14 · Other HTTP Security Header Misconfigurations", desc: "Review X-Content-Type-Options, X-Frame-Options/frame-ancestors, Referrer-Policy, Permissions-Policy, and cookie flags.", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
+            { text: "WSTG-CONF-15 · Feature Flag Security Bypass", desc: "Test whether client-visible or guessable feature flags can be toggled to unlock unreleased or privileged functionality.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "wstg-idnt",
+      title: "WSTG · Identity Management",
+      color: "#a855f7",
+      tag: "WSTG",
+      desc: "How identities are defined, registered, and provisioned — the roles and account lifecycle the app relies on.",
+      groups: [
+        {
+          id: "wstg-idnt",
+          title: "Identity Management",
+          scenario: "How identities are defined, registered, and provisioned — the roles and account lifecycle the app relies on.",
+          items: [
+            { text: "WSTG-IDNT-01 · Role Definitions", desc: "Enumerate the roles and confirm each grants only its intended permissions, with no gaps between roles.", vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
+            { text: "WSTG-IDNT-02 · User Registration Process", desc: "Test the sign-up flow for weak verification, duplicate/overwrite registration, and identity-binding abuse.", vulns: [{ n: "Insufficient Email Verification", id: "email-verification" }] },
+            { text: "WSTG-IDNT-03 · Account Provisioning Process", desc: "Check how accounts are created/approved/deprovisioned and whether that process can be abused to gain or keep access.", vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
+            { text: "WSTG-IDNT-04 · Account Enumeration and Guessable User Account", desc: "Look for response, timing, or error differences that reveal which usernames/emails exist.", vulns: [{ n: "Authentication Bypass", id: "auth-bypass" }] },
+            { text: "WSTG-IDNT-05 · Weak or Unenforced Username Policy", desc: "Test whether predictable or policy-violating usernames are allowed, aiding enumeration and guessing.", vulns: [{ n: "Authentication Bypass", id: "auth-bypass" }] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "wstg-athn",
+      title: "WSTG · Authentication",
+      color: "#ef4444",
+      tag: "WSTG",
+      desc: "Everything that proves who the user is — transport, credentials, lockout, reset, remember-me, and MFA.",
+      groups: [
+        {
+          id: "wstg-athn",
+          title: "Authentication",
+          scenario: "Everything that proves who the user is — transport, credentials, lockout, reset, remember-me, and MFA.",
+          items: [
+            { text: "WSTG-ATHN-01 · Credentials Transported over an Encrypted Channel", desc: "Confirm credentials are only ever sent over TLS, never in a URL, and never over a plaintext leg.", tools: [{ n: "testssl.sh", id: "testssl" }], vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }, { n: "Weak TLS / SSL Configuration", id: "weak-tls" }] },
+            { text: "WSTG-ATHN-02 · Default Credentials", desc: "Try vendor and common default credentials on the app and any management interfaces.", tools: [{ n: "NetExec", id: "netexec" }, { n: "Nuclei", id: "nuclei" }], vulns: [{ n: "Default Credentials", id: "default-credentials" }] },
+            { text: "WSTG-ATHN-03 · Weak Lock Out Mechanism", desc: "Test whether repeated failures trigger lockout/throttling, per account and per source.", vulns: [{ n: "Weak Password Policy", id: "weak-password-policy" }] },
+            { text: "WSTG-ATHN-04 · Bypassing Authentication Schema", desc: "Attempt forced browsing, parameter/response tampering, and logic flaws to reach authenticated state without valid creds.", vulns: [{ n: "Authentication Bypass", id: "auth-bypass" }] },
+            { text: "WSTG-ATHN-05 · Vulnerable Remember Password", desc: "Inspect remember-me tokens for predictability, weak storage, and whether they survive password change.", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] },
+            { text: "WSTG-ATHN-06 · Browser Cache Weaknesses", desc: "Check that sensitive pages set no-store/no-cache so credentials and data are not left in the browser or shared cache.", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }, { n: "Missing Security Headers", id: "missing-security-headers" }] },
+            { text: "WSTG-ATHN-07 · Weak Authentication Methods", desc: "Assess the strength of the password policy and authentication factors against guessing and stuffing.", vulns: [{ n: "Weak Password Policy", id: "weak-password-policy" }] },
+            { text: "WSTG-ATHN-08 · Weak Security Question Answer", desc: "Test knowledge-based recovery questions for guessable or OSINT-recoverable answers.", vulns: [{ n: "Authentication Bypass", id: "auth-bypass" }] },
+            { text: "WSTG-ATHN-09 · Weak Password Change or Reset Functionalities", desc: "Attack the reset/change flow — token entropy/binding, host-header poisoning, and missing re-auth.", vulns: [{ n: "Authentication Bypass", id: "auth-bypass" }, { n: "Host Header Injection", id: "host-header-injection" }] },
+            { text: "WSTG-ATHN-10 · Weaker Authentication in Alternative Channel", desc: "Check whether mobile, API, or legacy channels enforce weaker auth than the main site.", vulns: [{ n: "Authentication Bypass", id: "auth-bypass" }] },
+            { text: "WSTG-ATHN-11 · Multi-Factor Authentication (MFA)", desc: "Test the second factor for brute force, flow skipping, response manipulation, and replay.", vulns: [{ n: "OTP / 2FA Bypass", id: "otp-2fa-bypass" }] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "wstg-athz",
+      title: "WSTG · Authorization",
+      color: "#2fd44f",
+      tag: "WSTG",
+      desc: "Once authenticated — whether the app correctly restricts what each user may reach and do.",
+      groups: [
+        {
+          id: "wstg-athz",
+          title: "Authorization",
+          scenario: "Once authenticated — whether the app correctly restricts what each user may reach and do.",
+          items: [
+            { text: "WSTG-ATHZ-01 · Directory Traversal File Include", desc: "Test path parameters for ../ traversal and local/remote file inclusion.", tools: [{ n: "FFUF", id: "ffuf" }], vulns: [{ n: "Path Traversal / LFI / RFI", id: "path-traversal" }] },
+            { text: "WSTG-ATHZ-02 · Bypassing Authorization Schema", desc: "Attempt to access functions and data outside your role via forced browsing and parameter manipulation.", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
+            { text: "WSTG-ATHZ-03 · Privilege Escalation", desc: "Test for horizontal and vertical escalation into other users' data and admin functionality.", vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
+            { text: "WSTG-ATHZ-04 · Insecure Direct Object References", desc: "Swap object identifiers to read or modify resources you do not own.", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
+            { text: "WSTG-ATHZ-05 · OAuth Weaknesses", desc: "Test the OAuth/OIDC flow for loose redirect_uri, missing state, and token/code leakage.", vulns: [{ n: "OAuth Misconfiguration", id: "oauth-misconfig" }] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "wstg-sess",
+      title: "WSTG · Session Management",
+      color: "#8a94a8",
+      tag: "WSTG",
+      desc: "How sessions are created, protected, and destroyed — cookies, fixation, CSRF, timeout, JWTs, and concurrency.",
+      groups: [
+        {
+          id: "wstg-sess",
+          title: "Session Management",
+          scenario: "How sessions are created, protected, and destroyed — cookies, fixation, CSRF, timeout, JWTs, and concurrency.",
+          items: [
+            { text: "WSTG-SESS-01 · Session Management Schema", desc: "Analyse session tokens for predictability, entropy, and sound server-side handling.", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "Authentication Bypass", id: "auth-bypass" }] },
+            { text: "WSTG-SESS-02 · Cookies Attributes", desc: "Verify Secure, HttpOnly, and SameSite are set appropriately on session cookies.", vulns: [{ n: "Missing Security Headers", id: "missing-security-headers" }] },
+            { text: "WSTG-SESS-03 · Session Fixation", desc: "Confirm the session id is regenerated at login so a planted id cannot be ridden.", vulns: [{ n: "Session Fixation", id: "session-fixation" }] },
+            { text: "WSTG-SESS-04 · Exposed Session Variables", desc: "Check that session identifiers are not exposed in URLs, logs, or client-visible storage.", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] },
+            { text: "WSTG-SESS-05 · Cross Site Request Forgery", desc: "Test state-changing actions for missing or bypassable anti-CSRF protection.", vulns: [{ n: "Cross-Site Request Forgery (CSRF)", id: "csrf" }] },
+            { text: "WSTG-SESS-06 · Logout Functionality", desc: "Verify logout fully invalidates the session server-side and cannot be replayed.", vulns: [{ n: "Authentication Bypass", id: "auth-bypass" }] },
+            { text: "WSTG-SESS-07 · Session Timeout", desc: "Check that idle and absolute timeouts exist and are enforced for sensitive apps.", vulns: [{ n: "Authentication Bypass", id: "auth-bypass" }] },
+            { text: "WSTG-SESS-08 · Session Puzzling", desc: "Test whether session variables set in one flow can be abused to skip steps or gain state in another.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "WSTG-SESS-09 · Session Hijacking", desc: "Assess whether a captured or fixed session can be reused, and what protections bind it.", vulns: [{ n: "Session Fixation", id: "session-fixation" }] },
+            { text: "WSTG-SESS-10 · JSON Web Tokens", desc: "Attack JWTs for alg:none, algorithm confusion, weak secrets, and unvalidated claims.", tools: [{ n: "jwt_tool", id: "jwt-tool" }], vulns: [{ n: "JWT Vulnerabilities", id: "jwt-vulns" }] },
+            { text: "WSTG-SESS-11 · Concurrent Sessions", desc: "Check whether multiple simultaneous sessions are allowed and whether that breaks logout/revocation.", vulns: [{ n: "Authentication Bypass", id: "auth-bypass" }] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "wstg-injt",
+      title: "WSTG · Injection",
+      color: "#d64550",
+      tag: "WSTG",
+      desc: "Where untrusted input reaches an interpreter — the whole injection family plus smuggling, assignment, and deserialization.",
+      groups: [
+        {
+          id: "wstg-injt",
+          title: "Injection",
+          scenario: "Where untrusted input reaches an interpreter — the whole injection family plus smuggling, assignment, and deserialization.",
+          items: [
+            { text: "WSTG-INJT-01 · Reflected Cross Site Scripting", desc: "Inject script into reflected parameters and confirm execution in the response context.", tools: [{ n: "Dalfox", id: "dalfox" }], vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
+            { text: "WSTG-INJT-02 · Stored Cross Site Scripting", desc: "Plant a payload in stored fields and confirm it fires when the data is later rendered.", tools: [{ n: "Dalfox", id: "dalfox" }], vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
+            { text: "WSTG-INJT-03 · HTTP Verb Tampering", desc: "Change the HTTP method to bypass method-based access controls or reach unintended handlers.", vulns: [{ n: "Dangerous HTTP Methods", id: "dangerous-http-methods" }] },
+            { text: "WSTG-INJT-04 · HTTP Parameter Pollution", desc: "Send duplicate parameters so layers disagree on the value, bypassing filters or business rules.", vulns: [{ n: "HTTP Parameter Pollution", id: "http-parameter-pollution" }] },
+            { text: "WSTG-INJT-05 · SQL Injection", desc: "Test every input reaching a query for SQL injection, from auth bypass to data extraction.", tools: [{ n: "sqlmap", id: "sqlmap" }], vulns: [{ n: "SQL Injection (SQLi)", id: "sqli" }] },
+            { text: "WSTG-INJT-06 · LDAP Injection", desc: "Inject LDAP filter syntax to bypass authentication or read directory data.", vulns: [{ n: "LDAP Injection", id: "ldap-injection" }] },
+            { text: "WSTG-INJT-07 · XML Injection", desc: "Inject XML metacharacters/elements into XML or SOAP messages to alter the parsed document.", vulns: [{ n: "SOAP Injection", id: "soap-injection" }, { n: "XML External Entity (XXE)", id: "xxe" }] },
+            { text: "WSTG-INJT-08 · SSI Injection", desc: "Inject server-side include directives into pages the server parses for SSI.", vulns: [{ n: "Server-Side Includes (SSI) Injection", id: "ssi-injection" }] },
+            { text: "WSTG-INJT-09 · XPath Injection", desc: "Inject XPath syntax to bypass authentication or extract the backing XML document.", vulns: [{ n: "XPath Injection", id: "xpath-injection" }] },
+            { text: "WSTG-INJT-10 · IMAP SMTP Injection", desc: "Inject newlines/commands into mail-building input to add headers or relay mail.", vulns: [{ n: "SMTP / Email Header Injection", id: "smtp-injection" }] },
+            { text: "WSTG-INJT-11 · Code Injection", desc: "Test for input evaluated as server-side code (eval, include, template), leading to execution.", vulns: [{ n: "OS Command Injection", id: "command-injection" }, { n: "Server-Side Template Injection (SSTI)", id: "ssti" }] },
+            { text: "WSTG-INJT-12 · Command Injection", desc: "Inject shell metacharacters into input that reaches an OS command for code execution.", tools: [{ n: "Commix", id: "commix" }], vulns: [{ n: "OS Command Injection", id: "command-injection" }] },
+            { text: "WSTG-INJT-13 · Format String Injection", desc: "Supply format specifiers (%s, %x, %n) to inputs passed to a formatting function." },
+            { text: "WSTG-INJT-14 · Incubated Vulnerability", desc: "Chain a stored/persisted injection that only triggers later when the data is processed.", vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
+            { text: "WSTG-INJT-15 · HTTP Response Splitting", desc: "Inject CRLF into a header sink to split the response and inject headers/body.", vulns: [{ n: "CRLF / HTTP Response Header Injection", id: "crlf-injection" }] },
+            { text: "WSTG-INJT-16 · HTTP Request Smuggling", desc: "Exploit front-end/back-end disagreement on request boundaries (CL.TE/TE.CL) to smuggle requests.", vulns: [{ n: "HTTP Request Smuggling", id: "http-request-smuggling" }] },
+            { text: "WSTG-INJT-17 · Host Header Injection", desc: "Abuse a trusted Host/X-Forwarded-Host to poison links, reset emails, or caches.", vulns: [{ n: "Host Header Injection", id: "host-header-injection" }] },
+            { text: "WSTG-INJT-18 · Server-side Template Injection", desc: "Inject template syntax that the server evaluates, escalating to RCE.", tools: [{ n: "SSTImap", id: "sstimap" }], vulns: [{ n: "Server-Side Template Injection (SSTI)", id: "ssti" }] },
+            { text: "WSTG-INJT-19 · Server-Side Request Forgery", desc: "Make the server fetch attacker-chosen URLs to reach internal services and cloud metadata.", vulns: [{ n: "Server-Side Request Forgery (SSRF)", id: "ssrf" }] },
+            { text: "WSTG-INJT-20 · Mass Assignment", desc: "Over-post extra fields (role, isAdmin, price) that the framework binds without authorization.", vulns: [{ n: "Mass Assignment", id: "mass-assignment" }] },
+            { text: "WSTG-INJT-21 · CSV Injection", desc: "Inject formula payloads (=, +, -, @) into fields that are later exported to a spreadsheet." },
+            { text: "WSTG-INJT-22 · Prototype Pollution", desc: "Pollute Object.prototype via crafted keys (__proto__) to alter app behaviour or reach RCE.", vulns: [{ n: "Prototype Pollution", id: "prototype-pollution" }] },
+            { text: "WSTG-INJT-23 · Insecure Deserialization", desc: "Feed crafted serialized objects to a deserializer to tamper with state or achieve RCE.", tools: [{ n: "ysoserial", id: "ysoserial" }], vulns: [{ n: "Insecure Deserialization", id: "insecure-deserialization" }] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "wstg-errh",
+      title: "WSTG · Error Handling",
+      color: "#e8912e",
+      tag: "WSTG",
+      desc: "Push the app into error states and read what the responses give away.",
+      groups: [
+        {
+          id: "wstg-errh",
+          title: "Error Handling",
+          scenario: "Push the app into error states and read what the responses give away.",
+          items: [
+            { text: "WSTG-ERRH-01 · Improper Error Handling", desc: "Trigger errors with malformed input and check whether responses leak internals or fail open.", vulns: [{ n: "Verbose Errors & Info Disclosure", id: "verbose-errors" }] },
+            { text: "WSTG-ERRH-02 · Stack Traces", desc: "Force stack traces that reveal framework, versions, file paths, and query structure.", vulns: [{ n: "Verbose Errors & Info Disclosure", id: "verbose-errors" }] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "wstg-cryp",
+      title: "WSTG · Weak Cryptography",
+      color: "#2fb3a3",
+      tag: "WSTG",
+      desc: "The transport and storage crypto the app depends on — TLS strength, padding oracles, and weak primitives.",
+      groups: [
+        {
+          id: "wstg-cryp",
+          title: "Weak Cryptography",
+          scenario: "The transport and storage crypto the app depends on — TLS strength, padding oracles, and weak primitives.",
+          items: [
+            { text: "WSTG-CRYP-01 · Weak Transport Layer Security", desc: "Audit protocols, ciphers, forward secrecy, and certificates for downgrade and known attacks.", tools: [{ n: "testssl.sh", id: "testssl" }], vulns: [{ n: "Weak TLS / SSL Configuration", id: "weak-tls" }] },
+            { text: "WSTG-CRYP-02 · Padding Oracle", desc: "Test CBC-mode decryption endpoints for padding-oracle behaviour that reveals plaintext." },
+            { text: "WSTG-CRYP-03 · Sensitive Information Sent via Unencrypted Channels", desc: "Confirm no sensitive data travels over plaintext or mixed-content channels.", tools: [{ n: "testssl.sh", id: "testssl" }], vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] },
+            { text: "WSTG-CRYP-04 · Weak Cryptographic Primitives", desc: "Check for weak hashes/ciphers, hardcoded or reused keys, and predictable randomness.", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "wstg-busl",
+      title: "WSTG · Business Logic",
+      color: "#2fd44f",
+      tag: "WSTG",
+      desc: "Abuse the rules and workflows themselves — values, request forging, limits, process order, and uploads.",
+      groups: [
+        {
+          id: "wstg-busl",
+          title: "Business Logic",
+          scenario: "Abuse the rules and workflows themselves — values, request forging, limits, process order, and uploads.",
+          items: [
+            { text: "WSTG-BUSL-01 · Business Logic Data Validation", desc: "Submit values that are individually valid but violate a business rule (negative, out-of-range, wrong currency).", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "WSTG-BUSL-02 · Ability to Forge Requests", desc: "Craft requests the UI never offers (hidden fields, skipped steps) that the server still accepts.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }, { n: "Cross-Site Request Forgery (CSRF)", id: "csrf" }] },
+            { text: "WSTG-BUSL-03 · Integrity Checks", desc: "Tamper with values the client should not control (price, role, quantity) and see if the server trusts them.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }, { n: "Mass Assignment", id: "mass-assignment" }] },
+            { text: "WSTG-BUSL-04 · Process Timing", desc: "Exploit timing and race windows in check-then-act flows (redeem twice, over-withdraw).", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "Race Conditions", id: "race-condition" }] },
+            { text: "WSTG-BUSL-05 · Number of Times a Function Can Be Used Limits", desc: "Exceed single-use or capped actions (coupons, votes, transfers) the app should limit.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }, { n: "Race Conditions", id: "race-condition" }] },
+            { text: "WSTG-BUSL-06 · Circumvention of Work Flows", desc: "Skip, reorder, or replay steps in a multi-stage process to reach a state you should not.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "WSTG-BUSL-07 · Defenses Against Application Misuse", desc: "Probe whether the app detects and responds to obvious abuse/automation of its own features.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }] },
+            { text: "WSTG-BUSL-08 · Upload of Unexpected File Types", desc: "Upload disallowed file types to see whether the restriction is enforced server-side.", tools: [{ n: "UploadScanner (Burp)", id: "upload-scanner" }], vulns: [{ n: "Unrestricted File Upload", id: "file-upload" }] },
+            { text: "WSTG-BUSL-09 · Upload of Malicious Files", desc: "Upload web shells, malicious images, and polyglots to reach stored XSS or RCE.", tools: [{ n: "UploadScanner (Burp)", id: "upload-scanner" }], vulns: [{ n: "Unrestricted File Upload", id: "file-upload" }] },
+            { text: "WSTG-BUSL-10 · Payment Functionality", desc: "Test payment flows for tampering, test cards, and whether processing is correctly server-side.", vulns: [{ n: "Business Logic Flaws", id: "business-logic" }, { n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "wstg-clnt",
+      title: "WSTG · Client-side",
+      color: "#b5651d",
+      tag: "WSTG",
+      desc: "Bugs that execute in the victim's browser — DOM XSS, redirects, CORS, clickjacking, messaging, and storage.",
+      groups: [
+        {
+          id: "wstg-clnt",
+          title: "Client-side",
+          scenario: "Bugs that execute in the victim's browser — DOM XSS, redirects, CORS, clickjacking, messaging, and storage.",
+          items: [
+            { text: "WSTG-CLNT-01 · DOM-Based Cross Site Scripting", desc: "Trace client-side sources (location, postMessage) into dangerous sinks (innerHTML, eval).", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
+            { text: "WSTG-CLNT-02 · JavaScript Execution", desc: "Find places where attacker-controlled data reaches eval/Function/setTimeout and runs as code.", vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
+            { text: "WSTG-CLNT-03 · HTML Injection", desc: "Inject markup that renders in the page without full script execution (still phishing/UI redress).", vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
+            { text: "WSTG-CLNT-04 · Client-side URL Redirect", desc: "Abuse client-controlled redirect targets (location = source) for open redirect and phishing.", vulns: [{ n: "Open Redirect", id: "open-redirect" }] },
+            { text: "WSTG-CLNT-05 · CSS Injection", desc: "Inject CSS to exfiltrate data via attribute selectors or to perform UI redress." },
+            { text: "WSTG-CLNT-06 · Client-side Resource Manipulation", desc: "Control script/iframe/link targets from client input to load attacker resources.", vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
+            { text: "WSTG-CLNT-07 · Cross Origin Resource Sharing", desc: "Test CORS for reflected origins, null origin, and credentialed wildcard misconfigurations.", tools: [{ n: "Corsy", id: "corsy" }, { n: "CORScanner", id: "corscanner" }], vulns: [{ n: "CORS Misconfiguration", id: "cors-misconfig" }] },
+            { text: "WSTG-CLNT-09 · Clickjacking", desc: "Confirm sensitive actions can be framed and overlaid to hijack victim clicks.", vulns: [{ n: "Clickjacking", id: "clickjacking" }] },
+            { text: "WSTG-CLNT-10 · WebSockets", desc: "Test WebSocket endpoints for origin validation, auth, and injection over the channel." },
+            { text: "WSTG-CLNT-11 · Web Messaging", desc: "Audit postMessage handlers for missing origin checks and unsafe use of the message data.", vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
+            { text: "WSTG-CLNT-12 · Browser Storage", desc: "Check localStorage/sessionStorage/IndexedDB for sensitive data and tokens exposed to script.", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] },
+            { text: "WSTG-CLNT-13 · Cross Site Script Inclusion", desc: "Test whether authenticated JS/JSON responses can be read cross-origin to leak data (XSSI).", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] },
+            { text: "WSTG-CLNT-14 · Reverse Tabnabbing", desc: "Check target=_blank links without rel=noopener that let the opened page rewrite the opener.", vulns: [{ n: "Open Redirect", id: "open-redirect" }] },
+            { text: "WSTG-CLNT-15 · Client-side Template Injection", desc: "Inject into a client-side template engine (AngularJS, etc.) to reach DOM XSS/sandbox escape.", vulns: [{ n: "Server-Side Template Injection (SSTI)", id: "ssti" }, { n: "Cross-Site Scripting (XSS)", id: "xss" }] }
+          ]
+        }
+      ]
+    },
+    {
+      id: "wstg-apit",
+      title: "WSTG · API Testing",
+      color: "#3b9ee5",
+      tag: "WSTG",
+      desc: "API-specific coverage — reconnaissance, object/function-level authorization, data exposure, and GraphQL.",
+      groups: [
+        {
+          id: "wstg-apit",
+          title: "API Testing",
+          scenario: "API-specific coverage — reconnaissance, object/function-level authorization, data exposure, and GraphQL.",
+          items: [
+            { text: "WSTG-APIT-01 · API Reconnaissance", desc: "Discover API endpoints, versions, and schemas from docs, JS, specs (Swagger/OpenAPI), and traffic.", tools: [{ n: "Katana", id: "katana" }, { n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "Exposed Secrets & API Keys", id: "secrets-exposure" }] },
+            { text: "WSTG-APIT-02 · API Broken Object Level Authorization", desc: "Swap object ids across API calls to access other users' objects (BOLA/IDOR).", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
+            { text: "WSTG-APIT-03 · Excessive Data Exposure", desc: "Check whether API responses return more fields than the client needs (PII, internal flags).", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] },
+            { text: "WSTG-APIT-04 · API Broken Function Level Authorization", desc: "Call privileged/admin API functions as a low-privilege user (BFLA).", vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
+            { text: "WSTG-APIT-99 · GraphQL", desc: "Test GraphQL for introspection, injection, batching abuse, and missing authorization per resolver.", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] }
+          ]
+        }
+      ]
+    },
   ]
 };
