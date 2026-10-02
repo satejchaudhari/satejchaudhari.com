@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Architecting Security for a 100,000-User Enterprise — Satej Chaudhari</title>
-  <meta name="description" content="A security architect's blueprint for a 100,000+ user, multi-site, PII-regulated enterprise — scenario and constraints, the Zero-Trust pillar model, identity and the Enterprise Access Model, network segmentation at scale, data residency, the SOC's log-volume math, resilience, the decision register of hard trade-offs, and a maturity roadmap.">
+  <title>How Security Is Designed for a 100,000-User Enterprise — Satej Chaudhari</title>
+  <meta name="description" content="A general guide to securing a 100,000+ user, multi-site, PII-regulated enterprise — scenario and constraints, the Zero-Trust pillar model, identity and the Enterprise Access Model, network segmentation at scale, data residency, the SOC's log-volume math, resilience, the decision register of hard trade-offs, and a maturity roadmap.">
 
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
-  <meta property="og:title" content="Architecting Security for a 100,000-User Enterprise">
-  <meta property="og:description" content="A security architect's blueprint for a 100,000+ user, multi-site, PII-regulated enterprise — Zero-Trust pillars, the Enterprise Access Model, segmentation at scale, data residency, the SOC's log-volume math, resilience, and the decision register of hard trade-offs.">
+  <meta property="og:title" content="How Security Is Designed for a 100,000-User Enterprise">
+  <meta property="og:description" content="A general guide to securing a 100,000+ user, multi-site, PII-regulated enterprise — Zero-Trust pillars, the Enterprise Access Model, segmentation at scale, data residency, the SOC's log-volume math, resilience, and the decision register of hard trade-offs.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-02-enterprise-security-architecture.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-02">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Architecting Security for a 100,000-User Enterprise">
-  <meta name="twitter:description" content="A security architect's blueprint for a 100,000+ user, multi-site, PII-regulated enterprise — Zero-Trust pillars, the Enterprise Access Model, segmentation at scale, data residency, the SOC's log-volume math, and the hard trade-offs.">
+  <meta name="twitter:title" content="How Security Is Designed for a 100,000-User Enterprise">
+  <meta name="twitter:description" content="A general guide to securing a 100,000+ user, multi-site, PII-regulated enterprise — Zero-Trust pillars, the Enterprise Access Model, segmentation at scale, data residency, the SOC's log-volume math, and the hard trade-offs.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -70,7 +70,7 @@
     <article>
       <header class="post-header">
         <span class="tag">Blue Team</span>
-        <h1 class="post-title">Architecting Security for a 100,000-User Enterprise</h1>
+        <h1 class="post-title">How Security Is Designed for a 100,000-User Enterprise</h1>
         <p class="post-meta">
           <time datetime="2026-10-02">2026-10-02</time>
           <span>&middot; 34 min read</span>
@@ -80,11 +80,12 @@
       <div class="post-body">
 
         <p>
-          This is a security architect's walkthrough of how you actually defend a very large,
-          high-stakes organisation — not a list of products, but the reasoning: the scenario and its
-          constraints, the reference models the design hangs on, and the <em>decisions</em> (above
-          all the networking and identity decisions) you make when you are responsible for 100,000+
-          people, their devices, and the regulated personal data they handle across many countries.
+          This is a general guide to how a very large, high-stakes organisation is actually defended
+          — not a list of products, but the reasoning: the scenario and its constraints, the
+          reference models the design hangs on, and the <em>decisions</em> (above all the networking
+          and identity decisions) that have to be made when 100,000+ people, their devices, and the
+          regulated personal data they handle across many countries are in scope. It describes
+          common industry practice, not any particular deployment.
         </p>
         <p>
           To keep it concrete, everything below is designed for one fictional organisation,
@@ -110,10 +111,10 @@
           </tbody>
         </table>
         <p>
-          Those facts are the architecture's actual inputs. Scale (100k+) kills anything that
+          Those facts are the design's actual inputs. Scale (100k+) kills anything that
           depends on manual effort per object. Multi-jurisdiction turns &ldquo;encrypt the
           data&rdquo; into &ldquo;encrypt it <em>and</em> keep EU data in the EU and prove it.&rdquo;
-          M&amp;A means the estate is never fully known. The architect's job is to make choices that
+          M&amp;A means the estate is never fully known. Good security design makes choices that
           survive all three.
         </p>
         <blockquote>
@@ -128,7 +129,7 @@
         <h2>2. The reference models the design hangs on</h2>
         <p>
           A programme this size is not invented from scratch; it is assembled from established
-          models so it is defensible to auditors, boards, and regulators, and so new architects can
+          models so it is defensible to auditors, boards, and regulators, and so newcomers can
           read it. The ones that actually shape the drawings:
         </p>
         <ul>
@@ -157,7 +158,7 @@
         <p>
           The rest of this page is organised by the five Zero-Trust pillars, then the three
           cross-cutting capabilities, then resilience, then the decision register and roadmap — the
-          same order an architect briefs the design.
+          same order the design is usually presented.
         </p>
 
         <h2>3. Pillar 1 — Identity (the real perimeter at 140,000 accounts)</h2>
@@ -462,7 +463,7 @@
             exercises</strong> up to board level so the plan is muscle memory, not a document.</li>
         </ul>
 
-        <h2>12. The architect's decision register</h2>
+        <h2>12. The key design decisions (decision register)</h2>
         <p>
           Everything above is well-understood; the craft is the decisions, because security always
           trades against cost, usability, performance, and operational reality. These are the big
@@ -488,7 +489,7 @@
         </table>
         <blockquote>
           The recurring truth: there is no absolute &ldquo;secure&rdquo; configuration, only an
-          <em>acceptable risk</em> for this business. The architect's value is knowing exactly what
+          <em>acceptable risk</em> for this business. The value of good design is knowing exactly what
           is being traded and making that trade on purpose — then having the telemetry to know when
           the trade stops being acceptable.
         </blockquote>

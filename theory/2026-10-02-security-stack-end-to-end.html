@@ -4,18 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Security Built End-to-End in a High-Stakes Enterprise — Satej Chaudhari</title>
-  <meta name="description" content="A principal architect's end-to-end reference for the full security stack of a global bank: the network foundation in depth, identity, data, endpoint, cloud/app, the SOC workflow, vuln/offensive, email, GRC and BCDR — with the real tools in each category, where they sit, why they're chosen, and the trade-offs.">
+  <meta name="description" content="A general, vendor-level guide to the full security stack of a large high-stakes organisation (modelled on a global bank): the network foundation in depth, identity, data, endpoint, cloud/app, the SOC workflow, vuln/offensive, email, GRC and BCDR — with the real tools in each category, where they sit, why they're chosen, and the trade-offs.">
 
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
   <meta property="og:title" content="How Security Is Built End-to-End in a Large High-Stakes Environment">
-  <meta property="og:description" content="A principal architect's end-to-end reference for the full security stack of a global bank — the network foundation in depth, identity, data, endpoint, cloud/app, the SOC workflow, vuln/offensive, email, GRC and BCDR — with the real tools, placement, rationale, and trade-offs.">
+  <meta property="og:description" content="A general, vendor-level guide to the full security stack of a large high-stakes organisation (modelled on a global bank) — the network foundation in depth, identity, data, endpoint, cloud/app, the SOC workflow, vuln/offensive, email, GRC and BCDR — with the real tools, placement, rationale, and trade-offs.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-02-security-stack-end-to-end.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-02">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="How Security Is Built End-to-End in a High-Stakes Enterprise">
-  <meta name="twitter:description" content="A principal architect's end-to-end reference for the full security stack of a global bank — network, identity, data, endpoint, cloud, SOC, offensive, GRC and BCDR — with real tools, placement, rationale, and trade-offs.">
+  <meta name="twitter:description" content="A general, vendor-level guide to the full security stack of a large high-stakes organisation (modelled on a global bank) — network, identity, data, endpoint, cloud, SOC, offensive, GRC and BCDR — with real tools, placement, rationale, and trade-offs.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -80,17 +80,18 @@
       <div class="post-body">
 
         <p>
-          This is an internal-architecture-reference-style walkthrough of how the entire security
-          stack of a large, high-stakes organisation is actually designed and operated — the network
-          foundation, every major security domain, the specific tools in each, and how it all ties
-          together operationally. It is written from the chair of someone who has had to make the
-          build-vs-buy, placement, and segmentation calls in production, so it names real vendors and
-          is honest about cost, operational burden, and where teams commonly regret a choice.
+          This is a general, reference-style guide to how the entire security stack of a large,
+          high-stakes organisation is built and operated — the network foundation, every major
+          security domain, the specific tools in each, and how it all ties together operationally.
+          It names real vendors and is honest about cost, operational burden, and where teams
+          commonly regret a choice, so it reads like an internal reference rather than a marketing
+          overview. It describes common industry practice; it is not a claim of any particular
+          deployment.
         </p>
         <p>
           It is a companion to the more conceptual
-          <a href="2026-10-02-enterprise-security-architecture.html">100,000-user architect's
-          blueprint</a> — that page is the <em>why</em> and the operating model; this one is the
+          <a href="2026-10-02-enterprise-security-architecture.html">100,000-user enterprise
+          guide</a> — that page is the <em>why</em> and the operating model; this one is the
           <em>what</em>, down to the tooling in each layer.
         </p>
 
@@ -153,8 +154,8 @@
         <h2>2. Network architecture &amp; design</h2>
         <p>
           This is the deepest section, because the network is the substrate every other control sits
-          on and the place segmentation lives or dies. I'll build it from the physical fabric
-          outward to the user edge, then trace an end-to-end traffic flow.
+          on and the place segmentation lives or dies. It works from the physical fabric outward to
+          the user edge, then traces an end-to-end traffic flow.
         </p>
 
         <h3>2.1 Overall topology</h3>
@@ -349,6 +350,23 @@
           admin workstation. Standing admin rights approach zero; every elevation is logged and
           attributable — the auditability the regulator demands.
         </blockquote>
+        <h3>3.1 PKI, certificates &amp; machine identity</h3>
+        <p>
+          At enterprise scale there are far more <strong>machine</strong> identities (services,
+          workloads, devices, pipelines) than human ones, and they authenticate largely with
+          certificates and keys. Left unmanaged, certificates become outages (expiries that take
+          payments offline) and security gaps (rogue or long-lived certs). So an internal
+          <strong>PKI</strong> (an internal CA hierarchy, increasingly automated with ACME) plus a
+          <strong>certificate lifecycle management</strong> platform is its own control area, tightly
+          coupled to identity and secrets.
+        </p>
+        <table>
+          <thead><tr><th>Capability</th><th>Leading tools</th><th>OSS / native</th><th>Role &amp; trade-offs</th></tr></thead>
+          <tbody>
+            <tr><td>Certificate lifecycle / machine identity</td><td>Venafi (now CyberArk), Keyfactor, AppViewX, Entrust</td><td>HashiCorp Vault PKI, step-ca, cert-manager (K8s), ACME/Let's Encrypt for public</td><td>Discover, issue, rotate, and revoke certs automatically so none expire unnoticed or outlive their purpose. Venafi/Keyfactor are the enterprise standards; Vault PKI + cert-manager cover cloud-native well. The post-quantum-crypto migration and ever-shortening cert lifetimes make automation non-negotiable.</td></tr>
+            <tr><td>Internal CA / HSM-backed root</td><td>Microsoft AD CS, EJBCA, cloud private CA</td><td>EJBCA (OSS), smallstep</td><td>Issues the internal trust. <a href="2026-08-18-adcs.html">AD CS</a> is common but a frequent attack path (ESC1–ESC8) — it must be hardened and monitored as a Tier-0 asset.</td></tr>
+          </tbody>
+        </table>
 
         <h2>4. Data security</h2>
         <p>
@@ -362,7 +380,8 @@
             <tr><td>Database Activity Monitoring (DAM)</td><td>Imperva, IBM Guardium</td><td>Native DB audit + SIEM</td><td>Watches privileged and sensitive-data queries on crown-jewel databases for compliance and insider detection; a PCI/SOX staple. Agents/taps add DB overhead — placement and scope matter.</td></tr>
             <tr><td>Classification &amp; discovery (DSPM)</td><td>Microsoft Purview, BigID, Varonis</td><td>—</td><td>Labels drive every downstream control; DSPM finds where regulated data actually sprawled. Varonis is strong on data-access analytics (who can/does touch what).</td></tr>
             <tr><td>Encryption keys / HSM</td><td>Thales Luna/CipherTrust, Entrust, cloud HSM (CloudHSM / Azure Managed HSM)</td><td>—</td><td>Keys in FIPS-validated HSMs, customer-managed for the most sensitive sets; key lifecycle (rotation, escrow, separation of duties) is itself audited. Tokenisation/masking shrinks PCI scope.</td></tr>
-            <tr><td>CASB (SaaS governance)</td><td>Netskope, Microsoft Defender for Cloud Apps, Zscaler</td><td>—</td><td>Visibility and DLP/policy over sanctioned and shadow SaaS; usually part of the SASE stack, so it co-locates with the proxy.</td></tr>
+            <tr><td>CASB (SaaS governance)</td><td>Netskope, Microsoft Defender for Cloud Apps, Zscaler</td><td>—</td><td>Visibility and DLP/policy over sanctioned and shadow SaaS data in transit; usually part of the SASE stack, so it co-locates with the proxy.</td></tr>
+            <tr><td>SSPM (SaaS posture)</td><td>AppOmni, Obsidian, Microsoft Defender for Cloud Apps</td><td>—</td><td>Where a CASB watches traffic, SSPM audits the <em>configuration and entitlements</em> inside critical SaaS (M365, Salesforce, Workday) — the over-shared files and over-privileged OAuth grants that are now a top data-exposure path. Obsidian adds UEBA over SaaS for insider/takeover detection.</td></tr>
           </tbody>
         </table>
 
@@ -394,6 +413,34 @@
             <tr><td>Secrets scanning</td><td>GitGuardian, Snyk, native (GitHub Advanced Security)</td><td>Gitleaks, TruffleHog (OSS)</td><td>Catches credentials committed to code — the exact failure behind countless breaches. Cheap, high ROI, run in pre-commit and CI.</td></tr>
           </tbody>
         </table>
+
+        <h3>6.1 AI &amp; LLM security</h3>
+        <p>
+          AI — especially generative/LLM applications — is now a first-class part of the application
+          attack surface, both the systems an organisation <em>builds</em> with AI and the AI tools
+          its staff <em>use</em>. The recognised control vocabulary is the
+          <a href="https://genai.owasp.org/llm-top-10/" target="_blank" rel="noopener">OWASP Top 10 for
+          LLM Applications (2025)</a> — prompt injection, sensitive-information disclosure,
+          supply-chain and model/data poisoning, insecure output handling, excessive agency, and so
+          on — sitting inside the governance frameworks <strong>NIST AI RMF</strong> and
+          <strong>ISO/IEC 42001</strong> (an AI management system, the ISO&nbsp;27001 analogue for AI).
+        </p>
+        <table>
+          <thead><tr><th>Concern</th><th>Leading tools / controls</th><th>Notes &amp; trade-offs</th></tr></thead>
+          <tbody>
+            <tr><td>LLM guardrails / AI firewall</td><td>Lakera, Protect AI, Robust Intelligence (Cisco), HiddenLayer; cloud-native (Azure AI Content Safety, AWS Bedrock Guardrails)</td><td>Filter prompt injection, jailbreaks, and sensitive-data leakage at the app boundary. Still an immature market — treat as defence-in-depth, not a sole control; the real fix is least-privilege tool/agent design.</td></tr>
+            <tr><td>AI posture &amp; model supply chain</td><td>Wiz AI-SPM, Protect AI, HiddenLayer; model/artefact scanning</td><td>Discover where AI/ML is running (shadow AI), scan models and notebooks for malicious artefacts, and govern which third-party models are allowed.</td></tr>
+            <tr><td>Data protection for AI use</td><td>DLP/CASB with GenAI policies, SSPM, enterprise-controlled AI gateways</td><td>Stop staff pasting regulated data into public chatbots — route them to a sanctioned, logged enterprise AI endpoint instead of blocking (shadow-AI is the alternative).</td></tr>
+            <tr><td>Governance</td><td>NIST AI RMF, ISO/IEC 42001, an AI use-case register &amp; risk review</td><td>A bank must inventory AI use, assess model risk (bias, explainability, regulatory), and keep a human in the loop for high-impact decisions — this is model-risk-management territory regulators already understand.</td></tr>
+          </tbody>
+        </table>
+        <blockquote>
+          AI security has two faces: securing the AI you deploy (the OWASP-LLM surface, agent/tool
+          permissions, model supply chain) and governing the AI your people use (data leakage,
+          shadow AI). Both are increasingly audited; neither is optional in a regulated enterprise.
+          AI also increasingly augments the <em>defender</em> — triage, detection tuning, and hunting
+          in the SOC below.
+        </blockquote>
 
         <h2>7. The SOC — end-to-end workflow</h2>
         <p>
@@ -478,6 +525,15 @@
                                                        (retainer + MDR on surge)</code></pre>
 
         <h2>8. Vulnerability, exposure &amp; offensive security</h2>
+        <p>
+          The modern framing for this area is <strong>Continuous Threat Exposure Management
+          (CTEM)</strong> — a Gartner cycle of <strong>Scoping &rarr; Discovery &rarr; Prioritization
+          &rarr; Validation &rarr; Mobilization</strong> that moves beyond periodic scanning to a
+          continuous, business-aligned loop: define what matters, find the exposures across the
+          whole attack surface, rank them by real exploitability and business impact, prove they're
+          actually exploitable (and that controls catch them), then drive remediation. The tools
+          below are how each stage is operationalised.
+        </p>
         <table>
           <thead><tr><th>Capability</th><th>Leading tools</th><th>OSS</th><th>Notes</th></tr></thead>
           <tbody>
@@ -611,11 +667,13 @@
           <li><a href="https://attack.mitre.org/" target="_blank" rel="noopener">MITRE ATT&amp;CK</a></li>
           <li><a href="https://csrc.nist.gov/pubs/sp/800/61/r2/final" target="_blank" rel="noopener">NIST SP&nbsp;800-61 — Computer Security Incident Handling</a></li>
           <li><a href="https://www.nist.gov/cyberframework" target="_blank" rel="noopener">NIST Cybersecurity Framework 2.0</a></li>
+          <li><a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener">NIST AI Risk Management Framework</a></li>
+          <li><a href="https://genai.owasp.org/llm-top-10/" target="_blank" rel="noopener">OWASP Top 10 for LLM Applications (2025)</a></li>
         </ul>
 
         <h2>Related reading</h2>
         <ul class="related-list">
-          <li><a href="2026-10-02-enterprise-security-architecture.html">Architecting Security for a 100,000-User Enterprise</a></li>
+          <li><a href="2026-10-02-enterprise-security-architecture.html">How Security Is Designed for a 100,000-User Enterprise</a></li>
           <li><a href="2026-08-18-ad-fundamentals.html">Active Directory Fundamentals</a></li>
           <li><a href="2026-09-23-defense-evasion.html">Windows Defense Evasion — AV, EDR &amp; ASR</a></li>
           <li><a href="2026-09-23-command-and-control.html">Command &amp; Control (C2) Frameworks</a></li>
