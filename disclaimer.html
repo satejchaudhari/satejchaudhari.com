@@ -4,16 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Disclaimer — Satej Chaudhari</title>
-  <meta name="description" content="Disclaimer covering the educational purpose, authorized-use requirements, and personal-opinion nature of this site's content.">
+  <meta name="description" content="Educational security-research site: authorized-use-only, no-warranty, assumption-of-risk, responsible-disclosure, and trademark terms.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Satej Chaudhari">
   <meta property="og:title" content="Disclaimer">
-  <meta property="og:description" content="Disclaimer covering the educational purpose, authorized-use requirements, and personal-opinion nature of this site's content.">
+  <meta property="og:description" content="Educational security-research site: authorized-use-only, no-warranty, assumption-of-risk, responsible-disclosure, and trademark terms.">
   <meta property="og:url" content="https://satejchaudhari.com/disclaimer.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Disclaimer">
-  <meta name="twitter:description" content="Disclaimer covering the educational purpose, authorized-use requirements, and personal-opinion nature of this site's content.">
+  <meta name="twitter:description" content="Educational security-research site: authorized-use-only, no-warranty, assumption-of-risk, responsible-disclosure, and trademark terms.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <link rel="canonical" href="https://satejchaudhari.com/disclaimer.html">
 
@@ -69,63 +69,127 @@
 
     <article>
       <header class="post-header">
+        <span class="tag">Legal</span>
         <h1 class="post-title">Disclaimer</h1>
         <p class="post-meta">
-          <time datetime="2026-07-04">2026-07-04</time>
-          <span>&middot; Last updated</span>
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; last updated</span>
         </p>
       </header>
 
       <div class="post-body">
 
-        <h2>Educational purpose</h2>
+        <blockquote>
+          <strong>In short:</strong> this is a personal, educational security-research site.
+          The offensive techniques, tools, and commands described here are for use
+          <strong>only</strong> against systems you own or are explicitly authorized to test.
+          Everything is provided &ldquo;as is,&rdquo; with no warranty, and you alone are
+          responsible for what you do with it. Unauthorized access to computer systems is a
+          crime.
+        </blockquote>
+
+        <h2>1. Educational purpose</h2>
         <p>
-          Everything on this site — writeups, blog posts, theory notes, and the toolkit — is
-          published for educational and informational purposes. It documents research, lab
-          work, and professional experience in security and compliance, written up in a way
-          that's hopefully useful to someone else learning the same material.
+          Everything on this site — writeups, theory notes, the toolkit, and the checklists — is
+          published for educational and informational purposes only. It documents research, lab
+          work, and professional experience in offensive security and compliance, written up in
+          the hope it's useful to others learning the same material. It is not professional,
+          legal, or security advice, and it is not a substitute for a qualified assessment of
+          your own environment.
         </p>
 
-        <h2>Authorized use only</h2>
+        <h2>2. Authorized use only</h2>
         <p>
-          Any techniques, tools, or commands described on this site are intended for use only
-          against systems you own, or systems you have explicit, documented authorization to
-          test — such as a CTF environment, a personal lab, or an engagement covered by a
-          signed scope of work. Accessing or testing systems without authorization is illegal
-          in most jurisdictions, regardless of intent, and is not condoned here.
+          The techniques, payloads, tools, and commands described here are intended for use
+          <strong>only</strong> against systems that you own, or that you have explicit,
+          documented permission to test — for example a CTF or training platform, a personal
+          lab, or an engagement covered by a signed scope of work and rules of engagement.
+        </p>
+        <p>
+          Accessing, scanning, or testing systems, networks, or accounts without authorization
+          is illegal in most jurisdictions regardless of intent — under laws such as the U.S.
+          Computer Fraud and Abuse Act (CFAA), the UK Computer Misuse Act, and India's
+          Information Technology Act, 2000, among others. Nothing on this site is an
+          encouragement or instruction to break the law, and such use is expressly not condoned.
+          <strong>You are solely responsible for ensuring your actions are lawful and
+          authorized.</strong>
         </p>
 
-        <h2>No warranty</h2>
+        <h2>3. Lab and CTF context</h2>
         <p>
-          Content is provided "as is," without warranty of any kind. Tools, commands, and
-          configurations described here may not work as expected in every environment, may be
-          out of date by the time you read them, and should be tested in a safe, controlled
-          setting before use elsewhere. I am not responsible for any damage, data loss, legal
-          consequences, or other outcomes resulting from the use or misuse of information
-          found on this site.
+          Many writeups target deliberately vulnerable, publicly available machines (for
+          example HackTheBox and Vulnhub boxes) or purpose-built lab environments. Those are
+          sanctioned targets by design. The same steps run against a system you do not have
+          permission to test are an offence — the environment, not the technique, is what makes
+          the activity legitimate.
         </p>
 
-        <h2>Personal opinions</h2>
+        <h2>4. No warranty &amp; assumption of risk</h2>
         <p>
-          Views expressed here are my own and do not represent the position of any current or
-          former employer, client, or organization I'm affiliated with. Writeups based on real
-          engagements are always sanitized to remove client-identifying details, internal
-          hostnames, IP ranges, and anything else that could identify the organization
-          involved.
+          All content is provided &ldquo;as is&rdquo; and &ldquo;as available,&rdquo; without
+          warranty of any kind, express or implied, including fitness for a particular purpose
+          or accuracy. Commands and tools can be destructive, may behave differently across
+          environments, and may be out of date by the time you read them. Test everything in a
+          safe, isolated environment first.
+        </p>
+        <p>
+          To the fullest extent permitted by law, I accept no liability for any damage, data
+          loss, service disruption, legal consequence, or other harm arising from the use or
+          misuse of anything on this site. You use this information entirely at your own risk.
         </p>
 
-        <h2>Third-party tools and links</h2>
+        <h2>5. Accuracy &amp; currency</h2>
         <p>
-          The toolkit page links to third-party tools and websites I don't control or
-          maintain. I try to keep links current, but I'm not responsible for the content,
-          accuracy, or availability of external sites, or for changes made to those tools
-          after a page was written.
+          Security tooling, CVEs, and techniques move quickly. Information here reflects my
+          understanding at the time of writing and may become inaccurate or obsolete without
+          notice. Verify against primary sources — official documentation, advisories, and the
+          tools themselves — before relying on anything.
         </p>
 
-        <h2>Contact</h2>
+        <h2>6. Responsible disclosure</h2>
         <p>
-          If you have a concern about something published here — including a request to
-          redact or remove specific content — reach out via the contact links on the
+          Any writeups touching real-world software describe already-public issues (patched
+          vulnerabilities, published CVEs, or known misconfigurations) for educational purposes.
+          I do not publish working exploits for undisclosed (0-day) vulnerabilities. If you
+          believe something here aids active abuse or exposes a vulnerability that has not been
+          responsibly disclosed, please contact me (see below) so it can be reviewed or removed.
+        </p>
+
+        <h2>7. Sanitization &amp; personal opinions</h2>
+        <p>
+          Writeups based on real engagements are always sanitized to remove client-identifying
+          details — organization names, internal hostnames, IP ranges, credentials, and anything
+          else that could identify the party involved. Views expressed here are my own and do
+          not represent the position of any current or former employer, client, or organization
+          I'm affiliated with.
+        </p>
+
+        <h2>8. Third-party tools, links &amp; trademarks</h2>
+        <p>
+          The toolkit and writeups reference third-party tools and link to external sites I
+          neither own nor control. I try to keep links current, but I'm not responsible for the
+          content, accuracy, safety, or availability of external resources, or for changes made
+          to those tools after a page was written. Always review a tool's own documentation and
+          licence before use.
+        </p>
+        <p>
+          All product names, logos, trademarks, and brands — including tool names and platforms
+          such as HackTheBox and Vulnhub — are the property of their respective owners and are
+          used here for identification and reference only. Their use does not imply any
+          affiliation with or endorsement by those owners.
+        </p>
+
+        <h2>9. Changes to this disclaimer</h2>
+        <p>
+          This disclaimer may be updated at any time without notice. The &ldquo;last
+          updated&rdquo; date above reflects the current version; continued use of the site
+          means you accept it as it stands.
+        </p>
+
+        <h2>10. Contact</h2>
+        <p>
+          If you have a concern about anything published here — including a request to redact or
+          remove specific content — reach out via the contact links in the
           <a href="index.html#about">About</a> section of the homepage.
         </p>
 
