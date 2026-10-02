@@ -83,56 +83,56 @@
         <h2>Reconnaissance</h2>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image1.png" alt="netdiscover showing the target at 192.168.0.121">
+          <img src="../assets/img/vulnhub-grotesque-1/image1.webp" alt="netdiscover showing the target at 192.168.0.121">
           <figcaption>Target located at <code>192.168.0.121</code> with <code>netdiscover</code>.</figcaption>
         </figure>
 
         <p><code>nmap</code> enumerates the services.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image2.png" alt="nmap scan of the target">
+          <img src="../assets/img/vulnhub-grotesque-1/image2.webp" alt="nmap scan of the target">
           <figcaption>Scanning the target with <code>nmap</code>.</figcaption>
         </figure>
 
         <p>Ports 66 and 80 are open, both HTTP.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image3.png" alt="nmap results showing ports 66 and 80 open">
+          <img src="../assets/img/vulnhub-grotesque-1/image3.webp" alt="nmap results showing ports 66 and 80 open">
           <figcaption><strong>66</strong> and <strong>80</strong>, both HTTP.</figcaption>
         </figure>
 
         <p>Port 80 shows nothing immediately, but port 66 serves a file, which is downloaded for later.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image4.png" alt="Port 66 serving a downloadable file">
+          <img src="../assets/img/vulnhub-grotesque-1/image4.webp" alt="Port 66 serving a downloadable file">
           <figcaption>A file waiting on port 66.</figcaption>
         </figure>
 
         <p>The port 66 page source carries a comment containing encoded text.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image5.png" alt="Encoded comment in the page source">
+          <img src="../assets/img/vulnhub-grotesque-1/image5.webp" alt="Encoded comment in the page source">
           <figcaption>An encoded blob hidden in a comment.</figcaption>
         </figure>
 
         <p>Research identifies it as <strong>Brainfuck</strong>, so it is run through a decoder.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image6.png" alt="Decoding the Brainfuck comment">
+          <img src="../assets/img/vulnhub-grotesque-1/image6.webp" alt="Decoding the Brainfuck comment">
           <figcaption>Decoding the Brainfuck.</figcaption>
         </figure>
 
         <p>It decodes to what looks like a path, <code>/sshpasswd.pn</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image7.png" alt="Decoded output giving the /sshpasswd.pn path">
+          <img src="../assets/img/vulnhub-grotesque-1/image7.webp" alt="Decoded output giving the /sshpasswd.pn path">
           <figcaption>Decoded: the path <code>/sshpasswd.pn</code>.</figcaption>
         </figure>
 
         <p>The bare path 404s; adding a <code>g</code> to make <code>/sshpasswd.png</code> returns an image — but nothing useful comes out of it, even with <code>steghide</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image8.png" alt="sshpasswd.png image, a dead end">
+          <img src="../assets/img/vulnhub-grotesque-1/image8.webp" alt="sshpasswd.png image, a dead end">
           <figcaption><code>sshpasswd.png</code> — a dead end this time.</figcaption>
         </figure>
 
@@ -141,31 +141,31 @@
         <p>Back to the file pulled from port 66 — time to see what it actually is.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image9.png" alt="Inspecting the file downloaded from port 66">
+          <img src="../assets/img/vulnhub-grotesque-1/image9.webp" alt="Inspecting the file downloaded from port 66">
           <figcaption>Examining the downloaded file.</figcaption>
         </figure>
 
         <p>Listing, searching and sorting through its contents…</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image10.png" alt="Listing directories within the file">
+          <img src="../assets/img/vulnhub-grotesque-1/image10.webp" alt="Listing directories within the file">
           <figcaption>Walking its directory listing.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image11.png" alt="Searching and sorting the contents">
+          <img src="../assets/img/vulnhub-grotesque-1/image11.webp" alt="Searching and sorting the contents">
           <figcaption>Searching and sorting for anything useful.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image12.png" alt="Further filtering of the contents">
+          <img src="../assets/img/vulnhub-grotesque-1/image12.webp" alt="Further filtering of the contents">
           <figcaption>Narrowing it down.</figcaption>
         </figure>
 
         <p>…turns up a hint: a WordPress site on port 80, with a file path to follow.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image13.png" alt="Hint pointing to a WordPress path on port 80">
+          <img src="../assets/img/vulnhub-grotesque-1/image13.webp" alt="Hint pointing to a WordPress path on port 80">
           <figcaption>A pointer to WordPress on port 80.</figcaption>
         </figure>
 
@@ -174,38 +174,38 @@
         <p>That page is full of song lyrics and little else, so <code>dirb</code> enumerates further — it finds a WordPress login plus a password hint that points back to the lyrics page.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image14.png" alt="Lyrics page on the WordPress site">
+          <img src="../assets/img/vulnhub-grotesque-1/image14.webp" alt="Lyrics page on the WordPress site">
           <figcaption>The lyrics page.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image15.png" alt="dirb finding the WordPress login and a password hint">
+          <img src="../assets/img/vulnhub-grotesque-1/image15.webp" alt="dirb finding the WordPress login and a password hint">
           <figcaption><code>dirb</code> surfaces the login and a &ldquo;back to lyrics&rdquo; hint.</figcaption>
         </figure>
 
         <blockquote>Per the walkthrough, the password is one of the song lyrics hashed as MD5. Each set of lyrics is saved to its own text file to test them all.</blockquote>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image16.png" alt="Saving each song&#x27;s lyrics to a text file">
+          <img src="../assets/img/vulnhub-grotesque-1/image16.webp" alt="Saving each song&#x27;s lyrics to a text file">
           <figcaption>Each lyric captured to its own file…</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image17.png" alt="More lyric files prepared">
+          <img src="../assets/img/vulnhub-grotesque-1/image17.webp" alt="More lyric files prepared">
           <figcaption>…across the songs on the page.</figcaption>
         </figure>
 
         <p>Each file is reduced to its MD5 sum — the candidate passwords — paired with the song's author as the username.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image18.png" alt="Converting the lyric files to MD5 sums">
+          <img src="../assets/img/vulnhub-grotesque-1/image18.webp" alt="Converting the lyric files to MD5 sums">
           <figcaption>MD5-summing the lyrics into candidate passwords.</figcaption>
         </figure>
 
         <p>One author/MD5 pair logs straight into WordPress.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image19.png" alt="Successful WordPress login">
+          <img src="../assets/img/vulnhub-grotesque-1/image19.webp" alt="Successful WordPress login">
           <figcaption>Authenticated to WordPress.</figcaption>
         </figure>
 
@@ -214,45 +214,45 @@
         <p>The active theme has an unconfigured, default <code>404.php</code> — an ideal place to plant code.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image20.png" alt="Default unconfigured 404.php in the theme editor">
+          <img src="../assets/img/vulnhub-grotesque-1/image20.webp" alt="Default unconfigured 404.php in the theme editor">
           <figcaption>The theme's stock <code>404.php</code>.</figcaption>
         </figure>
 
         <p>A PHP reverse shell from GitHub is pasted into <code>404.php</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image21.png" alt="Pasting a PHP reverse shell into 404.php">
+          <img src="../assets/img/vulnhub-grotesque-1/image21.webp" alt="Pasting a PHP reverse shell into 404.php">
           <figcaption>Dropping a reverse shell into the template.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image22.png" alt="The reverse shell code in place">
+          <img src="../assets/img/vulnhub-grotesque-1/image22.webp" alt="The reverse shell code in place">
           <figcaption>The payload saved to <code>404.php</code>.</figcaption>
         </figure>
 
         <p>The callback IP and port are set to the Kali host.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image23.png" alt="Setting the reverse shell IP and port">
+          <img src="../assets/img/vulnhub-grotesque-1/image23.webp" alt="Setting the reverse shell IP and port">
           <figcaption>Pointing the shell back at Kali.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image24.png" alt="Reverse shell configuration saved">
+          <img src="../assets/img/vulnhub-grotesque-1/image24.webp" alt="Reverse shell configuration saved">
           <figcaption>Configuration in place.</figcaption>
         </figure>
 
         <p>A listener is started and <code>404.php</code> is requested; the shell fires automatically.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image25.png" alt="Listener started, catching the shell on 404.php load">
+          <img src="../assets/img/vulnhub-grotesque-1/image25.webp" alt="Listener started, catching the shell on 404.php load">
           <figcaption>Visiting the page triggers the callback.</figcaption>
         </figure>
 
         <p>The shell lands as <code>www-data</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image26.png" alt="Shell received as www-data">
+          <img src="../assets/img/vulnhub-grotesque-1/image26.webp" alt="Shell received as www-data">
           <figcaption>Foothold as <code>www-data</code>.</figcaption>
         </figure>
 
@@ -261,26 +261,26 @@
         <p>This is a restricted shell with little room to move, so the goal becomes reading <code>wp-config.php</code> — easiest via a WordPress file-manager plugin installed from the admin panel.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image27.png" alt="Installing a file manager plugin in WordPress">
+          <img src="../assets/img/vulnhub-grotesque-1/image27.webp" alt="Installing a file manager plugin in WordPress">
           <figcaption>Adding a file-manager plugin to browse the filesystem.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image28.png" alt="Browsing to wp-config.php with the plugin">
+          <img src="../assets/img/vulnhub-grotesque-1/image28.webp" alt="Browsing to wp-config.php with the plugin">
           <figcaption>Navigating to <code>wp-config.php</code>.</figcaption>
         </figure>
 
         <p>It holds the credentials for the user <code>raphael</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image29.png" alt="wp-config.php revealing raphael&#x27;s credentials">
+          <img src="../assets/img/vulnhub-grotesque-1/image29.webp" alt="wp-config.php revealing raphael&#x27;s credentials">
           <figcaption><code>raphael</code>'s username and password in <code>wp-config.php</code>.</figcaption>
         </figure>
 
         <p>Reusing that password, <code>su raphael</code> gives a proper shell.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-grotesque-1/image30.png" alt="Switching to raphael and reading user.txt">
+          <img src="../assets/img/vulnhub-grotesque-1/image30.webp" alt="Switching to raphael and reading user.txt">
           <figcaption><code>su raphael</code>, then <code>user.txt</code> — the user flag.</figcaption>
         </figure>
 

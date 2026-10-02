@@ -73,18 +73,18 @@ Or add a whole new category by adding a new `{ category: "...", tools: [...] }` 
 
 ## Adding images to a post
 
-1. Put the image file in `assets/img/` — organizing by post keeps things tidy, e.g.:
+1. Put the image file in `assets/img/` — organizing by post keeps things tidy. **Save screenshots as `.webp`** (≈65% smaller than PNG at the same quality); convert with `cwebp input.png -q 82 -o output.webp` or Pillow. e.g.:
    ```
-   assets/img/wsus-lateral-movement/screenshot1.png
+   assets/img/wsus-lateral-movement/screenshot1.webp
    ```
 2. Reference it from inside `/posts/your-post.html` (note the `../` since posts live one folder down):
    ```html
-   <img src="../assets/img/wsus-lateral-movement/screenshot1.png" alt="Describe the image">
+   <img src="../assets/img/wsus-lateral-movement/screenshot1.webp" alt="Describe the image">
    ```
 3. Want a caption under it? Wrap it in a `<figure>`:
    ```html
    <figure>
-     <img src="../assets/img/wsus-lateral-movement/screenshot1.png" alt="Describe the image">
+     <img src="../assets/img/wsus-lateral-movement/screenshot1.webp" alt="Describe the image">
      <figcaption>Optional caption text.</figcaption>
    </figure>
    ```

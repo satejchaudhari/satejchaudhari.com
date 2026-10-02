@@ -121,7 +121,7 @@ IP: 10.10.11.45</code></pre>
       </p>
 
       <figure>
-        <img src="../assets/img/vintage/image-1.png" alt="Initial authentication testing">
+        <img src="../assets/img/vintage/image-1.webp" alt="Initial authentication testing">
         <figcaption>Authentication testing against LDAP.</figcaption>
       </figure>
 
@@ -140,7 +140,7 @@ echo 'Rosaisbest123' | kinit p.rosa
 klist</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-2.png" alt="Kerberos ticket">
+        <img src="../assets/img/vintage/image-2.webp" alt="Kerberos ticket">
         <figcaption>Successfully obtaining a TGT as p.rosa.</figcaption>
       </figure>
 
@@ -166,12 +166,12 @@ klist</code></pre>
 --dns-server 10.10.11.45</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-3.png" alt="BloodHound collection">
+        <img src="../assets/img/vintage/image-3.webp" alt="BloodHound collection">
         <figcaption>Collecting BloodHound data using NetExec.</figcaption>
       </figure>
 
       <figure>
-        <img src="../assets/img/vintage/image-4.png" alt="BloodHound enumeration">
+        <img src="../assets/img/vintage/image-4.webp" alt="BloodHound enumeration">
         <figcaption>BloodHound CE enumeration output.</figcaption>
       </figure>
 
@@ -183,7 +183,7 @@ klist</code></pre>
       </p>
 
       <figure>
-        <img src="../assets/img/vintage/image-5.png" alt="Pre Windows 2000 Compatible Access">
+        <img src="../assets/img/vintage/image-5.webp" alt="Pre Windows 2000 Compatible Access">
         <figcaption>FS01$ inherits access through the legacy compatibility group.</figcaption>
       </figure>
 
@@ -196,7 +196,7 @@ klist</code></pre>
 klist</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-6.png" alt="FS01 ticket">
+        <img src="../assets/img/vintage/image-6.webp" alt="FS01 ticket">
         <figcaption>Kerberos ticket obtained as FS01$.</figcaption>
       </figure>
 
@@ -208,7 +208,7 @@ klist</code></pre>
       </p>
 
       <figure>
-        <img src="../assets/img/vintage/image-7.png" alt="ReadGMSAPassword">
+        <img src="../assets/img/vintage/image-7.webp" alt="ReadGMSAPassword">
         <figcaption>FS01$ can read the managed password of GMSA01$.</figcaption>
       </figure>
 
@@ -219,7 +219,7 @@ get object \
 --attr msDS-ManagedPassword</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-8.png" alt="gMSA password extraction">
+        <img src="../assets/img/vintage/image-8.webp" alt="gMSA password extraction">
         <figcaption>Extracting the managed password and NTLM hash.</figcaption>
       </figure>
 
@@ -237,7 +237,7 @@ wkt /tmp/GMSA01.keytab
 kinit -V -k -t /tmp/GMSA01.keytab -f 'GMSA01$'</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-9.png" alt="Keytab authentication">
+        <img src="../assets/img/vintage/image-9.webp" alt="Keytab authentication">
         <figcaption>Creating a keytab and obtaining a Kerberos ticket.</figcaption>
       </figure>
 
@@ -251,7 +251,7 @@ kinit -V -k -t /tmp/GMSA01.keytab -f 'GMSA01$'</code></pre>
 'VINTAGE/GMSA01$'</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-10.png" alt="Impacket getTGT">
+        <img src="../assets/img/vintage/image-10.webp" alt="Impacket getTGT">
         <figcaption>Obtaining a TGT using the extracted NTLM hash.</figcaption>
       </figure>
 
@@ -267,12 +267,12 @@ kinit -V -k -t /tmp/GMSA01.keytab -f 'GMSA01$'</code></pre>
 add groupMember ServiceManagers 'GMSA01$'</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-11.png" alt="AddSelf abuse">
+        <img src="../assets/img/vintage/image-11.webp" alt="AddSelf abuse">
         <figcaption>Adding GMSA01$ to ServiceManagers.</figcaption>
       </figure>
 
       <figure>
-        <img src="../assets/img/vintage/image-12.png" alt="GenericAll permissions">
+        <img src="../assets/img/vintage/image-12.webp" alt="GenericAll permissions">
         <figcaption>ServiceManagers possesses GenericAll over multiple service accounts.</figcaption>
       </figure>
 
@@ -291,7 +291,7 @@ set object svc_sql servicePrincipalName \
 -v 'http/anything'</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-13.png" alt="Enable svc_sql">
+        <img src="../assets/img/vintage/image-13.webp" alt="Enable svc_sql">
         <figcaption>Enabling svc_sql and assigning an SPN.</figcaption>
       </figure>
 
@@ -305,14 +305,14 @@ set object svc_sql servicePrincipalName \
 --kerberoasting hashes.txt</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-14.png" alt="Kerberoasting">
+        <img src="../assets/img/vintage/image-14.webp" alt="Kerberoasting">
         <figcaption>Requesting a TGS ticket for the newly configured service account.</figcaption>
       </figure>
 
       <pre><code>john --wordlist=/usr/share/wordlists/rockyou.txt hashes.txt</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-15.png" alt="Cracked password">
+        <img src="../assets/img/vintage/image-15.webp" alt="Cracked password">
         <figcaption>Recovering the password from the Kerberoasted ticket.</figcaption>
       </figure>
 
@@ -337,7 +337,7 @@ set object svc_sql servicePrincipalName \
 --users</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-16.png" alt="User enumeration">
+        <img src="../assets/img/vintage/image-16.webp" alt="User enumeration">
         <figcaption>Enumerating domain users.</figcaption>
       </figure>
 
@@ -348,7 +348,7 @@ set object svc_sql servicePrincipalName \
 -k</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-17.png" alt="Password spray">
+        <img src="../assets/img/vintage/image-17.webp" alt="Password spray">
         <figcaption>Password spraying identifies a valid user.</figcaption>
       </figure>
 
@@ -366,7 +366,7 @@ set object svc_sql servicePrincipalName \
       </p>
 
       <figure>
-        <img src="../assets/img/vintage/image-18.png" alt="Group membership">
+        <img src="../assets/img/vintage/image-18.webp" alt="Group membership">
         <figcaption>Group memberships associated with c.neri.</figcaption>
       </figure>
 
@@ -377,7 +377,7 @@ evil-winrm \
 -r vintage.htb</code></pre>
 
       <figure>
-        <img src="../assets/img/vintage/image-19.png" alt="User shell">
+        <img src="../assets/img/vintage/image-19.webp" alt="User shell">
         <figcaption>Interactive shell obtained via WinRM.</figcaption>
       </figure>
 

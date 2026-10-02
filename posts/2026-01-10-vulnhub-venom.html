@@ -83,21 +83,21 @@
         <h2>Reconnaissance</h2>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image1.png" alt="Venom VM booted in the hypervisor">
+          <img src="../assets/img/vulnhub-venom/image1.webp" alt="Venom VM booted in the hypervisor">
           <figcaption>The Venom VM imported from Vulnhub and booted.</figcaption>
         </figure>
 
         <p>With the box running, <code>netdiscover</code> on the local network finds the target.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image2.png" alt="netdiscover output showing the target IP">
+          <img src="../assets/img/vulnhub-venom/image2.webp" alt="netdiscover output showing the target IP">
           <figcaption>The target comes back as <code>192.168.0.113</code>.</figcaption>
         </figure>
 
         <p>An <code>nmap</code> scan maps the attack surface.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image3.png" alt="nmap scan results showing open ports">
+          <img src="../assets/img/vulnhub-venom/image3.webp" alt="nmap scan results showing open ports">
           <figcaption>Ports <strong>21 (FTP)</strong>, <strong>80 (HTTP)</strong>, <strong>139 (SMB)</strong> and <strong>443 (HTTPS)</strong> are open.</figcaption>
         </figure>
 
@@ -106,74 +106,74 @@
         <p>Visiting port 80 shows the default web page. Viewing the page source turns up a hash left in an HTML comment.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image4.png" alt="Default web page with a hash in an HTML comment">
+          <img src="../assets/img/vulnhub-venom/image4.webp" alt="Default web page with a hash in an HTML comment">
           <figcaption>The default page — a hash is commented out in the source.</figcaption>
         </figure>
 
         <p>Running that hash through an online cracker resolves it to a word.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image5.png" alt="Online hash cracker returning the plaintext &#x27;hostinger&#x27;">
+          <img src="../assets/img/vulnhub-venom/image5.webp" alt="Online hash cracker returning the plaintext &#x27;hostinger&#x27;">
           <figcaption>The hash cracks to <code>hostinger</code>.</figcaption>
         </figure>
 
         <p>That looks like a username, so it is worth trying against FTP.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image6.png" alt="FTP login attempt using the recovered name">
+          <img src="../assets/img/vulnhub-venom/image6.webp" alt="FTP login attempt using the recovered name">
           <figcaption>Authenticating to FTP with <code>hostinger</code>…</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image7.png" alt="Successful FTP session">
+          <img src="../assets/img/vulnhub-venom/image7.webp" alt="Successful FTP session">
           <figcaption>…succeeds.</figcaption>
         </figure>
 
         <p>The FTP share holds a file, <code>hit.txt</code>, which is pulled down to Kali.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image8.png" alt="Downloading hit.txt from the FTP server">
+          <img src="../assets/img/vulnhub-venom/image8.webp" alt="Downloading hit.txt from the FTP server">
           <figcaption><code>hit.txt</code> retrieved from the share.</figcaption>
         </figure>
 
         <p>Opening it reveals more encoded hashes and a domain name.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image9.png" alt="Contents of hit.txt showing encoded data">
+          <img src="../assets/img/vulnhub-venom/image9.webp" alt="Contents of hit.txt showing encoded data">
           <figcaption><code>hit.txt</code> — more encoded material and a hostname.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image10.png" alt="Decoding the first layer of the hash chain">
+          <img src="../assets/img/vulnhub-venom/image10.webp" alt="Decoding the first layer of the hash chain">
           <figcaption>Working through the chain of encodings, step one…</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image11.png" alt="Decoding the next layer">
+          <img src="../assets/img/vulnhub-venom/image11.webp" alt="Decoding the next layer">
           <figcaption>…step two…</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image12.png" alt="Decoding a further layer">
+          <img src="../assets/img/vulnhub-venom/image12.webp" alt="Decoding a further layer">
           <figcaption>…step three…</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image13.png" alt="Decoding the final layer of the chain">
+          <img src="../assets/img/vulnhub-venom/image13.webp" alt="Decoding the final layer of the chain">
           <figcaption>…and the final layer.</figcaption>
         </figure>
 
         <p>The decoded chain yields the next clue and a link.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image14.png" alt="Decoded clue pointing to a link">
+          <img src="../assets/img/vulnhub-venom/image14.webp" alt="Decoded clue pointing to a link">
           <figcaption>The decoded clue and the link it points to.</figcaption>
         </figure>
 
         <p>Following the link lets the admin password be decoded.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image15.png" alt="Decoding the admin password from the link">
+          <img src="../assets/img/vulnhub-venom/image15.webp" alt="Decoding the admin password from the link">
           <figcaption>The admin password, recovered.</figcaption>
         </figure>
 
@@ -182,76 +182,76 @@
         <p>After adding the hostname <code>venom.box</code> to <code>/etc/hosts</code>, the site resolves to a login page.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image16.png" alt="Login page served after adding venom.box to /etc/hosts">
+          <img src="../assets/img/vulnhub-venom/image16.webp" alt="Login page served after adding venom.box to /etc/hosts">
           <figcaption>The application login, reachable once the host entry is added.</figcaption>
         </figure>
 
         <p>Using the username <code>dora</code> and the decoded password logs straight in.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image17.png" alt="Logging in with dora and the decoded password">
+          <img src="../assets/img/vulnhub-venom/image17.webp" alt="Logging in with dora and the decoded password">
           <figcaption>Authenticating as <code>dora</code>…</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image18.png" alt="Authenticated admin dashboard">
+          <img src="../assets/img/vulnhub-venom/image18.webp" alt="Authenticated admin dashboard">
           <figcaption>…lands on the admin dashboard.</figcaption>
         </figure>
 
         <p>The panel identifies the software as <strong>Subrion CMS 4.2.1</strong>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image19.png" alt="Subrion CMS 4.2.1 version banner">
+          <img src="../assets/img/vulnhub-venom/image19.webp" alt="Subrion CMS 4.2.1 version banner">
           <figcaption>The target runs Subrion CMS 4.2.1.</figcaption>
         </figure>
 
         <p>Since the panel allows file uploads, the first attempt is a malicious <code>.phar</code> payload to pull a reverse shell.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image20.png" alt="Preparing a malicious phar upload">
+          <img src="../assets/img/vulnhub-venom/image20.webp" alt="Preparing a malicious phar upload">
           <figcaption>Crafting a <code>.phar</code> payload…</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image21.png" alt="Uploading the phar file through the CMS">
+          <img src="../assets/img/vulnhub-venom/image21.webp" alt="Uploading the phar file through the CMS">
           <figcaption>…uploading it through the CMS…</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image22.png" alt="Upload accepted by the application">
+          <img src="../assets/img/vulnhub-venom/image22.webp" alt="Upload accepted by the application">
           <figcaption>…which the application accepts.</figcaption>
         </figure>
 
         <p>The upload does not yield a shell, so a different route is taken.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image23.png" alt="Reviewing the failed upload approach">
+          <img src="../assets/img/vulnhub-venom/image23.webp" alt="Reviewing the failed upload approach">
           <figcaption>The <code>.phar</code> route does not call back — time for a known exploit.</figcaption>
         </figure>
 
         <p>Exploit-DB has a public exploit for this exact Subrion version, which is downloaded.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image24.png" alt="Exploit-DB page for Subrion CMS 4.2.1">
+          <img src="../assets/img/vulnhub-venom/image24.webp" alt="Exploit-DB page for Subrion CMS 4.2.1">
           <figcaption>The matching Subrion 4.2.1 exploit on Exploit-DB.</figcaption>
         </figure>
 
         <p>Running the exploit with the known credentials returns a shell.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image25.png" alt="Running the Subrion exploit with valid credentials">
+          <img src="../assets/img/vulnhub-venom/image25.webp" alt="Running the Subrion exploit with valid credentials">
           <figcaption>Launching the exploit with <code>dora</code>'s credentials.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image26.png" alt="Shell obtained through the exploit">
+          <img src="../assets/img/vulnhub-venom/image26.webp" alt="Shell obtained through the exploit">
           <figcaption>A foothold shell on the box.</figcaption>
         </figure>
 
         <p>A second Python one-liner upgrades this into a proper reverse shell caught by a local listener, landing as <code>www-data</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image27.png" alt="Reverse shell caught as www-data">
+          <img src="../assets/img/vulnhub-venom/image27.webp" alt="Reverse shell caught as www-data">
           <figcaption>Interactive shell as <code>www-data</code>.</figcaption>
         </figure>
 
@@ -260,45 +260,45 @@
         <p>Switching to the <code>hostinger</code> user and moving to <code>/tmp</code>, <code>linpeas</code> is staged over from Kali with <code>python -m SimpleHTTPServer</code> and <code>wget</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image28.png" alt="Switching to the hostinger user">
+          <img src="../assets/img/vulnhub-venom/image28.webp" alt="Switching to the hostinger user">
           <figcaption>Becoming the <code>hostinger</code> user.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image29.png" alt="Serving linpeas from Kali with SimpleHTTPServer">
+          <img src="../assets/img/vulnhub-venom/image29.webp" alt="Serving linpeas from Kali with SimpleHTTPServer">
           <figcaption>Hosting <code>linpeas</code> from Kali.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image30.png" alt="Downloading linpeas onto the target with wget">
+          <img src="../assets/img/vulnhub-venom/image30.webp" alt="Downloading linpeas onto the target with wget">
           <figcaption>Pulling it onto the target into <code>/tmp</code>.</figcaption>
         </figure>
 
         <p>After making it executable, linpeas runs.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image31.png" alt="Making linpeas executable and running it">
+          <img src="../assets/img/vulnhub-venom/image31.webp" alt="Making linpeas executable and running it">
           <figcaption><code>chmod +x</code> and run.</figcaption>
         </figure>
 
         <p>It surfaces a backup file; opening it reveals the <strong>user flag</strong>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image32.png" alt="Backup file containing the user flag">
+          <img src="../assets/img/vulnhub-venom/image32.webp" alt="Backup file containing the user flag">
           <figcaption>The user flag, recovered from a backup file.</figcaption>
         </figure>
 
         <p>The same output points at the user <code>Nathan</code>; switching to that account with the hash recovered alongside the flag works.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image33.png" alt="Switching to the Nathan user">
+          <img src="../assets/img/vulnhub-venom/image33.webp" alt="Switching to the Nathan user">
           <figcaption>Pivoting to <code>Nathan</code>.</figcaption>
         </figure>
 
         <p><code>sudo -l</code> shows <code>Nathan</code> may run <code>sudo bash</code> directly — an instant root shell.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-venom/image34.png" alt="sudo bash giving a root shell and root.txt">
+          <img src="../assets/img/vulnhub-venom/image34.webp" alt="sudo bash giving a root shell and root.txt">
           <figcaption><code>sudo bash</code> → root, and <code>root.txt</code> in <code>/root</code> completes the box.</figcaption>
         </figure>
 

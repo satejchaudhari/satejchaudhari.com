@@ -110,11 +110,11 @@
           is not required), with the latest version of Suricata installed.
         </p>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image1.png" alt="Ubuntu Server VM prepared as the lab host">
+          <img src="../assets/img/linux-namespaces-suricata/image1.webp" alt="Ubuntu Server VM prepared as the lab host">
           <figcaption>A clean Ubuntu Server host — the whole lab lives inside it.</figcaption>
         </figure>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image2.png" alt="Installing the latest Suricata release on the host">
+          <img src="../assets/img/linux-namespaces-suricata/image2.webp" alt="Installing the latest Suricata release on the host">
           <figcaption>Installing the latest Suricata build.</figcaption>
         </figure>
 
@@ -152,7 +152,7 @@
 
         <h3>1.4.1 Create all seven namespaces</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image3.png" alt="ip netns add creating seven namespaces and ip netns list confirming them">
+          <img src="../assets/img/linux-namespaces-suricata/image3.webp" alt="ip netns add creating seven namespaces and ip netns list confirming them">
           <figcaption>Seven namespaces created and confirmed with <code>ip netns list</code>.</figcaption>
         </figure>
         <p>
@@ -163,7 +163,7 @@
 
         <h3>1.4.2 Create the veth pairs in the root namespace</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image4.png" alt="Creating six veth pairs in the root namespace">
+          <img src="../assets/img/linux-namespaces-suricata/image4.webp" alt="Creating six veth pairs in the root namespace">
           <figcaption>Six veth pairs created in the root namespace before being distributed.</figcaption>
         </figure>
         <p>
@@ -176,7 +176,7 @@
 
         <h3>1.4.3 Move each interface into its namespace</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image5.png" alt="Moving veth interfaces into their respective namespaces with ip link set netns">
+          <img src="../assets/img/linux-namespaces-suricata/image5.webp" alt="Moving veth interfaces into their respective namespaces with ip link set netns">
           <figcaption>Each interface is moved into its namespace with <code>ip link set &lt;iface&gt; netns &lt;ns&gt;</code>.</figcaption>
         </figure>
         <p>
@@ -187,7 +187,7 @@
 
         <h3>1.4.4 Assign IP addresses</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image6.png" alt="Assigning a unique /24 subnet to each source namespace">
+          <img src="../assets/img/linux-namespaces-suricata/image6.webp" alt="Assigning a unique /24 subnet to each source namespace">
           <figcaption>Each source namespace lives on its own unique /24.</figcaption>
         </figure>
         <p>
@@ -199,7 +199,7 @@
 
         <h3>1.4.5 Bring up the source-side interfaces</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image7.png" alt="Bringing up loopback and veth interfaces in the source namespaces; ids addr output still DOWN">
+          <img src="../assets/img/linux-namespaces-suricata/image7.webp" alt="Bringing up loopback and veth interfaces in the source namespaces; ids addr output still DOWN">
           <figcaption>Loopback and veth brought up in each source namespace. On the right, the
             <code>ids</code> side shows its IPs assigned but still <code>DOWN</code> — its interfaces
             haven't been brought up yet.</figcaption>
@@ -211,7 +211,7 @@
 
         <h3>1.4.6 Bring up the IDS-side interfaces</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image8.png" alt="IDS interfaces transitioning to UP with the LOWER_UP flag set">
+          <img src="../assets/img/linux-namespaces-suricata/image8.webp" alt="IDS interfaces transitioning to UP with the LOWER_UP flag set">
           <figcaption><code>ids1</code>/<code>ids2</code> transition to
             <code>BROADCAST,MULTICAST,UP,LOWER_UP</code> — <code>LOWER_UP</code> confirms the veth
             link is established end to end.</figcaption>
@@ -219,7 +219,7 @@
 
         <h3>1.4.7 Bring up the target interface</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image9.png" alt="Target interface up with 192.168.100.2 and ids-target peer confirmed">
+          <img src="../assets/img/linux-namespaces-suricata/image9.webp" alt="Target interface up with 192.168.100.2 and ids-target peer confirmed">
           <figcaption><code>ids-target</code> is <code>UP,LOWER_UP</code> with
             <code>192.168.100.1/24</code>, and <code>link-netns target</code> confirms the peer sits
             in the target namespace.</figcaption>
@@ -227,7 +227,7 @@
 
         <h3>1.4.8 Add default routes</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image10.png" alt="Adding default routes in each namespace pointing at the ids namespace">
+          <img src="../assets/img/linux-namespaces-suricata/image10.webp" alt="Adding default routes in each namespace pointing at the ids namespace">
           <figcaption>Default routes so every segment reaches the others only through <code>ids</code>.</figcaption>
         </figure>
         <p>
@@ -240,7 +240,7 @@
 
         <h3>1.4.9 Enable IP forwarding on the IDS and verify</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image11.png" alt="Enabling net.ipv4.ip_forward and a ping showing ttl=63 with zero packet loss">
+          <img src="../assets/img/linux-namespaces-suricata/image11.webp" alt="Enabling net.ipv4.ip_forward and a ping showing ttl=63 with zero packet loss">
           <figcaption>Forwarding enabled, then verified: <code>ttl=63</code> and 0% loss end to end.</figcaption>
         </figure>
         <p>
@@ -258,7 +258,7 @@
 
         <h3>1.5 Network diagram</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image12.png" alt="Diagram of five source namespaces routing through the ids namespace to the target">
+          <img src="../assets/img/linux-namespaces-suricata/image12.webp" alt="Diagram of five source namespaces routing through the ids namespace to the target">
           <figcaption>Every source namespace must pass through <code>ids</code> — there is no direct
             path to <code>target</code>.</figcaption>
         </figure>
@@ -281,7 +281,7 @@
         <pre><code>sudo ip netns exec target bash
 ip a</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image13.png" alt="Inside the target namespace, ip a shows veth-target with 192.168.100.2/24">
+          <img src="../assets/img/linux-namespaces-suricata/image13.webp" alt="Inside the target namespace, ip a shows veth-target with 192.168.100.2/24">
           <figcaption><code>veth-target</code> holds <code>192.168.100.2/24</code> and is up.</figcaption>
         </figure>
 
@@ -306,7 +306,7 @@ if ($result-&gt;fetchArray()) {
 }
 ?&gt;</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image14.png" alt="The vulnerable PHP login page source">
+          <img src="../assets/img/linux-namespaces-suricata/image14.webp" alt="The vulnerable PHP login page source">
           <figcaption>The injectable login page.</figcaption>
         </figure>
 
@@ -318,18 +318,18 @@ INSERT INTO users VALUES('satej','satej123');
 INSERT INTO users VALUES('rudra','rudra123');
 .quit</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image15.png" alt="Creating the users table and inserting three accounts in SQLite">
+          <img src="../assets/img/linux-namespaces-suricata/image15.webp" alt="Creating the users table and inserting three accounts in SQLite">
           <figcaption>Three accounts seeded — the data the login page queries against.</figcaption>
         </figure>
 
         <h3>2.1.4 Start the PHP built-in web server</h3>
         <pre><code>php -S 192.168.100.2:80</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image16.png" alt="Starting PHP's built-in web server bound to 192.168.100.2:80">
+          <img src="../assets/img/linux-namespaces-suricata/image16.webp" alt="Starting PHP's built-in web server bound to 192.168.100.2:80">
           <figcaption>The service listening on <code>192.168.100.2:80</code>.</figcaption>
         </figure>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image17.png" alt="Valid credentials return Login Successful, invalid return Login Failed">
+          <img src="../assets/img/linux-namespaces-suricata/image17.webp" alt="Valid credentials return Login Successful, invalid return Login Failed">
           <figcaption>Baseline behaviour: valid credentials succeed, invalid ones fail — so a later
             bypass is provably the result of exploitation, not misconfiguration.</figcaption>
         </figure>
@@ -346,7 +346,7 @@ INSERT INTO users VALUES('rudra','rudra123');
     rev:1;
 )</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image18.png" alt="The NS1 SQL injection rule in local.rules">
+          <img src="../assets/img/linux-namespaces-suricata/image18.webp" alt="The NS1 SQL injection rule in local.rules">
           <figcaption>The <code>sid:100001</code> rule, scoped to the ns1 subnet.</figcaption>
         </figure>
         <p>
@@ -369,7 +369,7 @@ INSERT INTO users VALUES('rudra','rudra123');
         </p>
         <pre><code>sudo ip netns exec ids suricata -i ids1 -S /etc/suricata/rules/local.rules -v</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image19.png" alt="Suricata starting on interface ids1 and beginning live capture">
+          <img src="../assets/img/linux-namespaces-suricata/image19.webp" alt="Suricata starting on interface ids1 and beginning live capture">
           <figcaption>Suricata initialised and monitoring live traffic on <code>ids1</code>.</figcaption>
         </figure>
 
@@ -378,7 +378,7 @@ INSERT INTO users VALUES('rudra','rudra123');
         <h3>2.4.1 Executing the attack</h3>
         <pre><code>curl "http://192.168.100.2/sqli/?user=admin&amp;pass=%27%20OR%201=1--"</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image20.png" alt="curl sending the URL-encoded OR 1=1 payload from ns1">
+          <img src="../assets/img/linux-namespaces-suricata/image20.webp" alt="curl sending the URL-encoded OR 1=1 payload from ns1">
           <figcaption>The payload <code>%27%20OR%201=1--</code> decodes to <code>' OR 1=1--</code>.</figcaption>
         </figure>
         <p>
@@ -388,7 +388,7 @@ INSERT INTO users VALUES('rudra','rudra123');
 
         <h3>2.4.2 Alert generation</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image21.png" alt="fast.log entry showing the NS1 SQL Injection alert with sid 100001">
+          <img src="../assets/img/linux-namespaces-suricata/image21.webp" alt="fast.log entry showing the NS1 SQL Injection alert with sid 100001">
           <figcaption>The alert recorded in <code>fast.log</code>.</figcaption>
         </figure>
         <p>
@@ -402,7 +402,7 @@ INSERT INTO users VALUES('rudra','rudra123');
         <h3>3.1 Setting up the FTP environment</h3>
         <h3>3.1.1 Install and configure vsftpd</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image22.png" alt="Installing the vsftpd FTP server on the target">
+          <img src="../assets/img/linux-namespaces-suricata/image22.webp" alt="Installing the vsftpd FTP server on the target">
           <figcaption>vsftpd installed on the target.</figcaption>
         </figure>
         <p>The config (<code>/etc/vsftpd.conf</code>) was set to allow anonymous access:</p>
@@ -413,24 +413,24 @@ local_enable=YES
 write_enable=YES
 anon_root=/srv/ftp</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image23.png" alt="vsftpd.conf with anonymous_enable set to YES and anon_root /srv/ftp">
+          <img src="../assets/img/linux-namespaces-suricata/image23.webp" alt="vsftpd.conf with anonymous_enable set to YES and anon_root /srv/ftp">
           <figcaption>Anonymous access enabled; <code>/srv/ftp</code> presented to anonymous users.</figcaption>
         </figure>
 
         <h3>3.1.2 Start the FTP service</h3>
         <pre><code>/usr/sbin/vsftpd /etc/vsftpd.conf</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image24.png" alt="Starting the vsftpd service">
+          <img src="../assets/img/linux-namespaces-suricata/image24.webp" alt="Starting the vsftpd service">
           <figcaption>vsftpd running.</figcaption>
         </figure>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image25.png" alt="Anonymous login succeeding and listing test.txt">
+          <img src="../assets/img/linux-namespaces-suricata/image25.webp" alt="Anonymous login succeeding and listing test.txt">
           <figcaption>Anonymous login works and the test file is visible.</figcaption>
         </figure>
 
         <h3>3.2 Suricata rule development</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image26.png" alt="The NS2 FTP access rule in local.rules">
+          <img src="../assets/img/linux-namespaces-suricata/image26.webp" alt="The NS2 FTP access rule in local.rules">
           <figcaption>The <code>sid:100002</code> FTP rule.</figcaption>
         </figure>
         <pre><code>alert ftp 10.2.2.0/24 any -&gt; 192.168.100.2 21 (
@@ -447,13 +447,13 @@ anon_root=/srv/ftp</code></pre>
 
         <h3>3.3 Start Suricata on ids2</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image27.png" alt="Suricata starting on interface ids2">
+          <img src="../assets/img/linux-namespaces-suricata/image27.webp" alt="Suricata starting on interface ids2">
           <figcaption>Suricata now inspecting FTP traffic on the ns2 path.</figcaption>
         </figure>
 
         <h3>3.4 Detecting the access</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image28.png" alt="Anonymous FTP session from ns2 and the resulting fast.log alert">
+          <img src="../assets/img/linux-namespaces-suricata/image28.webp" alt="Anonymous FTP session from ns2 and the resulting fast.log alert">
           <figcaption>The anonymous login from ns2 and its matching alert.</figcaption>
         </figure>
         <p>
@@ -470,7 +470,7 @@ anon_root=/srv/ftp</code></pre>
 useradd -m satejssh
 passwd satejssh</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image29.png" alt="Creating the satejssh user account in the target namespace">
+          <img src="../assets/img/linux-namespaces-suricata/image29.webp" alt="Creating the satejssh user account in the target namespace">
           <figcaption>A target account for the brute-force simulation.</figcaption>
         </figure>
 
@@ -480,21 +480,21 @@ passwd satejssh</code></pre>
           attempt opens a fresh connection (which is what the behaviour-based rule counts).
         </p>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image30.png" alt="sshd_config edited to allow password authentication">
+          <img src="../assets/img/linux-namespaces-suricata/image30.webp" alt="sshd_config edited to allow password authentication">
           <figcaption><code>sshd_config</code> — password auth on.</figcaption>
         </figure>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image31.png" alt="sshd_config MaxAuthTries set to 1">
+          <img src="../assets/img/linux-namespaces-suricata/image31.webp" alt="sshd_config MaxAuthTries set to 1">
           <figcaption><code>MaxAuthTries 1</code>.</figcaption>
         </figure>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image32.png" alt="Starting sshd and verifying login from ns3 with valid credentials">
+          <img src="../assets/img/linux-namespaces-suricata/image32.webp" alt="Starting sshd and verifying login from ns3 with valid credentials">
           <figcaption>Daemon started and reachability verified from ns3.</figcaption>
         </figure>
 
         <h3>4.2 Suricata rule development</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image33.png" alt="The threshold-based NS3 SSH brute force rule">
+          <img src="../assets/img/linux-namespaces-suricata/image33.webp" alt="The threshold-based NS3 SSH brute force rule">
           <figcaption>The <code>sid:100003</code> threshold rule.</figcaption>
         </figure>
         <pre><code>alert tcp 10.3.3.0/24 any -&gt; 192.168.100.2 22 (
@@ -515,13 +515,13 @@ passwd satejssh</code></pre>
 
         <h3>4.3 Start Suricata on ids3</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image34.png" alt="Suricata starting on ids3 with the brute-force rule loaded">
+          <img src="../assets/img/linux-namespaces-suricata/image34.webp" alt="Suricata starting on ids3 with the brute-force rule loaded">
           <figcaption>Rule loaded, engine up on <code>ids3</code>.</figcaption>
         </figure>
 
         <h3>4.4 Detecting the brute force</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image35.png" alt="fast.log entry for NS3 SSH BRUTE FORCE after three attempts">
+          <img src="../assets/img/linux-namespaces-suricata/image35.webp" alt="fast.log entry for NS3 SSH BRUTE FORCE after three attempts">
           <figcaption>Alert after three attempts inside the window.</figcaption>
         </figure>
         <p>
@@ -538,7 +538,7 @@ passwd satejssh</code></pre>
         </p>
         <pre><code>iptables -I FORWARD -p tcp --dport 22 -j NFQUEUE --queue-num 0</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image36.png" alt="iptables FORWARD rule sending SSH traffic to NFQUEUE queue 0">
+          <img src="../assets/img/linux-namespaces-suricata/image36.webp" alt="iptables FORWARD rule sending SSH traffic to NFQUEUE queue 0">
           <figcaption>SSH packets routed into NFQUEUE for inspect-then-verdict handling.</figcaption>
         </figure>
         <p>The companion rule uses the <code>drop</code> action rather than <code>alert</code>:</p>
@@ -551,11 +551,11 @@ passwd satejssh</code></pre>
     rev:1;
 )</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image37.png" alt="Suricata started in NFQUEUE/IPS mode with the drop rule loaded">
+          <img src="../assets/img/linux-namespaces-suricata/image37.webp" alt="Suricata started in NFQUEUE/IPS mode with the drop rule loaded">
           <figcaption>Suricata running inline with the blocking rule.</figcaption>
         </figure>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image38.png" alt="Suricata drop event generated for blocked SSH traffic">
+          <img src="../assets/img/linux-namespaces-suricata/image38.webp" alt="Suricata drop event generated for blocked SSH traffic">
           <figcaption>A drop event — the packet never reaches the target.</figcaption>
         </figure>
         <blockquote>
@@ -574,17 +574,17 @@ passwd satejssh</code></pre>
           directory objects.
         </p>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image39.png" alt="Installing OpenLDAP packages on the target">
+          <img src="../assets/img/linux-namespaces-suricata/image39.webp" alt="Installing OpenLDAP packages on the target">
           <figcaption>OpenLDAP packages installed.</figcaption>
         </figure>
         <pre><code>slapd
 ss -tulpn | grep 389</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image40.png" alt="slapd running and listening on port 389">
+          <img src="../assets/img/linux-namespaces-suricata/image40.webp" alt="slapd running and listening on port 389">
           <figcaption>The directory service listening on 389.</figcaption>
         </figure>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image41.png" alt="A test LDAP query from ns4 succeeding against the target">
+          <img src="../assets/img/linux-namespaces-suricata/image41.webp" alt="A test LDAP query from ns4 succeeding against the target">
           <figcaption>Connectivity from ns4 confirmed; the default <code>dc=nodomain</code> tree was
             kept.</figcaption>
         </figure>
@@ -598,13 +598,13 @@ cn: FINANCE-PC
 description: Decoy Workstation</code></pre>
         <pre><code>ldapadd -x -D "cn=admin,dc=nodomain" -W -f decoy.ldif</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image42.png" alt="Importing the decoy FINANCE-PC object with ldapadd">
+          <img src="../assets/img/linux-namespaces-suricata/image42.webp" alt="Importing the decoy FINANCE-PC object with ldapadd">
           <figcaption>The decoy imported into the directory.</figcaption>
         </figure>
         <pre><code>ip netns exec ns4 ldapsearch -x -H ldap://192.168.100.2 \
   -b "dc=nodomain" "(cn=FINANCE-PC)"</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image43.png" alt="ldapsearch returning the FINANCE-PC decoy object and its attributes">
+          <img src="../assets/img/linux-namespaces-suricata/image43.webp" alt="ldapsearch returning the FINANCE-PC decoy object and its attributes">
           <figcaption>The decoy is discoverable through normal LDAP enumeration.</figcaption>
         </figure>
 
@@ -617,22 +617,22 @@ description: Decoy Workstation</code></pre>
     rev:1;
 )</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image44.png" alt="The NS4 LDAP decoy enumeration rule">
+          <img src="../assets/img/linux-namespaces-suricata/image44.webp" alt="The NS4 LDAP decoy enumeration rule">
           <figcaption>The <code>sid:100004</code> rule matches the honeypot name in any query.</figcaption>
         </figure>
         <pre><code>sudo ip netns exec ids suricata -i ids4 -S /etc/suricata/rules/local.rules -v</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image45.png" alt="Suricata started on interface ids4">
+          <img src="../assets/img/linux-namespaces-suricata/image45.webp" alt="Suricata started on interface ids4">
           <figcaption>Monitoring ns4 traffic on <code>ids4</code>.</figcaption>
         </figure>
 
         <h3>5.4 Detecting the enumeration</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image46.png" alt="ldapsearch for FINANCE-PC from ns4 triggering the Suricata match">
+          <img src="../assets/img/linux-namespaces-suricata/image46.webp" alt="ldapsearch for FINANCE-PC from ns4 triggering the Suricata match">
           <figcaption>The search filter carries <code>FINANCE-PC</code> across <code>ids4</code>.</figcaption>
         </figure>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image47.png" alt="fast.log entry for NS4 LDAP DECOY ENUMERATION">
+          <img src="../assets/img/linux-namespaces-suricata/image47.webp" alt="fast.log entry for NS4 LDAP DECOY ENUMERATION">
           <figcaption>The alert: source <code>10.4.4.2</code> → <code>192.168.100.2:389</code>, rule
             <code>100004</code>.</figcaption>
         </figure>
@@ -665,13 +665,13 @@ userPassword: Summer2025!
 # ...adoe, rpatel, mjones, finance.svc, backup.svc — all with userPassword: Summer2025!</code></pre>
         <pre><code>ldapadd -x -D "cn=admin,dc=nodomain" -W -f users.ldif</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image48.png" alt="Importing the six user accounts with ldapadd">
+          <img src="../assets/img/linux-namespaces-suricata/image48.webp" alt="Importing the six user accounts with ldapadd">
           <figcaption>Six accounts imported under <code>ou=People</code>.</figcaption>
         </figure>
 
         <h3>6.2 Build the spray</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image49.png" alt="users.txt containing the target usernames">
+          <img src="../assets/img/linux-namespaces-suricata/image49.webp" alt="users.txt containing the target usernames">
           <figcaption><code>users.txt</code> — the target list.</figcaption>
         </figure>
         <pre><code>while read user
@@ -684,7 +684,7 @@ do
   sleep 2
 done &lt; users.txt</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image50.png" alt="The password-spray bind loop running against each account">
+          <img src="../assets/img/linux-namespaces-suricata/image50.webp" alt="The password-spray bind loop running against each account">
           <figcaption>One password (<code>Winter2025!</code>) tried against every account — the
             opposite of a per-account brute force, and a common way to dodge lockout policies.</figcaption>
         </figure>
@@ -698,23 +698,23 @@ done &lt; users.txt</code></pre>
     rev:1;
 )</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image51.png" alt="The NS5 LDAP password spraying rule keyed on invalid_credentials responses">
+          <img src="../assets/img/linux-namespaces-suricata/image51.webp" alt="The NS5 LDAP password spraying rule keyed on invalid_credentials responses">
           <figcaption>The <code>sid:100005</code> rule watches the <em>server's</em>
             <code>invalid_credentials</code> responses, not the requests.</figcaption>
         </figure>
         <pre><code>sudo ip netns exec ids suricata -i ids5 -S /etc/suricata/rules/local.rules -v</code></pre>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image52.png" alt="Suricata started on interface ids5">
+          <img src="../assets/img/linux-namespaces-suricata/image52.webp" alt="Suricata started on interface ids5">
           <figcaption>Monitoring ns5 traffic on <code>ids5</code>.</figcaption>
         </figure>
 
         <h3>6.4 Detecting the spray</h3>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image53.png" alt="The password spray executing from ns5 against multiple accounts">
+          <img src="../assets/img/linux-namespaces-suricata/image53.webp" alt="The password spray executing from ns5 against multiple accounts">
           <figcaption>Repeated failed binds across accounts with the same password.</figcaption>
         </figure>
         <figure>
-          <img src="../assets/img/linux-namespaces-suricata/image54.png" alt="fast.log entry for NS5 LDAP Password Spraying Detected">
+          <img src="../assets/img/linux-namespaces-suricata/image54.webp" alt="fast.log entry for NS5 LDAP Password Spraying Detected">
           <figcaption>Alert once five <code>invalid_credentials</code> responses land inside the
             window.</figcaption>
         </figure>

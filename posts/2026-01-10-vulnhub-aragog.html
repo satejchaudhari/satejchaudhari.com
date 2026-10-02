@@ -83,47 +83,47 @@
         <h2>Reconnaissance</h2>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image1.png" alt="Aragog VM booted from Vulnhub">
+          <img src="../assets/img/vulnhub-aragog/image1.webp" alt="Aragog VM booted from Vulnhub">
           <figcaption>The Aragog VM running.</figcaption>
         </figure>
 
         <p><code>netdiscover</code> finds the target at <code>192.168.0.107</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image2.png" alt="netdiscover showing the target IP">
+          <img src="../assets/img/vulnhub-aragog/image2.webp" alt="netdiscover showing the target IP">
           <figcaption>Target located at <code>192.168.0.107</code>.</figcaption>
         </figure>
 
         <p><code>nmap</code> shows only SSH (22) and HTTP (80) open.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image3.png" alt="nmap results showing ports 22 and 80 open">
+          <img src="../assets/img/vulnhub-aragog/image3.webp" alt="nmap results showing ports 22 and 80 open">
           <figcaption>A small surface: SSH and HTTP.</figcaption>
         </figure>
 
         <p>Port 80 just serves an image, so a <code>nikto</code> scan digs deeper.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image4.png" alt="The web page showing only an image">
+          <img src="../assets/img/vulnhub-aragog/image4.webp" alt="The web page showing only an image">
           <figcaption>Nothing obvious on the web root.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image5.png" alt="nikto scan against port 80">
+          <img src="../assets/img/vulnhub-aragog/image5.webp" alt="nikto scan against port 80">
           <figcaption>A <code>nikto</code> scan of the service.</figcaption>
         </figure>
 
         <p>It surfaces a <code>login.php</code> page, noted for later.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image6.png" alt="login.php discovered by nikto">
+          <img src="../assets/img/vulnhub-aragog/image6.webp" alt="login.php discovered by nikto">
           <figcaption>A <code>login.php</code> worth remembering.</figcaption>
         </figure>
 
         <p>A directory scan confirms the site runs WordPress.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image7.png" alt="Directory scan revealing a WordPress install">
+          <img src="../assets/img/vulnhub-aragog/image7.webp" alt="Directory scan revealing a WordPress install">
           <figcaption>The site is WordPress.</figcaption>
         </figure>
 
@@ -132,73 +132,73 @@
         <p>In <code>msfconsole</code>, the WordPress auxiliary scanner is pointed at the host with <code>RHOSTS</code> and <code>TARGETURI</code> set.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image8.png" alt="Metasploit WordPress scanner configured and run">
+          <img src="../assets/img/vulnhub-aragog/image8.webp" alt="Metasploit WordPress scanner configured and run">
           <figcaption>Scanning the WordPress install with Metasploit.</figcaption>
         </figure>
 
         <p>It detects the <strong>wp-file-manager</strong> plugin, so Exploit-DB is checked for a matching exploit.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image9.png" alt="wp-file-manager plugin detected">
+          <img src="../assets/img/vulnhub-aragog/image9.webp" alt="wp-file-manager plugin detected">
           <figcaption>The vulnerable <code>wp-file-manager</code> plugin.</figcaption>
         </figure>
 
         <p>There is a public exploit that uploads a file via the plugin; it is downloaded.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image10.png" alt="Exploit-DB page for the wp-file-manager vulnerability">
+          <img src="../assets/img/vulnhub-aragog/image10.webp" alt="Exploit-DB page for the wp-file-manager vulnerability">
           <figcaption>The matching exploit on Exploit-DB.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image11.png" alt="Fetching the exploit from GitHub">
+          <img src="../assets/img/vulnhub-aragog/image11.webp" alt="Fetching the exploit from GitHub">
           <figcaption>Grabbing the exploit from GitHub.</figcaption>
         </figure>
 
         <p>Running it with <code>--check</code> confirms the target is vulnerable.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image12.png" alt="Exploit --check confirming the target is vulnerable">
+          <img src="../assets/img/vulnhub-aragog/image12.webp" alt="Exploit --check confirming the target is vulnerable">
           <figcaption><code>--check</code> reports the target exploitable.</figcaption>
         </figure>
 
         <p>A PHP reverse shell is fetched to upload through the plugin.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image13.png" alt="Downloading a PHP reverse shell">
+          <img src="../assets/img/vulnhub-aragog/image13.webp" alt="Downloading a PHP reverse shell">
           <figcaption>A PHP reverse shell payload.</figcaption>
         </figure>
 
         <p>The callback IP is set to Kali and the port to 5555.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image14.png" alt="Editing the reverse shell with the Kali IP and port 5555">
+          <img src="../assets/img/vulnhub-aragog/image14.webp" alt="Editing the reverse shell with the Kali IP and port 5555">
           <figcaption>Pointing the shell at Kali on port 5555.</figcaption>
         </figure>
 
         <p>The exploit uploads the shell and returns its URL; opening that URL against a waiting listener on 5555 catches the connection.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image15.png" alt="Running the exploit to upload the reverse shell">
+          <img src="../assets/img/vulnhub-aragog/image15.webp" alt="Running the exploit to upload the reverse shell">
           <figcaption>Uploading the shell via the plugin.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image16.png" alt="netcat listener on port 5555">
+          <img src="../assets/img/vulnhub-aragog/image16.webp" alt="netcat listener on port 5555">
           <figcaption>A listener waiting on 5555.</figcaption>
         </figure>
 
         <p>The shell lands as <code>www-data</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image17.png" alt="Reverse shell received as www-data">
+          <img src="../assets/img/vulnhub-aragog/image17.webp" alt="Reverse shell received as www-data">
           <figcaption>Foothold as <code>www-data</code>.</figcaption>
         </figure>
 
         <p>Under <code>/home</code>, a <code>hagrid98</code> folder holds <code>horcrux1</code> — the first flag.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image18.png" alt="horcrux1 file containing the first flag">
+          <img src="../assets/img/vulnhub-aragog/image18.webp" alt="horcrux1 file containing the first flag">
           <figcaption><code>horcrux1</code>: the first flag.</figcaption>
         </figure>
 
@@ -207,42 +207,42 @@
         <p>To escalate, <code>linpeas</code> is staged from Kali with <code>SimpleHTTPServer</code> and <code>wget</code> (curl isn't available on the target), made executable, and run.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image19.png" alt="Making linpeas executable and running it">
+          <img src="../assets/img/vulnhub-aragog/image19.webp" alt="Making linpeas executable and running it">
           <figcaption>linpeas staged and run on the target.</figcaption>
         </figure>
 
         <p>It recovers database credentials, which are used against MySQL.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image20.png" alt="Database credentials found by linpeas">
+          <img src="../assets/img/vulnhub-aragog/image20.webp" alt="Database credentials found by linpeas">
           <figcaption>WordPress database credentials from linpeas.</figcaption>
         </figure>
 
         <blockquote>On this box the MySQL client only flushed its output on exit, so each query was run in a separate session — slower, but it gets the data out.</blockquote>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image21.png" alt="Listing the MySQL databases">
+          <img src="../assets/img/vulnhub-aragog/image21.webp" alt="Listing the MySQL databases">
           <figcaption>Enumerating the databases.</figcaption>
         </figure>
 
         <p>Within the <code>wordpress</code> database, the tables are listed.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image22.png" alt="Listing tables in the wordpress database">
+          <img src="../assets/img/vulnhub-aragog/image22.webp" alt="Listing tables in the wordpress database">
           <figcaption>Tables in the <code>wordpress</code> schema.</figcaption>
         </figure>
 
         <p>The users table holds a WordPress hash for <code>hagrid98</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image23.png" alt="wp_users row with hagrid98&#x27;s password hash">
+          <img src="../assets/img/vulnhub-aragog/image23.webp" alt="wp_users row with hagrid98&#x27;s password hash">
           <figcaption><code>hagrid98</code>'s stored password hash.</figcaption>
         </figure>
 
         <p>John cracks it against <code>rockyou</code> to <code>password123</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image24.png" alt="John cracking the hash to password123">
+          <img src="../assets/img/vulnhub-aragog/image24.webp" alt="John cracking the hash to password123">
           <figcaption>The hash cracks to <code>password123</code>.</figcaption>
         </figure>
 
@@ -251,59 +251,59 @@
         <p>Those credentials switch to <code>hagrid98</code>…</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image25.png" alt="Switching to the hagrid98 user">
+          <img src="../assets/img/vulnhub-aragog/image25.webp" alt="Switching to the hagrid98 user">
           <figcaption><code>su hagrid98</code> succeeds.</figcaption>
         </figure>
 
         <p>…and the same password works over SSH for a stable session.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image26.png" alt="Reconnecting as hagrid98 over SSH">
+          <img src="../assets/img/vulnhub-aragog/image26.webp" alt="Reconnecting as hagrid98 over SSH">
           <figcaption>A proper SSH session as <code>hagrid98</code>.</figcaption>
         </figure>
 
         <p>linpeas again shows nothing obvious, so <code>pspy</code> is used to watch processes without root.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image27.png" alt="Running linpeas again as hagrid98">
+          <img src="../assets/img/vulnhub-aragog/image27.webp" alt="Running linpeas again as hagrid98">
           <figcaption>A second linpeas pass — nothing new.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image28.png" alt="Downloading pspy to monitor processes">
+          <img src="../assets/img/vulnhub-aragog/image28.webp" alt="Downloading pspy to monitor processes">
           <figcaption>Staging <code>pspy</code>.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image29.png" alt="pspy monitoring running processes">
+          <img src="../assets/img/vulnhub-aragog/image29.webp" alt="pspy monitoring running processes">
           <figcaption>Watching processes with <code>pspy</code>.</figcaption>
         </figure>
 
         <p>pspy shows a root-run script that performs a backup — and it is writable.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image30.png" alt="pspy revealing a root-run writable backup script">
+          <img src="../assets/img/vulnhub-aragog/image30.webp" alt="pspy revealing a root-run writable backup script">
           <figcaption>A backup script running as root on a schedule.</figcaption>
         </figure>
 
         <p>A reverse-shell line is appended to the script and saved; the next scheduled run executes it as root.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image31.png" alt="Appending a reverse shell to the backup script">
+          <img src="../assets/img/vulnhub-aragog/image31.webp" alt="Appending a reverse shell to the backup script">
           <figcaption>Injecting a reverse shell into the writable script.</figcaption>
         </figure>
 
         <p>A listener on the matching port catches the root callback.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image32.png" alt="Root reverse shell received on the listener">
+          <img src="../assets/img/vulnhub-aragog/image32.webp" alt="Root reverse shell received on the listener">
           <figcaption>The script fires and calls back as <strong>root</strong>.</figcaption>
         </figure>
 
         <p>In <code>/root</code> sits <code>horcrux2.txt</code> — the second flag, and the box.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-aragog/image33.png" alt="horcrux2.txt root flag completing the box">
+          <img src="../assets/img/vulnhub-aragog/image33.webp" alt="horcrux2.txt root flag completing the box">
           <figcaption><code>horcrux2.txt</code>: the final flag.</figcaption>
         </figure>
 

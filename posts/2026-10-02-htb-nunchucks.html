@@ -117,14 +117,14 @@ store   [Status: 200, Size: 4029, Words: 1053, Lines: 102]</code></pre>
         <p>The canonical SSTI probe is a maths expression in template syntax. If <code>{{7*7}}</code> comes back as <code>49</code>, the input is being evaluated by the engine rather than treated as text:</p>
 
         <figure>
-          <img src="../assets/img/htb-nunchucks/img1.png" alt="The store reflecting {{7*7}} as 49, confirming SSTI">
+          <img src="../assets/img/htb-nunchucks/img1.webp" alt="The store reflecting {{7*7}} as 49, confirming SSTI">
           <figcaption><code>{{7*7}}</code> renders as <code>49</code> — the email field is evaluated server-side.</figcaption>
         </figure>
 
         <p>The TLS certificate's <code>nunchucks.htb</code> branding and the Node.js stack point at <strong>Nunjucks</strong>, Mozilla's templating engine. Nunjucks runs in a sandbox, but it is well known that the sandbox can be escaped by reaching back to the Node <code>global</code> object and pulling in <code>child_process</code>. A good reference payload is the one shipped as a nuclei template (<code>node-nunjucks-ssti</code>); dropped into Burp Repeater against the JSON API, it reads files first to prove impact:</p>
 
         <figure>
-          <img src="../assets/img/htb-nunchucks/img2.png" alt="Reading arbitrary files through the Nunjucks SSTI payload in Burp">
+          <img src="../assets/img/htb-nunchucks/img2.webp" alt="Reading arbitrary files through the Nunjucks SSTI payload in Burp">
           <figcaption>Arbitrary file read via the Nunjucks sandbox-escape payload, driven through Burp Repeater.</figcaption>
         </figure>
 

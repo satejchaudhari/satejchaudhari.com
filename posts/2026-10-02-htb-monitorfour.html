@@ -169,7 +169,7 @@ Status...........: Cracked</code></pre>
         <p>Mode <code>0</code> is raw MD5. The crack is instant — <code>wonderful1</code> — and the record ties the admin account to the display name <code>Marcus</code>, which is what Cacti expects as a username.</p>
 
         <figure>
-          <img src="../assets/img/htb-monitorfour/img1.png" alt="Logging in to Cacti as the administrator with the cracked password">
+          <img src="../assets/img/htb-monitorfour/img1.webp" alt="Logging in to Cacti as the administrator with the cracked password">
           <figcaption>Authenticated to Cacti as the administrator (<code>marcus</code> / <code>wonderful1</code>). An authenticated session is the precondition for the exploit.</figcaption>
         </figure>
 
@@ -178,7 +178,7 @@ Status...........: Cracked</code></pre>
         <p>CVE-2025-24367 abuses Cacti's custom-graph / template handling: an authenticated user can get the application to create attacker-controlled PHP files under the web root, which then execute. In other words, the login we just earned is the key, and the CVE turns it into code execution. The public PoC automates the whole dance — log in, create the graph, write the PHP stager, trigger it.</p>
 
         <figure>
-          <img src="../assets/img/htb-monitorfour/img2.png" alt="The CVE-2025-24367 exploit script running against the Cacti instance">
+          <img src="../assets/img/htb-monitorfour/img2.webp" alt="The CVE-2025-24367 exploit script running against the Cacti instance">
           <figcaption>The public CVE-2025-24367 exploit — it logs in, writes PHP under the web root, and triggers the callback.</figcaption>
         </figure>
 

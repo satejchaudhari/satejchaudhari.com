@@ -83,21 +83,21 @@
         <h2>Reconnaissance</h2>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image1.png" alt="Matrix 2 VM booted from Vulnhub">
+          <img src="../assets/img/vulnhub-matrix-2/image1.webp" alt="Matrix 2 VM booted from Vulnhub">
           <figcaption>The Matrix 2 VM running.</figcaption>
         </figure>
 
         <p><code>netdiscover</code> locates the target.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image2.png" alt="netdiscover showing the target IP 192.168.0.118">
+          <img src="../assets/img/vulnhub-matrix-2/image2.webp" alt="netdiscover showing the target IP 192.168.0.118">
           <figcaption>Target identified as <code>192.168.0.118</code>.</figcaption>
         </figure>
 
         <p>An <code>nmap</code> scan shows HTTP on 80 plus four unusual HTTP ports.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image3.png" alt="nmap results showing ports 80, 1337, 12320, 12321, 12322">
+          <img src="../assets/img/vulnhub-matrix-2/image3.webp" alt="nmap results showing ports 80, 1337, 12320, 12321, 12322">
           <figcaption>Port <strong>80</strong> is open alongside <strong>1337</strong>, <strong>12320</strong>, <strong>12321</strong> and <strong>12322</strong>, all serving HTTP.</figcaption>
         </figure>
 
@@ -106,49 +106,49 @@
         <p>Browsing each page first turns up nothing obvious.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image4.png" alt="Default pages across the web ports">
+          <img src="../assets/img/vulnhub-matrix-2/image4.webp" alt="Default pages across the web ports">
           <figcaption>Nothing useful on the landing pages.</figcaption>
         </figure>
 
         <p>Port 1337 prompts for a username and password.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image5.png" alt="Port 1337 basic-auth prompt">
+          <img src="../assets/img/vulnhub-matrix-2/image5.webp" alt="Port 1337 basic-auth prompt">
           <figcaption>Port 1337 is behind HTTP basic auth.</figcaption>
         </figure>
 
         <p>Port 12320 is a web shell that also needs credentials, so it is set aside for now.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image6.png" alt="Web shell login on port 12320">
+          <img src="../assets/img/vulnhub-matrix-2/image6.webp" alt="Web shell login on port 12320">
           <figcaption>Port 12320 — a login-gated web shell.</figcaption>
         </figure>
 
         <p>Port 12322 mirrors port 80 with nothing immediately useful, so a <code>dirb</code> scan looks for hidden paths.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image7.png" alt="dirb directory scan against port 12322">
+          <img src="../assets/img/vulnhub-matrix-2/image7.webp" alt="dirb directory scan against port 12322">
           <figcaption>A <code>dirb</code> scan of the service.</figcaption>
         </figure>
 
         <p>The scan flags a <code>robots.txt</code>, worth a look.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image8.png" alt="robots.txt discovered by dirb">
+          <img src="../assets/img/vulnhub-matrix-2/image8.webp" alt="robots.txt discovered by dirb">
           <figcaption><code>robots.txt</code> stands out in the results.</figcaption>
         </figure>
 
         <p>It disallows a specific PHP page, which is exactly where to go next.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image9.png" alt="robots.txt disallowing a PHP page">
+          <img src="../assets/img/vulnhub-matrix-2/image9.webp" alt="robots.txt disallowing a PHP page">
           <figcaption>The disallowed PHP endpoint named in <code>robots.txt</code>.</figcaption>
         </figure>
 
         <p>The page renders blank — suspicious — so a POST request is sent to it with <code>curl --insecure</code> (the service uses a self-signed certificate).</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image10.png" alt="Blank PHP page in the browser">
+          <img src="../assets/img/vulnhub-matrix-2/image10.webp" alt="Blank PHP page in the browser">
           <figcaption>A blank page that clearly does more than it shows.</figcaption>
         </figure>
 
@@ -157,33 +157,33 @@
         <h2>Foothold via the web shell</h2>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image11.png" alt="Web shell access as testuser">
+          <img src="../assets/img/vulnhub-matrix-2/image11.webp" alt="Web shell access as testuser">
           <figcaption><code>testuser:testuser</code> gets into the web shell.</figcaption>
         </figure>
 
         <p>From the shell the filesystem is browsable, and a folder named <code>p4ss</code> stands out.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image12.png" alt="Listing files including a p4ss folder">
+          <img src="../assets/img/vulnhub-matrix-2/image12.webp" alt="Listing files including a p4ss folder">
           <figcaption>A promising <code>p4ss</code> directory.</figcaption>
         </figure>
 
         <p>Inside is a <code>.htpasswd</code> file containing a hash.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image13.png" alt="A .htpasswd file holding a password hash">
+          <img src="../assets/img/vulnhub-matrix-2/image13.webp" alt="A .htpasswd file holding a password hash">
           <figcaption><code>.htpasswd</code> — a hash to crack.</figcaption>
         </figure>
 
         <p>The hash is copied to Kali and fed to John the Ripper.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image14.png" alt="Saving the hash to a file on Kali">
+          <img src="../assets/img/vulnhub-matrix-2/image14.webp" alt="Saving the hash to a file on Kali">
           <figcaption>The hash saved locally.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image15.png" alt="John the Ripper cracking the hash to Tr1n17y">
+          <img src="../assets/img/vulnhub-matrix-2/image15.webp" alt="John the Ripper cracking the hash to Tr1n17y">
           <figcaption>John recovers the password <code>Tr1n17y</code>.</figcaption>
         </figure>
 
@@ -192,21 +192,21 @@
         <p>Those credentials unlock the basic-auth prompt on port 1337.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image16.png" alt="Logging in on port 1337 with the cracked password">
+          <img src="../assets/img/vulnhub-matrix-2/image16.webp" alt="Logging in on port 1337 with the cracked password">
           <figcaption>Authenticated on port 1337.</figcaption>
         </figure>
 
         <p>The page shows an image, <code>hidden.jpg</code>, which is downloaded. On the main page the name <code>n30</code> is styled bold and red — a strong hint it is a passphrase.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image17.png" alt="hidden.jpg and the highlighted n30 hint">
+          <img src="../assets/img/vulnhub-matrix-2/image17.webp" alt="hidden.jpg and the highlighted n30 hint">
           <figcaption><code>hidden.jpg</code>, and <code>n30</code> highlighted as a likely passphrase.</figcaption>
         </figure>
 
         <p>Running <code>steghide</code> with <code>n30</code> as the passphrase extracts an embedded password.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image18.png" alt="steghide extracting data with the n30 passphrase">
+          <img src="../assets/img/vulnhub-matrix-2/image18.webp" alt="steghide extracting data with the n30 passphrase">
           <figcaption><code>steghide</code> gives up a hidden password.</figcaption>
         </figure>
 
@@ -215,40 +215,40 @@
         <p>The extracted password, with username <code>n30</code>, grants access.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image19.png" alt="Logging in as n30 with the extracted password">
+          <img src="../assets/img/vulnhub-matrix-2/image19.webp" alt="Logging in as n30 with the extracted password">
           <figcaption>Access as <code>n30</code>.</figcaption>
         </figure>
 
         <p><code>linpeas</code> is pulled onto the target to hunt for escalation paths.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image20.png" alt="Running linpeas on the target">
+          <img src="../assets/img/vulnhub-matrix-2/image20.webp" alt="Running linpeas on the target">
           <figcaption>linpeas staged and running.</figcaption>
         </figure>
 
         <p>It flags a suspicious permission: <code>n30</code> can run <code>/usr/bin/Morpheus</code> as root.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image21.png" alt="linpeas highlighting a sudo-runnable Morpheus binary">
+          <img src="../assets/img/vulnhub-matrix-2/image21.webp" alt="linpeas highlighting a sudo-runnable Morpheus binary">
           <figcaption><code>n30</code> may execute <code>/usr/bin/Morpheus</code> as root.</figcaption>
         </figure>
 
         <p>Running it shows it invokes <code>gawk</code>; the classic <code>gawk</code> <code>BEGIN{system("/bin/sh")}</code> trick drops a root shell.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image22.png" alt="gawk spawning a root shell via Morpheus">
+          <img src="../assets/img/vulnhub-matrix-2/image22.webp" alt="gawk spawning a root shell via Morpheus">
           <figcaption>Abusing <code>gawk</code> through <code>Morpheus</code> for a root shell.</figcaption>
         </figure>
 
         <p>With root, <code>/root</code> holds <code>flag.txt</code>.</p>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image23.png" alt="flag.txt in the root directory">
+          <img src="../assets/img/vulnhub-matrix-2/image23.webp" alt="flag.txt in the root directory">
           <figcaption>The root flag in <code>/root/flag.txt</code>.</figcaption>
         </figure>
 
         <figure>
-          <img src="../assets/img/vulnhub-matrix-2/image24.png" alt="Box completed">
+          <img src="../assets/img/vulnhub-matrix-2/image24.webp" alt="Box completed">
           <figcaption>Box complete.</figcaption>
         </figure>
 

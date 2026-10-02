@@ -61,6 +61,7 @@ Templates to copy for hand-written pages:
 - **Authorised-use framing.** Offensive content is for authorised testing and
   study. Keep the existing disclaimer framing; do not add operational guidance
   aimed at illegal targeting.
+- **Images:** store screenshots as `.webp` (≈65% smaller than PNG, no visible loss) under `assets/img/<slug>/`, reference them with a real `alt`, and keep the social-card `og-default.png` as the one PNG. 
 - **No secrets** in any file (no real tokens, creds, internal hostnames beyond
   lab examples).
 

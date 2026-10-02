@@ -156,7 +156,7 @@ PS C:\Windows\system32&gt; whoami
 baby2\amelia.griffiths</code></pre>
 
         <figure>
-          <img src="../assets/img/htb-babytwo/img1.png" alt="Reverse shell returning as amelia.griffiths from the poisoned logon script">
+          <img src="../assets/img/htb-babytwo/img1.webp" alt="Reverse shell returning as amelia.griffiths from the poisoned logon script">
           <figcaption>The backdoored logon script fires when Amelia signs in, returning a shell as her.</figcaption>
         </figure>
 
@@ -173,7 +173,7 @@ certutil -encode C:\temp\&lt;ts&gt;_BloodHound.zip bh.txt   # transfer bh.txt, t
 #   base64 -d bh.b64 &gt; bh.zip &amp;&amp; unzip bh.zip   -&gt; import into BloodHound</code></pre>
 
         <figure>
-          <img src="../assets/img/htb-babytwo/img2.png" alt="BloodHound graph showing Amelia&#x27;s path toward Domain Admin">
+          <img src="../assets/img/htb-babytwo/img2.webp" alt="BloodHound graph showing Amelia&#x27;s path toward Domain Admin">
           <figcaption>BloodHound lays out the route: Amelia can write the ACL on the GPO-management account.</figcaption>
         </figure>
 
