@@ -58,5 +58,41 @@ var POSTS = [
     tag: "Active Directory",
     description: "Writeup for a Active Directory machine on HackTheBox.",
     readTime: "20 min read"
+  },
+  {
+    title: "Vulnhub: Venom",
+    url: "posts/2026-01-10-vulnhub-venom.html",
+    date: "2026-01-10",
+    type: "writeup",
+    tag: "Vulnhub",
+    description: "A hash hidden in page source, an FTP foothold, a chain of encoded clues to a Subrion CMS 4.2.1 login, a public CMS exploit for the shell, and a wide-open sudo rule for root.",
+    readTime: "9 min read"
+  },
+  {
+    title: "Vulnhub: Matrix 2",
+    url: "posts/2026-01-10-vulnhub-matrix-2.html",
+    date: "2026-01-10",
+    type: "writeup",
+    tag: "Vulnhub",
+    description: "A robots.txt hint and an unauthenticated POST leak usernames, a cracked .htpasswd hash and a steghide-hidden password lead in, and a sudo-runnable gawk binary gives root.",
+    readTime: "7 min read"
+  },
+  {
+    title: "Vulnhub: Matrix 3",
+    url: "posts/2026-01-10-vulnhub-matrix-3.html",
+    date: "2026-01-10",
+    type: "writeup",
+    tag: "Vulnhub",
+    description: "A white-rabbit directory maze hides a crackable hash, a Windows binary reversed in Ghidra leaks SSH credentials, and two chained sudo rules walk the way to root.",
+    readTime: "8 min read"
+  },
+  {
+    title: "Vulnhub: Aragog (HackingHP)",
+    url: "posts/2026-01-10-vulnhub-aragog.html",
+    date: "2026-01-10",
+    type: "writeup",
+    tag: "Vulnhub",
+    description: "A vulnerable WordPress File Manager plugin for the foothold, database credentials that crack a user's WordPress hash, and a writable root-run backup script for the root shell.",
+    readTime: "9 min read"
   }
 ];

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vulnhub: Venom — Satej Chaudhari</title>
+  <meta name="description" content="Vulnhub Venom walkthrough — a hash hidden in page source, an FTP foothold, a chain of encoded clues to a Subrion CMS 4.2.1 login, a public CMS exploit for the shell, and a wide-open sudo rule for root.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Vulnhub</span>
+        <h1 class="post-title">Vulnhub: Venom</h1>
+        <p class="post-meta">
+          <time datetime="2026-01-10">2026-01-10</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p><strong>Venom</strong> is a beginner-to-intermediate Vulnhub box. The path runs through a hash hidden in page source, an FTP foothold, a chain of encoded clues leading to a Subrion CMS login, a public CMS exploit for the shell, and finally a trivial <code>sudo</code> misconfiguration for root.</p>
+
+        <h2>Reconnaissance</h2>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image1.png" alt="Venom VM booted in the hypervisor">
+          <figcaption>The Venom VM imported from Vulnhub and booted.</figcaption>
+        </figure>
+
+        <p>With the box running, <code>netdiscover</code> on the local network finds the target.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image2.png" alt="netdiscover output showing the target IP">
+          <figcaption>The target comes back as <code>192.168.0.113</code>.</figcaption>
+        </figure>
+
+        <p>An <code>nmap</code> scan maps the attack surface.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image3.png" alt="nmap scan results showing open ports">
+          <figcaption>Ports <strong>21 (FTP)</strong>, <strong>80 (HTTP)</strong>, <strong>139 (SMB)</strong> and <strong>443 (HTTPS)</strong> are open.</figcaption>
+        </figure>
+
+        <h2>Web &amp; FTP enumeration</h2>
+
+        <p>Visiting port 80 shows the default web page. Viewing the page source turns up a hash left in an HTML comment.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image4.png" alt="Default web page with a hash in an HTML comment">
+          <figcaption>The default page — a hash is commented out in the source.</figcaption>
+        </figure>
+
+        <p>Running that hash through an online cracker resolves it to a word.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image5.png" alt="Online hash cracker returning the plaintext &#x27;hostinger&#x27;">
+          <figcaption>The hash cracks to <code>hostinger</code>.</figcaption>
+        </figure>
+
+        <p>That looks like a username, so it is worth trying against FTP.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image6.png" alt="FTP login attempt using the recovered name">
+          <figcaption>Authenticating to FTP with <code>hostinger</code>…</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image7.png" alt="Successful FTP session">
+          <figcaption>…succeeds.</figcaption>
+        </figure>
+
+        <p>The FTP share holds a file, <code>hit.txt</code>, which is pulled down to Kali.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image8.png" alt="Downloading hit.txt from the FTP server">
+          <figcaption><code>hit.txt</code> retrieved from the share.</figcaption>
+        </figure>
+
+        <p>Opening it reveals more encoded hashes and a domain name.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image9.png" alt="Contents of hit.txt showing encoded data">
+          <figcaption><code>hit.txt</code> — more encoded material and a hostname.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image10.png" alt="Decoding the first layer of the hash chain">
+          <figcaption>Working through the chain of encodings, step one…</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image11.png" alt="Decoding the next layer">
+          <figcaption>…step two…</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image12.png" alt="Decoding a further layer">
+          <figcaption>…step three…</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image13.png" alt="Decoding the final layer of the chain">
+          <figcaption>…and the final layer.</figcaption>
+        </figure>
+
+        <p>The decoded chain yields the next clue and a link.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image14.png" alt="Decoded clue pointing to a link">
+          <figcaption>The decoded clue and the link it points to.</figcaption>
+        </figure>
+
+        <p>Following the link lets the admin password be decoded.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image15.png" alt="Decoding the admin password from the link">
+          <figcaption>The admin password, recovered.</figcaption>
+        </figure>
+
+        <h2>Admin login &amp; Subrion CMS</h2>
+
+        <p>After adding the hostname <code>venom.box</code> to <code>/etc/hosts</code>, the site resolves to a login page.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image16.png" alt="Login page served after adding venom.box to /etc/hosts">
+          <figcaption>The application login, reachable once the host entry is added.</figcaption>
+        </figure>
+
+        <p>Using the username <code>dora</code> and the decoded password logs straight in.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image17.png" alt="Logging in with dora and the decoded password">
+          <figcaption>Authenticating as <code>dora</code>…</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image18.png" alt="Authenticated admin dashboard">
+          <figcaption>…lands on the admin dashboard.</figcaption>
+        </figure>
+
+        <p>The panel identifies the software as <strong>Subrion CMS 4.2.1</strong>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image19.png" alt="Subrion CMS 4.2.1 version banner">
+          <figcaption>The target runs Subrion CMS 4.2.1.</figcaption>
+        </figure>
+
+        <p>Since the panel allows file uploads, the first attempt is a malicious <code>.phar</code> payload to pull a reverse shell.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image20.png" alt="Preparing a malicious phar upload">
+          <figcaption>Crafting a <code>.phar</code> payload…</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image21.png" alt="Uploading the phar file through the CMS">
+          <figcaption>…uploading it through the CMS…</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image22.png" alt="Upload accepted by the application">
+          <figcaption>…which the application accepts.</figcaption>
+        </figure>
+
+        <p>The upload does not yield a shell, so a different route is taken.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image23.png" alt="Reviewing the failed upload approach">
+          <figcaption>The <code>.phar</code> route does not call back — time for a known exploit.</figcaption>
+        </figure>
+
+        <p>Exploit-DB has a public exploit for this exact Subrion version, which is downloaded.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image24.png" alt="Exploit-DB page for Subrion CMS 4.2.1">
+          <figcaption>The matching Subrion 4.2.1 exploit on Exploit-DB.</figcaption>
+        </figure>
+
+        <p>Running the exploit with the known credentials returns a shell.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image25.png" alt="Running the Subrion exploit with valid credentials">
+          <figcaption>Launching the exploit with <code>dora</code>'s credentials.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image26.png" alt="Shell obtained through the exploit">
+          <figcaption>A foothold shell on the box.</figcaption>
+        </figure>
+
+        <p>A second Python one-liner upgrades this into a proper reverse shell caught by a local listener, landing as <code>www-data</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image27.png" alt="Reverse shell caught as www-data">
+          <figcaption>Interactive shell as <code>www-data</code>.</figcaption>
+        </figure>
+
+        <h2>Privilege escalation</h2>
+
+        <p>Switching to the <code>hostinger</code> user and moving to <code>/tmp</code>, <code>linpeas</code> is staged over from Kali with <code>python -m SimpleHTTPServer</code> and <code>wget</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image28.png" alt="Switching to the hostinger user">
+          <figcaption>Becoming the <code>hostinger</code> user.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image29.png" alt="Serving linpeas from Kali with SimpleHTTPServer">
+          <figcaption>Hosting <code>linpeas</code> from Kali.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image30.png" alt="Downloading linpeas onto the target with wget">
+          <figcaption>Pulling it onto the target into <code>/tmp</code>.</figcaption>
+        </figure>
+
+        <p>After making it executable, linpeas runs.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image31.png" alt="Making linpeas executable and running it">
+          <figcaption><code>chmod +x</code> and run.</figcaption>
+        </figure>
+
+        <p>It surfaces a backup file; opening it reveals the <strong>user flag</strong>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image32.png" alt="Backup file containing the user flag">
+          <figcaption>The user flag, recovered from a backup file.</figcaption>
+        </figure>
+
+        <p>The same output points at the user <code>Nathan</code>; switching to that account with the hash recovered alongside the flag works.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image33.png" alt="Switching to the Nathan user">
+          <figcaption>Pivoting to <code>Nathan</code>.</figcaption>
+        </figure>
+
+        <p><code>sudo -l</code> shows <code>Nathan</code> may run <code>sudo bash</code> directly — an instant root shell.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-venom/image34.png" alt="sudo bash giving a root shell and root.txt">
+          <figcaption><code>sudo bash</code> → root, and <code>root.txt</code> in <code>/root</code> completes the box.</figcaption>
+        </figure>
+
+        <blockquote>Venom is a clue-chasing box: the real work is enumeration and patiently decoding one layer at a time. The actual exploitation — a public CMS exploit and a wide-open <code>sudo</code> rule — is straightforward once the credentials are in hand.</blockquote>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

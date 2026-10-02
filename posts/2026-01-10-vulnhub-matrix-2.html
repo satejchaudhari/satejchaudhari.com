@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vulnhub: Matrix 2 — Satej Chaudhari</title>
+  <meta name="description" content="Vulnhub Matrix 2 walkthrough — a robots.txt hint and unauthenticated POST leak usernames, a cracked .htpasswd hash and a steghide-hidden password lead in, and a sudo-runnable gawk binary gives root.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Vulnhub</span>
+        <h1 class="post-title">Vulnhub: Matrix 2</h1>
+        <p class="post-meta">
+          <time datetime="2026-01-10">2026-01-10</time>
+          <span>&middot; 7 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p><strong>Matrix 2</strong> chains a <code>robots.txt</code> hint and an unauthenticated POST to leak usernames, a crackable <code>.htpasswd</code> hash, a steghide-protected image whose passphrase is hidden in plain sight, and finally a <code>gawk</code> <code>sudo</code> rule for root.</p>
+
+        <h2>Reconnaissance</h2>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image1.png" alt="Matrix 2 VM booted from Vulnhub">
+          <figcaption>The Matrix 2 VM running.</figcaption>
+        </figure>
+
+        <p><code>netdiscover</code> locates the target.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image2.png" alt="netdiscover showing the target IP 192.168.0.118">
+          <figcaption>Target identified as <code>192.168.0.118</code>.</figcaption>
+        </figure>
+
+        <p>An <code>nmap</code> scan shows HTTP on 80 plus four unusual HTTP ports.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image3.png" alt="nmap results showing ports 80, 1337, 12320, 12321, 12322">
+          <figcaption>Port <strong>80</strong> is open alongside <strong>1337</strong>, <strong>12320</strong>, <strong>12321</strong> and <strong>12322</strong>, all serving HTTP.</figcaption>
+        </figure>
+
+        <h2>Enumerating the web services</h2>
+
+        <p>Browsing each page first turns up nothing obvious.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image4.png" alt="Default pages across the web ports">
+          <figcaption>Nothing useful on the landing pages.</figcaption>
+        </figure>
+
+        <p>Port 1337 prompts for a username and password.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image5.png" alt="Port 1337 basic-auth prompt">
+          <figcaption>Port 1337 is behind HTTP basic auth.</figcaption>
+        </figure>
+
+        <p>Port 12320 is a web shell that also needs credentials, so it is set aside for now.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image6.png" alt="Web shell login on port 12320">
+          <figcaption>Port 12320 — a login-gated web shell.</figcaption>
+        </figure>
+
+        <p>Port 12322 mirrors port 80 with nothing immediately useful, so a <code>dirb</code> scan looks for hidden paths.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image7.png" alt="dirb directory scan against port 12322">
+          <figcaption>A <code>dirb</code> scan of the service.</figcaption>
+        </figure>
+
+        <p>The scan flags a <code>robots.txt</code>, worth a look.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image8.png" alt="robots.txt discovered by dirb">
+          <figcaption><code>robots.txt</code> stands out in the results.</figcaption>
+        </figure>
+
+        <p>It disallows a specific PHP page, which is exactly where to go next.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image9.png" alt="robots.txt disallowing a PHP page">
+          <figcaption>The disallowed PHP endpoint named in <code>robots.txt</code>.</figcaption>
+        </figure>
+
+        <p>The page renders blank — suspicious — so a POST request is sent to it with <code>curl --insecure</code> (the service uses a self-signed certificate).</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image10.png" alt="Blank PHP page in the browser">
+          <figcaption>A blank page that clearly does more than it shows.</figcaption>
+        </figure>
+
+        <p>The response leaks information and two usernames, <code>n30</code> and <code>testuser</code>. Back at the web shell, <code>testuser:testuser</code> is worth a try.</p>
+
+        <h2>Foothold via the web shell</h2>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image11.png" alt="Web shell access as testuser">
+          <figcaption><code>testuser:testuser</code> gets into the web shell.</figcaption>
+        </figure>
+
+        <p>From the shell the filesystem is browsable, and a folder named <code>p4ss</code> stands out.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image12.png" alt="Listing files including a p4ss folder">
+          <figcaption>A promising <code>p4ss</code> directory.</figcaption>
+        </figure>
+
+        <p>Inside is a <code>.htpasswd</code> file containing a hash.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image13.png" alt="A .htpasswd file holding a password hash">
+          <figcaption><code>.htpasswd</code> — a hash to crack.</figcaption>
+        </figure>
+
+        <p>The hash is copied to Kali and fed to John the Ripper.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image14.png" alt="Saving the hash to a file on Kali">
+          <figcaption>The hash saved locally.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image15.png" alt="John the Ripper cracking the hash to Tr1n17y">
+          <figcaption>John recovers the password <code>Tr1n17y</code>.</figcaption>
+        </figure>
+
+        <h2>Pivot: steghide &amp; the hidden passphrase</h2>
+
+        <p>Those credentials unlock the basic-auth prompt on port 1337.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image16.png" alt="Logging in on port 1337 with the cracked password">
+          <figcaption>Authenticated on port 1337.</figcaption>
+        </figure>
+
+        <p>The page shows an image, <code>hidden.jpg</code>, which is downloaded. On the main page the name <code>n30</code> is styled bold and red — a strong hint it is a passphrase.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image17.png" alt="hidden.jpg and the highlighted n30 hint">
+          <figcaption><code>hidden.jpg</code>, and <code>n30</code> highlighted as a likely passphrase.</figcaption>
+        </figure>
+
+        <p>Running <code>steghide</code> with <code>n30</code> as the passphrase extracts an embedded password.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image18.png" alt="steghide extracting data with the n30 passphrase">
+          <figcaption><code>steghide</code> gives up a hidden password.</figcaption>
+        </figure>
+
+        <h2>Privilege escalation</h2>
+
+        <p>The extracted password, with username <code>n30</code>, grants access.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image19.png" alt="Logging in as n30 with the extracted password">
+          <figcaption>Access as <code>n30</code>.</figcaption>
+        </figure>
+
+        <p><code>linpeas</code> is pulled onto the target to hunt for escalation paths.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image20.png" alt="Running linpeas on the target">
+          <figcaption>linpeas staged and running.</figcaption>
+        </figure>
+
+        <p>It flags a suspicious permission: <code>n30</code> can run <code>/usr/bin/Morpheus</code> as root.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image21.png" alt="linpeas highlighting a sudo-runnable Morpheus binary">
+          <figcaption><code>n30</code> may execute <code>/usr/bin/Morpheus</code> as root.</figcaption>
+        </figure>
+
+        <p>Running it shows it invokes <code>gawk</code>; the classic <code>gawk</code> <code>BEGIN{system("/bin/sh")}</code> trick drops a root shell.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image22.png" alt="gawk spawning a root shell via Morpheus">
+          <figcaption>Abusing <code>gawk</code> through <code>Morpheus</code> for a root shell.</figcaption>
+        </figure>
+
+        <p>With root, <code>/root</code> holds <code>flag.txt</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image23.png" alt="flag.txt in the root directory">
+          <figcaption>The root flag in <code>/root/flag.txt</code>.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-2/image24.png" alt="Box completed">
+          <figcaption>Box complete.</figcaption>
+        </figure>
+
+        <blockquote>Matrix 2 rewards reading the hints literally — the disallowed page, the colour-coded <code>n30</code>, and GTFOBins-style knowledge that a <code>sudo</code>-runnable <code>gawk</code> is game over.</blockquote>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

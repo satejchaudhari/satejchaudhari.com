@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vulnhub: Matrix 3 — Satej Chaudhari</title>
+  <meta name="description" content="Vulnhub Matrix 3 walkthrough — a white-rabbit directory maze hides a crackable hash, a Windows binary reversed in Ghidra leaks SSH credentials, and two chained sudo rules (cp, then a passwordless shell) reach root.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Vulnhub</span>
+        <h1 class="post-title">Vulnhub: Matrix 3</h1>
+        <p class="post-meta">
+          <time datetime="2026-01-10">2026-01-10</time>
+          <span>&middot; 8 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p><strong>Matrix 3</strong> is a breadcrumb hunt: a rabbit-hole of generated directories hides a crackable hash, a Windows binary analysed in Ghidra leaks SSH credentials, and two chained <code>sudo</code> rules (<code>cp</code> then a passwordless shell) walk the way to root.</p>
+
+        <h2>Reconnaissance</h2>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image1.png" alt="Matrix 3 VM booted from Vulnhub">
+          <figcaption>The Matrix 3 VM running.</figcaption>
+        </figure>
+
+        <p><code>netdiscover</code> finds the target.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image2.png" alt="netdiscover locating the target host">
+          <figcaption>Scanning for the target with <code>netdiscover</code>.</figcaption>
+        </figure>
+
+        <p>The host is <code>192.168.0.119</code>. <code>nmap</code> shows HTTP on 80 and 7331, and SSH on the non-standard port 6466.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image3.png" alt="nmap showing ports 80, 7331 (http) and 6466 (ssh)">
+          <figcaption>HTTP on <strong>80</strong> and <strong>7331</strong>, SSH on <strong>6466</strong>.</figcaption>
+        </figure>
+
+        <h2>Following the white rabbit</h2>
+
+        <p>Port 80 tells us to &ldquo;follow the white rabbit.&rdquo;</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image4.png" alt="Web page instructing to follow the white rabbit">
+          <figcaption>The landing page's hint.</figcaption>
+        </figure>
+
+        <p>A <code>dirb</code> scan reveals an <code>assets</code> folder.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image5.png" alt="dirb finding an assets directory">
+          <figcaption>An <code>assets</code> directory surfaces.</figcaption>
+        </figure>
+
+        <p>It contains an <code>img</code> subdirectory with a PNG.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image6.png" alt="PNG file inside the img subdirectory">
+          <figcaption>A lone PNG under <code>img</code>.</figcaption>
+        </figure>
+
+        <p>The image is a white rabbit, and its filename contains &ldquo;matrix&rdquo; — visiting a path built from that name works.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image7.png" alt="White rabbit image whose name hints at the next path">
+          <figcaption>The rabbit's filename points at the next directory.</figcaption>
+        </figure>
+
+        <p>That path is full of randomly named folders, each holding another set of random names.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image8.png" alt="Directory of randomly named folders">
+          <figcaption>A maze of generated directories.</figcaption>
+        </figure>
+
+        <p>Walking it by hand would take forever, so DirBuster is pointed at it to brute-force the tree.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image9.png" alt="DirBuster configured against the directory tree">
+          <figcaption>Letting DirBuster do the walking.</figcaption>
+        </figure>
+
+        <p>With a wordlist and a few extensions it finds a file called <code>secret</code> at <code>/Matrix/n/e/o/6/4/</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image10.png" alt="DirBuster locating a secret file deep in the tree">
+          <figcaption><code>secret</code> found at <code>/Matrix/n/e/o/6/4/</code>.</figcaption>
+        </figure>
+
+        <h2>Cracking the hash</h2>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image11.png" alt="Downloading the secret file">
+          <figcaption>Pulling the <code>secret</code> file down.</figcaption>
+        </figure>
+
+        <p>It contains a hash.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image12.png" alt="The secret file revealed as a hash">
+          <figcaption>The file holds a single hash.</figcaption>
+        </figure>
+
+        <p>An online cracker resolves it quickly.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image13.png" alt="Online cracker returning the plaintext &#x27;passwd&#x27;">
+          <figcaption>The hash cracks to <code>passwd</code>.</figcaption>
+        </figure>
+
+        <h2>Reversing the binary for SSH creds</h2>
+
+        <p>That password opens the basic-auth prompt on port 7331.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image14.png" alt="Logging in on port 7331 with the cracked password">
+          <figcaption>Authenticated on port 7331.</figcaption>
+        </figure>
+
+        <p>A <code>dirb</code> scan of this service is run next.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image15.png" alt="dirb scan against port 7331">
+          <figcaption>Enumerating port 7331.</figcaption>
+        </figure>
+
+        <p>It finds a <code>robots.txt</code> that disallows <code>/data/</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image16.png" alt="robots.txt disallowing /data/">
+          <figcaption><code>robots.txt</code> points at <code>/data/</code>.</figcaption>
+        </figure>
+
+        <p>That directory holds a <code>data</code> file — a Windows executable.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image17.png" alt="A Windows binary named data">
+          <figcaption>The <code>data</code> file is a Windows binary.</figcaption>
+        </figure>
+
+        <p>It is loaded into Ghidra for static analysis.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image18.png" alt="Opening the binary in Ghidra">
+          <figcaption>Analysing <code>data</code> in Ghidra.</figcaption>
+        </figure>
+
+        <blockquote>I was unable to recover the credentials from the binary myself despite several attempts; the following screenshot is from a published walkthrough, included for completeness.</blockquote>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image19.png" alt="Walkthrough screenshot of the located credentials">
+          <figcaption>Where the credentials sit in the binary (from a walkthrough).</figcaption>
+        </figure>
+
+        <p>The binary hides a username and password that can now be used.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image20.png" alt="Username and password extracted from the binary">
+          <figcaption>The embedded SSH credentials.</figcaption>
+        </figure>
+
+        <h2>Privilege escalation</h2>
+
+        <p>Those credentials log in over SSH on port 6466 as <code>guest</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image21.png" alt="SSH login as guest on port 6466">
+          <figcaption>A shell as <code>guest</code>.</figcaption>
+        </figure>
+
+        <p><code>sudo -l</code> shows <code>guest</code> may run <code>/bin/cp</code> without a password.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image22.png" alt="sudo -l showing passwordless /bin/cp for guest">
+          <figcaption><code>guest</code> can run <code>/bin/cp</code> as root.</figcaption>
+        </figure>
+
+        <p>That write primitive is used to plant an SSH key: generate a keypair…</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image23.png" alt="Generating an SSH keypair">
+          <figcaption>Generating a fresh SSH keypair.</figcaption>
+        </figure>
+
+        <p>…then <code>cp</code> the public key into the next user's <code>authorized_keys</code>. Logging in with the private key lands a shell as <code>trinity</code> with no password.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image24.png" alt="SSH into trinity using the planted key">
+          <figcaption>Key-based login as <code>trinity</code>.</figcaption>
+        </figure>
+
+        <p><code>sudo -l</code> as <code>trinity</code> shows <code>oracle</code> can be run without a password; its <code>/bin/sh</code> escape gives a root shell.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image25.png" alt="Abusing a passwordless sudo rule to get root">
+          <figcaption>The second <code>sudo</code> rule → root.</figcaption>
+        </figure>
+
+        <p><code>/root</code> holds <code>flag.txt</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-matrix-3/image26.png" alt="root flag.txt completing the box">
+          <figcaption>The root flag — box complete.</figcaption>
+        </figure>
+
+        <blockquote>Matrix 3 is two puzzles stacked: a patience-testing web crawl to a binary, then a tidy privilege-escalation chain where a single passwordless <code>cp</code> is enough to bootstrap full access.</blockquote>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

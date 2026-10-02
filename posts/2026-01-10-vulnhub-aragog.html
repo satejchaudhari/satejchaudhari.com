@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vulnhub: Aragog (HackingHP) — Satej Chaudhari</title>
+  <meta name="description" content="Vulnhub Aragog walkthrough — a vulnerable WordPress File Manager plugin for the foothold, database credentials that crack a user&#x27;s WordPress hash, and a writable root-run backup script for the root shell.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Vulnhub</span>
+        <h1 class="post-title">Vulnhub: Aragog (HackingHP)</h1>
+        <p class="post-meta">
+          <time datetime="2026-01-10">2026-01-10</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p><strong>Aragog</strong> (a Harry&nbsp;Potter-themed box) runs a WordPress site with a vulnerable File Manager plugin for the foothold, leaks database credentials that crack a user's WordPress hash, and finishes with a writable, root-run backup script for the root shell.</p>
+
+        <h2>Reconnaissance</h2>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image1.png" alt="Aragog VM booted from Vulnhub">
+          <figcaption>The Aragog VM running.</figcaption>
+        </figure>
+
+        <p><code>netdiscover</code> finds the target at <code>192.168.0.107</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image2.png" alt="netdiscover showing the target IP">
+          <figcaption>Target located at <code>192.168.0.107</code>.</figcaption>
+        </figure>
+
+        <p><code>nmap</code> shows only SSH (22) and HTTP (80) open.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image3.png" alt="nmap results showing ports 22 and 80 open">
+          <figcaption>A small surface: SSH and HTTP.</figcaption>
+        </figure>
+
+        <p>Port 80 just serves an image, so a <code>nikto</code> scan digs deeper.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image4.png" alt="The web page showing only an image">
+          <figcaption>Nothing obvious on the web root.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image5.png" alt="nikto scan against port 80">
+          <figcaption>A <code>nikto</code> scan of the service.</figcaption>
+        </figure>
+
+        <p>It surfaces a <code>login.php</code> page, noted for later.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image6.png" alt="login.php discovered by nikto">
+          <figcaption>A <code>login.php</code> worth remembering.</figcaption>
+        </figure>
+
+        <p>A directory scan confirms the site runs WordPress.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image7.png" alt="Directory scan revealing a WordPress install">
+          <figcaption>The site is WordPress.</figcaption>
+        </figure>
+
+        <h2>Foothold: WordPress File Manager</h2>
+
+        <p>In <code>msfconsole</code>, the WordPress auxiliary scanner is pointed at the host with <code>RHOSTS</code> and <code>TARGETURI</code> set.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image8.png" alt="Metasploit WordPress scanner configured and run">
+          <figcaption>Scanning the WordPress install with Metasploit.</figcaption>
+        </figure>
+
+        <p>It detects the <strong>wp-file-manager</strong> plugin, so Exploit-DB is checked for a matching exploit.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image9.png" alt="wp-file-manager plugin detected">
+          <figcaption>The vulnerable <code>wp-file-manager</code> plugin.</figcaption>
+        </figure>
+
+        <p>There is a public exploit that uploads a file via the plugin; it is downloaded.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image10.png" alt="Exploit-DB page for the wp-file-manager vulnerability">
+          <figcaption>The matching exploit on Exploit-DB.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image11.png" alt="Fetching the exploit from GitHub">
+          <figcaption>Grabbing the exploit from GitHub.</figcaption>
+        </figure>
+
+        <p>Running it with <code>--check</code> confirms the target is vulnerable.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image12.png" alt="Exploit --check confirming the target is vulnerable">
+          <figcaption><code>--check</code> reports the target exploitable.</figcaption>
+        </figure>
+
+        <p>A PHP reverse shell is fetched to upload through the plugin.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image13.png" alt="Downloading a PHP reverse shell">
+          <figcaption>A PHP reverse shell payload.</figcaption>
+        </figure>
+
+        <p>The callback IP is set to Kali and the port to 5555.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image14.png" alt="Editing the reverse shell with the Kali IP and port 5555">
+          <figcaption>Pointing the shell at Kali on port 5555.</figcaption>
+        </figure>
+
+        <p>The exploit uploads the shell and returns its URL; opening that URL against a waiting listener on 5555 catches the connection.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image15.png" alt="Running the exploit to upload the reverse shell">
+          <figcaption>Uploading the shell via the plugin.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image16.png" alt="netcat listener on port 5555">
+          <figcaption>A listener waiting on 5555.</figcaption>
+        </figure>
+
+        <p>The shell lands as <code>www-data</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image17.png" alt="Reverse shell received as www-data">
+          <figcaption>Foothold as <code>www-data</code>.</figcaption>
+        </figure>
+
+        <p>Under <code>/home</code>, a <code>hagrid98</code> folder holds <code>horcrux1</code> — the first flag.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image18.png" alt="horcrux1 file containing the first flag">
+          <figcaption><code>horcrux1</code>: the first flag.</figcaption>
+        </figure>
+
+        <h2>Looting the database</h2>
+
+        <p>To escalate, <code>linpeas</code> is staged from Kali with <code>SimpleHTTPServer</code> and <code>wget</code> (curl isn't available on the target), made executable, and run.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image19.png" alt="Making linpeas executable and running it">
+          <figcaption>linpeas staged and run on the target.</figcaption>
+        </figure>
+
+        <p>It recovers database credentials, which are used against MySQL.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image20.png" alt="Database credentials found by linpeas">
+          <figcaption>WordPress database credentials from linpeas.</figcaption>
+        </figure>
+
+        <blockquote>On this box the MySQL client only flushed its output on exit, so each query was run in a separate session — slower, but it gets the data out.</blockquote>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image21.png" alt="Listing the MySQL databases">
+          <figcaption>Enumerating the databases.</figcaption>
+        </figure>
+
+        <p>Within the <code>wordpress</code> database, the tables are listed.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image22.png" alt="Listing tables in the wordpress database">
+          <figcaption>Tables in the <code>wordpress</code> schema.</figcaption>
+        </figure>
+
+        <p>The users table holds a WordPress hash for <code>hagrid98</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image23.png" alt="wp_users row with hagrid98&#x27;s password hash">
+          <figcaption><code>hagrid98</code>'s stored password hash.</figcaption>
+        </figure>
+
+        <p>John cracks it against <code>rockyou</code> to <code>password123</code>.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image24.png" alt="John cracking the hash to password123">
+          <figcaption>The hash cracks to <code>password123</code>.</figcaption>
+        </figure>
+
+        <h2>Privilege escalation</h2>
+
+        <p>Those credentials switch to <code>hagrid98</code>…</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image25.png" alt="Switching to the hagrid98 user">
+          <figcaption><code>su hagrid98</code> succeeds.</figcaption>
+        </figure>
+
+        <p>…and the same password works over SSH for a stable session.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image26.png" alt="Reconnecting as hagrid98 over SSH">
+          <figcaption>A proper SSH session as <code>hagrid98</code>.</figcaption>
+        </figure>
+
+        <p>linpeas again shows nothing obvious, so <code>pspy</code> is used to watch processes without root.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image27.png" alt="Running linpeas again as hagrid98">
+          <figcaption>A second linpeas pass — nothing new.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image28.png" alt="Downloading pspy to monitor processes">
+          <figcaption>Staging <code>pspy</code>.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image29.png" alt="pspy monitoring running processes">
+          <figcaption>Watching processes with <code>pspy</code>.</figcaption>
+        </figure>
+
+        <p>pspy shows a root-run script that performs a backup — and it is writable.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image30.png" alt="pspy revealing a root-run writable backup script">
+          <figcaption>A backup script running as root on a schedule.</figcaption>
+        </figure>
+
+        <p>A reverse-shell line is appended to the script and saved; the next scheduled run executes it as root.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image31.png" alt="Appending a reverse shell to the backup script">
+          <figcaption>Injecting a reverse shell into the writable script.</figcaption>
+        </figure>
+
+        <p>A listener on the matching port catches the root callback.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image32.png" alt="Root reverse shell received on the listener">
+          <figcaption>The script fires and calls back as <strong>root</strong>.</figcaption>
+        </figure>
+
+        <p>In <code>/root</code> sits <code>horcrux2.txt</code> — the second flag, and the box.</p>
+
+        <figure>
+          <img src="../assets/img/vulnhub-aragog/image33.png" alt="horcrux2.txt root flag completing the box">
+          <figcaption><code>horcrux2.txt</code>: the final flag.</figcaption>
+        </figure>
+
+        <blockquote>Aragog is a clean mirror of a real engagement: a vulnerable plugin for entry, credential reuse from a looted database, and a writable root cron/backup script to finish — each step the natural consequence of the last.</blockquote>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>
