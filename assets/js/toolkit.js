@@ -62,10 +62,30 @@ var TOOLKIT = [
         "name": "udp-proto-scanner",
         "url": "https://github.com/CiscoCXSecurity/udp-proto-scanner",
         "description": "Probe UDP services with protocol-specific packets to find responders.",
-        "brief": "UDP scanning with generic probes is slow and unreliable; udp-proto-scanner sends real protocol-specific payloads (DNS, SNMP, NTP, NetBIOS, and more) so genuine UDP services actually respond, making it far more accurate than a blind UDP sweep.",
+        "brief": "UDP scanning with generic empty probes is slow and unreliable because closed and open|filtered ports look alike. udp-proto-scanner sends real protocol-specific payloads (DNS, SNMP, NTP, NetBIOS, chargen, and more) so genuine UDP services actually respond, making it far more accurate than a blind UDP sweep and much faster across large ranges.",
         "quickReference": [
-          { "label": "Scan a range", "cmd": "udp-proto-scanner.pl 10.0.0.0/24" },
-          { "label": "From a targets file", "cmd": "udp-proto-scanner.pl --file targets.txt" }
+          { "label": "Scan a CIDR range", "cmd": "udp-proto-scanner.pl 10.0.0.0/24" },
+          { "label": "From a targets file", "cmd": "udp-proto-scanner.pl --file targets.txt" },
+          { "label": "Specific probe only", "cmd": "udp-proto-scanner.pl --probe_name SNMPv1 10.0.0.0/24" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["<CIDR / host>", "Target(s) to scan, given on the command line"],
+              ["--file <file>", "Read targets from a file (one per line/CIDR)"],
+              ["--probe_name <name>", "Send only the named probe (e.g. SNMPv1, DNSStatusRequest, NBTStat)"],
+              ["--retries <n>", "Number of retransmissions per probe"],
+              ["--bandwidth <n>", "Throttle output bandwidth to avoid flooding the link"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "It is a Perl script — run it as udp-proto-scanner.pl (clone the repo or use the Kali package).",
+            "Use it to confirm and enrich the open|filtered UDP ports that a fast nmap -sU pass flags, rather than scanning all 65k UDP ports blindly.",
+            "High-value UDP responders it surfaces — SNMP (161), NetBIOS (137), DNS (53), NTP (123) — are each worth dedicated follow-up (e.g. snmpwalk, onesixtyone).",
+            "Throttle --bandwidth on fragile or monitored networks; UDP floods are easy to trigger accidentally."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "udp-proto-scanner — GitHub", "url": "https://github.com/CiscoCXSecurity/udp-proto-scanner" }
+          ] }
         ]
       },
       {
@@ -73,11 +93,36 @@ var TOOLKIT = [
         "name": "testssl.sh",
         "url": "https://github.com/drwetter/testssl.sh",
         "description": "Test a server's TLS/SSL for protocols, ciphers, and known flaws.",
-        "brief": "testssl.sh is a single script that audits a host's TLS configuration: supported protocols, cipher strength, certificate details, and known vulnerabilities (Heartbleed, ROBOT, POODLE, etc.). It runs offline with no dependencies and produces clear, gradeable output.",
+        "brief": "testssl.sh is a single Bash script that audits a host's TLS configuration end to end: supported protocols (SSLv2/3 through TLS 1.3), cipher strength and ordering, forward secrecy, certificate details and chain, HTTP security headers, and the full roster of named vulnerabilities (Heartbleed, ROBOT, POODLE, BEAST, CRIME, Sweet32, and more). It runs from one portable script with no external dependencies and produces clear, colour-graded output that is easy to turn into a report.",
         "quickReference": [
           { "label": "Full test", "cmd": "testssl.sh https://target.com" },
-          { "label": "Only high-severity findings", "cmd": "testssl.sh --severity HIGH target.com:443" },
-          { "label": "Known vulnerabilities only", "cmd": "testssl.sh --vulnerable target.com" }
+          { "label": "Only severe findings", "cmd": "testssl.sh --severity HIGH target.com:443" },
+          { "label": "Known vulnerabilities only", "cmd": "testssl.sh -U target.com" },
+          { "label": "Machine-readable output", "cmd": "testssl.sh --jsonfile out.json --csvfile out.csv target.com" }
+        ],
+        "sections": [
+          { "title": "Useful Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-U / --vulnerable", "Test for all known TLS vulnerabilities"],
+              ["-p / --protocols", "Check which protocol versions are offered"],
+              ["-E / --cipher-per-proto", "Enumerate ciphers offered per protocol"],
+              ["-S / --server-defaults", "Certificate, chain, and server-default details"],
+              ["-H / --header", "Check HTTP security headers (HSTS, etc.)"],
+              ["--severity <LOW|MEDIUM|HIGH|CRITICAL>", "Only report findings at or above this level"],
+              ["--jsonfile / --csvfile / --htmlfile", "Write machine-readable or HTML reports"],
+              ["--sneaky / --quiet", "Reduce fingerprint/noise of the scan"],
+              ["--starttls <proto>", "Test STARTTLS services (smtp, imap, pop3, ftp, xmpp, ...)"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Run against host:port, not just a URL, so you can test mail and other TLS services (e.g. --starttls smtp mail.target.com:25).",
+            "Use the official Docker image or the git clone for the newest cipher/vuln database: docker run --rm drwetter/testssl.sh target.com.",
+            "Map the findings straight onto the Weak TLS / SSL Configuration write-up — testssl's output is the evidence for that report.",
+            "Prefer --severity HIGH for a quick triage, then a full run for the detailed appendix."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "testssl.sh — GitHub", "url": "https://github.com/drwetter/testssl.sh" },
+            { "label": "testssl.sh — documentation", "url": "https://testssl.sh/" }
+          ] }
         ]
       },
       {
@@ -3738,11 +3783,31 @@ var TOOLKIT = [
         "name": "Metabigor",
         "url": "https://github.com/j3ssie/metabigor",
         "description": "OSINT tool that turns organisation names into ASNs and IP ranges with no API keys.",
-        "brief": "Metabigor gathers intelligence — ASNs, netblocks, and related data — from public sources without needing any API keys, which makes it a quick, dependency-light way to expand a target's IP footprint.",
+        "brief": "Metabigor gathers intelligence — ASNs, netblocks, related organisations, and certificate data — from public sources without needing any API keys, which makes it a quick, dependency-light way to expand a target's IP footprint. It reads targets on stdin and is built to chain with other recon tools.",
         "quickReference": [
           { "label": "Org name to netblocks", "cmd": "echo \"target\" | metabigor net --org" },
           { "label": "ASN to ranges", "cmd": "echo \"AS12345\" | metabigor net --asn" },
-          { "label": "Search by IP", "cmd": "echo \"1.2.3.4\" | metabigor net --ip" }
+          { "label": "Search by IP", "cmd": "echo \"1.2.3.4\" | metabigor net --ip" },
+          { "label": "Port/service data for an IP", "cmd": "echo \"1.2.3.4\" | metabigor ip -o result.txt" }
+        ],
+        "sections": [
+          { "title": "Subcommands", "type": "table", "columns": ["Command", "Purpose"],
+            "rows": [
+              ["net --org", "Resolve an organisation name to its announced netblocks"],
+              ["net --asn", "List the IP ranges an ASN announces"],
+              ["net --ip", "Find the ASN/owner that an IP belongs to"],
+              ["related", "Discover related organisations/domains"],
+              ["cert", "Pull certificate-transparency data for a target"],
+              ["ip", "Query open ports/services for an IP (scrapes public scan data)"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "All subcommands read targets on stdin — echo or cat into metabigor and pipe the output onward.",
+            "No API keys are required, which makes it ideal for a fast first pass; cross-check its netblocks against bgp.he.net and asnlookup before scanning.",
+            "Always confirm a discovered range actually belongs to the target — shared and cloud ASNs contain unrelated assets you must not touch."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "Metabigor — GitHub", "url": "https://github.com/j3ssie/metabigor" }
+          ] }
         ]
       },
       {
@@ -3750,11 +3815,30 @@ var TOOLKIT = [
         "name": "BGP.he.net (Hurricane Electric)",
         "url": "https://bgp.he.net/",
         "description": "Free BGP toolkit for looking up ASNs, prefixes, peers, and DNS by organisation.",
-        "brief": "Hurricane Electric's BGP toolkit is a web interface for exploring routing data: search an organisation to find its ASNs, then list the IPv4/IPv6 prefixes each ASN announces. It is the manual counterpart to asnlookup/metabigor and useful for validating their output.",
+        "brief": "Hurricane Electric's BGP toolkit is a web interface for exploring global routing data: search an organisation name to find its ASNs, then list the IPv4/IPv6 prefixes each ASN announces, its peers, and reverse-DNS. It is the manual, authoritative counterpart to asnlookup/metabigor — ideal for validating their output and spotting netblocks automated tools missed.",
         "quickReference": [
+          { "label": "Search an organisation", "cmd": "https://bgp.he.net/search?search%5Bsearch%5D=Target+Corp" },
           { "label": "Look up an ASN", "cmd": "https://bgp.he.net/AS12345" },
           { "label": "Prefixes announced by an ASN", "cmd": "https://bgp.he.net/AS12345#_prefixes" },
           { "label": "DNS records for a domain", "cmd": "https://bgp.he.net/dns/target.com" }
+        ],
+        "sections": [
+          { "title": "What to Pull", "type": "table", "columns": ["Page", "Gives you"],
+            "rows": [
+              ["Organisation search", "Every ASN registered to the name"],
+              ["AS<n> > Prefixes v4/v6", "The exact CIDRs that ASN announces (your scan scope)"],
+              ["AS<n> > Peers / Graph", "Upstreams and peers — hints at hosting relationships"],
+              ["IP address page", "Owning ASN, PTR, and the covering prefix"],
+              ["DNS page", "Known A/AAAA/MX records for a domain"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Use it to VALIDATE automated ASN results — if asnlookup and bgp.he.net agree a range belongs to the target, you can scan with confidence.",
+            "A company often owns several ASNs; check all of them, not just the first hit.",
+            "Cloud-hosted targets may announce nothing of their own — the netblocks will belong to AWS/Azure/GCP, so pivot to cloud-asset enumeration instead of scanning the provider's range."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "Hurricane Electric BGP Toolkit", "url": "https://bgp.he.net/" }
+          ] }
         ]
       },
       {
@@ -3762,10 +3846,28 @@ var TOOLKIT = [
         "name": "Crunchbase",
         "url": "https://www.crunchbase.com/",
         "description": "Company intelligence — funding, acquisitions, and subsidiaries.",
-        "brief": "Crunchbase profiles companies with their funding history, leadership, and — most usefully for recon — acquisitions. Acquired companies often keep separate, less-hardened infrastructure, so their domains belong in scope on a large engagement.",
+        "brief": "Crunchbase profiles companies with their funding history, leadership, and — most usefully for recon — acquisitions and subsidiaries. Acquired companies frequently keep separate, less-hardened, unmerged infrastructure, so their domains and brands belong in scope on a broad engagement. Treat it as scope-expansion intelligence, then confirm ownership before testing anything.",
         "quickReference": [
           { "label": "Company profile", "cmd": "https://www.crunchbase.com/organization/<company>" },
-          { "label": "Acquisitions", "cmd": "profile page -> Financials / Acquisitions tab" }
+          { "label": "Acquisitions", "cmd": "profile page -> Financials / Acquisitions" },
+          { "label": "Subsidiaries / sub-orgs", "cmd": "profile page -> Overview -> Sub-Organizations" }
+        ],
+        "sections": [
+          { "title": "What to Harvest", "type": "table", "columns": ["Section", "Recon value"],
+            "rows": [
+              ["Acquisitions", "Newly owned companies with weaker, unmerged infrastructure"],
+              ["Sub-organizations", "Subsidiary brands and their separate domains"],
+              ["Overview / website", "Primary and secondary domains to seed subdomain enumeration"],
+              ["People / leadership", "Names for email-format guessing and social-engineering context"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Only pull scope-expansion leads here — ALWAYS confirm an acquired company/domain is in your authorised scope before any active testing.",
+            "Much of the detail sits behind a paid account; the free profile plus a web search usually surfaces the acquisitions and main domains.",
+            "Cross-reference acquisitions with WHOIS/ASN data to verify the infrastructure really belongs to the parent."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "Crunchbase", "url": "https://www.crunchbase.com/" }
+          ] }
         ]
       },
       {
@@ -3773,11 +3875,32 @@ var TOOLKIT = [
         "name": "cloud_enum",
         "url": "https://github.com/initstring/cloud_enum",
         "description": "Enumerate public AWS, Azure, and GCP assets for a keyword.",
-        "brief": "cloud_enum guesses and validates cloud resources — S3 buckets, Azure blobs/containers, GCP buckets and apps — named after a keyword, flagging which exist and which are publicly readable. Open buckets are a common source of leaked files.",
+        "brief": "cloud_enum guesses and validates cloud resources — S3 buckets, Azure blobs/containers/websites, and GCP buckets and apps — named after a keyword, flagging which exist and which are publicly readable or writable. Open or listable storage is a common source of leaked files, backups, and credentials, so this is a high-yield check whenever a target uses cloud infrastructure.",
         "quickReference": [
           { "label": "Scan a keyword across all three clouds", "cmd": "cloud_enum -k targetcompany" },
           { "label": "Multiple keywords", "cmd": "cloud_enum -k target -k target-corp -k targetapp" },
-          { "label": "From a keyword file", "cmd": "cloud_enum -kf keywords.txt -l results.txt" }
+          { "label": "From a keyword file, log results", "cmd": "cloud_enum -kf keywords.txt -l results.txt" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-k <keyword>", "Keyword to base guesses on (repeatable)"],
+              ["-kf <file>", "Read keywords from a file"],
+              ["-m <file>", "Custom mutation wordlist (appended to each keyword)"],
+              ["-l <file>", "Log output to a file"],
+              ["-t <n>", "Threads"],
+              ["--disable-aws / --disable-azure / --disable-gcp", "Limit which clouds are checked"],
+              ["-qs", "Quick scan (skip the slower extra checks)"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Seed keywords from the real naming scheme: company, product, and the -assets/-backups/-dev/-prod suffixes teams actually use.",
+            "A found-but-protected bucket is still useful intel; a publicly readable or writable one is a finding — follow up per the Cloud Storage Misconfiguration write-up.",
+            "Pair discovered bucket names with the aws/gsutil/az CLIs (--no-sign-request) to test list/read/write precisely.",
+            "Add a mutation wordlist (-m) to catch environment- and region-suffixed names."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "cloud_enum — GitHub", "url": "https://github.com/initstring/cloud_enum" }
+          ] }
         ]
       },
       {
@@ -3800,11 +3923,32 @@ var TOOLKIT = [
         "name": "git-hound",
         "url": "https://github.com/tillson/git-hound",
         "description": "Find exposed secrets across GitHub with pattern matching.",
-        "brief": "git-hound searches GitHub code (beyond a single org) for secrets tied to a target, using regex rules and commit digging to catch keys that were committed and later 'removed'. It is aimed at surfacing leaked credentials at scale.",
+        "brief": "git-hound searches GitHub code across the whole platform (not just a single org) for secrets tied to a target, using regex rules plus commit and file digging to catch keys that were committed and later 'removed' but remain in history. It is aimed at surfacing leaked credentials, internal hostnames, and config at scale, and scores results to cut false positives.",
         "quickReference": [
-          { "label": "Search by domain", "cmd": "echo \"target.com\" | git-hound --dig-files --dig-commits" },
+          { "label": "Search by domain, dig deep", "cmd": "echo \"target.com\" | git-hound --dig-files --dig-commits" },
           { "label": "From a subdomain list", "cmd": "git-hound --subdomain-file subs.txt" },
-          { "label": "Custom regex rules", "cmd": "git-hound --regex-file rules.txt" }
+          { "label": "Custom regex rules + results file", "cmd": "git-hound --regex-file rules.txt --results-only results.txt" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["(stdin)", "Query/keyword(s) to search, piped in on stdin"],
+              ["--dig-files", "Also search the full content of matching files"],
+              ["--dig-commits", "Dig through commit history (catches 'removed' secrets)"],
+              ["--regex-file <file>", "Use a custom regex ruleset"],
+              ["--subdomain-file <file>", "Search using a list of subdomains as queries"],
+              ["--many-results", "Page past GitHub's default result cap"],
+              ["--results-only <file>", "Write just the hits to a file"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Requires a logged-in GitHub session/token — read the repo's current auth setup, as GitHub code-search access has changed over time.",
+            "Run it alongside trufflehog/gitleaks (which scan a known repo/history) — git-hound's strength is DISCOVERING unknown repos across the platform that mention your target.",
+            "Validate every hit by hand and rotate any confirmed live secret immediately; treat exposed keys as compromised.",
+            "Tune the regex file to your target's key formats to cut noise."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "git-hound — GitHub", "url": "https://github.com/tillson/git-hound" }
+          ] }
         ]
       },
       {
@@ -3827,9 +3971,28 @@ var TOOLKIT = [
         "name": "spoofcheck",
         "url": "https://github.com/BishopFox/spoofcheck",
         "description": "Check whether a domain's SPF and DMARC records allow email spoofing.",
-        "brief": "spoofcheck evaluates a domain's SPF and DMARC policies and reports whether mail can be spoofed as that domain — a weak or missing policy enables convincing phishing from the organisation's own name.",
+        "brief": "spoofcheck evaluates a domain's SPF and DMARC records and reports a clear verdict on whether mail can be spoofed as that domain. A missing SPF, a soft/neutral SPF (~all / ?all), or a DMARC policy of p=none means a forged From: will not be rejected — enabling convincing phishing from the organisation's own name. It is the fast, scriptable complement to a manual dig of the records.",
         "quickReference": [
-          { "label": "Check a domain", "cmd": "python spoofcheck.py target.com" }
+          { "label": "Check a domain", "cmd": "python spoofcheck.py target.com" },
+          { "label": "Manual cross-check", "cmd": "dig +short TXT target.com | grep spf1 ; dig +short TXT _dmarc.target.com" }
+        ],
+        "sections": [
+          { "title": "What It Checks", "type": "table", "columns": ["Record", "Spoofable when"],
+            "rows": [
+              ["SPF", "Missing, or ends in ~all / ?all / +all instead of -all"],
+              ["SPF lookups", "Record is present but broken (10+ DNS lookups, permerror)"],
+              ["DMARC", "Missing, or policy p=none (monitor only)"],
+              ["DMARC subdomain", "sp= is absent/none, leaving subdomains spoofable"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "It is a Python 2 script historically — run with the interpreter the repo specifies, or just cross-check the records manually with dig.",
+            "A 'spoofable' verdict maps directly onto the Spoofable Email (SPF/DKIM/DMARC) write-up — use that for impact and remediation wording.",
+            "Checking is entirely passive (DNS lookups only), so it is safe to run against any in-scope domain.",
+            "Remember DMARC enforcement (quarantine/reject) is what actually blocks spoofing; p=none only reports."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "spoofcheck — GitHub", "url": "https://github.com/BishopFox/spoofcheck" }
+          ] }
         ]
       },
       {
@@ -5747,10 +5910,33 @@ var TOOLKIT = [
         "name": "gotator",
         "url": "https://github.com/Josue87/gotator",
         "description": "Generate DNS permutation wordlists from known subdomains.",
-        "brief": "gotator takes the subdomains you already found plus a permutation wordlist and produces new candidate names (dev-, staging-, -v2, numbering) to resolve. It feeds a resolver like puredns to catch predictable hosts that never appear publicly.",
+        "brief": "gotator takes the subdomains you already found plus a permutation wordlist and produces new candidate names (dev-, staging-, -v2, numbering) to resolve. It feeds a resolver like puredns to catch predictable hosts that never appear in any public source. It is a generation step only — it does no DNS resolution itself, so its output must be piped into a mass resolver.",
         "quickReference": [
           { "label": "Generate permutations", "cmd": "gotator -sub subs.txt -perm perms.txt -depth 1 -numbers 5 -mindup -adv -md > out.txt" },
           { "label": "Then resolve them", "cmd": "puredns resolve out.txt -r resolvers.txt" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-sub <file>", "File of known subdomains to permute (required)"],
+              ["-perm <file>", "Permutation wordlist (e.g. SecLists dns/subdomains-top... or a custom list)"],
+              ["-depth <n>", "How many permutation passes to apply (1 is usually enough; higher explodes the list)"],
+              ["-numbers <n>", "Append/iterate numeric suffixes up to n"],
+              ["-mindup", "Reduce duplicate output"],
+              ["-adv", "Advanced mode: more permutation combinations"],
+              ["-md", "Include merged dash/dot variants"],
+              ["-t <n>", "Number of threads"],
+              ["-silent", "Only print the generated names"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "gotator only GENERATES candidate names — always pipe the output into a fast resolver (puredns, shuffledns) with a clean resolver list to find the live ones.",
+            "Keep -depth at 1 for most work; depth 2+ can turn a few thousand inputs into millions of candidates.",
+            "Feed it the subdomains you already resolved, not a generic wordlist, so permutations stay relevant to the target's naming scheme.",
+            "A good permutation wordlist (dev, staging, uat, internal, api, admin, test, old, new, v1/v2) matters more than brute size."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "gotator — GitHub", "url": "https://github.com/Josue87/gotator" }
+          ] }
         ]
       },
       {
@@ -5758,10 +5944,26 @@ var TOOLKIT = [
         "name": "ripgen",
         "url": "https://github.com/resyncgg/ripgen",
         "description": "Fast, rules-based subdomain permutation generator.",
-        "brief": "ripgen derives permutation rules from a set of known subdomains and generates new candidates extremely quickly. It is a faster alternative to gotator/altdns for producing a permutation list to resolve.",
+        "brief": "ripgen derives permutation rules from a set of known subdomains and generates new candidates extremely quickly in Rust. It is a faster alternative to gotator/altdns for producing a permutation list, and like them it only generates names — you resolve the output separately with puredns or shuffledns.",
         "quickReference": [
           { "label": "Generate from a list", "cmd": "ripgen -d subs.txt > permutations.txt" },
-          { "label": "Pipe form", "cmd": "cat subs.txt | ripgen | puredns resolve -r resolvers.txt" }
+          { "label": "Pipe straight into a resolver", "cmd": "ripgen -d subs.txt | puredns resolve -r resolvers.txt" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-d <file>", "Input file of known (sub)domains to derive rules from"],
+              ["(stdin)", "Domains can also be piped in on stdin instead of -d"],
+              ["-w <file>", "Optional custom word list to blend into the permutations"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "ripgen trades gotator's tuning knobs for raw speed — it is ideal when your known-subdomain set is large.",
+            "As with all permutation tools, the output is only candidates; resolve it with a mass resolver and a vetted resolver list.",
+            "Run ripgen and gotator and diff the results — each produces names the other misses."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "ripgen — GitHub", "url": "https://github.com/resyncgg/ripgen" }
+          ] }
         ]
       },
       {
@@ -5769,11 +5971,41 @@ var TOOLKIT = [
         "name": "gowitness",
         "url": "https://github.com/sensepost/gowitness",
         "description": "Take screenshots of web hosts from the command line for visual triage.",
-        "brief": "gowitness uses headless Chrome to screenshot a list of hosts or URLs and stores the results in a searchable report, so hundreds of targets can be triaged by eye — logins, dashboards, and default pages jump out fast.",
+        "brief": "gowitness drives headless Chrome to screenshot a list of hosts or URLs and stores the results — along with headers, technologies, and response metadata — in a SQLite database that a built-in web report then browses. It lets you triage hundreds of targets by eye, so logins, dashboards, default pages, and error screens stand out fast. Version 3 restructured the CLI into scan and report subcommands.",
         "quickReference": [
-          { "label": "Screenshot a host list", "cmd": "gowitness scan file -f live.txt" },
-          { "label": "One URL", "cmd": "gowitness scan single -u https://target.com" },
-          { "label": "View the report", "cmd": "gowitness report server   # then open the local UI" }
+          { "label": "Screenshot a host/URL list", "cmd": "gowitness scan file -f live.txt --write-db" },
+          { "label": "One URL", "cmd": "gowitness scan single --url https://target.com --write-db" },
+          { "label": "Scan common ports on each host", "cmd": "gowitness scan file -f hosts.txt --ports-medium --write-db" },
+          { "label": "Browse the report UI", "cmd": "gowitness report server   # serves the DB at http://localhost:7171" }
+        ],
+        "sections": [
+          { "title": "Subcommands (v3)", "type": "table", "columns": ["Command", "Purpose"],
+            "rows": [
+              ["scan single --url <url>", "Screenshot a single URL"],
+              ["scan file -f <file>", "Screenshot every host/URL in a file (use - for stdin)"],
+              ["scan cidr", "Screenshot hosts across a CIDR range"],
+              ["report server", "Start the web UI to browse results (default :7171)"],
+              ["report list / report ...", "Inspect results from the command line"]
+            ] },
+          { "title": "Useful Flags", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["--write-db", "Persist results to the SQLite database (needed for the report UI)"],
+              ["-f <file>", "Input file of targets (scan file); - reads stdin"],
+              ["--no-http / --no-https", "Do not auto-prepend the scheme to bare hosts"],
+              ["-p / --port", "Specific port(s) to scan; repeatable"],
+              ["--ports-small / --ports-medium / --ports-large", "Scan a built-in port list on each target"],
+              ["--screenshot-path <dir>", "Where screenshot images are written"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Feed it the live hosts from httpx/subfinder so you only screenshot things that actually respond.",
+            "Always pass --write-db when you intend to use the report server — without it there is nothing for the UI to show.",
+            "The report UI clusters and filters by title, status, and technology, which is the fastest way to find the interesting 5% of a large scope.",
+            "The v2 one-shot commands (gowitness file / gowitness single) were replaced by the scan/report subcommands in v3 — use -h at any level to see the current flags."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "gowitness — GitHub", "url": "https://github.com/sensepost/gowitness" },
+            { "label": "gowitness Wiki", "url": "https://github.com/sensepost/gowitness/wiki" }
+          ] }
         ]
       },
       {
@@ -5781,10 +6013,31 @@ var TOOLKIT = [
         "name": "aquatone",
         "url": "https://github.com/michenriksen/aquatone",
         "description": "Screenshot and report on a large set of hosts from stdin.",
-        "brief": "aquatone reads hosts or URLs from stdin, screenshots them, and builds an HTML report that clusters similar pages — a quick way to visually cover a wide attack surface. gowitness is the more actively maintained alternative.",
+        "brief": "aquatone reads hosts or URLs from stdin, screenshots them with a headless browser, and builds an HTML report that clusters visually similar pages — a quick way to cover a wide attack surface by eye. Note the original project is archived and unmaintained; gowitness is the actively developed alternative and is preferred for new work, but aquatone still appears in many older workflows.",
         "quickReference": [
           { "label": "From a host list", "cmd": "cat hosts.txt | aquatone" },
-          { "label": "Scan more ports", "cmd": "cat hosts.txt | aquatone -ports large" }
+          { "label": "Scan a larger port set", "cmd": "cat hosts.txt | aquatone -ports large" },
+          { "label": "From an nmap XML scan", "cmd": "cat nmap.xml | aquatone -nmap" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-ports <small|medium|large|xlarge|csv>", "Which ports to probe on each host"],
+              ["-nmap", "Parse an nmap/masscan XML report from stdin instead of plain hosts"],
+              ["-out <dir>", "Output directory for the report and screenshots"],
+              ["-threads <n>", "Concurrency (default scales with CPU)"],
+              ["-scan-timeout <ms>", "Port-scan timeout per host"],
+              ["-screenshot-timeout <ms>", "Timeout per screenshot"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "The project is archived — prefer gowitness unless you specifically need aquatone's report clustering or are following an existing playbook.",
+            "It takes input on stdin only; pipe in a host list, httpx output, or an nmap XML file (-nmap).",
+            "Open aquatone_report.html in the output directory to review the clustered screenshots."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "aquatone — GitHub (archived)", "url": "https://github.com/michenriksen/aquatone" },
+            { "label": "gowitness (maintained alternative)", "url": "https://github.com/sensepost/gowitness" }
+          ] }
         ]
       },
       {
@@ -5792,11 +6045,34 @@ var TOOLKIT = [
         "name": "wafw00f",
         "url": "https://github.com/EnableSecurity/wafw00f",
         "description": "Identify and fingerprint the WAF protecting a website.",
-        "brief": "wafw00f sends a series of crafted requests and analyses the responses to identify which Web Application Firewall (if any) sits in front of a site. Knowing the WAF tells you what will block payloads and how to shape them.",
+        "brief": "wafw00f sends a series of normal and deliberately malicious requests and analyses the responses — status codes, headers, cookies, block pages — to identify which Web Application Firewall (if any) sits in front of a site. Knowing the WAF and its vendor tells you what is likely to block your payloads and how to shape or encode them to slip through.",
         "quickReference": [
           { "label": "Fingerprint a site", "cmd": "wafw00f https://target.com" },
           { "label": "List detectable WAFs", "cmd": "wafw00f -l" },
-          { "label": "From a URL list", "cmd": "wafw00f -i urls.txt" }
+          { "label": "From a URL list", "cmd": "wafw00f -i urls.txt" },
+          { "label": "Find every matching WAF, verbose", "cmd": "wafw00f https://target.com -a -v" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-l", "List all WAFs wafw00f can detect"],
+              ["-a", "Find ALL matching WAFs, not just the first"],
+              ["-i <file>", "Read targets from a file (one per line)"],
+              ["-p <proxy>", "Send traffic through an HTTP(S)/SOCKS proxy"],
+              ["-o <file>", "Write results to a file"],
+              ["-f <json|csv|text>", "Output format"],
+              ["-v", "Verbose output (show the reasoning)"],
+              ["-H <file>", "Use custom headers from a file"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Run it early in recon — the identified WAF guides every later payload (encoding, casing, parameter pollution, etc.).",
+            "Use -a: some stacks sit behind more than one layer (e.g. a CDN WAF plus an app WAF) and only -a reveals both.",
+            "A 'no WAF detected' result is not a guarantee — a silent or custom WAF may still be present; confirm by behaviour when payloads are dropped.",
+            "Route through Burp with -p to log exactly what each probe sent and received."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "wafw00f — GitHub", "url": "https://github.com/EnableSecurity/wafw00f" }
+          ] }
         ]
       },
       {
@@ -5804,10 +6080,33 @@ var TOOLKIT = [
         "name": "WhatWaf",
         "url": "https://github.com/Ekultek/WhatWaf",
         "description": "Detect WAFs/IPS and suggest tamper-based bypasses.",
-        "brief": "WhatWaf detects firewalls and protection systems and, unlike wafw00f, also proposes tamper techniques that may bypass the detected protection — useful when a WAF is blocking your test payloads.",
+        "brief": "WhatWaf detects firewalls and intrusion-protection systems and, unlike wafw00f, also proposes tamper techniques that may bypass the detected protection — making it useful the moment a WAF starts blocking your test payloads. It can read a list of targets, route through a proxy, and suggest the encodings/mutations most likely to evade the identified product.",
         "quickReference": [
           { "label": "Detect on a URL", "cmd": "whatwaf -u https://target.com" },
-          { "label": "With a random user-agent", "cmd": "whatwaf -u https://target.com --ra" }
+          { "label": "With a random user-agent", "cmd": "whatwaf -u https://target.com --ra" },
+          { "label": "Scan a list of URLs", "cmd": "whatwaf -l urls.txt" },
+          { "label": "Through a proxy", "cmd": "whatwaf -u https://target.com --proxy http://127.0.0.1:8080" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-u <url>", "Single target URL"],
+              ["-l <file>", "File of URLs to test"],
+              ["--ra", "Use a random user-agent per request"],
+              ["--proxy <url>", "Route traffic through a proxy (e.g. Burp)"],
+              ["-p <payloads>", "Use custom payloads to trigger the WAF"],
+              ["--throttle <sec>", "Delay between requests to avoid rate limits"],
+              ["-F", "Force testing even if no WAF is detected"],
+              ["--tamper / --encode", "Show/apply tamper and encoding suggestions"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Reach for WhatWaf over wafw00f when you specifically want bypass guidance rather than just identification.",
+            "Its tamper suggestions are a starting point — confirm each one manually against the live WAF, as detection is heuristic.",
+            "Throttle and randomise the user-agent on sensitive targets so the fingerprinting probes do not themselves trip rate limiting."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "WhatWaf — GitHub", "url": "https://github.com/Ekultek/WhatWaf" }
+          ] }
         ]
       },
       {
@@ -5815,11 +6114,35 @@ var TOOLKIT = [
         "name": "gau (getallurls)",
         "url": "https://github.com/lc/gau",
         "description": "Fetch known URLs for a domain from Wayback, Common Crawl, OTX, and URLScan.",
-        "brief": "gau pulls every URL that public archives already know about for a domain — old endpoints, parameters, and files that may still work but are no longer linked. It is the fastest way to build a large URL list for parameter and pattern analysis.",
+        "brief": "gau pulls every URL that public archives already know about for a domain — old endpoints, parameters, and files that may still work but are no longer linked anywhere. It is the fastest way to build a large URL corpus for parameter and pattern analysis (feed it into gf, qsreplace, and your fuzzers), and it complements an active crawler like gospider or katana.",
         "quickReference": [
           { "label": "All URLs for a domain", "cmd": "gau target.com" },
           { "label": "Include subdomains", "cmd": "gau --subs target.com" },
-          { "label": "From a domain list", "cmd": "cat domains.txt | gau --threads 5 | tee urls.txt" }
+          { "label": "From a domain list", "cmd": "cat domains.txt | gau --threads 5 | tee urls.txt" },
+          { "label": "Drop static assets", "cmd": "gau --subs --blacklist png,jpg,gif,svg,woff,ttf,css target.com" }
+        ],
+        "sections": [
+          { "title": "Flags", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["--subs", "Include subdomains of the target"],
+              ["--providers <list>", "Sources to query: wayback,commoncrawl,otx,urlscan"],
+              ["--threads <n>", "Number of worker threads"],
+              ["--blacklist <exts>", "Comma-separated extensions to skip (png,jpg,css,...)"],
+              ["--from / --to <YYYYMM>", "Restrict results to a date range"],
+              ["--o <file>", "Write results to a file"],
+              ["--json", "Output as JSON (with source/date metadata)"],
+              ["--fc <codes> / --mc <codes>", "Filter/match by HTTP status (when known)"],
+              ["--config <file>", "Alternate TOML config (API keys for providers)"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Archive data is historical, so expect dead URLs — pipe the output through httpx to keep only live ones before testing.",
+            "Blacklist static extensions to cut the list down to endpoints that actually take parameters.",
+            "gau pairs naturally with gf: gau --subs target.com | gf ssrf  (or xss/lfi/sqli) to surface likely-vulnerable parameters.",
+            "Add URLScan/OTX API keys in the config to widen coverage; sort -u the merged output of gau, katana, and gospider."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "gau — GitHub", "url": "https://github.com/lc/gau" }
+          ] }
         ]
       },
       {
@@ -5827,22 +6150,75 @@ var TOOLKIT = [
         "name": "gospider",
         "url": "https://github.com/jaeles-project/gospider",
         "description": "Fast web spider that crawls a site and extracts links, JS, and forms.",
-        "brief": "gospider actively crawls a target, following links and pulling out URLs, JavaScript files, forms, and third-party sources. Where gau reads archives, gospider walks the live site, so the two complement each other.",
+        "brief": "gospider actively crawls a target in Go, following links and pulling out URLs, JavaScript files, forms, subdomains, and third-party sources (robots.txt, sitemap, and optionally Wayback/OTX/Common Crawl). Where gau reads archives, gospider walks the live site, so running both and merging the results gives the widest view of the attack surface.",
         "quickReference": [
-          { "label": "Crawl one site", "cmd": "gospider -s https://target.com -d 2" },
-          { "label": "Crawl a list with extra sources", "cmd": "gospider -S urls.txt -c 10 -d 1 --other-source" }
+          { "label": "Crawl one site", "cmd": "gospider -s https://target.com -d 2 -c 10" },
+          { "label": "Crawl a list with extra sources", "cmd": "gospider -S urls.txt -c 10 -d 1 --other-source" },
+          { "label": "Include subdomains, send to Burp", "cmd": "gospider -s https://target.com --include-subs -p http://127.0.0.1:8080" }
+        ],
+        "sections": [
+          { "title": "Flags", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-s <url>", "Single site to crawl"],
+              ["-S <file>", "File of sites to crawl"],
+              ["-d <n>", "Maximum crawl depth (0 = unlimited)"],
+              ["-c <n>", "Concurrent requests per domain"],
+              ["-t <n>", "Number of threads (parallel sites)"],
+              ["--other-source", "Also pull URLs from Wayback, OTX, and Common Crawl"],
+              ["--include-subs", "Include subdomains encountered while crawling"],
+              ["-a", "Find URLs from third-party sources (archives) as well"],
+              ["-p <proxy>", "Route through a proxy (e.g. Burp)"],
+              ["--blacklist <regex>", "Skip URLs matching the pattern (e.g. static assets)"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Keep depth modest (1-2) on large sites or the crawl explodes; raise concurrency (-c) for speed instead.",
+            "--other-source turns gospider into a one-stop collector (live crawl + archives), but gau is faster for archive-only passes.",
+            "Proxy through Burp (-p) to populate the sitemap and capture interesting requests as it crawls.",
+            "Pipe the discovered JS into subjs/xnLinkFinder for deeper endpoint extraction."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "gospider — GitHub", "url": "https://github.com/jaeles-project/gospider" }
+          ] }
         ]
       },
       {
         "id": "gf-patterns",
-        "name": "gf-patterns",
+        "name": "gf / Gf-Patterns",
         "url": "https://github.com/1ndianl33t/Gf-Patterns",
         "description": "gf patterns to grep a URL list for likely vulnerable parameters.",
-        "brief": "gf is a wrapper around grep with reusable pattern files; the gf-patterns set flags URLs whose parameters commonly carry specific bugs — xss, ssrf, lfi, sqli, redirect, and more — so a huge URL list narrows to the ones worth testing.",
+        "brief": "gf (by tomnomnom) is a wrapper around grep that stores reusable, named pattern files; the Gf-Patterns collection (by 1ndianl33t) adds ready-made patterns that flag URLs whose parameters commonly carry specific bug classes — xss, ssrf, lfi, sqli, redirect, rce, idor, and more. Running a huge URL list through gf narrows it to the handful of endpoints worth manual testing.",
         "quickReference": [
+          { "label": "Install the patterns", "cmd": "mkdir -p ~/.gf && cp Gf-Patterns/*.json ~/.gf/" },
           { "label": "Find XSS candidates", "cmd": "cat urls.txt | gf xss" },
           { "label": "SSRF candidates", "cmd": "gau target.com | gf ssrf" },
           { "label": "List available patterns", "cmd": "gf -list" }
+        ],
+        "sections": [
+          { "title": "Setup", "type": "notes", "items": [
+            "Install gf itself (Go): go install github.com/tomnomnom/gf@latest, then add the gf-completion to your shell.",
+            "Clone this repo and copy its *.json pattern files into ~/.gf/ so gf can find them (gf -list should then show xss, ssrf, lfi, ...).",
+            "Patterns are just grep definitions — you can add your own JSON file to ~/.gf for custom parameter hunting."
+          ] },
+          { "title": "Useful Patterns", "type": "table", "columns": ["Pattern", "Flags URLs likely vulnerable to"],
+            "rows": [
+              ["xss", "Reflected parameters worth XSS testing"],
+              ["sqli", "Parameters commonly tied to SQL injection"],
+              ["ssrf", "url=, dest=, redirect=, and similar fetch parameters"],
+              ["lfi", "file=, path=, include= style parameters"],
+              ["redirect", "Open-redirect candidate parameters"],
+              ["rce", "cmd=, exec=, run= style parameters"],
+              ["idor", "id=, user=, account= numeric-reference parameters"],
+              ["interestingparams / debug_logic", "Debug, admin, and other high-value parameters"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "gf is a triage filter, not a scanner — it narrows a massive URL list to candidates; you still confirm each by hand or with a dedicated tool.",
+            "Chain it: gau --subs target.com | gf xss | qsreplace '\"><svg onload=alert(1)>' | httpx -silent.",
+            "Combine patterns by running the list through several (xss, then ssrf, then lfi) to bucket your targets."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "Gf-Patterns — GitHub", "url": "https://github.com/1ndianl33t/Gf-Patterns" },
+            { "label": "gf (tomnomnom)", "url": "https://github.com/tomnomnom/gf" }
+          ] }
         ]
       },
       {
@@ -5850,10 +6226,31 @@ var TOOLKIT = [
         "name": "broken-link-checker",
         "url": "https://github.com/stevenvachon/broken-link-checker",
         "description": "Crawl a site for broken links — candidates for broken-link hijacking.",
-        "brief": "blc crawls a website and reports broken links. Links pointing at expired external domains or de-provisioned resources can be re-registered by an attacker to serve content in the site's trust context (broken-link hijacking).",
+        "brief": "blc crawls a website and reports every broken link it finds. For an attacker this is a hunt for broken-link hijacking: links pointing at expired external domains, de-provisioned cloud resources, or dead social handles can be re-registered and then serve attacker content inside the site's trust context (and sometimes run script, if the link loads a resource).",
         "quickReference": [
           { "label": "Recursive, ordered scan", "cmd": "blc https://target.com -ro" },
-          { "label": "Recursive, filter internal noise", "cmd": "blc -r --filter-level 3 https://target.com" }
+          { "label": "Recursive, filter internal noise", "cmd": "blc -r --filter-level 3 https://target.com" },
+          { "label": "Exclude a noisy host", "cmd": "blc -r --exclude twitter.com https://target.com" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-r / --recursive", "Follow links and keep crawling the site"],
+              ["-o / --ordered", "Report results in the order found (cleaner output)"],
+              ["--filter-level <0-3>", "How aggressively to classify a link as broken"],
+              ["--exclude <keyword>", "Skip URLs matching a keyword/host"],
+              ["--exclude-external", "Only check internal links"],
+              ["-g / --get", "Use GET instead of HEAD for sites that mishandle HEAD"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Install with npm: npm install -g broken-link-checker, then run blc.",
+            "You care about broken EXTERNAL links — check whether the dead target domain or cloud resource can be registered/claimed (see Subdomain Takeover for the same idea applied to DNS).",
+            "Use -g on sites that return errors to HEAD requests but serve content to GET.",
+            "It is noisy on large sites; combine --filter-level and --exclude to focus on actionable breaks."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "broken-link-checker — GitHub", "url": "https://github.com/stevenvachon/broken-link-checker" }
+          ] }
         ]
       },
       {
@@ -5861,10 +6258,28 @@ var TOOLKIT = [
         "name": "subjs",
         "url": "https://github.com/lc/subjs",
         "description": "Extract JavaScript file URLs from a list of hosts.",
-        "brief": "subjs takes URLs or live hosts and returns the JavaScript files they reference. Those JS files are the raw material for endpoint and secret discovery, so subjs is the collection step before analysis with xnLinkFinder or JSA.",
+        "brief": "subjs takes URLs or live hosts and returns the JavaScript file URLs they reference. Those JS files are the raw material for endpoint and secret discovery, so subjs is the collection step that comes before analysis with xnLinkFinder, JSA, or a secret scanner.",
         "quickReference": [
           { "label": "From a URL list", "cmd": "cat urls.txt | subjs" },
-          { "label": "Chain from httpx", "cmd": "cat hosts.txt | httpx -silent | subjs | tee js_files.txt" }
+          { "label": "Chain from httpx", "cmd": "cat hosts.txt | httpx -silent | subjs | tee js_files.txt" },
+          { "label": "From a file, more workers", "cmd": "subjs -i urls.txt -c 40" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-i <file>", "Input file of URLs/hosts (otherwise reads stdin)"],
+              ["-c <n>", "Concurrency (number of workers)"],
+              ["-t <sec>", "Request timeout"],
+              ["-ua <string>", "Custom user-agent"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "subjs only lists the JS URLs — download and analyse them separately (xnLinkFinder, JSA) to extract endpoints and secrets.",
+            "Feed it live hosts (httpx output) rather than raw domains so it only fetches pages that respond.",
+            "Pipe the collected files through a secrets scanner (trufflehog/gitleaks on downloaded copies) to catch hardcoded keys."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "subjs — GitHub", "url": "https://github.com/lc/subjs" }
+          ] }
         ]
       },
       {
@@ -5872,10 +6287,33 @@ var TOOLKIT = [
         "name": "xnLinkFinder",
         "url": "https://github.com/xnl-h4ck3r/xnLinkFinder",
         "description": "Discover endpoints and parameters from JS, URLs, and Burp exports.",
-        "brief": "xnLinkFinder parses JavaScript, URL lists, and Burp/ZAP exports to extract endpoints and parameter names, expanding the attack surface with routes the crawler never linked. It can also output a parameter list for fuzzing.",
+        "brief": "xnLinkFinder parses JavaScript, URL lists, directories, and Burp/ZAP/Caido/HAR exports to extract endpoints and parameter names, expanding the attack surface with routes the crawler never linked. It resolves relative paths against a scope, de-duplicates, and can emit a separate parameter list ready for fuzzing.",
         "quickReference": [
-          { "label": "From a domain + subdomains", "cmd": "xnLinkFinder -i target.com -sf subs.txt" },
-          { "label": "From a Burp export", "cmd": "xnLinkFinder -i burpfile -o endpoints.txt -op parameters.txt" }
+          { "label": "Crawl a domain", "cmd": "xnLinkFinder -i target.com -sf target.com" },
+          { "label": "From a Burp export", "cmd": "xnLinkFinder -i burp.xml -sf 'target.*' -o endpoints.txt -op parameters.txt" },
+          { "label": "Deeper crawl with prefix", "cmd": "xnLinkFinder -i target.com -sp https://target.com -sf target.com -d 3" }
+        ],
+        "sections": [
+          { "title": "Key Flags", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-i <input>", "URL, file of URLs, directory, or Burp/ZAP/Caido/HAR file"],
+              ["-sf <scope>", "Scope filter — restrict output to these domains (string or file)"],
+              ["-sp <prefix>", "Scope prefix — domain(s) to prepend to relative links"],
+              ["-d <n>", "Crawl/recursion depth (default 1)"],
+              ["-o <file>", "Output file for discovered links (default output.txt)"],
+              ["-op <file>", "Output file for potential parameters (default parameters.txt)"],
+              ["-H / -c", "Custom headers / cookies for authenticated crawling"],
+              ["-ow", "Overwrite the output file instead of appending"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "A scope filter (-sf) is effectively required for URL inputs, or you drown in third-party links.",
+            "Point -i at a Burp project export to mine every JS and response the proxy already captured — no extra crawling needed.",
+            "The -op parameter list feeds straight into Arjun/ffuf for hidden-parameter and value fuzzing.",
+            "Use -sp to turn relative paths (/api/v1/...) into full, testable URLs."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "xnLinkFinder — GitHub", "url": "https://github.com/xnl-h4ck3r/xnLinkFinder" }
+          ] }
         ]
       },
       {
@@ -5883,10 +6321,27 @@ var TOOLKIT = [
         "name": "JSA (JS Analysis)",
         "url": "https://github.com/w9w/JSA",
         "description": "Analyse JavaScript files to pull out endpoints and links.",
-        "brief": "JSA extracts links and endpoints from JavaScript, helping map an application's hidden routes and API calls from its front-end bundles. It is one of several JS-analysis tools you would run over the files collected with subjs.",
+        "brief": "JSA (JavaScript Security Analysis) reads JavaScript — first-, second-, and third-level files — and extracts the endpoints and links inside, converting relative paths to full URLs, filtering third-party scripts, validating HTTP status, and de-duplicating the result. It helps map an application's hidden routes and API calls from its front-end bundles, and reads its input on stdin so it chains cleanly after subjs.",
         "quickReference": [
-          { "label": "Analyse one file", "cmd": "python3 jsa.py -f app.js" },
-          { "label": "Analyse a list of JS URLs", "cmd": "python3 jsa.py -l js_files.txt" }
+          { "label": "Analyse one JS file", "cmd": "echo \"https://host.com/app.js\" | python3 jsa.py" },
+          { "label": "Chain from subjs", "cmd": "echo \"https://host.com\" | subjs | python3 jsa.py" },
+          { "label": "Parallel over many hosts", "cmd": "cat hosts.txt | subjs | parallel -j 20 'echo {} | python3 jsa.py'" }
+        ],
+        "sections": [
+          { "title": "Setup & Usage", "type": "notes", "items": [
+            "Install: git clone https://github.com/w9w/JSA && cd JSA && pip3 install -r requirements.txt",
+            "JSA reads one JS URL per line on stdin — there is no -f/-l flag; pipe URLs in (echo, cat, or subjs).",
+            "It converts relative endpoints to absolute URLs and filters out third-party scripts so the output is scoped to the target.",
+            "automation.sh (in the repo) wraps the flow and expects a GitHub API token in a .tokens file for its extra sources."
+          ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Run JSA and xnLinkFinder over the same JS set — each one's regexes catch endpoints the other misses.",
+            "Pipe its output into httpx to confirm which discovered endpoints are live, then into a fuzzer/Burp for testing.",
+            "Use GNU parallel for large scopes so hundreds of JS files are analysed concurrently."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "JSA — GitHub", "url": "https://github.com/w9w/JSA" }
+          ] }
         ]
       },
       {
@@ -5894,10 +6349,30 @@ var TOOLKIT = [
         "name": "Corsy",
         "url": "https://github.com/s0md3v/Corsy",
         "description": "Scan URLs for CORS misconfigurations.",
-        "brief": "Corsy tests endpoints for common CORS misconfigurations — reflected origins, null origin, weak allow-list logic — that can let a malicious site read authenticated responses. It reports the specific misconfiguration class per URL.",
+        "brief": "Corsy tests endpoints for the common CORS misconfiguration classes — a reflected Origin, a trusted null origin, pre-/suffix-match allow-list bugs, and unauthenticated wildcard-with-credentials cases — any of which can let a malicious site read authenticated responses. It reports the specific misconfiguration per URL so you know exactly what to prove.",
         "quickReference": [
           { "label": "Scan one URL", "cmd": "python3 corsy.py -u https://target.com" },
-          { "label": "Scan a list", "cmd": "python3 corsy.py -i urls.txt -t 10" }
+          { "label": "Scan a list", "cmd": "python3 corsy.py -i urls.txt -t 10" },
+          { "label": "With auth headers", "cmd": "python3 corsy.py -u https://target.com --headers 'Cookie: session=...'" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-u <url>", "Single target URL"],
+              ["-i <file>", "File of URLs to test"],
+              ["-t <n>", "Number of threads"],
+              ["-d <sec>", "Delay between requests"],
+              ["--headers <string>", "Custom headers (e.g. a session cookie for authenticated endpoints)"],
+              ["-o <file>", "Save the JSON report"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Test AUTHENTICATED endpoints with --headers — CORS only matters where the response contains session-bound data.",
+            "A reported reflected-origin + credentials finding should be proven with a small fetch() PoC from an attacker origin (see CORS Misconfiguration).",
+            "Feed it the endpoints discovered by katana/gau rather than only the site root — the dangerous CORS is usually on the API."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "Corsy — GitHub", "url": "https://github.com/s0md3v/Corsy" }
+          ] }
         ]
       },
       {
@@ -5905,10 +6380,31 @@ var TOOLKIT = [
         "name": "CORScanner",
         "url": "https://github.com/chenjj/CORScanner",
         "description": "Fast scanner for CORS misconfigurations.",
-        "brief": "CORScanner checks a target for CORS misconfigurations at speed, covering reflected origins, null origin, and prefix/suffix allow-list bugs. It complements Corsy as a second opinion on cross-origin policy.",
+        "brief": "CORScanner checks a target for CORS misconfigurations at speed, covering reflected origins, the null origin, and prefix/suffix allow-list bugs across many URLs concurrently. It makes a good second opinion alongside Corsy, since the two use slightly different checks and catch different cases.",
         "quickReference": [
           { "label": "Scan one URL", "cmd": "python3 cors_scan.py -u https://target.com" },
-          { "label": "Scan a list, many threads", "cmd": "python3 cors_scan.py -i urls.txt -t 100" }
+          { "label": "Scan a list, many threads", "cmd": "python3 cors_scan.py -i urls.txt -t 100" },
+          { "label": "With a cookie, verbose", "cmd": "python3 cors_scan.py -u https://target.com -d 'Cookie: session=...' -v" }
+        ],
+        "sections": [
+          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+            "rows": [
+              ["-u <url>", "Single target URL"],
+              ["-i <file>", "File of URLs to test"],
+              ["-t <n>", "Number of threads"],
+              ["-d <headers>", "Custom request headers (e.g. a session cookie)"],
+              ["-o <file>", "Output file for results"],
+              ["-v", "Verbose output"],
+              ["-q", "Quiet mode (only vulnerable URLs)"]
+            ] },
+          { "title": "Notes & Tips", "type": "notes", "items": [
+            "Run it alongside Corsy and compare — overlap is a strong signal, and each catches a few cases the other misses.",
+            "As with Corsy, authenticated endpoints are where CORS findings have impact; always test with a valid session.",
+            "Confirm any hit with a manual Origin-reflection check and a fetch() PoC before reporting."
+          ] },
+          { "title": "References", "type": "references", "items": [
+            { "label": "CORScanner — GitHub", "url": "https://github.com/chenjj/CORScanner" }
+          ] }
         ]
       },
       {
@@ -8954,15 +9450,82 @@ var TOOLKIT = [
     tools: [
       {
         id: "evilginx2",
-        name: "Evilginx2",
-        url: "https://github.com/kgretzky/evilginx2",
-        description: "Man-in-the-middle phishing framework for capturing credentials and session tokens, including 2FA bypass."
+        name: "Evilginx",
+        url: "https://github.com/kgretzky/evilginx",
+        description: "Reverse-proxy man-in-the-middle phishing framework that captures credentials and session cookies, bypassing most MFA.",
+        brief: "Evilginx (v3 of the project formerly called Evilginx2) is a standalone reverse-proxy phishing framework. Instead of a fake HTML clone, it proxies the real login site to the victim, so everything looks authentic; as the victim authenticates it transparently harvests their username, password, AND the post-authentication session cookies. Because it steals the issued session token, it defeats most second factors (TOTP, push, SMS) — the attacker imports the cookies and is already logged in. It is driven by 'phishlets' (YAML site configs) and 'lures' (the links you send), and is strictly for authorized red-team/social-engineering engagements.",
+        quickReference: [
+          { label: "Set the base domain / IP", cmd: "config domain phish.example\nconfig ipv4 external <your-ip>" },
+          { label: "Point a phishlet at a hostname", cmd: "phishlets hostname o365 login.phish.example" },
+          { label: "Enable a phishlet (fetches certs)", cmd: "phishlets enable o365" },
+          { label: "Create and read a lure", cmd: "lures create o365\nlures get-url 0" }
+        ],
+        sections: [
+          { title: "Console Workflow", type: "commands", commands: [
+            { label: "1. Configure the server", cmd: "# in the evilginx console:\nconfig domain phish.example      # your phishing base domain\nconfig ipv4 external <your-ip>   # public IP the domain points at" },
+            { label: "2. Load and enable a phishlet", cmd: "phishlets               # list available phishlets\nphishlets hostname o365 login.phish.example\nphishlets enable o365    # obtains Let's Encrypt certs automatically" },
+            { label: "3. Create a lure (the link you send)", cmd: "lures create o365\nlures edit 0 redirect_url https://real-site/after-login\nlures get-url 0          # the URL to deliver to the target" },
+            { label: "4. Collect captured sessions", cmd: "sessions                 # list captured sessions\nsessions 1               # show tokens/cookies for session 1\n# import the cookies into your browser to ride the authenticated session" }
+          ] },
+          { title: "Phishlets", type: "table", columns: ["Concept", "Detail"],
+            rows: [
+              ["Phishlet", "A YAML config describing how to proxy a specific target site"],
+              ["hostname", "The phishing hostname a phishlet is served on (must resolve to you)"],
+              ["enable", "Activates the phishlet and provisions TLS certificates"],
+              ["lure", "A generated link/path that starts the proxied login for a victim"],
+              ["session", "A captured victim session: credentials + cookies/tokens"]
+            ] },
+          { title: "Notes & Tips", type: "notes", items: [
+            "Authorized engagements only — Evilginx captures real credentials and live sessions, so use it strictly within a scoped, written social-engineering authorization.",
+            "It bypasses MFA by stealing the SESSION COOKIE, not the second factor; the defensive takeaway is phishing-resistant auth (FIDO2/WebAuthn, passkeys) and token binding.",
+            "You need a domain you control and DNS A records pointing at the server; enabling a phishlet provisions certificates automatically.",
+            "Custom or updated phishlets are often required as target login flows change; test them against a controlled account first.",
+            "Evilginx 3.x added a GUI and tighter Gophish integration for managing lures and campaigns."
+          ] },
+          { title: "References", type: "references", items: [
+            { label: "Evilginx — GitHub", url: "https://github.com/kgretzky/evilginx" },
+            { label: "Evilginx documentation", url: "https://help.evilginx.com/" }
+          ] }
+        ]
       },
       {
         id: "gophish",
         name: "Gophish",
         url: "https://github.com/gophish/gophish",
-        description: "Open-source phishing campaign framework — templates, landing pages, and campaign tracking."
+        description: "Open-source phishing-campaign framework — email templates, landing pages, sending profiles, and result tracking.",
+        brief: "Gophish is an open-source framework for running and measuring phishing campaigns in authorized security-awareness and red-team work. It provides a web dashboard and REST API to manage sending profiles (SMTP), email templates, landing pages (which can capture submitted data), target groups, and campaigns — then tracks opens, clicks, and submitted credentials with per-recipient timelines. It focuses on the awareness/metrics side of phishing; pair it with Evilginx when a campaign needs live credential/session capture.",
+        quickReference: [
+          { label: "Run the server", cmd: "./gophish   # admin UI on https://127.0.0.1:3333 (creds printed on first run)" },
+          { label: "Core building blocks", cmd: "Sending Profile (SMTP) -> Email Template -> Landing Page -> Users & Groups -> Campaign" },
+          { label: "Capture submitted data", cmd: "Landing Page -> enable 'Capture Submitted Data' (+ 'Capture Passwords')" },
+          { label: "API example", cmd: "curl -k -H 'Authorization: Bearer <api-key>' https://127.0.0.1:3333/api/campaigns/" }
+        ],
+        sections: [
+          { title: "Campaign Building Blocks", type: "table", columns: ["Component", "Purpose"],
+            rows: [
+              ["Sending Profile", "The SMTP relay/credentials Gophish sends mail through"],
+              ["Email Template", "The phishing email (HTML/text, {{.FirstName}} etc. variables, tracking)"],
+              ["Landing Page", "The page the link leads to; can clone a site and capture submitted data"],
+              ["Users & Groups", "Target recipients, imported via CSV or the API"],
+              ["Campaign", "Ties the above together, schedules sending, and records results"]
+            ] },
+          { title: "Workflow", type: "commands", commands: [
+            { label: "1. Start Gophish", cmd: "./gophish\n# note the randomly generated admin password in the console output\n# log in at https://127.0.0.1:3333 and change it" },
+            { label: "2. Build the pieces", cmd: "# in the UI, create in order:\n# Sending Profile (SMTP) -> Email Template -> Landing Page -> Users & Groups" },
+            { label: "3. Launch and track", cmd: "# Campaigns > New Campaign: pick the template, page, profile, group, URL\n# the dashboard then tracks Sent / Opened / Clicked / Submitted Data per user" }
+          ] },
+          { title: "Notes & Tips", type: "notes", items: [
+            "Authorized awareness/red-team use only, with written approval and a defined recipient scope.",
+            "'Capture Submitted Data' (and optionally passwords) on the landing page is what records credential entry — handle any captured data securely and purge it after the engagement.",
+            "The {{.Tracker}} pixel and unique per-user URLs drive the open/click metrics; keep them in templates.",
+            "Gophish measures human susceptibility; it does not defeat MFA — combine with Evilginx when live session capture is in scope.",
+            "Run it behind a redirector and use a warmed sending domain with proper SPF/DKIM/DMARC for realistic deliverability testing."
+          ] },
+          { title: "References", type: "references", items: [
+            { label: "Gophish — GitHub", url: "https://github.com/gophish/gophish" },
+            { label: "Gophish documentation", url: "https://docs.getgophish.com/" }
+          ] }
+        ]
       }
     ]
   }
