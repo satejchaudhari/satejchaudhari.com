@@ -2535,7 +2535,7 @@ var TOOLKIT = [
       {
               "id": "sharpgpoabuse",
               "name": "SharpGPOAbuse",
-              "url": "https://github.com/FSecureLABS/SharpGPOAbuse",
+              "url": "https://github.com/ReversecLabs/SharpGPOAbuse",
               "description": "Turns write access over a GPO into code execution / local admin on every machine in its scope.",
               "brief": "SharpGPOAbuse abuses a writable Group Policy Object. If you can edit a GPO (WriteProperty/WriteDacl on the GPC, a common ACL finding), you control policy for every computer or user the GPO is linked to. SharpGPOAbuse writes the malicious policy — an immediate scheduled task, a startup script, or a new local-admin membership — that the targeted machines apply at the next policy refresh.\n\nIt is a mass code-execution primitive: one writable GPO linked to a busy OU can mean SYSTEM on dozens of hosts. The changes bump the GPO version and add scheduled-task or registry policy items, which are auditable, so it is powerful but not subtle.",
               "quickReference": [
@@ -2586,7 +2586,7 @@ var TOOLKIT = [
                               "items": [
                                       {
                                               "label": "SharpGPOAbuse — GitHub",
-                                              "url": "https://github.com/FSecureLABS/SharpGPOAbuse"
+                                              "url": "https://github.com/ReversecLabs/SharpGPOAbuse"
                                       },
                                       {
                                               "label": "Theory — Group Policy (GPO)",
