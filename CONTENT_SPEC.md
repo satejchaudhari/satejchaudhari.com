@@ -262,17 +262,16 @@ the HTML file *and* the registry entry.
   title:       "Post Title",
   url:         "posts/YYYY-MM-DD-slug.html",   // relative to the linking page
   date:        "YYYY-MM-DD",
-  type:        "writeup",        // "writeup" (live on writeups.html) — see note below
+  type:        "writeup",        // the ONLY post type — always "writeup"
   tag:         "Active Directory",  // free text; drives the filter buttons
   description: "One-line summary under the title.",
   readTime:    "20 min read"     // optional
 }
 ```
 
-> **`type` note:** `writeup` is the live type (renders on `writeups.html` and the
-> homepage preview). The code also recognises `blog`, but there is currently **no
-> `blog.html`** in the repo, so a `blog` post would 404 until that page is added.
-> Use `writeup` unless a blog index has been created.
+> **`type` note:** `writeup` is the site's only post type (renders on
+> `writeups.html` and the homepage preview). The former `blog` type and
+> `blog.html` have been dropped — always use `writeup`.
 
 ### 7b. Page structure
 

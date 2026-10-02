@@ -12,9 +12,8 @@
     title       - shown as the entry heading
     url         - path to the post's html file, relative to the page linking to it
     date        - "YYYY-MM-DD"
-    type        - "writeup" or "blog" — controls which page (writeups.html /
-                  blog.html) the post shows up on, and which homepage preview
-                  it appears in
+    type        - "writeup" — the site's only post type; controls that the
+                  post shows on writeups.html and the homepage preview
     tag         - short category label, e.g. RECON / WEB / AD / TOOLING —
                   free text, drives the filter buttons on writeups.html /
                   blog.html automatically

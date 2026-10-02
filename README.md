@@ -8,24 +8,23 @@
 ## How the site is put together
 
 ```
-index.html                 → homepage: about + preview of latest writeups & blog posts
+index.html                 → homepage: about + preview of the latest writeups
 writeups.html               → full, filterable list of all writeups
-blog.html                    → full, filterable list of all blog posts
 toolkit.html                 → searchable master toolkit page
 post-template.html           → not used directly — see posts/post-template.html
-posts/                        → every writeup and blog post lives here as its own .html file
+posts/                        → every writeup lives here as its own .html file
   post-template.html          → COPY THIS to create a new post
 assets/css/style.css          → all styling — the entire visual identity, one file
-assets/js/posts.js            → the list of writeups & blog posts (title, date, type, tag, url...)
+assets/js/posts.js            → the list of writeups (title, date, type, tag, url...)
 assets/js/toolkit.js          → the list of tools shown on toolkit.html
-assets/js/main.js             → renders homepage previews + writeups.html / blog.html — you never edit this
+assets/js/main.js             → renders homepage previews + writeups.html — you never edit this
 assets/js/toolkit-main.js     → renders toolkit.html — you never edit this
 assets/img/                   → put images here
 ```
 
 ---
 
-## Adding a new writeup or blog post
+## Adding a new writeup
 
 **1. Copy the template**
 Duplicate `posts/post-template.html` and give it a clear filename inside `/posts/`, e.g.:
@@ -36,7 +35,7 @@ posts/2026-07-15-abusing-wsus-for-lateral-movement.html
 **2. Edit the copy**
 Open it and change the parts marked with numbered comments:
 - the `<title>` and meta description
-- the "back to" link at the top — point it at `../writeups.html` or `../blog.html` depending on the type
+- the "back to" link at the top — point it at `../writeups.html`
 - the tag (free text — `RECON`, `WEB`, `AD`, `NOTES`, whatever fits)
 - the post title and date
 - the content inside `<div class="post-body">` — this is just HTML: `<p>`, `<h2>`, `<ul>`, `<pre><code>`, `<img>`, `<blockquote>` are all pre-styled
@@ -48,15 +47,15 @@ Add one object to the top of the `POSTS` array:
   title: "Abusing WSUS for Lateral Movement",
   url: "posts/2026-07-15-abusing-wsus-for-lateral-movement.html",
   date: "2026-07-15",
-  type: "writeup",           // or "blog"
+  type: "writeup",
   tag: "WRITEUP",
   description: "How an unauthenticated WSUS server becomes a domain-wide code exec primitive.",
   readTime: "8 min read"
 }
 ```
-`type` controls which page it shows up on (`writeups.html` or `blog.html`) and which homepage preview it appears in. `tag` is free text and drives the filter buttons on that page automatically.
+`type` must be `"writeup"` (the site's only post type). `tag` is free text and drives the filter buttons on writeups.html automatically.
 
-**4. Save and check `index.html`, `writeups.html` / `blog.html`** — the new post appears at the top of the relevant list, and if the tag is new, a filter button for it appears automatically.
+**4. Save and check `index.html` and `writeups.html`** — the new post appears at the top of the list, and if the tag is new, a filter button for it appears automatically.
 
 That's the entire workflow. No commands to run.
 

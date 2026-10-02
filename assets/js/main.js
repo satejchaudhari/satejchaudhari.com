@@ -2,10 +2,10 @@
   Shared site behavior. Reads assets/js/posts.js (window.POSTS) and
   renders whichever of these pieces exist on the current page:
     - mobile nav toggle (every page)
-    - #writeups-preview / #blog-preview   → homepage, latest 3 of each type
-    - #log-list + #filter-bar             → writeups.html / blog.html,
-                                             full filterable list, driven by
-                                             <body data-post-type="writeup|blog">
+    - #writeups-preview                   → homepage, latest 3 writeups
+    - #log-list + #filter-bar             → writeups.html, full filterable
+                                             list, driven by
+                                             <body data-post-type="writeup">
 
   You never need to edit this file to add a post — edit assets/js/posts.js.
 */
@@ -93,13 +93,13 @@
 
   renderPreview("writeups-preview", "writeup", 3);
 
-  /* ---------- full list pages (writeups.html / blog.html) ---------- */
+  /* ---------- full list page (writeups.html) ---------- */
   const listEl = document.getElementById("log-list");
   const filterBarEl = document.getElementById("filter-bar");
   const countEl = document.getElementById("entry-count");
 
   if (listEl) {
-    const pageType = document.body.dataset.postType; // "writeup" | "blog"
+    const pageType = document.body.dataset.postType || "writeup";
     const scoped = posts.filter(p => p.type === pageType);
     if (countEl) countEl.textContent = scoped.length;
 

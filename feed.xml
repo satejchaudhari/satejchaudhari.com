@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Satej Chaudhari — Writeups</title>
+    <link>https://satejchaudhari.com/writeups.html</link>
+    <atom:link href="https://satejchaudhari.com/feed.xml" rel="self" type="application/rss+xml"/>
+    <description>Offensive-security writeups: HackTheBox, Vulnhub, and lab builds.</description>
+    <language>en</language>
+    <lastBuildDate>Fri, 02 Oct 2026 00:00:00 GMT</lastBuildDate>
+    <item>
+      <title>HackTheBox: MonitorFour</title>
+      <link>https://satejchaudhari.com/posts/2026-10-02-htb-monitorfour.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-10-02-htb-monitorfour.html</guid>
+      <pubDate>Fri, 02 Oct 2026 00:00:00 GMT</pubDate>
+      <category>HackTheBox</category>
+      <description>A Cacti vhost, a leaked .env and an IDOR expose user hashes; CVE-2025-24367 gives an in-container shell; and an exposed Docker Engine API on the host is abused to escape to root.</description>
+    </item>
+    <item>
+      <title>HackTheBox: Nunchucks</title>
+      <link>https://satejchaudhari.com/posts/2026-10-02-htb-nunchucks.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-10-02-htb-nunchucks.html</guid>
+      <pubDate>Fri, 02 Oct 2026 00:00:00 GMT</pubDate>
+      <category>HackTheBox</category>
+      <description>A Nunjucks server-side template injection behind a vhost gives a reverse shell, and a Perl setuid capability combined with a weak AppArmor profile escalates to root.</description>
+    </item>
+    <item>
+      <title>HackTheBox: BabyTwo</title>
+      <link>https://satejchaudhari.com/posts/2026-10-02-htb-babytwo.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-10-02-htb-babytwo.html</guid>
+      <pubDate>Fri, 02 Oct 2026 00:00:00 GMT</pubDate>
+      <category>HackTheBox</category>
+      <description>A guest-readable share leaks a user list, a username=password spray gets a foothold, a writable SYSVOL logon script catches a user, and a BloodHound-guided ACL to GPO abuse chain reaches Domain Admin.</description>
+    </item>
+    <item>
+      <title>HackTheBox: ReDelegate</title>
+      <link>https://satejchaudhari.com/posts/2026-10-02-htb-redelegate.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-10-02-htb-redelegate.html</guid>
+      <pubDate>Fri, 02 Oct 2026 00:00:00 GMT</pubDate>
+      <category>HackTheBox</category>
+      <description>Anonymous FTP yields a KeePass database cracked with a hint-built wordlist; secrets spray into MSSQL and AD; a ForceChangePassword ACL takes over a user; and SeEnableDelegationPrivilege plus GenericAll on a computer is abused for constrained delegation with protocol transition to DCSync the domain.</description>
+    </item>
+    <item>
+      <title>HackTheBox: Rebound</title>
+      <link>https://satejchaudhari.com/posts/2026-10-02-htb-rebound.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-10-02-htb-rebound.html</guid>
+      <pubDate>Fri, 02 Oct 2026 00:00:00 GMT</pubDate>
+      <category>HackTheBox</category>
+      <description>To the user flag — a RID-brute user list feeds a no-pre-auth Kerberoast, a cracked service ticket is reused, and a BloodHound chain of group self-add and forced ACL inheritance resets a service account for the user flag.</description>
+    </item>
+    <item>
+      <title>A Six-Segment IDS Lab with Linux Namespaces &amp; Suricata</title>
+      <link>https://satejchaudhari.com/posts/2026-10-02-linux-namespaces-suricata-ids.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-10-02-linux-namespaces-suricata-ids.html</guid>
+      <pubDate>Fri, 02 Oct 2026 00:00:00 GMT</pubDate>
+      <category>Blue Team</category>
+      <description>Building an isolated six-segment network from Linux namespaces, forcing every packet through an inline Suricata sensor, and writing per-subnet rules that detect and block SQL injection, anonymous FTP, SSH brute force, LDAP honeypot enumeration, and password spraying.</description>
+    </item>
+    <item>
+      <title>Setting Up Active Directory Domain Services (AD DS)</title>
+      <link>https://satejchaudhari.com/posts/2026-10-02-adds-setup.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-10-02-adds-setup.html</guid>
+      <pubDate>Fri, 02 Oct 2026 00:00:00 GMT</pubDate>
+      <category>Active Directory</category>
+      <description>A step-by-step build of an AD lab: installing the AD DS role, promoting a domain controller for a new forest, creating users, joining a client, and importing and linking the Windows 11 security-baseline GPO.</description>
+    </item>
+    <item>
+      <title>OSINT From a Single Domain: A Red Team Methodology</title>
+      <link>https://satejchaudhari.com/posts/2026-08-18-osint-methodology.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-08-18-osint-methodology.html</guid>
+      <pubDate>Tue, 18 Aug 2026 00:00:00 GMT</pubDate>
+      <category>RECON</category>
+      <description>A phase-by-phase OSINT workflow for an authorised red team engagement that starts with nothing but a domain name.</description>
+    </item>
+    <item>
+      <title>Vintage:  HackTheBox</title>
+      <link>https://satejchaudhari.com/posts/2026-07-03-VintageHTB.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-07-03-VintageHTB.html</guid>
+      <pubDate>Fri, 03 Jul 2026 00:00:00 GMT</pubDate>
+      <category>Active Directory</category>
+      <description>Writeup for a Active Directory machine on HackTheBox.</description>
+    </item>
+    <item>
+      <title>Vulnhub: Venom</title>
+      <link>https://satejchaudhari.com/posts/2026-01-10-vulnhub-venom.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-01-10-vulnhub-venom.html</guid>
+      <pubDate>Sat, 10 Jan 2026 00:00:00 GMT</pubDate>
+      <category>Vulnhub</category>
+      <description>A hash hidden in page source, an FTP foothold, a chain of encoded clues to a Subrion CMS 4.2.1 login, a public CMS exploit for the shell, and a wide-open sudo rule for root.</description>
+    </item>
+    <item>
+      <title>Vulnhub: Matrix 1</title>
+      <link>https://satejchaudhari.com/posts/2026-01-10-vulnhub-matrix-1.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-01-10-vulnhub-matrix-1.html</guid>
+      <pubDate>Sat, 10 Jan 2026 00:00:00 GMT</pubDate>
+      <category>Vulnhub</category>
+      <description>A base64-then-Brainfuck clue chain leaks a partial SSH password, crunch and hydra finish it, a vi restricted-shell escape gives a real shell, and a passwordless sudo rule gives root.</description>
+    </item>
+    <item>
+      <title>Vulnhub: Matrix 2</title>
+      <link>https://satejchaudhari.com/posts/2026-01-10-vulnhub-matrix-2.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-01-10-vulnhub-matrix-2.html</guid>
+      <pubDate>Sat, 10 Jan 2026 00:00:00 GMT</pubDate>
+      <category>Vulnhub</category>
+      <description>A robots.txt hint and an unauthenticated POST leak usernames, a cracked .htpasswd hash and a steghide-hidden password lead in, and a sudo-runnable gawk binary gives root.</description>
+    </item>
+    <item>
+      <title>Vulnhub: Matrix 3</title>
+      <link>https://satejchaudhari.com/posts/2026-01-10-vulnhub-matrix-3.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-01-10-vulnhub-matrix-3.html</guid>
+      <pubDate>Sat, 10 Jan 2026 00:00:00 GMT</pubDate>
+      <category>Vulnhub</category>
+      <description>A white-rabbit directory maze hides a crackable hash, a Windows binary reversed in Ghidra leaks SSH credentials, and two chained sudo rules walk the way to root.</description>
+    </item>
+    <item>
+      <title>Vulnhub: Aragog (HackingHP)</title>
+      <link>https://satejchaudhari.com/posts/2026-01-10-vulnhub-aragog.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-01-10-vulnhub-aragog.html</guid>
+      <pubDate>Sat, 10 Jan 2026 00:00:00 GMT</pubDate>
+      <category>Vulnhub</category>
+      <description>A vulnerable WordPress File Manager plugin for the foothold, database credentials that crack a user's WordPress hash, and a writable root-run backup script for the root shell.</description>
+    </item>
+    <item>
+      <title>Vulnhub: Grotesque 1</title>
+      <link>https://satejchaudhari.com/posts/2026-01-10-vulnhub-grotesque-1.html</link>
+      <guid isPermaLink="true">https://satejchaudhari.com/posts/2026-01-10-vulnhub-grotesque-1.html</guid>
+      <pubDate>Sat, 10 Jan 2026 00:00:00 GMT</pubDate>
+      <category>Vulnhub</category>
+      <description>To the user flag — a WordPress password that is the MD5 of a song lyric, a reverse shell planted in the theme's 404.php, and credential reuse from wp-config.php to reach user.txt.</description>
+    </item>
+  </channel>
+</rss>
