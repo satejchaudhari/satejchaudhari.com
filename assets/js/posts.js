@@ -24,6 +24,51 @@
 
 var POSTS = [
   {
+    title: "HackTheBox: MonitorFour",
+    url: "posts/2026-10-02-htb-monitorfour.html",
+    date: "2026-10-02",
+    type: "writeup",
+    tag: "HackTheBox",
+    description: "A Cacti vhost, a leaked .env and an IDOR expose user hashes; CVE-2025-24367 gives an in-container shell; and an exposed Docker Engine API on the host is abused to escape to root.",
+    readTime: "9 min read"
+  },
+  {
+    title: "HackTheBox: Nunchucks",
+    url: "posts/2026-10-02-htb-nunchucks.html",
+    date: "2026-10-02",
+    type: "writeup",
+    tag: "HackTheBox",
+    description: "A Nunjucks server-side template injection behind a vhost gives a reverse shell, and a Perl setuid capability combined with a weak AppArmor profile escalates to root.",
+    readTime: "7 min read"
+  },
+  {
+    title: "HackTheBox: BabyTwo",
+    url: "posts/2026-10-02-htb-babytwo.html",
+    date: "2026-10-02",
+    type: "writeup",
+    tag: "HackTheBox",
+    description: "A guest-readable share leaks a user list, a username=password spray gets a foothold, a writable SYSVOL logon script catches a user, and a BloodHound-guided ACL to GPO abuse chain reaches Domain Admin.",
+    readTime: "11 min read"
+  },
+  {
+    title: "HackTheBox: ReDelegate",
+    url: "posts/2026-10-02-htb-redelegate.html",
+    date: "2026-10-02",
+    type: "writeup",
+    tag: "HackTheBox",
+    description: "Anonymous FTP yields a KeePass database cracked with a hint-built wordlist; secrets spray into MSSQL and AD; a ForceChangePassword ACL takes over a user; and SeEnableDelegationPrivilege plus GenericAll on a computer is abused for constrained delegation with protocol transition to DCSync the domain.",
+    readTime: "12 min read"
+  },
+  {
+    title: "HackTheBox: Rebound",
+    url: "posts/2026-10-02-htb-rebound.html",
+    date: "2026-10-02",
+    type: "writeup",
+    tag: "HackTheBox",
+    description: "To the user flag — a RID-brute user list feeds a no-pre-auth Kerberoast, a cracked service ticket is reused, and a BloodHound chain of group self-add and forced ACL inheritance resets a service account for the user flag.",
+    readTime: "13 min read"
+  },
+  {
     title: "A Six-Segment IDS Lab with Linux Namespaces & Suricata",
     url: "posts/2026-10-02-linux-namespaces-suricata-ids.html",
     date: "2026-10-02",

