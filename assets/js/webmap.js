@@ -712,7 +712,7 @@ var WEB_MAP = {
             { text: "WSTG-CLNT-06 · Client-side Resource Manipulation", desc: "Control script/iframe/link targets from client input to load attacker resources.", vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
             { text: "WSTG-CLNT-07 · Cross Origin Resource Sharing", desc: "Test CORS for reflected origins, null origin, and credentialed wildcard misconfigurations.", tools: [{ n: "Corsy", id: "corsy" }, { n: "CORScanner", id: "corscanner" }], vulns: [{ n: "CORS Misconfiguration", id: "cors-misconfig" }] },
             { text: "WSTG-CLNT-09 · Clickjacking", desc: "Confirm sensitive actions can be framed and overlaid to hijack victim clicks.", vulns: [{ n: "Clickjacking", id: "clickjacking" }] },
-            { text: "WSTG-CLNT-10 · WebSockets", desc: "Test WebSocket endpoints for origin validation, auth, and injection over the channel." },
+            { text: "WSTG-CLNT-10 · WebSockets", desc: "Test WebSocket endpoints for origin validation, auth, and injection over the channel.", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "Cross-Site WebSocket Hijacking (CSWSH)", id: "cswsh" }] },
             { text: "WSTG-CLNT-11 · Web Messaging", desc: "Audit postMessage handlers for missing origin checks and unsafe use of the message data.", vulns: [{ n: "Cross-Site Scripting (XSS)", id: "xss" }] },
             { text: "WSTG-CLNT-12 · Browser Storage", desc: "Check localStorage/sessionStorage/IndexedDB for sensitive data and tokens exposed to script.", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] },
             { text: "WSTG-CLNT-13 · Cross Site Script Inclusion", desc: "Test whether authenticated JS/JSON responses can be read cross-origin to leak data (XSSI).", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] },
@@ -738,7 +738,7 @@ var WEB_MAP = {
             { text: "WSTG-APIT-02 · API Broken Object Level Authorization", desc: "Swap object ids across API calls to access other users' objects (BOLA/IDOR).", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
             { text: "WSTG-APIT-03 · Excessive Data Exposure", desc: "Check whether API responses return more fields than the client needs (PII, internal flags).", vulns: [{ n: "Sensitive Data Exposure", id: "sensitive-data-exposure" }] },
             { text: "WSTG-APIT-04 · API Broken Function Level Authorization", desc: "Call privileged/admin API functions as a low-privilege user (BFLA).", vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] },
-            { text: "WSTG-APIT-99 · GraphQL", desc: "Test GraphQL for introspection, injection, batching abuse, and missing authorization per resolver.", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "IDOR / Broken Access Control", id: "idor" }] }
+            { text: "WSTG-APIT-99 · GraphQL", desc: "Test GraphQL for introspection, injection, batching abuse, and missing authorization per resolver.", tools: [{ n: "Burp Suite", id: "burpsuite" }], vulns: [{ n: "GraphQL Vulnerabilities", id: "graphql" }, { n: "IDOR / Broken Access Control", id: "idor" }] }
           ]
         }
       ]
