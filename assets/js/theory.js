@@ -20,6 +20,14 @@
 
 var THEORY = [
   {
+    title: "Web API Fuzzing",
+    url: "theory/2026-10-07-web-api-fuzzing.html",
+    date: "2026-10-07",
+    tag: "WEB",
+    description: "How to attack Web APIs with a fuzzer — the REST / SOAP / GraphQL models, why APIs are fuzzed differently from web servers, finding endpoints and parameters for each style, and the three kinds of API fuzzing (parameter, data-format, sequence).",
+    readTime: "10 min read"
+  },
+  {
     title: "Active Directory Hardening & Tiering",
     url: "theory/2026-10-02-ad-hardening-tiering.html",
     date: "2026-10-02",

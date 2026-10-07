@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web API Fuzzing — Satej Chaudhari</title>
+  <meta name="description" content="How to attack Web APIs with a fuzzer — the REST/SOAP/GraphQL models, how APIs differ from web servers, finding endpoints and parameters for each, and the three kinds of API fuzzing.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Web API Fuzzing">
+  <meta property="og:description" content="How to attack Web APIs with a fuzzer — the REST/SOAP/GraphQL models, how APIs differ from web servers, finding endpoints and parameters for each, and the three kinds of API fuzzing.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-07-web-api-fuzzing.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-07">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Web API Fuzzing">
+  <meta name="twitter:description" content="How to attack Web APIs with a fuzzer — the REST/SOAP/GraphQL models, how APIs differ from web servers, finding endpoints and parameters for each, and the three kinds of API fuzzing.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">WEB</span>
+        <h1 class="post-title">Web API Fuzzing</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-07">2026-10-07</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Fuzzing a Web API is the same idea as fuzzing a website for hidden
+          directories, but the target has a different shape. A web server hands
+          a browser HTML, CSS and JavaScript to render; an API exists so one
+          piece of software can talk to another, exchanging structured data —
+          usually JSON or XML — and triggering actions. Nobody <em>looks</em> at
+          an API in a browser, so the interesting surface is not hidden pages,
+          it is <strong>undocumented endpoints and parameters</strong>. That
+          changes what you fuzz for, and this page is about doing it properly.
+        </p>
+
+        <h2>The three API styles you will meet</h2>
+        <p>
+          Almost everything on the web falls into one of three models, and each
+          one is discovered and fuzzed differently, so the first job on any
+          target is to work out which one you are looking at.
+        </p>
+
+        <h3>REST</h3>
+        <p>
+          The common case. REST is resource-oriented: every resource has its own
+          URL (the <em>endpoint</em>) and you act on it with ordinary HTTP verbs
+          — <code>GET</code> to read, <code>POST</code> to create,
+          <code>PUT</code>/<code>PATCH</code> to update, <code>DELETE</code> to
+          remove. The paths are hierarchical and predictable:
+        </p>
+        <pre><code>GET    /users          # a collection
+GET    /users/123      # one user
+GET    /products/456   # one product
+DELETE /items/789      # remove an item</code></pre>
+        <p>
+          Parameters arrive in three places, and all three are worth fuzzing:
+          <strong>query parameters</strong> after a <code>?</code>
+          (<code>/users?limit=10&amp;sort=name</code>, used for filtering,
+          sorting and pagination), <strong>path parameters</strong> baked into
+          the URL (<code>/products/{id}</code>, identifying a resource), and
+          <strong>body parameters</strong> sent inside a <code>POST</code>/
+          <code>PUT</code>/<code>PATCH</code> request as JSON.
+        </p>
+
+        <h3>SOAP</h3>
+        <p>
+          Older, heavier, still everywhere in enterprise systems. SOAP is
+          XML-based and usually exposes a <strong>single endpoint</strong>; the
+          operation you want is decided by the <em>contents</em> of the XML
+          message, not by the URL. A SOAP request wraps its parameters in a
+          <code>&lt;soapenv:Envelope&gt;</code>:
+        </p>
+        <pre><code>&lt;soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:lib="http://example.com/library"&gt;
+   &lt;soapenv:Body&gt;
+      &lt;lib:SearchBooks&gt;
+         &lt;lib:keywords&gt;cybersecurity&lt;/lib:keywords&gt;
+         &lt;lib:author&gt;Dan Kaminsky&lt;/lib:author&gt;
+      &lt;/lib:SearchBooks&gt;
+   &lt;/soapenv:Body&gt;
+&lt;/soapenv:Envelope&gt;</code></pre>
+        <p>
+          The operations and their parameters are defined in a
+          <strong>WSDL</strong> file — an XML description of the whole service.
+          If you can read the WSDL you have the full map: every operation, every
+          input and output, the data types, and the endpoint URL.
+        </p>
+
+        <h3>GraphQL</h3>
+        <p>
+          Modern and flexible. One endpoint (typically <code>/graphql</code>)
+          serves everything, and the client asks for exactly the fields it wants
+          in a query language — so there is no over-fetching and no
+          under-fetching. Reads are <strong>queries</strong>, writes are
+          <strong>mutations</strong>:
+        </p>
+        <pre><code>query {
+  user(id: 123) {
+    name
+    email
+    posts(limit: 5) { title body }
+  }
+}
+
+mutation {
+  createPost(title: "New Post", body: "...") { id title }
+}</code></pre>
+
+        <h2>API vs. web server — why the approach changes</h2>
+        <p>
+          The practical differences all point at the same conclusion: you fuzz an
+          API for endpoints and parameters, not for files on disk.
+        </p>
+        <table>
+          <thead><tr><th>&nbsp;</th><th>Web server</th><th>API</th></tr></thead>
+          <tbody>
+            <tr><td>Purpose</td><td>Serve pages and content to a browser</td><td>Let software exchange data and trigger actions</td></tr>
+            <tr><td>Data format</td><td>HTML, CSS, JavaScript</td><td>JSON, XML — per the API spec</td></tr>
+            <tr><td>Who uses it</td><td>A human, directly</td><td>Another program, on the user's behalf</td></tr>
+            <tr><td>Exposure</td><td>Usually public</td><td>Public, partner, or internal-only</td></tr>
+            <tr><td>You fuzz for</td><td>Hidden directories and files</td><td>Endpoints, operations and parameters</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Finding the endpoints and parameters</h2>
+        <p>
+          You cannot fuzz what you cannot see, so discovery comes first. Three
+          sources recur across all three API styles, and you work down them in
+          order of reliability.
+        </p>
+        <ul>
+          <li>
+            <strong>Documentation and the schema.</strong> The quickest win.
+            REST services often publish a machine-readable spec —
+            <strong>Swagger / OpenAPI</strong> or RAML — frequently at
+            <code>/docs</code>, <code>/swagger.json</code> or
+            <code>/openapi.json</code>. SOAP hands you the <strong>WSDL</strong>.
+            GraphQL exposes its entire schema through
+            <strong>introspection</strong>: a single query returns every type,
+            field, query and mutation, which <code>GraphiQL</code> and GraphQL
+            Playground render for you.
+          </li>
+          <li>
+            <strong>Traffic analysis.</strong> When the docs are missing or
+            incomplete, watch the real client. Burp Suite or the browser dev
+            tools show every request a front-end makes — endpoints, parameter
+            names, headers and body shapes — which is the ground truth of what
+            the API actually accepts.
+          </li>
+          <li>
+            <strong>Fuzzing.</strong> What is left over. Even a documented spec
+            rarely lists everything: there are endpoints omitted as
+            "security through obscurity", internal-only functions, and routes
+            still under development. A wordlist-driven fuzzer finds those, and
+            the same technique finds undocumented parameters once you have an
+            endpoint.
+          </li>
+        </ul>
+        <blockquote>
+          The documented spec is a starting point, never the whole picture.
+          Assume there are endpoints and parameters it does not mention — those
+          are usually the ones worth your time.
+        </blockquote>
+
+        <h2>What "fuzzing an API" actually means</h2>
+        <p>
+          You send the API a stream of automated requests, each one a small
+          mutation of a valid request, and watch for responses that stand out —
+          a different status code, a different size, an error, a stack trace, a
+          crash. Those deviations are where the bugs live. The mutations are
+          things like:
+        </p>
+        <ul>
+          <li>injecting unexpected values into a parameter;</li>
+          <li>changing or adding request headers;</li>
+          <li>reordering or duplicating parameters;</li>
+          <li>sending the wrong data type, or malformed JSON/XML.</li>
+        </ul>
+        <p>
+          It matters because APIs have a large, often undocumented attack
+          surface; because testing every input combination by hand is
+          impossible; and because a fuzzer exercises the same malformed inputs a
+          real attacker would, so you find the input-validation, injection and
+          authorisation flaws before someone else does.
+        </p>
+
+        <h2>The three kinds of API fuzzing</h2>
+        <ol>
+          <li>
+            <strong>Parameter fuzzing.</strong> The core technique — hammer the
+            values of query parameters, headers and body fields with unexpected
+            or malicious input. This is how you surface injection
+            (<a href="../vuln-detail.html?vuln=sqli">SQL</a>,
+            <a href="../vuln-detail.html?vuln=command-injection">command</a>),
+            <a href="../vuln-detail.html?vuln=idor">broken access control</a>,
+            and parameter tampering.
+          </li>
+          <li>
+            <strong>Data-format fuzzing.</strong> Target the JSON or XML
+            structure itself — break the nesting, flip types, abuse encoding and
+            special characters. This finds parser bugs, resource exhaustion, and
+            mishandling of malformed documents (XML parsers are a classic source
+            of trouble here).
+          </li>
+          <li>
+            <strong>Sequence fuzzing.</strong> APIs are stateful — endpoints
+            depend on each other and order matters. Varying the order, timing
+            and repetition of a chain of calls exposes race conditions,
+            <a href="../vuln-detail.html?vuln=idor">IDOR</a>, and
+            <a href="../vuln-detail.html?vuln=auth-bypass">authorisation
+            bypasses</a> that no single request would reveal.
+          </li>
+        </ol>
+
+        <h2>Discovering hidden endpoints in practice</h2>
+        <p>
+          Say a REST service documents five routes at <code>/docs</code> —
+          read root, read/update/delete an item, create an item. Point a
+          wordlist fuzzer at the base URL to find the ones it does not mention.
+          With <a href="../tool-detail.html?tool=ffuf">ffuf</a>:
+        </p>
+        <pre><code># fuzz for undocumented endpoints under the API root
+ffuf -u http://target.com/FUZZ \
+  -w /usr/share/seclists/Discovery/Web-Content/api/api-endpoints.txt \
+  -mc 200,201,301,302,401,403,405</code></pre>
+        <p>
+          Read the status codes, not just the 200s. A <code>405 Method Not
+          Allowed</code> is a real endpoint that simply wants a different verb —
+          try <code>POST</code> where a <code>GET</code> was rejected. A
+          <code>401</code>/<code>403</code> is a route that exists but needs
+          authentication. Anything returning <code>200</code> that is not in the
+          docs is an undocumented endpoint worth probing by hand.
+        </p>
+        <p>
+          Once an endpoint is confirmed, fuzz its parameters the same way — a
+          wordlist of likely parameter names against the endpoint, then a
+          wordlist of values against a parameter you have confirmed. That second
+          stage is where endpoint discovery turns into real findings: parameters
+          that leak other users' objects
+          (<a href="../vuln-detail.html?vuln=idor">broken object-level
+          authorisation</a>), functions you should not be able to call
+          (<a href="../vuln-detail.html?vuln=auth-bypass">broken function-level
+          authorisation</a>), or values the server fetches on your behalf
+          (<a href="../vuln-detail.html?vuln=ssrf">SSRF</a>).
+        </p>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="../tool-detail.html?tool=ffuf">FFUF — the fuzzer used above</a></li>
+          <li><a href="../web-map.html">Web Pentest Checklist</a></li>
+          <li><a href="../vuln-detail.html?vuln=idor">IDOR / Broken Access Control</a></li>
+          <li><a href="../vuln-detail.html?vuln=ssrf">Server-Side Request Forgery (SSRF)</a></li>
+          <li><a href="../vuln-detail.html?vuln=sqli">SQL Injection (SQLi)</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>
