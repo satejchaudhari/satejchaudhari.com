@@ -6505,7 +6505,8 @@ var TOOLKIT = [
             commands: [
               { label: "Initial directory sweep", cmd: "ffuf -w common.txt -u https://target.com/FUZZ\n# note the baseline 404 size, then:\nffuf -w common.txt -u https://target.com/FUZZ -fs <baseline_size>\n# once a stack is confirmed, re-run with matching extensions:\nffuf -w common.txt -u https://target.com/FUZZ -e .php,.bak" },
               { label: "Recursive enumeration", cmd: "ffuf -w common.txt -u https://target.com/FUZZ -recursion -recursion-depth 2" },
-              { label: "Parameter discovery on a found endpoint", cmd: "ffuf -w params.txt -u \"https://target.com/page?FUZZ=test\"\n# once a real param is found:\nffuf -w values.txt -u \"https://target.com/page?found_param=FUZZ\"" }
+              { label: "Parameter discovery on a found endpoint", cmd: "ffuf -w params.txt -u \"https://target.com/page?FUZZ=test\"\n# once a real param is found:\nffuf -w values.txt -u \"https://target.com/page?found_param=FUZZ\"" },
+              { label: "GET & POST parameter-value fuzzing (worked example)", cmd: "# GET: fuzz a parameter's VALUE to find one the server accepts\nffuf -u \"http://target.com/get.php?x=FUZZ\" -w /usr/share/seclists/Discovery/Web-Content/common.txt -v\n# a hit (e.g. x=OA_HTML) returns a different size/response -> confirm it:\ncurl \"http://target.com/get.php?x=OA_HTML\"\n\n# POST: fuzz a body parameter's VALUE (set the Content-Type, match 200 with -mc 200)\nffuf -u http://target.com/post.php -X POST \\\n  -H \"Content-Type: application/x-www-form-urlencoded\" \\\n  -d \"y=FUZZ\" -w /usr/share/seclists/Discovery/Web-Content/common.txt -mc 200 -v\n# confirm the accepted value:\ncurl -d \"y=SUNWmc\" http://target.com/post.php" }
             ]
           },
           {
