@@ -20,6 +20,14 @@
 
 var THEORY = [
   {
+    title: "AppLocker Bypass",
+    url: "theory/2026-10-08-applocker-bypass.html",
+    date: "2026-10-08",
+    tag: "Evasion",
+    description: "How Windows application whitelisting is enumerated and bypassed — reading the effective policy, writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32 and more), the unenforced Dll/Script collections, and escaping Constrained Language Mode.",
+    readTime: "11 min read"
+  },
+  {
     title: "Web API Fuzzing",
     url: "theory/2026-10-07-web-api-fuzzing.html",
     date: "2026-10-07",

