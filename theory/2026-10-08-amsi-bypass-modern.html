@@ -4,18 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Modern AMSI &amp; ETW Bypasses — Satej Chaudhari</title>
-  <meta name="description" content="Why AMSI and ETW bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the shared in-process trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint approach and how it blends in, silencing ETW logging, and what an attacker gains by combining them.">
+  <meta name="description" content="A complete, concept-level picture of how AMSI and ETW are silenced in modern EDR-heavy environments — what each does, the shared in-process trust-boundary flaw, the bypass families as an evolution, how the chain is assembled and operated without getting caught, what combining them buys an attacker, and what actually detects it.">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
   <meta property="og:title" content="Modern AMSI &amp; ETW Bypasses — Why They Still Work">
-  <meta property="og:description" content="Why AMSI and ETW bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the shared in-process trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint approach and how it blends in, silencing ETW logging, and what an attacker gains by combining them.">
+  <meta property="og:description" content="A complete, concept-level picture of how AMSI and ETW are silenced in modern EDR-heavy environments — what each does, the shared in-process trust-boundary flaw, the bypass families as an evolution, how the chain is assembled and operated without getting caught, what combining them buys an attacker, and what actually detects it.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-08-amsi-bypass-modern.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-08">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Modern AMSI &amp; ETW Bypasses — Why They Still Work">
-  <meta name="twitter:description" content="Why AMSI and ETW bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the shared in-process trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint approach and how it blends in, silencing ETW logging, and what an attacker gains by combining them.">
-  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta name="twitter:description" content="A complete, concept-level picture of how AMSI and ETW are silenced in modern EDR-heavy environments — what each does, the shared in-process trust-boundary flaw, the bypass families as an evolution, how the chain is assembled and operated without getting caught, what combining them buys an attacker, and what actually detects it.">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
 
@@ -74,213 +73,298 @@
         <h1 class="post-title">Modern AMSI &amp; ETW Bypasses — Why They Still Work</h1>
         <p class="post-meta">
           <time datetime="2026-10-08">2026-10-08</time>
-          <span>&middot; 12 min read</span>
+          <span>&middot; 18 min read</span>
         </p>
       </header>
 
       <div class="post-body">
 
         <p>
-          The Antimalware Scan Interface (AMSI) is the hook that lets Windows hand
-          a script or a block of .NET code to the installed antivirus to be
-          checked <em>at the moment it is about to run</em> — defeating the old
-          trick of never writing anything to disk. It is genuinely useful, and yet
-          bypasses for it keep appearing and keep working on fully-patched,
-          EDR-protected machines. This page is about <strong>why that is</strong>,
-          explained at the level of the idea rather than the implementation. The
-          goal here is to understand the shape of the problem; it deliberately
-          skips exact instructions, offsets and register-level detail, because the
-          point is the concept, not a recipe. For where AMSI sits among the other
-          evasion surfaces, see
-          <a href="2026-09-23-defense-evasion.html">Windows Defense Evasion</a>.
+          Two pieces of Windows instrumentation stand between an attacker's script
+          or in-memory tool and the defender who wants to see it: <strong>AMSI</strong>,
+          which inspects content as it is about to run, and <strong>ETW</strong>,
+          which records what the runtime does. Between them they are the backbone of
+          host-based detection for PowerShell and .NET activity — and both can be
+          switched off from inside the very process they are meant to watch. This
+          page builds the whole picture end to end: what each one does, why both are
+          bypassable, how the techniques evolved as defenders caught each
+          generation, how an operator assembles and runs the chain without tripping
+          an alarm, what silencing both actually achieves, and what still catches it.
         </p>
         <p>
-          AMSI has a close sibling: <strong>Event Tracing for Windows (ETW)</strong>,
-          the pipe that carries runtime telemetry — including the PowerShell
-          script-block logs and .NET events that host-based detection leans on. The
-          two share the same structural weakness, are bypassed with the same ideas,
-          and are usually silenced together, so this page covers both and then looks
-          at what an attacker gains by combining them.
+          It is written at the level of <em>ideas</em>. It deliberately leaves out
+          exact functions, offsets, registers and instructions, because the goal is
+          to understand how the chain fits together and why it behaves the way it
+          does — not to hand over a recipe. For where this sits among the other
+          evasion surfaces, see
+          <a href="2026-09-23-defense-evasion.html">Windows Defense Evasion</a>; for
+          the logging channels involved, see
+          <a href="2026-09-23-windows-telemetry-logging.html">Windows Telemetry &amp;
+          PowerShell Logging</a>.
         </p>
 
-        <h2>The flaw is structural, not a bug</h2>
+        <h2>1. The ground: what AMSI and ETW do</h2>
         <p>
-          The reason AMSI can be bypassed at all is not a coding mistake Microsoft
-          will one day fix — it is where the check lives. When PowerShell or the
-          .NET runtime scans a piece of content, the scan happens
-          <strong>inside the very process that is running the attacker's code</strong>.
-          The runtime calls a function, the function asks the antivirus "is this
-          clean?", and the runtime <em>trusts the answer</em>. Everything in that
-          sentence — the function, the answer, the little bit of state that
-          remembers whether AMSI is even available — sits in the same process, on
-          the same side of the trust boundary as the code being inspected.
+          You cannot follow the bypasses without first being clear on what is being
+          bypassed. The two systems do opposite but complementary jobs.
+        </p>
+
+        <h3>1.1 AMSI — the inspection layer</h3>
+        <p>
+          The Antimalware Scan Interface is a bridge. When a scripting engine
+          (PowerShell, VBScript, JScript) or the .NET runtime is about to execute
+          content, it can hand that content — the actual script text or the bytes of
+          an assembly — to AMSI, which passes it to the registered antivirus provider
+          (Defender, or a third-party AV) to be scanned <em>in memory, at the moment
+          of use</em>. The engine then trusts the verdict: clean content runs,
+          flagged content is refused.
+        </p>
+        <p>
+          The reason AMSI exists is that attackers had moved off disk. Fileless
+          PowerShell, reflectively-loaded .NET, and heavily-obfuscated one-liners
+          never touch the filesystem, so a file-scanning AV never sees them. AMSI
+          closes that gap by scanning the content the runtime is actually going to
+          execute, however it arrived — which is exactly why neutralising AMSI is
+          step one for most script- or .NET-based tooling.
+        </p>
+
+        <h3>1.2 ETW — the recording layer</h3>
+        <p>
+          Event Tracing for Windows is the plumbing that carries runtime telemetry.
+          Components act as <strong>providers</strong> that emit structured events;
+          <strong>consumers</strong> (the EDR agent, Windows' own logging, a SIEM
+          forwarder) subscribe and forward them. A great deal of what a blue team
+          relies on flows through here: PowerShell <strong>script-block logging</strong>
+          (the familiar Event ID 4104, which records the actual code that ran), .NET
+          assembly-load and method events, process and image telemetry, and much more.
+        </p>
+        <p>
+          Where AMSI answers "is this content malicious?", ETW answers "what
+          happened, for the record?" One is a gate, the other is a camera. That
+          distinction is the key to the whole page: an attacker who defeats only the
+          gate still gets filmed; one who defeats only the camera still gets stopped
+          at the gate. The two are silenced together precisely because they cover
+          complementary halves of the same exposure.
+        </p>
+
+        <h2>2. The shared flaw: a guard standing inside the vault</h2>
+        <p>
+          Neither system is bypassable because of a bug that a patch will fix. They
+          are bypassable because of <em>where they run</em>. Both the AMSI scan and
+          the ETW emission happen <strong>inside the same process</strong> that is
+          running the attacker's code, in user mode. The runtime calls a function to
+          scan; the runtime calls a function to emit an event; the small pieces of
+          state that say "is AMSI available?" or "is this ETW provider enabled?" all
+          live in that process's own memory, reachable by that process's own code.
         </p>
         <blockquote>
-          A security check that runs in the same place as the thing it is checking
-          can always be influenced by that thing. Every AMSI bypass is a different
-          way of doing exactly that — and because the flaw is structural, closing
-          one route does not close the category.
+          A guard posted inside the vault can be bribed by whoever is already in the
+          vault. Every AMSI or ETW bypass is a different way of doing exactly that —
+          and because the weakness is structural, closing one route never closes the
+          category.
         </blockquote>
         <p>
-          So the useful mental model is not "find the hole in AMSI" but "make the
-          in-process check come back clean." There are three broad ways to do that,
-          and they are worth seeing as an evolution — each generation is an answer
-          to how the previous one got caught.
+          This is why the durable answer is never "a better in-process check." It is
+          a vantage point the process cannot reach — the kernel, or telemetry shipped
+          off the host — a theme the rest of the page keeps returning to. The
+          practical consequence for an attacker is a menu of options: influence the
+          <em>state</em> the check consults, rewrite the <em>code</em> of the check,
+          or intercept the check's <em>execution</em>. Those three ideas are the
+          three families below, and they appeared in that order because each answers
+          how the previous one got caught.
         </p>
 
-        <h2>Family 1 — Tell the runtime AMSI isn't working</h2>
+        <h2>3. The bypass families — an arms race, in order</h2>
+
+        <h3>3.1 State tampering — convince the runtime it is switched off</h3>
         <p>
-          The gentlest approach does not fight the scanner at all; it convinces the
-          runtime there is nothing to call. The scripting engine keeps a small
-          internal flag that effectively means "AMSI failed to start up." It checks
-          that flag before every scan, and if it is set, it simply skips the scan —
-          sensible fail-open behaviour so that a broken antivirus does not break
-          PowerShell. Flip that flag and the engine politely stops scanning
-          anything, for the rest of the session.
+          The gentlest approach does not fight the scanner; it removes the reason to
+          call it. The scripting engine keeps an internal flag that means, in effect,
+          "AMSI failed to initialise." It consults that flag before every scan, and
+          if it is set, it skips scanning entirely — sensible fail-open design so a
+          broken antivirus does not break PowerShell. Flip the flag and the engine
+          quietly stops scanning for the rest of the session. The equivalent exists
+          for ETW: a provider the runtime believes is disabled simply is not written
+          to.
         </p>
         <p>
-          Why it works in a modern environment: it never touches antivirus code or
-          looks like memory tampering — it uses the runtime's own legitimate
-          features to change a value the runtime put there itself. The important
-          nuance is that this state is <em>fragile</em>: it may not exist yet when
-          the process first starts, and an EDR may reset it. That is why real
-          tooling re-asserts it continually — before each command, each script,
-          each cycle of a loader — rather than once. The lesson is that this is a
-          piece of <strong>state</strong> to be kept flipped, not a one-time switch.
+          Why this fits a modern environment: it never touches antivirus code and
+          never looks like memory corruption. It uses the runtime's own legitimate
+          features to change a value the runtime itself put there. Its weakness is
+          that the state is <strong>fragile</strong> — it may not exist yet when the
+          process first starts, and an EDR can reset it. That is why serious tooling
+          treats it as a flag to be held down, re-asserting it before each command,
+          each script, and on a timed cycle, rather than flipping it once and hoping.
         </p>
 
-        <h2>Family 2 — Overwrite the scan function (and why it now gets caught)</h2>
+        <h3>3.2 Function patching — rewrite the check</h3>
         <p>
-          The classic approach is blunter: reach into the AMSI library in memory
-          and overwrite the start of the scan function so that it always reports
-          "clean" and never actually consults the antivirus. For years this was the
-          default, and it still works where nothing is watching.
+          The blunter, classic approach reaches into the library in memory and
+          overwrites the start of the scan function (for AMSI) or the event-writing
+          function (for ETW) so it returns immediately — reporting "clean", or
+          emitting nothing. For years this was the default, and it still works
+          wherever nothing is watching memory.
         </p>
         <p>
-          But this is exactly where modern defence caught up. Overwriting the
-          function leaves evidence: the code in memory no longer matches the code
-          Microsoft shipped on disk. EDRs learned to take the well-known scan
-          functions and compare what is loaded in the process against a known-good
-          copy; any difference is a loud, high-confidence signal of tampering.
-          Patching the function went from "reliable" to "reliably detected,"
-          which is the pressure that produced the next generation.
+          This is also exactly where modern defence caught up, and the details of
+          <em>how</em> it got caught shaped everything after it:
         </p>
+        <ul>
+          <li>
+            <strong>The edit is visible.</strong> The code loaded in the process no
+            longer matches the code Microsoft shipped on disk. EDRs learned to
+            compare the in-memory bytes of these well-known functions against a
+            known-good copy; any difference is a loud, high-confidence tampering
+            signal.
+          </li>
+          <li>
+            <strong>Making memory writable is itself a tell.</strong> To overwrite
+            the function the code must briefly change that memory's protection to be
+            writable. A well-made version restores the original protection afterwards,
+            because a lingering writable-and-executable code page is one of the
+            cleaner indicators an EDR hunts for — leaving one defeats the purpose.
+          </li>
+          <li>
+            <strong>The kernel can still see it.</strong> Even a tidy, restored patch
+            is visible from outside the process: a kernel-mode integrity sensor can
+            hash the touched bytes and notice the change. Silencing a user-mode
+            function does not blind a kernel sensor, and a careful operator treats
+            that as a known limit, not a solved problem.
+          </li>
+        </ul>
 
-        <h2>Family 3 — Patchless: change the outcome, not the code</h2>
+        <h3>3.3 Patchless interception — change the outcome, not the code</h3>
         <p>
-          The current favourite avoids modifying the scan function entirely, so
-          there is nothing for a byte-comparison to find. Instead of rewriting the
-          code, it uses the CPU's built-in debugging facility to <em>pause</em>
-          execution at the instant the scan function is about to run, and a small
-          custom exception handler the process registers for itself quietly makes
-          that paused call "return clean" and resumes. The library's bytes are
-          never altered — hence "patchless" — so an integrity check comparing
-          memory to disk sees nothing wrong.
+          The current favourite leaves the function's bytes completely untouched, so
+          there is nothing for a memory-versus-disk comparison to find. Instead of
+          rewriting the check, it uses the CPU's built-in debugging facility to
+          <em>pause</em> execution the instant the check is about to run, and a small
+          exception handler the process registers for itself steps in, makes that
+          paused call "return clean" (or return having emitted nothing), and resumes.
+          Nothing in the library changes — hence <strong>patchless</strong>.
         </p>
         <p>
-          A few conceptual points explain why it is effective, without needing any
+          Three properties explain why it is effective, and none of them needs
           low-level detail:
         </p>
         <ul>
           <li>
-            <strong>It defeats the detection that killed Family 2.</strong> The
-            tampering has moved out of the program's code — which is easy to verify
-            — and into fleeting, per-execution CPU and handler state, which a static
-            code scan does not look at.
+            <strong>It sidesteps the detection that killed patching.</strong> The
+            tampering has moved out of the program's code — which is easy to verify —
+            and into fleeting, per-execution CPU and handler state, which a static
+            code scan does not inspect.
           </li>
           <li>
-            <strong>It has to cover every path the scan can run on.</strong> The
-            CPU's pause-points are set per execution thread, and a scripting engine
-            may run its work on several threads, so the technique must apply itself
-            to all of them or a scan slips through on an uncovered one.
+            <strong>It must cover every path the check can run on.</strong> The CPU's
+            pause-points are set per execution thread, and a scripting engine runs its
+            work across several threads, so the technique has to apply itself to all
+            of them — including threads created later — or a scan slips through on an
+            uncovered one.
           </li>
           <li>
-            <strong>Order matters.</strong> The handler that fakes the result must
-            be in place <em>before</em> the pause-point is ever armed — otherwise
-            there is a window where execution stops and nothing is there to handle
-            it, which crashes the process and is itself a glaring signal.
-          </li>
-        </ul>
-
-        <h2>ETW — the same flaw on the logging side</h2>
-        <p>
-          Everything above is about AMSI deciding "is this content clean?" ETW is
-          the parallel system that decides "what gets <em>recorded</em>?" When
-          PowerShell writes a script-block log (the familiar Event ID 4104), when
-          the .NET runtime reports an assembly loading, when all manner of
-          components emit their telemetry — that stream flows through ETW, and a
-          SIEM or EDR picks it up downstream. If an attacker can make a process's
-          ETW emission a quiet no-op, that process stops producing those records,
-          and a large slice of host-based visibility goes dark without anything
-          obviously "failing."
-        </p>
-        <p>
-          It is bypassable for the same reason AMSI is: the emission path runs
-          inside the process, reachable by the process. The crude version is the
-          mirror image of Family 2 — edit the function that writes events so it
-          returns immediately and emits nothing. The refinement that makes it fit a
-          modern environment is about cleaning up after itself:
-        </p>
-        <ul>
-          <li>
-            <strong>Restore the scene.</strong> To edit the function the code has to
-            briefly make that memory writable, and a well-made bypass puts the
-            original memory protection back afterwards — a lingering writable or
-            modified code page is itself a strong indicator an EDR hunts for, so
-            leaving one undoes the point.
-          </li>
-          <li>
-            <strong>Know the trade.</strong> Even done cleanly, the edit is visible
-            to a defender watching from <em>outside</em> the process: a kernel-mode
-            integrity sensor can still hash the touched bytes and notice the change.
-            Silencing user-mode ETW blinds user-mode logging — it does not blind a
-            kernel sensor, and a careful operator treats that as a known limit, not
-            a solved problem.
+            <strong>Setup order is load-bearing.</strong> The handler that fakes the
+            result must be in place <em>before</em> the pause-point is ever armed. Arm
+            the trap with no handler ready and execution halts into nothing — the
+            process crashes, which is the loudest possible signal.
           </li>
         </ul>
 
-        <h2>Making the patchless trick blend in</h2>
+        <h3>3.4 The three families at a glance</h3>
+        <table>
+          <thead><tr><th>Family</th><th>What it manipulates</th><th>What catches it</th></tr></thead>
+          <tbody>
+            <tr><td>State tampering</td><td>A flag the runtime consults before scanning / emitting</td><td>AMSI tamper signals; the flag being reset and re-asserted repeatedly</td></tr>
+            <tr><td>Function patching</td><td>The bytes of the scan / event-write function</td><td>In-memory vs on-disk integrity checks; writable code pages; kernel hashing</td></tr>
+            <tr><td>Patchless interception</td><td>The execution of the check, via CPU pause-points + a handler</td><td>Anomalous debug state / freshly-registered handlers on security functions</td></tr>
+          </tbody>
+        </table>
+
+        <h2>4. Operating it without getting caught</h2>
         <p>
-          The breakpoint-based approach from Family 3 can target the logging path
-          just as it targets the scan path, and the same arms-race pressure shapes
-          how a serious implementation behaves — not to make it work, but to make
-          it <em>unremarkable</em> to something looking straight at it. Two ideas
-          capture the spirit without the plumbing:
+          Making a bypass <em>work</em> is the easy part. Making it
+          <em>unremarkable</em> to something looking straight at it is where real
+          tooling spends its effort — and this is the part most write-ups skip, yet
+          it is central to why these techniques survive in instrumented
+          environments. Two ideas capture the discipline without the plumbing.
+        </p>
+
+        <h3>4.1 Stay applied, and look normal doing it</h3>
+        <p>
+          Because the patchless pause-points are per-thread, the technique re-applies
+          itself to every thread on a timed cycle, so threads born since the last
+          pass are covered rather than left as a gap a scan can escape through. A
+          refined implementation goes further and sets extra pause-points on unused
+          memory that are designed <strong>never to fire</strong> — pure decoys — so
+          that a defender enumerating the process's debug state sees a normal-looking,
+          shifting pattern across the available slots instead of one suspicious entry
+          pinned permanently on a security function. The bypass hides inside what
+          looks like ordinary churn.
+        </p>
+
+        <h3>4.2 Tear down cleanly, or give the game away</h3>
+        <p>
+          Cleanup is where clumsy tooling exposes itself, and the ordering is not
+          optional:
         </p>
         <ul>
           <li>
-            <strong>Re-apply continuously, and look normal doing it.</strong> The
-            CPU pause-points are per-thread, so the technique re-applies itself on
-            every thread each cycle to catch threads that were created since the
-            last pass. Some implementations also set extra pause-points on unused
-            memory that are designed <em>never to fire</em> — pure decoys — so that a
-            defender enumerating the debug state sees a normal-looking, shifting
-            pattern instead of one suspicious slot pinned permanently on a security
-            function.
+            The pause-points must be cleared <strong>before</strong> any memory they
+            point at is released — aiming the CPU at freed memory is far worse than
+            leaking it, so if clearing fails the memory is deliberately left in place.
           </li>
           <li>
-            <strong>Tear down carefully.</strong> Cleanup is where clumsy tools give
-            themselves away. The pause-points must be cleared <em>before</em> any
-            memory they point at is freed — aiming the CPU at freed memory is far
-            worse than leaking it — and the worker machinery is only disposed once it
-            has provably stopped. Get the ordering wrong and the process crashes or
-            hangs, which is the loudest signal of all.
+            The background worker that maintains all this is only disposed once it has
+            <strong>provably stopped</strong>; tearing it down while it might still be
+            running is a reliable way to hang the whole process.
+          </li>
+          <li>
+            Get either wrong and the process crashes or freezes — the single loudest
+            thing an "evasion" technique can do.
           </li>
         </ul>
         <blockquote>
-          Notice what all this effort is spent on: not evading the check, but
-          avoiding the <em>traces</em> that give the evasion away. That is the tell
-          that the real contest has moved to visibility — the bypass is easy, staying
-          unseen while it runs is the hard part.
+          Notice where all this care goes: not into defeating the check, but into
+          erasing the <em>traces</em> that would reveal the bypass. That is the tell
+          that the real contest has moved from "can you get past it?" to "can you stay
+          unseen while you do?"
         </blockquote>
 
-        <h2>What combining AMSI and ETW silencing buys an attacker</h2>
+        <h2>5. The full chain, assembled</h2>
         <p>
-          The two are silenced together because they cover complementary halves of
-          the same process's exposure. AMSI is the <em>inspection</em> half — it is
-          what would flag a malicious script or in-memory .NET tool as it runs. ETW
-          is the <em>recording</em> half — it is what would leave a log of that
-          activity for someone to review later. Neutralise both inside a process and:
+          Put the pieces in order and a complete in-process evasion chain looks like
+          this. Each stage has a goal, a mechanism (named only in concept), and a
+          cost — the trace it risks leaving — which is what makes the sequence a
+          <em>chain</em> rather than a list: later stages exist to cover for the
+          exposure of earlier ones.
+        </p>
+        <table>
+          <thead><tr><th>Stage</th><th>Goal</th><th>What it defeats / risks</th></tr></thead>
+          <tbody>
+            <tr><td>1. Land &amp; assess</td><td>Run in a host process with the right access; learn what is watching</td><td>Nothing yet — but choices here decide how much noise later stages make</td></tr>
+            <tr><td>2. Blind inspection (AMSI)</td><td>Make content scanning stop flagging — by state, patch, or interception</td><td>Defeats the gate; risks tamper / integrity signals depending on method</td></tr>
+            <tr><td>3. Blind recording (ETW)</td><td>Make the runtime's event stream go quiet for this process</td><td>Defeats the camera; risks the same integrity signals as a patch would</td></tr>
+            <tr><td>4. Maintain</td><td>Re-assert across threads and cycles; keep the debug state looking normal</td><td>Covers threads/resets that would otherwise re-expose activity</td></tr>
+            <tr><td>5. Act</td><td>Run offensive scripts / in-memory .NET, drive the host, move on</td><td>The payoff — now largely unscanned and unlogged on this host</td></tr>
+            <tr><td>6. Tear down</td><td>Clear traps, release resources in the safe order, exit cleanly</td><td>Avoids the crash/hang and leftover artefacts that would betray everything</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The important structural point is that stages 2–4 are not independent
+          tricks bolted together; they are mutually reinforcing. Blinding AMSI with
+          no plan for ETW means the activity is unscanned but fully logged. Blinding
+          both but failing to maintain across new threads means a later pipeline runs
+          in the clear. Doing all of that but tearing down carelessly turns a quiet
+          operation into a crashed process and a high-fidelity alert. A real chain is
+          only as quiet as its noisiest stage.
+        </p>
+
+        <h2>6. What combining AMSI and ETW silencing buys an attacker</h2>
+        <p>
+          The two are silenced together because they cover complementary halves of a
+          process's exposure. AMSI is the <em>inspection</em> half — what would flag a
+          malicious script or in-memory tool as it runs. ETW is the <em>recording</em>
+          half — what would leave a log of that activity to review later. Neutralise
+          both inside a process and:
         </p>
         <ul>
           <li>
@@ -289,82 +373,101 @@
           </li>
           <li>
             the activity leaves little of its usual evidence — no script-block logs,
-            no runtime load events — so even after the fact there is less for a hunt
-            to pivot on;
+            no runtime load events — so even a later hunt has less to pivot on;
           </li>
           <li>
-            the process becomes a relatively quiet place to stage further work:
-            run offensive .NET in memory, drive the host, move on — all while the
-            host-based signals that a blue team would key alerts on are muted for
-            that process.
+            the process becomes a quiet place to stage further work: run offensive
+            .NET in memory, enumerate, move laterally, all while the host-based
+            signals a blue team keys alerts on are muted for that process.
           </li>
         </ul>
         <p>
-          The crucial qualifier — and the reason this is not game-over for a
-          defender — is the word <strong>process</strong>. Every bit of this lives
-          in user mode, inside one process, and only affects what that process
-          reports about itself. It does not touch a kernel sensor, it does not
-          silence telemetry gathered from outside the process, and it does not
-          affect network, identity or other hosts' logs. An attacker gains local
-          quiet, not true invisibility — which is exactly why mature detection does
-          not depend on in-process signals alone.
+          The crucial qualifier — and the reason this is not game over for a
+          defender — is the word <strong>process</strong>. Every bit of this lives in
+          user mode, inside one process, and only affects what that process reports
+          about itself. It does not touch a kernel sensor. It does not silence
+          telemetry gathered from outside the process. It does nothing to network
+          logs, identity/authentication events, or what other hosts record. An
+          attacker buys <strong>local quiet, not true invisibility</strong> — which is
+          precisely why mature detection never depends on in-process signals alone.
         </p>
 
-        <h2>Why this keeps working in modern environments</h2>
+        <h2>7. Why this keeps working in modern environments</h2>
         <p>
-          Put the three families side by side and the pattern is clear. Each new
-          defensive capability — content scanning, then in-memory integrity
-          checking — was answered not by defeating it head-on but by
-          <strong>moving the tampering somewhere the new detection does not
-          look</strong>: from the antivirus engine, to a managed flag, to the
-          function's bytes, to volatile per-thread state. The attacker keeps
-          winning the same structural argument: the check and the code share one
-          process, so whatever the defender can see from inside that process, the
-          attacker can reach too.
+          Lay the families and the operational care side by side and the pattern is
+          unmistakable. Every defensive advance — content scanning, then in-memory
+          integrity checking, then watching debug state — was answered not by
+          beating it head-on but by <strong>moving the manipulation somewhere the new
+          detection does not look</strong>: from the antivirus engine, to a managed
+          flag, to the function's bytes, to volatile per-thread execution state, and
+          finally to hiding that state inside normal-looking churn. The attacker keeps
+          winning the same structural argument from §2: the check and the code share
+          one process, so whatever a defender can observe from inside that process,
+          the attacker can reach too.
         </p>
         <blockquote>
-          This is why AMSI bypass is best understood as an arms race over
-          <em>visibility</em>, not a single vulnerability. The durable answer is not
-          a better in-process check — it is a vantage point outside the process.
+          AMSI/ETW bypass is best understood as an arms race over <em>visibility</em>,
+          not a single vulnerability to be patched. The techniques persist because the
+          flaw they exploit is architectural, and the only moves that durably counter
+          them come from outside the process.
         </blockquote>
 
-        <h2>What actually catches it</h2>
+        <h2>8. What actually catches it</h2>
         <p>
-          Because every one of these tricks lives inside the process, the defences
-          that work are the ones that watch from outside it:
+          Because every technique here lives inside the process, the defences that
+          work are the ones that watch from outside it — the vantage point the bypass
+          cannot reach:
         </p>
         <ul>
           <li>
-            <strong>Kernel and hardware-assisted telemetry</strong> (ETW
-            "threat-intelligence" events and EDR sensors) can observe the suspicious
-            setup these techniques require, where an in-process scan cannot.
+            <strong>Kernel and hardware-assisted telemetry.</strong> ETW
+            threat-intelligence events and EDR kernel sensors observe the suspicious
+            setup these techniques require — the memory-protection changes, the
+            integrity mismatches, the debug-state anomalies — where an in-process scan
+            is blind by definition.
           </li>
           <li>
-            <strong>AMSI's own tamper signals and memory scanning</strong> — modern
-            AMSI reports when its state looks manipulated, and EDRs periodically scan
-            loaded modules for the integrity mismatches and known bypass patterns
-            Family 2 leaves behind.
+            <strong>Integrity and memory scanning.</strong> Periodically comparing the
+            loaded security functions against their on-disk originals catches the
+            patching family outright, and memory scans can flag the known shapes these
+            bypasses leave behind.
           </li>
           <li>
-            <strong>Looking at the right state for Family 3</strong> — an ordinary,
+            <strong>Debug-state anomaly detection.</strong> An ordinary,
             non-debugged process that has debugging pause-points set on security
-            functions, or that has just wired up its own exception handler around
-            them, is anomalous and detectable even though no code was changed.
+            functions, or that has just registered its own exception handler around
+            them, is anomalous — detectable even though no code was altered, and not
+            hidden by the decoy trick once a defender knows to look for handlers on
+            those specific functions.
           </li>
           <li>
-            <strong>Breadth over any single control</strong> — AMSI is one signal
-            among many. Script-block and module logging, on-host behavioural rules,
-            and newer PowerShell hardening mean that silencing AMSI alone no longer
-            makes activity invisible. See
-            <a href="2026-09-23-windows-telemetry-logging.html">Windows Telemetry
-            &amp; PowerShell Logging</a>.
+            <strong>Tamper and absence signals.</strong> Modern AMSI reports when its
+            own state looks manipulated, and a sudden, unexplained <em>silence</em>
+            from a process that should be emitting script-block or .NET events is
+            itself a detection — missing telemetry is a signal, not a blind spot, if
+            you are looking for it.
+          </li>
+          <li>
+            <strong>Breadth and off-host logging.</strong> Because the bypass is scoped
+            to one process on one host, shipping logs off the host in real time, and
+            correlating across network, identity and other endpoints, defeats the
+            "local quiet" an attacker bought. Script-block logging forwarded to a SIEM,
+            behavioural rules, and newer PowerShell/.NET hardening all raise the cost
+            of staying silent.
           </li>
         </ul>
+
+        <h2>9. The takeaway</h2>
         <p>
-          The takeaway mirrors the rest of the evasion material on this site: a
-          control that lives in the same trust boundary as the attacker's code can
-          always be influenced by it, so the real defensive investment is in
-          cross-surface, outside-the-process visibility that a bypass cannot reach.
+          AMSI and ETW are a gate and a camera posted inside the room they guard, so
+          anyone already in the room can lean on them — and the techniques for doing
+          so have evolved, step for step, to stay ahead of each new way of noticing.
+          The complete chain is not one clever trick but a disciplined sequence:
+          blind the gate, blind the camera, maintain both quietly, act, and leave no
+          mess. Understanding it that way makes the defensive conclusion obvious —
+          stop trusting signals that live where the attacker already stands, and
+          invest in the kernel-level, cross-host, off-box visibility that the whole
+          chain, by construction, cannot touch.
         </p>
 
         <h2>Related reading</h2>
