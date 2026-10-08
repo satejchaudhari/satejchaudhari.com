@@ -20,12 +20,12 @@
 
 var THEORY = [
   {
-    title: "AppLocker Bypass",
+    title: "AppLocker & WDAC Bypass",
     url: "theory/2026-10-08-applocker-bypass.html",
     date: "2026-10-08",
     tag: "Evasion",
-    description: "How Windows application whitelisting is enumerated and bypassed — reading the effective policy, writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32 and more), the unenforced Dll/Script collections, and escaping Constrained Language Mode.",
-    readTime: "11 min read"
+    description: "How Windows application whitelisting is enumerated and bypassed — AppLocker rule collections, writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32 and more), the unenforced Dll/Script collections, escaping Constrained Language Mode, and WDAC in depth: its kernel-enforced model, rule levels, signed policies, managed installer / ISG trust anchors, and how WDAC itself is bypassed.",
+    readTime: "16 min read"
   },
   {
     title: "Web API Fuzzing",

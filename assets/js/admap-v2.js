@@ -925,7 +925,7 @@ var AD_MAP_V2 = {
         {
           id: "la-bypass-applocker",
           title: "Bypass AppLocker",
-          theory: { label: "AppLocker Bypass", url: "theory/2026-10-08-applocker-bypass.html" },
+          theory: { label: "AppLocker & WDAC Bypass", url: "theory/2026-10-08-applocker-bypass.html" },
           cve: null,
           desc: "Enumerate AppLocker rules and abuse writable paths or trusted LOLBins to run code.",
           cmds: [],

