@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Modern AMSI Bypasses — Satej Chaudhari</title>
-  <meta name="description" content="Why AMSI bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint-plus-handler evolution, and what actually detects them.">
+  <title>Modern AMSI &amp; ETW Bypasses — Satej Chaudhari</title>
+  <meta name="description" content="Why AMSI and ETW bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the shared in-process trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint approach and how it blends in, silencing ETW logging, and what an attacker gains by combining them.">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
-  <meta property="og:title" content="Modern AMSI Bypasses — Why They Still Work">
-  <meta property="og:description" content="Why AMSI bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint-plus-handler evolution, and what actually detects them.">
+  <meta property="og:title" content="Modern AMSI &amp; ETW Bypasses — Why They Still Work">
+  <meta property="og:description" content="Why AMSI and ETW bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the shared in-process trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint approach and how it blends in, silencing ETW logging, and what an attacker gains by combining them.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-08-amsi-bypass-modern.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-08">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Modern AMSI Bypasses — Why They Still Work">
-  <meta name="twitter:description" content="Why AMSI bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint-plus-handler evolution, and what actually detects them.">
+  <meta name="twitter:title" content="Modern AMSI &amp; ETW Bypasses — Why They Still Work">
+  <meta name="twitter:description" content="Why AMSI and ETW bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the shared in-process trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint approach and how it blends in, silencing ETW logging, and what an attacker gains by combining them.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -71,10 +71,10 @@
     <article>
       <header class="post-header">
         <span class="tag">Evasion</span>
-        <h1 class="post-title">Modern AMSI Bypasses — Why They Still Work</h1>
+        <h1 class="post-title">Modern AMSI &amp; ETW Bypasses — Why They Still Work</h1>
         <p class="post-meta">
           <time datetime="2026-10-08">2026-10-08</time>
-          <span>&middot; 9 min read</span>
+          <span>&middot; 12 min read</span>
         </p>
       </header>
 
@@ -93,6 +93,14 @@
           point is the concept, not a recipe. For where AMSI sits among the other
           evasion surfaces, see
           <a href="2026-09-23-defense-evasion.html">Windows Defense Evasion</a>.
+        </p>
+        <p>
+          AMSI has a close sibling: <strong>Event Tracing for Windows (ETW)</strong>,
+          the pipe that carries runtime telemetry — including the PowerShell
+          script-block logs and .NET events that host-based detection leans on. The
+          two share the same structural weakness, are bypassed with the same ideas,
+          and are usually silenced together, so this page covers both and then looks
+          at what an attacker gains by combining them.
         </p>
 
         <h2>The flaw is structural, not a bug</h2>
@@ -193,6 +201,114 @@
             it, which crashes the process and is itself a glaring signal.
           </li>
         </ul>
+
+        <h2>ETW — the same flaw on the logging side</h2>
+        <p>
+          Everything above is about AMSI deciding "is this content clean?" ETW is
+          the parallel system that decides "what gets <em>recorded</em>?" When
+          PowerShell writes a script-block log (the familiar Event ID 4104), when
+          the .NET runtime reports an assembly loading, when all manner of
+          components emit their telemetry — that stream flows through ETW, and a
+          SIEM or EDR picks it up downstream. If an attacker can make a process's
+          ETW emission a quiet no-op, that process stops producing those records,
+          and a large slice of host-based visibility goes dark without anything
+          obviously "failing."
+        </p>
+        <p>
+          It is bypassable for the same reason AMSI is: the emission path runs
+          inside the process, reachable by the process. The crude version is the
+          mirror image of Family 2 — edit the function that writes events so it
+          returns immediately and emits nothing. The refinement that makes it fit a
+          modern environment is about cleaning up after itself:
+        </p>
+        <ul>
+          <li>
+            <strong>Restore the scene.</strong> To edit the function the code has to
+            briefly make that memory writable, and a well-made bypass puts the
+            original memory protection back afterwards — a lingering writable or
+            modified code page is itself a strong indicator an EDR hunts for, so
+            leaving one undoes the point.
+          </li>
+          <li>
+            <strong>Know the trade.</strong> Even done cleanly, the edit is visible
+            to a defender watching from <em>outside</em> the process: a kernel-mode
+            integrity sensor can still hash the touched bytes and notice the change.
+            Silencing user-mode ETW blinds user-mode logging — it does not blind a
+            kernel sensor, and a careful operator treats that as a known limit, not
+            a solved problem.
+          </li>
+        </ul>
+
+        <h2>Making the patchless trick blend in</h2>
+        <p>
+          The breakpoint-based approach from Family 3 can target the logging path
+          just as it targets the scan path, and the same arms-race pressure shapes
+          how a serious implementation behaves — not to make it work, but to make
+          it <em>unremarkable</em> to something looking straight at it. Two ideas
+          capture the spirit without the plumbing:
+        </p>
+        <ul>
+          <li>
+            <strong>Re-apply continuously, and look normal doing it.</strong> The
+            CPU pause-points are per-thread, so the technique re-applies itself on
+            every thread each cycle to catch threads that were created since the
+            last pass. Some implementations also set extra pause-points on unused
+            memory that are designed <em>never to fire</em> — pure decoys — so that a
+            defender enumerating the debug state sees a normal-looking, shifting
+            pattern instead of one suspicious slot pinned permanently on a security
+            function.
+          </li>
+          <li>
+            <strong>Tear down carefully.</strong> Cleanup is where clumsy tools give
+            themselves away. The pause-points must be cleared <em>before</em> any
+            memory they point at is freed — aiming the CPU at freed memory is far
+            worse than leaking it — and the worker machinery is only disposed once it
+            has provably stopped. Get the ordering wrong and the process crashes or
+            hangs, which is the loudest signal of all.
+          </li>
+        </ul>
+        <blockquote>
+          Notice what all this effort is spent on: not evading the check, but
+          avoiding the <em>traces</em> that give the evasion away. That is the tell
+          that the real contest has moved to visibility — the bypass is easy, staying
+          unseen while it runs is the hard part.
+        </blockquote>
+
+        <h2>What combining AMSI and ETW silencing buys an attacker</h2>
+        <p>
+          The two are silenced together because they cover complementary halves of
+          the same process's exposure. AMSI is the <em>inspection</em> half — it is
+          what would flag a malicious script or in-memory .NET tool as it runs. ETW
+          is the <em>recording</em> half — it is what would leave a log of that
+          activity for someone to review later. Neutralise both inside a process and:
+        </p>
+        <ul>
+          <li>
+            tooling that would normally be caught on execution runs without being
+            flagged, because the content is never meaningfully scanned;
+          </li>
+          <li>
+            the activity leaves little of its usual evidence — no script-block logs,
+            no runtime load events — so even after the fact there is less for a hunt
+            to pivot on;
+          </li>
+          <li>
+            the process becomes a relatively quiet place to stage further work:
+            run offensive .NET in memory, drive the host, move on — all while the
+            host-based signals that a blue team would key alerts on are muted for
+            that process.
+          </li>
+        </ul>
+        <p>
+          The crucial qualifier — and the reason this is not game-over for a
+          defender — is the word <strong>process</strong>. Every bit of this lives
+          in user mode, inside one process, and only affects what that process
+          reports about itself. It does not touch a kernel sensor, it does not
+          silence telemetry gathered from outside the process, and it does not
+          affect network, identity or other hosts' logs. An attacker gains local
+          quiet, not true invisibility — which is exactly why mature detection does
+          not depend on in-process signals alone.
+        </p>
 
         <h2>Why this keeps working in modern environments</h2>
         <p>

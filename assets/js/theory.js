@@ -20,12 +20,12 @@
 
 var THEORY = [
   {
-    title: "Modern AMSI Bypasses — Why They Still Work",
+    title: "Modern AMSI & ETW Bypasses — Why They Still Work",
     url: "theory/2026-10-08-amsi-bypass-modern.html",
     date: "2026-10-08",
     tag: "Evasion",
-    description: "Why AMSI bypasses keep working on fully-patched, EDR-protected hosts — the structural trust-boundary flaw, and the three families (flag-state tampering, byte-patching and why it now gets caught, and the patchless breakpoint-plus-handler evolution), plus what actually detects them. Concepts, not payloads.",
-    readTime: "9 min read"
+    description: "Why AMSI and ETW bypasses keep working on fully-patched, EDR-protected hosts — the shared in-process trust-boundary flaw, the families (flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint approach and how it blends in), silencing ETW logging, what combining them buys an attacker, and what actually detects them. Concepts, not payloads.",
+    readTime: "12 min read"
   },
   {
     title: "AppLocker & WDAC Bypass",
