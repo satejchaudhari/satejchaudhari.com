@@ -184,8 +184,8 @@ var THEORY = [
     url: "theory/2026-09-23-defense-evasion.html",
     date: "2026-09-23",
     tag: "Evasion",
-    description: "Why offensive tradecraft evades endpoint defences — the static and runtime detection surfaces, userland API hooking and unhooking, in-memory execution, packing, AMSI/ETW as in-process instrumentation, and ASR rules. Mechanisms, not payloads.",
-    readTime: "14 min read"
+    description: "Why offensive tradecraft evades endpoint defences — the static and runtime detection surfaces, userland API hooking and unhooking, in-memory execution, packing, AMSI/ETW as in-process instrumentation (including the hardware-breakpoint + VEH patchless approach), and ASR rules. Mechanisms, not payloads.",
+    readTime: "15 min read"
   },
   {
     title: "Windows Access Tokens & UAC",
