@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modern AMSI Bypasses — Satej Chaudhari</title>
+  <meta name="description" content="Why AMSI bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint-plus-handler evolution, and what actually detects them.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Modern AMSI Bypasses — Why They Still Work">
+  <meta property="og:description" content="Why AMSI bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint-plus-handler evolution, and what actually detects them.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-08-amsi-bypass-modern.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-08">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Modern AMSI Bypasses — Why They Still Work">
+  <meta name="twitter:description" content="Why AMSI bypasses still work in modern, EDR-heavy environments — explained at the level of ideas, not payloads: the trust-boundary flaw, flag-state tampering, byte-patching and why it now gets caught, the patchless breakpoint-plus-handler evolution, and what actually detects them.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Evasion</span>
+        <h1 class="post-title">Modern AMSI Bypasses — Why They Still Work</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-08">2026-10-08</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          The Antimalware Scan Interface (AMSI) is the hook that lets Windows hand
+          a script or a block of .NET code to the installed antivirus to be
+          checked <em>at the moment it is about to run</em> — defeating the old
+          trick of never writing anything to disk. It is genuinely useful, and yet
+          bypasses for it keep appearing and keep working on fully-patched,
+          EDR-protected machines. This page is about <strong>why that is</strong>,
+          explained at the level of the idea rather than the implementation. The
+          goal here is to understand the shape of the problem; it deliberately
+          skips exact instructions, offsets and register-level detail, because the
+          point is the concept, not a recipe. For where AMSI sits among the other
+          evasion surfaces, see
+          <a href="2026-09-23-defense-evasion.html">Windows Defense Evasion</a>.
+        </p>
+
+        <h2>The flaw is structural, not a bug</h2>
+        <p>
+          The reason AMSI can be bypassed at all is not a coding mistake Microsoft
+          will one day fix — it is where the check lives. When PowerShell or the
+          .NET runtime scans a piece of content, the scan happens
+          <strong>inside the very process that is running the attacker's code</strong>.
+          The runtime calls a function, the function asks the antivirus "is this
+          clean?", and the runtime <em>trusts the answer</em>. Everything in that
+          sentence — the function, the answer, the little bit of state that
+          remembers whether AMSI is even available — sits in the same process, on
+          the same side of the trust boundary as the code being inspected.
+        </p>
+        <blockquote>
+          A security check that runs in the same place as the thing it is checking
+          can always be influenced by that thing. Every AMSI bypass is a different
+          way of doing exactly that — and because the flaw is structural, closing
+          one route does not close the category.
+        </blockquote>
+        <p>
+          So the useful mental model is not "find the hole in AMSI" but "make the
+          in-process check come back clean." There are three broad ways to do that,
+          and they are worth seeing as an evolution — each generation is an answer
+          to how the previous one got caught.
+        </p>
+
+        <h2>Family 1 — Tell the runtime AMSI isn't working</h2>
+        <p>
+          The gentlest approach does not fight the scanner at all; it convinces the
+          runtime there is nothing to call. The scripting engine keeps a small
+          internal flag that effectively means "AMSI failed to start up." It checks
+          that flag before every scan, and if it is set, it simply skips the scan —
+          sensible fail-open behaviour so that a broken antivirus does not break
+          PowerShell. Flip that flag and the engine politely stops scanning
+          anything, for the rest of the session.
+        </p>
+        <p>
+          Why it works in a modern environment: it never touches antivirus code or
+          looks like memory tampering — it uses the runtime's own legitimate
+          features to change a value the runtime put there itself. The important
+          nuance is that this state is <em>fragile</em>: it may not exist yet when
+          the process first starts, and an EDR may reset it. That is why real
+          tooling re-asserts it continually — before each command, each script,
+          each cycle of a loader — rather than once. The lesson is that this is a
+          piece of <strong>state</strong> to be kept flipped, not a one-time switch.
+        </p>
+
+        <h2>Family 2 — Overwrite the scan function (and why it now gets caught)</h2>
+        <p>
+          The classic approach is blunter: reach into the AMSI library in memory
+          and overwrite the start of the scan function so that it always reports
+          "clean" and never actually consults the antivirus. For years this was the
+          default, and it still works where nothing is watching.
+        </p>
+        <p>
+          But this is exactly where modern defence caught up. Overwriting the
+          function leaves evidence: the code in memory no longer matches the code
+          Microsoft shipped on disk. EDRs learned to take the well-known scan
+          functions and compare what is loaded in the process against a known-good
+          copy; any difference is a loud, high-confidence signal of tampering.
+          Patching the function went from "reliable" to "reliably detected,"
+          which is the pressure that produced the next generation.
+        </p>
+
+        <h2>Family 3 — Patchless: change the outcome, not the code</h2>
+        <p>
+          The current favourite avoids modifying the scan function entirely, so
+          there is nothing for a byte-comparison to find. Instead of rewriting the
+          code, it uses the CPU's built-in debugging facility to <em>pause</em>
+          execution at the instant the scan function is about to run, and a small
+          custom exception handler the process registers for itself quietly makes
+          that paused call "return clean" and resumes. The library's bytes are
+          never altered — hence "patchless" — so an integrity check comparing
+          memory to disk sees nothing wrong.
+        </p>
+        <p>
+          A few conceptual points explain why it is effective, without needing any
+          low-level detail:
+        </p>
+        <ul>
+          <li>
+            <strong>It defeats the detection that killed Family 2.</strong> The
+            tampering has moved out of the program's code — which is easy to verify
+            — and into fleeting, per-execution CPU and handler state, which a static
+            code scan does not look at.
+          </li>
+          <li>
+            <strong>It has to cover every path the scan can run on.</strong> The
+            CPU's pause-points are set per execution thread, and a scripting engine
+            may run its work on several threads, so the technique must apply itself
+            to all of them or a scan slips through on an uncovered one.
+          </li>
+          <li>
+            <strong>Order matters.</strong> The handler that fakes the result must
+            be in place <em>before</em> the pause-point is ever armed — otherwise
+            there is a window where execution stops and nothing is there to handle
+            it, which crashes the process and is itself a glaring signal.
+          </li>
+        </ul>
+
+        <h2>Why this keeps working in modern environments</h2>
+        <p>
+          Put the three families side by side and the pattern is clear. Each new
+          defensive capability — content scanning, then in-memory integrity
+          checking — was answered not by defeating it head-on but by
+          <strong>moving the tampering somewhere the new detection does not
+          look</strong>: from the antivirus engine, to a managed flag, to the
+          function's bytes, to volatile per-thread state. The attacker keeps
+          winning the same structural argument: the check and the code share one
+          process, so whatever the defender can see from inside that process, the
+          attacker can reach too.
+        </p>
+        <blockquote>
+          This is why AMSI bypass is best understood as an arms race over
+          <em>visibility</em>, not a single vulnerability. The durable answer is not
+          a better in-process check — it is a vantage point outside the process.
+        </blockquote>
+
+        <h2>What actually catches it</h2>
+        <p>
+          Because every one of these tricks lives inside the process, the defences
+          that work are the ones that watch from outside it:
+        </p>
+        <ul>
+          <li>
+            <strong>Kernel and hardware-assisted telemetry</strong> (ETW
+            "threat-intelligence" events and EDR sensors) can observe the suspicious
+            setup these techniques require, where an in-process scan cannot.
+          </li>
+          <li>
+            <strong>AMSI's own tamper signals and memory scanning</strong> — modern
+            AMSI reports when its state looks manipulated, and EDRs periodically scan
+            loaded modules for the integrity mismatches and known bypass patterns
+            Family 2 leaves behind.
+          </li>
+          <li>
+            <strong>Looking at the right state for Family 3</strong> — an ordinary,
+            non-debugged process that has debugging pause-points set on security
+            functions, or that has just wired up its own exception handler around
+            them, is anomalous and detectable even though no code was changed.
+          </li>
+          <li>
+            <strong>Breadth over any single control</strong> — AMSI is one signal
+            among many. Script-block and module logging, on-host behavioural rules,
+            and newer PowerShell hardening mean that silencing AMSI alone no longer
+            makes activity invisible. See
+            <a href="2026-09-23-windows-telemetry-logging.html">Windows Telemetry
+            &amp; PowerShell Logging</a>.
+          </li>
+        </ul>
+        <p>
+          The takeaway mirrors the rest of the evasion material on this site: a
+          control that lives in the same trust boundary as the attacker's code can
+          always be influenced by it, so the real defensive investment is in
+          cross-surface, outside-the-process visibility that a bypass cannot reach.
+        </p>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-09-23-defense-evasion.html">Windows Defense Evasion — AV, EDR &amp; ASR</a></li>
+          <li><a href="2026-09-23-windows-telemetry-logging.html">Windows Telemetry &amp; PowerShell Logging</a></li>
+          <li><a href="2026-09-23-in-memory-tradecraft.html">In-Memory Post-Exploitation Tradecraft</a></li>
+          <li><a href="2026-10-08-applocker-bypass.html">AppLocker &amp; WDAC Bypass</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

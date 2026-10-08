@@ -75,7 +75,7 @@
         <h1 class="post-title">Windows Defense Evasion — AV, EDR &amp; ASR</h1>
         <p class="post-meta">
           <time datetime="2026-09-23">2026-09-23</time>
-          <span>&middot; 15 min read</span>
+          <span>&middot; 14 min read</span>
         </p>
       </header>
 
@@ -243,56 +243,11 @@
           Telemetry</a> page covers the logging channels these affect.
         </blockquote>
 
-        <h3>Hardware breakpoints and VEH — the patchless evolution</h3>
-
         <p>
-          The first generation of userland AMSI/ETW bypasses worked by <em>overwriting bytes</em> —
-          patching the opening instructions of <code>AmsiScanBuffer</code> or
-          <code>EtwEventWrite</code> so the scan returns a clean result or the event is never written.
-          That is effective but noisy: it leaves a modified, writable code page, and defenders learned to
-          scan the first bytes of these well-known functions against a known-good copy on disk and flag
-          any that no longer match. Integrity checks like this turned "patch the function" into a
-          reliably-detected move.
+          How those in-process bypasses are actually built has evolved a great deal, and the stealthier
+          modern generation is a topic in its own right. It has its own page:
+          <a href="2026-10-08-amsi-bypass-modern.html">Modern AMSI Bypasses &mdash; Why They Still Work</a>.
         </p>
-
-        <p>
-          The answer researchers converged on is to change the <em>outcome</em> of the check without
-          touching its code at all, using two CPU/OS features that were built for debuggers:
-        </p>
-
-        <ul>
-          <li>
-            <strong>Hardware breakpoints.</strong> Each thread's context carries four debug registers
-            (<code>Dr0</code>–<code>Dr3</code>) that the CPU uses to trap execution at a chosen address.
-            Pointing one at the entry of the scan function means that whenever the runtime calls it, the
-            processor raises an exception <em>before</em> the real function runs — no bytes in the module
-            are modified, so a byte-for-byte integrity comparison still passes.
-          </li>
-          <li>
-            <strong>A Vectored Exception Handler (VEH).</strong> The process registers its own handler
-            that receives that breakpoint exception first. From the handler it can read and adjust the
-            trapped thread's saved register state and then resume — the conceptual effect being that the
-            inspected content is treated as clean, or the telemetry call is short-circuited, purely by
-            steering the thread's own state rather than by altering any instruction.
-          </li>
-        </ul>
-
-        <p>
-          The point for study is the <em>shape</em> of the technique, not a payload: it moves the
-          tampering out of the module's code (which is easy to verify) and into volatile per-thread state
-          (which is not visible to a static byte check). That is why it is the current default in a lot of
-          offensive tooling and why the defensive answer had to move as well.
-        </p>
-
-        <blockquote>
-          Detection follows the state the technique relies on. Because the trick lives in debug registers
-          and an exception handler, defenders look there: a non-debugged process whose threads carry
-          non-zero <code>Dr0</code>–<code>Dr3</code> values, hardware breakpoints set on
-          <code>AmsiScanBuffer</code>/<code>EtwEventWrite</code>, or a freshly-registered vectored handler
-          are all strong signals. Kernel telemetry (ETW-TI and EDR thread-context callbacks) sees this
-          where an in-process byte scan cannot — the same "reach past the process's own trust boundary"
-          lesson that runs through this whole page.
-        </blockquote>
 
         <h2>Attack Surface Reduction (ASR) rules</h2>
 

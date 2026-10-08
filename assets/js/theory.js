@@ -20,6 +20,14 @@
 
 var THEORY = [
   {
+    title: "Modern AMSI Bypasses — Why They Still Work",
+    url: "theory/2026-10-08-amsi-bypass-modern.html",
+    date: "2026-10-08",
+    tag: "Evasion",
+    description: "Why AMSI bypasses keep working on fully-patched, EDR-protected hosts — the structural trust-boundary flaw, and the three families (flag-state tampering, byte-patching and why it now gets caught, and the patchless breakpoint-plus-handler evolution), plus what actually detects them. Concepts, not payloads.",
+    readTime: "9 min read"
+  },
+  {
     title: "AppLocker & WDAC Bypass",
     url: "theory/2026-10-08-applocker-bypass.html",
     date: "2026-10-08",
@@ -184,8 +192,8 @@ var THEORY = [
     url: "theory/2026-09-23-defense-evasion.html",
     date: "2026-09-23",
     tag: "Evasion",
-    description: "Why offensive tradecraft evades endpoint defences — the static and runtime detection surfaces, userland API hooking and unhooking, in-memory execution, packing, AMSI/ETW as in-process instrumentation (including the hardware-breakpoint + VEH patchless approach), and ASR rules. Mechanisms, not payloads.",
-    readTime: "15 min read"
+    description: "Why offensive tradecraft evades endpoint defences — the static and runtime detection surfaces, userland API hooking and unhooking, in-memory execution, packing, AMSI/ETW as in-process instrumentation, and ASR rules. Mechanisms, not payloads.",
+    readTime: "14 min read"
   },
   {
     title: "Windows Access Tokens & UAC",
