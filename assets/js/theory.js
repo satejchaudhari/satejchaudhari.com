@@ -24,8 +24,8 @@ var THEORY = [
     url: "theory/2026-10-08-amsi-bypass-modern.html",
     date: "2026-10-08",
     tag: "Evasion",
-    description: "A complete, concept-level picture of how AMSI and ETW are silenced on modern EDR-protected hosts — what each does, the shared in-process trust-boundary flaw, the three bypass families as an evolution, how the chain is assembled and operated without getting caught, what combining them buys an attacker, why it persists, and what actually detects it. Concepts, not payloads.",
-    readTime: "18 min read"
+    description: "A complete, concept-level picture of how AMSI and ETW are silenced on modern EDR-protected hosts — what each does, the shared in-process trust-boundary flaw, every bypass family up to the 2025 state of the art (state tampering, patching, patchless hardware-breakpoint/VEH, data-only context corruption, provider hijack, and footprint-hiding via unhooking/indirect syscalls), how the chain is assembled and operated, and why ETW-TI is the kernel-level ceiling that catches it. Concepts, not payloads.",
+    readTime: "21 min read"
   },
   {
     title: "AppLocker & WDAC Bypass",

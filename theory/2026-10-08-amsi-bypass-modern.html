@@ -73,7 +73,7 @@
         <h1 class="post-title">Modern AMSI &amp; ETW Bypasses — Why They Still Work</h1>
         <p class="post-meta">
           <time datetime="2026-10-08">2026-10-08</time>
-          <span>&middot; 18 min read</span>
+          <span>&middot; 21 min read</span>
         </p>
       </header>
 
@@ -179,9 +179,10 @@
           off the host — a theme the rest of the page keeps returning to. The
           practical consequence for an attacker is a menu of options: influence the
           <em>state</em> the check consults, rewrite the <em>code</em> of the check,
-          or intercept the check's <em>execution</em>. Those three ideas are the
-          three families below, and they appeared in that order because each answers
-          how the previous one got caught.
+          or intercept the check's <em>execution</em> — and, more recently, corrupt
+          the <em>data</em> it relies on or replace the <em>provider</em> behind it.
+          The families below are laid out roughly in the order they appeared, because
+          each answers how the previous one got caught.
         </p>
 
         <h2>3. The bypass families — an arms race, in order</h2>
@@ -289,14 +290,85 @@
             crashes, which is the loudest possible signal.
           </li>
         </ul>
+        <p>
+          This is the method getting the most attention in 2025, and it is already
+          evolving under pressure. Rather than forge the return value, some variants
+          have the VEH shrink the length argument the scanner receives so it inspects
+          effectively nothing and reports clean — same outcome, a different lever.
+          And because arming a breakpoint on another thread goes through a
+          thread-context API that kernel telemetry can watch (see §8), newer variants
+          work to arm it more quietly — a two-handler scheme is one published example.
+          The detail of either is the recipe layer this page omits; the point is that
+          even the current favourite is a moving target, not a settled trick.
+        </p>
 
-        <h3>3.4 The three families at a glance</h3>
+        <h3>3.4 Data-only corruption — invalidate the context, not the code</h3>
+        <p>
+          A newer idea reaches the same end as patching without touching any code at
+          all. AMSI keeps a small <em>context</em> object, created when scanning is
+          initialised, whose header starts with an identifying signature. If that
+          signature is corrupted, <code>amsi.dll</code> treats the context as invalid
+          and short-circuits — returning without really scanning (sources differ on
+          whether the exact result is "clean" or an invalid-argument error, so treat
+          it as version-dependent). The appeal is that only <strong>heap data</strong>
+          changes, never a code page, so the in-memory-vs-disk integrity checks that
+          catch classic patching (§3.2) see nothing wrong. ETW has the same shape: the
+          modern move is less about patching <code>EtwEventWrite</code> and more about
+          scrubbing the provider's <em>enable state</em> so the runtime reads it as
+          disabled, or reaching past the public function to an internal one that
+          integrity checks are less likely to watch.
+        </p>
+
+        <h3>3.5 Provider hijacking and removal</h3>
+        <p>
+          AMSI is pluggable: antivirus engines register as AMSI providers, as COM
+          servers listed under <code>HKLM\SOFTWARE\Microsoft\AMSI\Providers</code>.
+          An attacker with the rights to edit that key can point the provider at a COM
+          server that always answers "clean", or simply remove the registration so no
+          provider is consulted at all. Unlike the in-memory tricks, this
+          <strong>survives process restarts</strong> and even reboots — it is as much
+          persistence as evasion — but it needs administrative privileges and leaves a
+          registry change that monitoring of those keys catches directly. It is the
+          "configure the defence away" option rather than the "fight it in memory" one.
+        </p>
+
+        <h3>3.6 Hiding the bypass's own footprint</h3>
+        <p>
+          A modern loader does not just run a bypass; it tries to make the bypass
+          itself quiet, because the <em>setup</em> is now what gets caught. Two ideas
+          dominate:
+        </p>
+        <ul>
+          <li>
+            <strong>Unhooking.</strong> EDRs plant inline hooks in the userland copies
+            of <code>ntdll</code> and <code>amsi.dll</code> to watch sensitive calls.
+            Loading a fresh, pristine copy of the library from disk (or from the
+            cached KnownDLLs) over the hooked one removes those hooks, so the bypass's
+            own actions are no longer observed by the EDR's userland sensor.
+          </li>
+          <li>
+            <strong>Indirect syscalls.</strong> The memory and thread operations a
+            bypass needs can be issued so that execution enters the kernel without
+            passing through the hooked function prologues in <code>ntdll</code>,
+            denying the userland hooks a look at them.
+          </li>
+        </ul>
+        <p>
+          Both only defeat <em>userland</em> visibility, and that limit is the whole
+          story of §8: they do nothing against kernel-sourced telemetry, which is
+          exactly where the state of the art is now caught.
+        </p>
+
+        <h3>3.7 The methods at a glance</h3>
         <table>
           <thead><tr><th>Family</th><th>What it manipulates</th><th>What catches it</th></tr></thead>
           <tbody>
-            <tr><td>State tampering</td><td>A flag the runtime consults before scanning / emitting</td><td>AMSI tamper signals; the flag being reset and re-asserted repeatedly</td></tr>
+            <tr><td>State tampering</td><td>A flag the runtime consults before scanning / emitting (e.g. <code>amsiInitFailed</code>)</td><td>AMSI tamper signals; the flag being reset and re-asserted repeatedly</td></tr>
             <tr><td>Function patching</td><td>The first bytes of <code>AmsiScanBuffer</code> / <code>EtwEventWrite</code></td><td>In-memory vs on-disk integrity checks; RWX code pages; kernel hashing</td></tr>
-            <tr><td>Patchless interception</td><td>Execution of the check — a hardware breakpoint (debug registers) + a VEH</td><td>Non-zero debug registers / a VEH registered on security functions</td></tr>
+            <tr><td>Patchless interception</td><td>Execution of the check — a hardware breakpoint (debug registers) + a VEH</td><td>Kernel telemetry on thread-context changes (ETW-TI); debug-register / VEH inspection</td></tr>
+            <tr><td>Data-only corruption</td><td>The AMSI context signature, or an ETW provider's enable state — heap data, not code</td><td>Integrity checks that also watch key data structures; abnormal/invalid context state</td></tr>
+            <tr><td>Provider hijack / removal</td><td>The registered AMSI provider COM entry under <code>HKLM\…\AMSI\Providers</code></td><td>Registry monitoring of the provider keys; an admin-level change</td></tr>
+            <tr><td>Footprint hiding (unhooking / indirect syscalls)</td><td>Not a bypass itself — hides the others' userland traces</td><td>Kernel-sourced telemetry (ETW-TI), which userland unhooking cannot reach</td></tr>
           </tbody>
         </table>
 
@@ -443,11 +515,16 @@
         </p>
         <ul>
           <li>
-            <strong>Kernel and hardware-assisted telemetry.</strong> ETW
-            threat-intelligence events and EDR kernel sensors observe the suspicious
-            setup these techniques require — the memory-protection changes, the
-            integrity mismatches, the debug-state anomalies — where an in-process scan
-            is blind by definition.
+            <strong>Kernel telemetry — the ceiling on all of it.</strong> The
+            Microsoft-Windows-Threat-Intelligence provider (<strong>ETW-TI</strong>) is
+            registered by the kernel itself, so it reports regardless of userland
+            tricks: unhooking and indirect syscalls (§3.6) do not touch it. Crucially,
+            setting a hardware breakpoint on another thread goes through a
+            thread-context change (<code>NtSetContextThread</code>), which ETW-TI
+            surfaces — so the very step that makes the patchless method (§3.3) possible
+            is also what a modern EDR keys on to catch it. This is the vantage point an
+            in-process bypass cannot reach, and it is why the state of the art has a
+            ceiling rather than a clean win.
           </li>
           <li>
             <strong>Integrity and memory scanning.</strong> Periodically comparing the
