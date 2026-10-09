@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Red Team Workflow — Satej Chaudhari</title>
+  <title>External Red Team Workflow — Satej Chaudhari</title>
   <meta name="description" content="A combined red-team workflow: reconnaissance (OSINT) as a tickable checklist, then Initial Access as a jumpable playbook of vectors — phishing, web, remote services, credentials, network, wireless, physical, hardware, supply chain, drive-by and cloud — each with a note, command, tools and 'on success -> next step' links into the AD attack map.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Satej Chaudhari">
-  <meta property="og:title" content="Red Team Workflow">
+  <meta property="og:title" content="External Red Team Workflow">
   <meta property="og:description" content="Reconnaissance (OSINT) as a checklist, then Initial Access as a jumpable playbook of vectors with notes, commands, tools and next-step links.">
-  <meta property="og:url" content="https://satejchaudhari.com/red-team-workflow.html">
+  <meta property="og:url" content="https://satejchaudhari.com/external-red-team-workflow.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Red Team Workflow">
+  <meta name="twitter:title" content="External Red Team Workflow">
   <meta name="twitter:description" content="Reconnaissance (OSINT) as a checklist, then Initial Access as a jumpable playbook of vectors with notes, commands, tools and next-step links.">
-  <link rel="canonical" href="https://satejchaudhari.com/red-team-workflow.html">
+  <link rel="canonical" href="https://satejchaudhari.com/external-red-team-workflow.html">
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -287,14 +287,13 @@
   <main id="main" tabindex="-1" class="rtw-wrap">
     <div class="webmap-top">
       <p class="eyebrow">Interactive</p>
-      <h1>Red Team Workflow</h1>
+      <h1>External Red Team Workflow</h1>
     </div>
-    <p class="webmap-hint">Two surfaces in one flow. <b>Reconnaissance</b> is an OSINT <b>checklist</b> you tick as you cover it. <b>Initial Access</b> is a <b>playbook of vectors</b>: expand a technique for its note, command and tools, read the colour-coded outcome, then follow the <b>&ldquo;on success &rarr; next step&rdquo;</b> link to the follow-up. Not every method applies to every target, so these are options, not checks.</p>
-    <p class="webmap-hint">Chips link into the <b>Toolkit</b>, <b>Vulns &amp; Misconfigs</b> and <b>Theory</b>. The chain hands off into the <a href="ad-map.html">AD Attack-Path Explorer</a>. For authorised engagements only.</p>
+    <p class="webmap-hint">From the outside in &mdash; reconnaissance, then every vector that turns it into a foothold, each with a note, command and tools. Chips link the <b>Toolkit</b>, <b>Vulns</b> and <b>Theory</b>; the chain hands off to the <a href="ad-map.html">AD attack map</a> and the <a href="web-map.html">web checklist</a>. Authorised engagements only.</p>
 
     <nav id="rtw-nav" class="rtw-nav"><!-- jump bar built by rtwmap-main.js --></nav>
 
-    <h2 class="rtw-part">1 &middot; Reconnaissance <span>OSINT &mdash; a checklist you tick</span></h2>
+    <h2 class="rtw-part">1 &middot; Reconnaissance <span>OSINT</span></h2>
     <div class="webmap-progress-wrap">
       <div class="webmap-bar-track"><div id="rtw-recon-bar-fill"></div></div>
       <span id="rtw-recon-bar-label">0 / 0 checks (0%)</span>
@@ -306,8 +305,7 @@
     </div>
     <div id="recon-root"><!-- checklist built by rtwmap-main.js --></div>
 
-    <h2 class="rtw-part">2 &middot; Initial Access <span>a playbook &mdash; follow the jumps, don't tick</span></h2>
-    <p class="webmap-hint rtw-note">Pick the vector that fits the attack surface recon exposed. Each technique shows what you gain and links to the logical next step on success.</p>
+    <h2 class="rtw-part">2 &middot; Initial Access</h2>
     <div class="webmap-controls">
       <button class="webmap-btn" id="rtw-access-expand">Expand all</button>
       <button class="webmap-btn" id="rtw-access-collapse">Collapse all</button>
