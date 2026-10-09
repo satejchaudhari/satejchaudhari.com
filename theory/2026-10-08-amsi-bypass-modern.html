@@ -209,6 +209,24 @@
           treats it as a flag to be held down, re-asserting it before each command,
           each script, and on a timed cycle, rather than flipping it once and hoping.
         </p>
+        <blockquote>
+          <strong>"But wouldn't the EDR notice a process that stopped being
+          scanned?"</strong> In principle, yes — and that is a real weakness of this
+          family — but it is subtler than counting scans. A clean scan is not normally
+          a logged event, so "this process produced zero scans" is not something most
+          tools baseline; there was never a per-scan record to miss. What <em>is</em>
+          observable is the <strong>tamper</strong> itself: flipping
+          <code>amsiInitFailed</code> moves AMSI from "initialised and scanning" to
+          "reporting init-failed" mid-life, an anomalous transition that modern AMSI
+          surfaces as tamper telemetry — and, ironically, AMSI scans the very script
+          that tries to set the flag, so the classic one-liners are heavily signatured
+          and often caught before they run. The strongest tell, though, is the
+          <em>mismatch</em>: if script-block logging (Event ID 4104, carried over ETW)
+          still shows the process executing plenty of code while AMSI has gone silent,
+          that contradiction is far louder than silence alone. That is precisely why
+          AMSI is rarely silenced on its own — it is paired with an ETW bypass (§6),
+          so the logs that would expose the gap are closed at the same time.
+        </blockquote>
 
         <h3>3.2 Function patching — rewrite the check</h3>
         <p>
