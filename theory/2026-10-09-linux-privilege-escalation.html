@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Linux Privilege Escalation — Satej Chaudhari</title>
+  <meta name="description" content="The operator&#x27;s map of Linux local privilege escalation — enumeration, SUID/SGID and GTFOBins, sudo rules, cron and systemd timers, PATH and wildcard injection, capabilities, writable sensitive files, group/container escapes (docker/lxd/disk/NFS), kernel exploits, and detection/hardening.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Linux Privilege Escalation">
+  <meta property="og:description" content="The operator&#x27;s map of Linux local privilege escalation — enumeration, SUID/SGID and GTFOBins, sudo rules, cron and systemd timers, PATH and wildcard injection, capabilities, writable sensitive files, group/container escapes (docker/lxd/disk/NFS), kernel exploits, and detection/hardening.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-linux-privilege-escalation.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Linux Privilege Escalation">
+  <meta name="twitter:description" content="The operator&#x27;s map of Linux local privilege escalation — enumeration, SUID/SGID and GTFOBins, sudo rules, cron and systemd timers, PATH and wildcard injection, capabilities, writable sensitive files, group/container escapes (docker/lxd/disk/NFS), kernel exploits, and detection/hardening.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Linux</span>
+        <h1 class="post-title">Linux Privilege Escalation</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 12 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          You have a shell on a Linux host as a low-privileged user. Local
+          privilege escalation is the step from that foothold to <code>root</code>,
+          and on Linux it is almost always a <em>misconfiguration</em> rather than
+          a memory-corruption exploit: a binary that runs with privileges it should
+          not, a writable file the system trusts, or a permission a group quietly
+          grants. This page is the operator's map of those classes and how each is
+          abused and found.
+        </p>
+
+        <h2>Enumerate first — let a tool do the sweep</h2>
+        <p>
+          Never escalate blind. Run an automated enumeration script, read its
+          output, and only then reach for a technique. The classics:
+        </p>
+        <pre><code># the standard automated sweeps
+./linpeas.sh                 # LinPEAS — colour-coded, finds nearly everything
+./lse.sh -l1                 # linux-smart-enumeration, levelled output
+# manual quick wins
+id; sudo -l                  # my groups, and what I can run as root
+uname -a; cat /etc/os-release  # kernel / distro for exploit matching
+find / -perm -4000 -type f 2>/dev/null   # SUID binaries</code></pre>
+        <blockquote>
+          The order that pays off: <strong>sudo -l &rarr; SUID &rarr; cron &rarr;
+          writable files &rarr; capabilities &rarr; group memberships &rarr; kernel</strong>.
+          Quiet, config-based wins come before loud kernel exploits that can panic
+          the box.
+        </blockquote>
+
+        <h2>SUID / SGID binaries</h2>
+        <p>
+          A SUID binary runs with its <em>owner's</em> privileges regardless of who
+          launches it; SUID-root therefore runs as root. The exploit is to find a
+          SUID binary that can be made to execute your commands, read protected
+          files, or write where it should not. <a href="https://gtfobins.github.io/" target="_blank" rel="noopener">GTFOBins</a>
+          is the canonical lookup — it lists, per binary, the exact invocation that
+          breaks out.
+        </p>
+        <pre><code>find / -perm -4000 -type f 2>/dev/null
+# example: a SUID find breaks straight to a root shell
+find . -exec /bin/sh -p \; -quit
+# custom SUID binary calling a command by relative name -> PATH hijack (below)</code></pre>
+
+        <h2>Sudo rules</h2>
+        <p>
+          <code>sudo -l</code> lists what your user may run as another user — the
+          single highest-value check. A rule that lets you run almost any
+          interpreter, editor, or GTFOBins-listed binary as root is a direct
+          escalation; so are classic <code>sudo</code> CVEs and environment tricks.
+        </p>
+        <table>
+          <thead><tr><th>Finding</th><th>Abuse</th></tr></thead>
+          <tbody>
+            <tr><td>A GTFOBins binary allowed as root</td><td>Use its documented shell breakout (e.g. <code>sudo vim -c ':!/bin/sh'</code>)</td></tr>
+            <tr><td><code>env_keep</code> / <code>LD_PRELOAD</code> kept</td><td>Point <code>LD_PRELOAD</code> at a malicious <code>.so</code> that spawns a shell</td></tr>
+            <tr><td><code>(ALL) NOPASSWD: /path/script.sh</code> you can write</td><td>Overwrite the script, or abuse a wildcard in its path</td></tr>
+            <tr><td>Old sudo (e.g. Baron Samedit)</td><td>Match the version to the known CVE</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Cron jobs & systemd timers</h2>
+        <p>
+          Scheduled tasks run as their owner, usually root, on a timer. If you can
+          influence <em>what</em> a root cron runs — a writable script, a writable
+          directory in its path, or a wildcard it expands — you execute as root at
+          the next tick.
+        </p>
+        <pre><code>cat /etc/crontab; ls -la /etc/cron.*; systemctl list-timers
+# writable script run by root cron -> append your payload
+echo 'cp /bin/bash /tmp/rootbash; chmod +s /tmp/rootbash' >> /path/backup.sh
+# wildcard injection: a root cron doing `tar czf backup.tar.gz *` in a writable dir
+echo 'mypayload' > '--checkpoint=1'; echo 'mypayload' > '--checkpoint-action=exec=sh payload.sh'</code></pre>
+
+        <h2>PATH &amp; wildcard injection</h2>
+        <p>
+          A privileged program that calls another command by its <em>name</em>
+          rather than its absolute path trusts <code>$PATH</code>. If you control a
+          directory earlier in PATH (or the program's working directory), drop a
+          malicious binary of that name. Wildcard injection is the same idea for
+          shell globs — crafted filenames become command-line arguments.
+        </p>
+
+        <h2>Linux capabilities</h2>
+        <p>
+          Capabilities slice root's power into units, and a binary granted a
+          dangerous one escalates without being SUID. <code>cap_setuid</code> lets a
+          binary set its UID to 0; <code>cap_dac_read_search</code> reads any file;
+          others allow module loading or raw sockets.
+        </p>
+        <pre><code>getcap -r / 2>/dev/null
+# python with cap_setuid -> set uid 0 and drop a root shell
+./python -c 'import os; os.setuid(0); os.system("/bin/sh")'</code></pre>
+
+        <h2>Writable sensitive files</h2>
+        <ul>
+          <li><strong>Writable <code>/etc/passwd</code></strong> — add a root-UID user with a known password hash (or remove the <code>x</code> to blank root's password).</li>
+          <li><strong>Writable <code>/etc/shadow</code></strong> — replace root's hash with one you know.</li>
+          <li><strong>Writable service unit / init script</strong> — edit the <code>ExecStart</code> a root service runs, then restart it or wait for a reboot.</li>
+          <li><strong>Readable backups / config / history</strong> — passwords in <code>.bash_history</code>, <code>.env</code>, config files, and world-readable backups.</li>
+        </ul>
+
+        <h2>Group memberships &amp; container escapes</h2>
+        <ul>
+          <li><strong><code>docker</code> group</strong> — equivalent to root: run a container that bind-mounts <code>/</code> and chroot into it.</li>
+          <li><strong><code>lxd</code> / <code>lxc</code> group</strong> — launch a privileged container mounting the host disk.</li>
+          <li><strong><code>disk</code> group</strong> — read/write raw devices with <code>debugfs</code> to pull <code>/etc/shadow</code>.</li>
+          <li><strong>NFS <code>no_root_squash</code></strong> — mount the export, drop a root-owned SUID binary from a box you control.</li>
+        </ul>
+
+        <h2>Kernel &amp; the last resort</h2>
+        <p>
+          A kernel or privileged-service exploit (Dirty COW, Dirty Pipe, PwnKit/
+          <code>pkexec</code>, OverlayFS, Sudo Baron Samedit) matches a specific
+          version — confirm <code>uname -a</code> and the package version before
+          running anything, because a wrong kernel exploit panics the host. Prefer
+          the config wins above; use an exploit only when enumeration comes up dry.
+        </p>
+
+        <h2>Detection &amp; hardening</h2>
+        <ul>
+          <li>Minimise SUID/SGID and capabilities; audit them (<code>find -perm</code>, <code>getcap</code>) and alert on new ones.</li>
+          <li>Tightly scope sudo rules; never allow interpreters/editors, drop <code>env_keep</code>, keep sudo patched.</li>
+          <li>Make cron scripts and their directories root-owned and non-writable; avoid wildcards on untrusted input.</li>
+          <li>Monitor with <strong>auditd</strong> (execve, setuid, writes to <code>/etc/passwd</code>/<code>shadow</code>) and ship it off-host — see the <a href="2026-10-09-logging-and-telemetry.html">Logging</a> page.</li>
+          <li>Keep users out of the <code>docker</code>/<code>lxd</code>/<code>disk</code> groups unless they truly need root-equivalent access.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-09-pivoting-and-tunnelling.html">Pivoting &amp; Tunnelling</a></li>
+          <li><a href="2026-09-24-perimeter-to-ad.html">Perimeter &rarr; Active Directory</a></li>
+          <li><a href="2026-10-09-logging-and-telemetry.html">Logging &amp; Telemetry</a></li>
+          <li><a href="../toolkit.html">Toolkit</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

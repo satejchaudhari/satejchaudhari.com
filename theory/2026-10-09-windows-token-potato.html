@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows Token Abuse &amp; Potato Attacks — Satej Chaudhari</title>
+  <meta name="description" content="From a service-account foothold to SYSTEM via token privileges — which privileges (SeImpersonate, SeAssignPrimaryToken, SeDebug, SeBackup/Restore, SeLoadDriver) are really admin, the Potato pattern (coerce SYSTEM auth, impersonate the token), PrintSpoofer/RoguePotato/JuicyPotato/GodPotato and when each applies, other token abuse, and detection.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Windows Token Abuse &amp; Potato Attacks">
+  <meta property="og:description" content="From a service-account foothold to SYSTEM via token privileges — which privileges (SeImpersonate, SeAssignPrimaryToken, SeDebug, SeBackup/Restore, SeLoadDriver) are really admin, the Potato pattern (coerce SYSTEM auth, impersonate the token), PrintSpoofer/RoguePotato/JuicyPotato/GodPotato and when each applies, other token abuse, and detection.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-windows-token-potato.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Windows Token Abuse &amp; Potato Attacks">
+  <meta name="twitter:description" content="From a service-account foothold to SYSTEM via token privileges — which privileges (SeImpersonate, SeAssignPrimaryToken, SeDebug, SeBackup/Restore, SeLoadDriver) are really admin, the Potato pattern (coerce SYSTEM auth, impersonate the token), PrintSpoofer/RoguePotato/JuicyPotato/GodPotato and when each applies, other token abuse, and detection.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Red Team</span>
+        <h1 class="post-title">Windows Token Abuse &amp; Potato Attacks</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 11 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          On Windows, what a process can do is decided by its <strong>access
+          token</strong> and the <strong>privileges</strong> that token holds. A
+          handful of those privileges are, in practice, local admin or SYSTEM in
+          disguise — and a service account that holds one is the usual route from a
+          web/app foothold to SYSTEM. This page covers which privileges matter and
+          the "Potato" family that turns one of them into a SYSTEM shell. It builds
+          on <a href="2026-08-18-windows-tokens-uac.html">Windows Access Tokens &amp;
+          UAC</a>.
+        </p>
+
+        <h2>The privileges that are really admin</h2>
+        <p>
+          Check your token with <code>whoami /priv</code>. Several privileges, if
+          <em>Enabled</em> (or enable-able), are escalation primitives:
+        </p>
+        <table>
+          <thead><tr><th>Privilege</th><th>Why it is dangerous</th></tr></thead>
+          <tbody>
+            <tr><td><strong>SeImpersonatePrivilege</strong></td><td>Impersonate a token you can make connect to you — the key to every Potato (common on service accounts, IIS, MSSQL).</td></tr>
+            <tr><td><strong>SeAssignPrimaryTokenPrivilege</strong></td><td>Assign a primary token to a new process — the same Potato primitive by another route.</td></tr>
+            <tr><td><strong>SeDebugPrivilege</strong></td><td>Open any process — read LSASS, inject into a SYSTEM process.</td></tr>
+            <tr><td><strong>SeBackupPrivilege</strong></td><td>Read any file ignoring the DACL — copy SAM/SYSTEM/NTDS.dit.</td></tr>
+            <tr><td><strong>SeRestorePrivilege</strong></td><td>Write any file — overwrite a service binary or a DLL a SYSTEM process loads.</td></tr>
+            <tr><td><strong>SeTakeOwnershipPrivilege</strong></td><td>Take ownership of any object, then grant yourself access.</td></tr>
+            <tr><td><strong>SeLoadDriverPrivilege</strong></td><td>Load a (vulnerable) driver &rarr; kernel code execution (BYOVD).</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The Potato pattern</h2>
+        <p>
+          The Potato attacks all exploit the same idea. A service account holding
+          <strong>SeImpersonate</strong> cannot directly become SYSTEM — but it can
+          <em>impersonate a token it is handed</em>. The trick is to coerce a
+          <strong>SYSTEM</strong> process into authenticating to a listener you
+          control (via a local RPC/COM or named-pipe primitive), capture or receive
+          that SYSTEM token, and impersonate it to spawn a process as SYSTEM. No
+          password, no memory corruption — just abusing trusted local IPC plus the
+          impersonation privilege the account already has.
+        </p>
+        <blockquote>
+          The whole family reduces to: <strong>force SYSTEM to talk to me &rarr;
+          impersonate the SYSTEM token I receive &rarr; run my command as SYSTEM.</strong>
+          Which Potato you use depends only on which coercion primitive the
+          Windows version and patch level leaves open.
+        </blockquote>
+
+        <h2>The family — which one, when</h2>
+        <table>
+          <thead><tr><th>Tool</th><th>Primitive / when it applies</th></tr></thead>
+          <tbody>
+            <tr><td><strong>PrintSpoofer</strong></td><td>Abuses the Print Spooler's named pipe (<code>SpoolSS</code>) — the go-to on modern Windows 10/Server 2016–2019 where Spooler is up.</td></tr>
+            <tr><td><strong>RoguePotato</strong></td><td>Redirects the OXID resolver over a fake RPC to coerce SYSTEM — works where the DCOM trick was patched.</td></tr>
+            <tr><td><strong>JuicyPotato / JuicyPotatoNG</strong></td><td>The original DCOM/BITS CLSID abuse — effective on older builds (pre-Server 2019) that still allow it.</td></tr>
+            <tr><td><strong>GodPotato / SweetPotato / EfsPotato</strong></td><td>Newer, broad coverage across current builds using RPC/EFSRPC coercion — the current default when Spooler is off.</td></tr>
+          </tbody>
+        </table>
+        <pre><code># confirm the privilege
+whoami /priv | findstr SeImpersonate
+# then run a Potato appropriate to the build (example shapes)
+PrintSpoofer.exe -i -c cmd
+GodPotato.exe -cmd "cmd /c whoami"   # should return nt authority\system</code></pre>
+
+        <h2>Token abuse beyond Potatoes</h2>
+        <ul>
+          <li><strong>SeBackup/SeRestore</strong> &rarr; read the SAM &amp; SYSTEM hives (or NTDS.dit on a DC) and extract hashes offline.</li>
+          <li><strong>SeDebug</strong> &rarr; dump LSASS (see <a href="2026-08-18-windows-credential-storage.html">Windows Credential Storage</a>) or inject into a SYSTEM process.</li>
+          <li><strong>SeLoadDriver</strong> &rarr; load a known-vulnerable signed driver and execute in the kernel (BYOVD) — also a path to disabling EDR.</li>
+          <li><strong>Token theft / impersonation</strong> &rarr; already-SYSTEM/admin? Duplicate another logged-on user's token to act as them, including for lateral movement.</li>
+        </ul>
+
+        <h2>Detection &amp; hardening</h2>
+        <ul>
+          <li>Grant <code>SeImpersonate</code>/<code>SeAssignPrimaryToken</code> only where genuinely needed; audit service-account privileges.</li>
+          <li>Disable the Print Spooler on servers that do not print (kills PrintSpoofer and PrintNightmare at once).</li>
+          <li>Alert on a service/IIS/SQL account spawning <code>cmd</code>/<code>powershell</code> as SYSTEM, and on named-pipe impersonation patterns (Sysmon 17/18 — see <a href="2026-10-09-logging-and-telemetry.html">Logging</a>).</li>
+          <li>Block vulnerable drivers (Microsoft's blocklist / WDAC) to close <code>SeLoadDriver</code> and BYOVD.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-08-18-windows-tokens-uac.html">Windows Access Tokens &amp; UAC</a></li>
+          <li><a href="2026-08-18-windows-credential-storage.html">Windows Credential Storage</a></li>
+          <li><a href="2026-09-24-perimeter-to-ad.html">Perimeter &rarr; Active Directory</a></li>
+          <li><a href="../ad-map.html">AD Attack-Path Explorer</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

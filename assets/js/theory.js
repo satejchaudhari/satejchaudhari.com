@@ -20,6 +20,30 @@
 
 var THEORY = [
   {
+    title: "Linux Privilege Escalation",
+    url: "theory/2026-10-09-linux-privilege-escalation.html",
+    date: "2026-10-09",
+    tag: "Linux",
+    description: "The operator's map of Linux local privesc — enumeration, SUID/SGID and GTFOBins, sudo rules, cron and systemd timers, PATH and wildcard injection, capabilities, writable sensitive files, group/container escapes (docker/lxd/disk/NFS), kernel exploits, and hardening.",
+    readTime: "12 min read"
+  },
+  {
+    title: "Pivoting & Tunnelling",
+    url: "theory/2026-10-09-pivoting-and-tunnelling.html",
+    date: "2026-10-09",
+    tag: "Red Team",
+    description: "Using a foothold to reach networks you cannot touch directly — the local/remote/dynamic forwards and SOCKS, SSH tunnelling, chisel, ligolo-ng's routable interface, proxychains, Windows pivots, double pivots, and detection.",
+    readTime: "10 min read"
+  },
+  {
+    title: "Windows Token Abuse & Potato Attacks",
+    url: "theory/2026-10-09-windows-token-potato.html",
+    date: "2026-10-09",
+    tag: "Red Team",
+    description: "From a service-account foothold to SYSTEM — which token privileges are really admin (SeImpersonate, SeDebug, SeBackup/Restore, SeLoadDriver), the Potato pattern, PrintSpoofer/RoguePotato/JuicyPotato/GodPotato and when each applies, and detection.",
+    readTime: "11 min read"
+  },
+  {
     title: "Logging & Telemetry — From Event to SIEM",
     url: "theory/2026-10-09-logging-and-telemetry.html",
     date: "2026-10-09",
