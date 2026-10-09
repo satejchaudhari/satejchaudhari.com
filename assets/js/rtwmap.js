@@ -32,39 +32,6 @@ var RTW_MAP = {
   recon: {
     sections: [
       {
-        id: "r-planning", title: "Planning & Scoping", color: "#22d3ee", tag: "Pre-engagement",
-        desc: "Set the objective and scope before collecting anything.",
-        groups: [
-          { id: "rp-obj", title: "Define the objective", scenario: "the very start — before you collect anything.", items: [
-            { text: "Write the recon requirement as a question", desc: "State what the recon feeds (initial-access surface, target users, infrastructure)." },
-            { text: "List the selectors you already hold", desc: "Company, domains, brands, names, emails, usernames — your starting pivots." },
-            { text: "Set success criteria and a stop condition", desc: "Decide what 'enough' looks like; OSINT expands without limit." },
-            { text: "Keep the OSINT Framework open as a decision tree", desc: "Pick the branch that matches the selector in front of you.", tools: [ { n: "OSINT Framework", url: "https://osintframework.com/" } ] }
-          ]},
-          { id: "rp-scope", title: "Scope & rules of engagement", scenario: "at kickoff — lock down what is in play.", items: [
-            { text: "Confirm the target scope and in-scope selectors", desc: "Which domains, brands, netblocks, people and accounts are fair game." },
-            { text: "Agree rules of engagement and deconfliction", desc: "Timing, the passive/active boundary, points of contact, reporting." },
-            { text: "Keep an audit trail of sources and timestamps", desc: "Backs the report and lets blue team retrace the trail." }
-          ]}
-        ]
-      },
-      {
-        id: "r-opsec", title: "OPSEC & Managed Attribution", color: "#818cf8", tag: "OpSec",
-        desc: "Keep collection from touching the target and keep yourself out of your own data.",
-        groups: [
-          { id: "ro-infra", title: "Research environment", scenario: "before interacting with any target-controlled surface.", items: [
-            { text: "Use a dedicated VM / clean browser profile", desc: "Isolate research from your real identity, cookies and history." },
-            { text: "Route through a VPN / non-attributable egress", desc: "Avoid revealing your real IP and employer netblock." },
-            { text: "Watch for tracking and view-leaks", desc: "Link shorteners, pixels and 'who viewed' features tip off the target." }
-          ]},
-          { id: "ro-puppet", title: "Sock puppets", scenario: "when a source needs an account to view.", items: [
-            { text: "Build aged, believable research accounts", desc: "Never use real or employer accounts to view a target." },
-            { text: "Separate puppets per platform / engagement", desc: "Avoid cross-contamination that links personas." },
-            { text: "Mind account-suggestion leaks", desc: "'People you may know' can link personas back to you." }
-          ]}
-        ]
-      },
-      {
         id: "r-domain", title: "Domains, DNS & Infrastructure", color: "#38bdf8", tag: "Infra",
         desc: "Map the namespace: registration, DNS, subdomains, certificates.",
         groups: [
@@ -93,16 +60,62 @@ var RTW_MAP = {
       },
       {
         id: "r-people", title: "People, Email & Usernames", color: "#fb7185", tag: "HUMINT",
-        desc: "Build the people picture — names, roles, handles, breaches.",
+        desc: "Build the people picture — names, roles, handles.",
         groups: [
           { id: "rpe-org", title: "Org & people", scenario: "to build the org chart and email format.", items: [
             { text: "Harvest employees, roles and email format", desc: "Org chart + first.last@ pattern drive phishing, vishing and spraying.", tools: [ { n: "theHarvester", id: "theharvester" }, { n: "Hunter.io", url: "https://hunter.io/" } ] },
             { text: "Mine job postings and public records", desc: "Vacancies leak the tech stack; registries confirm the entity.", tools: [ { n: "OpenCorporates", url: "https://opencorporates.com/" } ] },
             { text: "Identify the help desk and IT process", desc: "Who resets passwords/MFA and how — the pretext for vishing." }
           ]},
-          { id: "rpe-id", title: "Usernames, email & breaches", scenario: "with a handle, email or name in hand.", items: [
+          { id: "rpe-id", title: "Usernames & email", scenario: "with a handle, email or name in hand.", items: [
             { text: "Enumerate usernames across platforms", desc: "A reused handle links accounts everywhere.", tools: [ { n: "Sherlock", id: "sherlock" }, { n: "Maigret", id: "maigret" } ] },
-            { text: "Check email registration and breaches", desc: "Which services a person uses, and exposed passwords for spraying.", tools: [ { n: "Holehe", id: "holehe" }, { n: "Have I Been Pwned", url: "https://haveibeenpwned.com/" }, { n: "Dehashed", url: "https://dehashed.com/" } ] }
+            { text: "Check which services an email is registered on", desc: "Account-existence checks with no password attempts.", tools: [ { n: "Holehe", id: "holehe" } ] },
+            { text: "Enrich with people-search aggregators", desc: "Addresses, relatives and past locations (region-specific).", tools: [ { n: "IntelTechniques", url: "https://inteltechniques.com/tools/" } ] }
+          ]}
+        ]
+      },
+      {
+        id: "r-social", title: "Social Media (SOCMINT)", color: "#60a5fa", tag: "SOCMINT",
+        desc: "Profiles, posts and networks across platforms — the richest people source.",
+        groups: [
+          { id: "rs-profiles", title: "Profiles & posts", scenario: "once an account is linked to the target or its staff.", items: [
+            { text: "Enumerate profiles per platform", desc: "LinkedIn, X, Facebook, Instagram, TikTok, Reddit, Mastodon — each has its own search quirks." },
+            { text: "Map the social graph and employees", desc: "Connections and org members reveal teams, reporting lines and relationships." },
+            { text: "Mine posts for operational detail", desc: "Badge photos, desk setups, screens, tech mentions, events and out-of-office windows." }
+          ]},
+          { id: "rs-capture", title: "Search & capture", scenario: "to gather at scale and preserve evidence.", items: [
+            { text: "Use platform search operators and read-only viewers", desc: "Advanced search and viewers reduce account risk." },
+            { text: "Archive posts as you find them", desc: "Social content is deleted fast — capture it immediately.", tools: [ { n: "archive.today", url: "https://archive.ph/" } ] }
+          ]}
+        ]
+      },
+      {
+        id: "r-media", title: "Images, Media & Geolocation", color: "#e879f9", tag: "IMINT / GEOINT",
+        desc: "Reverse-image, media and geolocation to source photos and place sites.",
+        groups: [
+          { id: "rm-image", title: "Reverse image & media", scenario: "when you have a photo, avatar, screenshot or video.", items: [
+            { text: "Reverse-image search across engines", desc: "Each indexes differently — always use several.", tools: [ { n: "Google Lens", url: "https://images.google.com/" }, { n: "Yandex", url: "https://yandex.com/images/" }, { n: "TinEye", url: "https://tineye.com/" } ] },
+            { text: "Read EXIF / embedded metadata", desc: "GPS, device and timestamps if the file kept them.", tools: [ { n: "ExifTool", id: "exiftool" } ] },
+            { text: "Mine video for background detail", desc: "Conference talks and demos leak offices, screens and staff." }
+          ]},
+          { id: "rm-geo", title: "Geolocation & site recon", scenario: "to place a photo or map a physical site.", items: [
+            { text: "Geolocate photos by landmarks and signage", desc: "Shop names, number plates, language and architecture narrow the region.", tools: [ { n: "Google Earth", url: "https://earth.google.com/" }, { n: "Mapillary", url: "https://www.mapillary.com/" } ] },
+            { text: "Map offices, entrances and surroundings", desc: "Satellite and street view for the physical / wireless approach." }
+          ]}
+        ]
+      },
+      {
+        id: "r-breach", title: "Breaches & Leaked Credentials", color: "#f87171", tag: "Leaks",
+        desc: "Exposed credentials and leaked datasets that feed credential-based access.",
+        groups: [
+          { id: "rb-exposure", title: "Credential exposure", scenario: "with an email, username, domain or phone in hand.", items: [
+            { text: "Check identifiers against breach indexes", desc: "Which breaches an identifier appears in, and which services the person used.", tools: [ { n: "Have I Been Pwned", url: "https://haveibeenpwned.com/" } ] },
+            { text: "Search aggregated leaks and stealer logs", desc: "Linked emails, usernames, passwords and session cookies across dumps.", tools: [ { n: "Dehashed", url: "https://dehashed.com/" }, { n: "Intelligence X", url: "https://intelx.io/" } ] },
+            { text: "Derive password patterns for spraying", desc: "Reuse and predictable mutation across services is the useful intelligence." }
+          ]},
+          { id: "rb-paste", title: "Paste & dark-web mentions", scenario: "to catch chatter and dumps naming the org.", items: [
+            { text: "Monitor paste sites and leak indexes", desc: "Dumped creds, docs and chatter surface on pastebins and aggregators.", tools: [ { n: "Intelligence X", url: "https://intelx.io/" } ] },
+            { text: "Search dark-web mentions of the org", desc: "Observe only — onion indexes for the target's name and domains.", tools: [ { n: "Ahmia", url: "https://ahmia.fi/" } ] }
           ]}
         ]
       },
