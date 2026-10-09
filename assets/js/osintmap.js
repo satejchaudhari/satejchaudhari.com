@@ -34,30 +34,29 @@ var OSINT_MAP = {
     /* ------------------------------------------------------------------ */
     {
       id: "planning",
-      title: "Planning, Scope & Legal",
+      title: "Planning & Scoping",
       color: "#22d3ee",
       tag: "Pre-engagement",
-      desc: "Set the objective, the authority to collect, and the boundaries before touching a single source.",
+      desc: "Set the objective and the engagement scope before collecting anything.",
       groups: [
         {
           id: "pl-objective",
           title: "Define the objective",
-          scenario: "the very start of any investigation — before you collect anything.",
+          scenario: "the very start of an engagement — before you collect anything.",
           items: [
-            { text: "Write the intelligence requirement as a question", desc: "State exactly what decision the intelligence supports (who / what / where), so collection stays focused and not open-ended." },
-            { text: "List the selectors you already hold", desc: "Name, email, username, phone, domain, image, company — your starting pivot points drive which phases apply." },
+            { text: "Write the recon requirement as a question", desc: "State exactly what the recon feeds (initial-access surface, target users, infrastructure), so collection stays focused and not open-ended." },
+            { text: "List the selectors you already hold", desc: "Company, domains, brands, names, emails, usernames — your starting pivot points drive which phases apply." },
             { text: "Set success criteria and a stop condition", desc: "Decide what 'enough' looks like so you do not rabbit-hole; OSINT expands without limit." }
           ]
         },
         {
-          id: "pl-legal",
-          title: "Authority, legality & ethics",
-          scenario: "always — collection without authority or outside the law is not OSINT, it is a liability.",
+          id: "pl-scope",
+          title: "Scope & rules of engagement",
+          scenario: "at kickoff — lock down what is in play before collection starts.",
           items: [
-            { text: "Confirm written authorisation / scope", desc: "For an engagement, confirm the target, the selectors in scope, and what is explicitly off-limits (personal accounts, family, etc.)." },
-            { text: "Check jurisdiction and data-protection law", desc: "GDPR and similar laws constrain collecting and storing personal data even from public sources; know what applies.", tools: [ { n: "GDPR", url: "https://gdpr-info.eu/" } ] },
-            { text: "Respect platform terms and the passive boundary", desc: "Logging in, scraping, or interacting can breach ToS and crosses from passive to active collection — decide deliberately." },
-            { text: "Keep an audit trail of sources and timestamps", desc: "Record where each fact came from and when; intelligence that cannot be sourced cannot be trusted or defended." }
+            { text: "Confirm the target scope and in-scope selectors", desc: "Which domains, brands, netblocks, people and accounts are fair game, and what is explicitly out of scope." },
+            { text: "Agree rules of engagement and deconfliction", desc: "Timing windows, the passive/active boundary you will hold to, points of contact, and how findings are reported." },
+            { text: "Keep an audit trail of sources and timestamps", desc: "Record where each fact came from and when — it backs the report and lets the blue team retrace the trail afterwards." }
           ]
         }
       ]
@@ -255,7 +254,7 @@ var OSINT_MAP = {
           items: [
             { text: "Disambiguate the full name and aliases", desc: "Common names need a second selector (location, employer, photo) to pin the right person." },
             { text: "People-search and public-records aggregators", desc: "Addresses, relatives, ages and past locations (coverage is region-specific).", tools: [ { n: "IntelTechniques", url: "https://inteltechniques.com/tools/" } ] },
-            { text: "Voter / electoral and property records", desc: "Where legal, these confirm address and identity (jurisdiction-dependent)." },
+            { text: "Voter / electoral and property records", desc: "Confirm address and identity where these registries are public (coverage is region-specific)." },
             { text: "Build a timeline and relationship map", desc: "Employers, education, locations and associates over time." }
           ]
         }
@@ -328,7 +327,7 @@ var OSINT_MAP = {
           items: [
             { text: "Normalise to E.164 and identify carrier / region / line type", desc: "Country, carrier and whether it is mobile, VoIP or landline.", tools: [ { n: "PhoneInfoga" } ] },
             { text: "Check caller-ID and reverse-lookup services", desc: "Crowdsourced name tags and spam reports (coverage varies by region)." },
-            { text: "Test the number against messaging apps", desc: "WhatsApp/Telegram/Signal presence and profile photo can confirm ownership — mind OPSEC and consent." }
+            { text: "Test the number against messaging apps", desc: "WhatsApp/Telegram/Signal presence and profile photo can confirm ownership — do it from a sock-puppet to protect OPSEC." }
           ]
         }
       ]
@@ -379,7 +378,7 @@ var OSINT_MAP = {
           scenario: "with an email, username, domain or phone in hand.",
           items: [
             { text: "Check which breaches an identifier appears in", desc: "Establishes exposure and which services the person used.", tools: [ { n: "Have I Been Pwned", url: "https://haveibeenpwned.com/" } ] },
-            { text: "Search aggregated leak datasets", desc: "Linked emails, usernames, hashed/plaintext passwords and reuse patterns (handle lawfully and ethically).", tools: [ { n: "Dehashed", url: "https://dehashed.com/" }, { n: "Intelligence X", url: "https://intelx.io/" } ] },
+            { text: "Search aggregated leak datasets", desc: "Linked emails, usernames, hashed/plaintext passwords and reuse patterns across dumps.", tools: [ { n: "Dehashed", url: "https://dehashed.com/" }, { n: "Intelligence X", url: "https://intelx.io/" } ] },
             { text: "Derive password patterns, not just values", desc: "Reuse and predictable mutation across services is the useful intelligence." }
           ]
         }
@@ -401,7 +400,7 @@ var OSINT_MAP = {
           items: [
             { text: "Run the image through multiple engines", desc: "Each indexes differently — always use several.", tools: [ { n: "Google Lens", url: "https://images.google.com/" }, { n: "Yandex", url: "https://yandex.com/images/" }, { n: "TinEye", url: "https://tineye.com/" } ] },
             { text: "Crop and search regions separately", desc: "Logos, faces and landmarks in isolation often match where the whole image does not." },
-            { text: "Use face-search engines with care", desc: "Face-matching across the web raises serious legal/ethical limits — only where authorised." }
+            { text: "Use face-search engines to place a person", desc: "Match a face across the web from a single photo; always confirm hits by hand, as false positives are common." }
           ]
         }
       ]
@@ -519,16 +518,16 @@ var OSINT_MAP = {
       title: "Dark Web & Paste Sites",
       color: "#9ca3af",
       tag: "Deep / Dark",
-      desc: "Leak markets, forums and paste sites — high value, high legal and OPSEC risk.",
+      desc: "Leak markets, forums and paste sites — high value, high OPSEC and malware risk.",
       groups: [
         {
           id: "dw-sources",
           title: "Deep & dark sources",
-          scenario: "when an identifier may appear in leaks, markets or forum chatter — only where authorised.",
+          scenario: "when an identifier may appear in leaks, markets or forum chatter.",
           items: [
             { text: "Search paste sites and leak indexes", desc: "Dumped creds, docs and chatter surface on pastebins and aggregators.", tools: [ { n: "Intelligence X", url: "https://intelx.io/" } ] },
-            { text: "Query Tor hidden-service search where lawful", desc: "Specialised indexes cover onion services; treat everything as untrusted and keep hard OPSEC.", tools: [ { n: "Ahmia", url: "https://ahmia.fi/" } ] },
-            { text: "Never transact or download malware", desc: "Observation only; interaction is a legal and safety line you do not cross without explicit authority." }
+            { text: "Query Tor hidden-service search engines", desc: "Specialised indexes cover onion services; treat everything as untrusted and keep hard OPSEC.", tools: [ { n: "Ahmia", url: "https://ahmia.fi/" } ] },
+            { text: "Observe only — do not transact or pull samples", desc: "Stay read-only: interacting with markets or downloading files is an OPSEC and malware risk to your research host." }
           ]
         }
       ]
