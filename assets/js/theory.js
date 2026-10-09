@@ -20,6 +20,30 @@
 
 var THEORY = [
   {
+    title: "BloodHound & AD Enumeration",
+    url: "theory/2026-10-09-bloodhound-ad-enumeration.html",
+    date: "2026-10-09",
+    tag: "AD",
+    description: "Thinking about Active Directory as a graph — SharpHound/AzureHound collection, nodes and edges (MemberOf, AdminTo, HasSession, GenericAll, delegation/cert edges), shortest-path to Domain Admin, custom Cypher, the enumerate-abuse-re-query loop, and OPSEC/detection.",
+    readTime: "10 min read"
+  },
+  {
+    title: "LSASS Dumping & Credential Extraction",
+    url: "theory/2026-10-09-lsass-credential-extraction.html",
+    date: "2026-10-09",
+    tag: "AD",
+    description: "Reading Windows' most valuable credential store — why LSASS holds hashes, Kerberos keys and sometimes plaintext, how it is dumped and parsed offline, the protections that stop it (LSA Protection/PPL, Credential Guard, ASR), where credentials live when LSASS is off the table, and detection.",
+    readTime: "10 min read"
+  },
+  {
+    title: "DPAPI Abuse",
+    url: "theory/2026-10-09-dpapi-abuse.html",
+    date: "2026-10-09",
+    tag: "AD",
+    description: "How Windows' Data Protection API is abused to recover saved secrets — browser passwords and cookies, Credential Vault, RDP/Wi-Fi — how master keys and the domain DPAPI backup key work, the paths from one user to domain-wide decryption, and detection.",
+    readTime: "9 min read"
+  },
+  {
     title: "Active Directory Persistence",
     url: "theory/2026-10-09-active-directory-persistence.html",
     date: "2026-10-09",

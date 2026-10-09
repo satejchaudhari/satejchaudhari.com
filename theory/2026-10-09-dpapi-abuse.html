@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DPAPI Abuse — Satej Chaudhari</title>
+  <meta name="description" content="How Windows&#x27; Data Protection API is abused to recover saved secrets — what DPAPI protects (browser passwords and cookies, Credential Vault, RDP/Wi-Fi), how master keys and the domain DPAPI backup key work, the access paths from a single user to domain-wide decryption, why the loot is high value, and detection.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="DPAPI Abuse">
+  <meta property="og:description" content="How Windows&#x27; Data Protection API is abused to recover saved secrets — what DPAPI protects (browser passwords and cookies, Credential Vault, RDP/Wi-Fi), how master keys and the domain DPAPI backup key work, the access paths from a single user to domain-wide decryption, why the loot is high value, and detection.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-dpapi-abuse.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DPAPI Abuse">
+  <meta name="twitter:description" content="How Windows&#x27; Data Protection API is abused to recover saved secrets — what DPAPI protects (browser passwords and cookies, Credential Vault, RDP/Wi-Fi), how master keys and the domain DPAPI backup key work, the access paths from a single user to domain-wide decryption, why the loot is high value, and detection.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+        <h1 class="post-title">DPAPI Abuse</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          The Data Protection API (DPAPI) is how Windows encrypts a user's secrets
+          at rest &mdash; browser passwords and cookies, saved RDP and Wi-Fi
+          credentials, the Windows Credential Vault, and many applications' stored
+          secrets. It is convenient and transparent, which also makes it a rich
+          target: once you can act as a user (or own the domain), DPAPI is the key
+          that unlocks a pile of their saved credentials.
+        </p>
+
+        <h2>What DPAPI protects</h2>
+        <ul>
+          <li><strong>Browser secrets</strong> &mdash; saved passwords and cookies (session cookies are especially valuable, since they bypass MFA when replayed).</li>
+          <li><strong>Windows Credential Manager / Vault</strong> &mdash; saved RDP, network share and application credentials.</li>
+          <li><strong>Wi-Fi keys, scheduled-task creds, and many app secrets</strong> that call the DPAPI functions.</li>
+        </ul>
+
+        <h2>How it works (the part that matters)</h2>
+        <p>
+          Each protected blob is encrypted with a key derived from a per-user
+          <strong>master key</strong>, which in turn is protected by the user's
+          password (and a machine key for machine-scoped data). So decrypting a blob
+          needs the right master key, and the master key needs either the user's
+          password, their password hash, or &mdash; the important part &mdash; the
+          <strong>domain DPAPI backup key</strong>.
+        </p>
+        <blockquote>
+          The domain backup key is the master skeleton: every domain controller holds
+          a backup key that can decrypt <em>any</em> domain user's DPAPI master keys.
+          An attacker who owns the domain can therefore decrypt the saved secrets of
+          every user in it &mdash; which is why DPAPI is both a local-user and a
+          domain-wide credential-access technique.
+        </blockquote>
+
+        <h2>The access paths</h2>
+        <table>
+          <thead><tr><th>You have</th><th>You can decrypt</th></tr></thead>
+          <tbody>
+            <tr><td>The user's password or NT hash</td><td>That user's master keys &rarr; their DPAPI blobs</td></tr>
+            <tr><td>Code running as the user</td><td>Their blobs transparently (the OS does the work)</td></tr>
+            <tr><td>Local admin / SYSTEM on the host</td><td>The machine master key &rarr; machine-scoped secrets</td></tr>
+            <tr><td>The domain DPAPI backup key (domain owned)</td><td>Any domain user's master keys &rarr; everyone's blobs</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Why it is high value</h2>
+        <p>
+          DPAPI loot is often credentials the victim actively uses &mdash; a saved
+          admin password in Credential Manager, a browser-stored password for an
+          internal app, or a live session cookie that skips authentication entirely.
+          It frequently yields lateral-movement and privilege-escalation material
+          that never appeared in LSASS, and it works offline from copied blobs and
+          master keys.
+        </p>
+
+        <h2>Detection &amp; hardening</h2>
+        <ul>
+          <li>Monitor access to the DPAPI master-key directories and the Credential Vault, and alert on extraction of the domain backup key from a DC.</li>
+          <li>Prefer not storing credentials in browsers/Credential Manager for privileged accounts; use a managed secrets vault instead.</li>
+          <li>Short session-cookie lifetimes and token-binding reduce the value of stolen cookies (ties into the AiTM problem in the <a href="external-red-team-workflow.html">workflow</a>).</li>
+          <li>Treat the domain backup key as crown-jewel material &mdash; its compromise means every user's saved secrets are exposed, a recovery consideration alongside <a href="2026-10-09-active-directory-persistence.html">AD persistence</a>.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-09-lsass-credential-extraction.html">LSASS Dumping &amp; Credential Extraction</a></li>
+          <li><a href="2026-08-18-windows-credential-storage.html">Windows Credential Storage</a></li>
+          <li><a href="2026-08-18-dcsync.html">DCSync</a></li>
+          <li><a href="../ad-map.html">AD Attack-Path Explorer</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>
