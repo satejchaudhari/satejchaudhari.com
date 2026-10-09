@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows Persistence — Satej Chaudhari</title>
+  <meta name="description" content="How access survives reboot and logout on Windows — Run keys, startup, Winlogon and logon scripts, scheduled tasks and services, fileless WMI event subscriptions, DLL/COM hijacking, and accessibility/account backdoors — by trigger, with the reliability-vs-noise trade-off and detection.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Windows Persistence">
+  <meta property="og:description" content="How access survives reboot and logout on Windows — Run keys, startup, Winlogon and logon scripts, scheduled tasks and services, fileless WMI event subscriptions, DLL/COM hijacking, and accessibility/account backdoors — by trigger, with the reliability-vs-noise trade-off and detection.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-windows-persistence.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Windows Persistence">
+  <meta name="twitter:description" content="How access survives reboot and logout on Windows — Run keys, startup, Winlogon and logon scripts, scheduled tasks and services, fileless WMI event subscriptions, DLL/COM hijacking, and accessibility/account backdoors — by trigger, with the reliability-vs-noise trade-off and detection.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Red Team</span>
+        <h1 class="post-title">Windows Persistence</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Persistence is how access survives a reboot, a logout, or a killed beacon.
+          On Windows the menu is large because many legitimate mechanisms run code
+          automatically; the operator picks one that is reliable, matches the
+          privilege held, and is quiet enough not to light up the EDR. Defenders
+          read the same list in reverse — these are the autoruns to baseline and
+          watch. This page catalogues the techniques by trigger.
+        </p>
+
+        <h2>Autostart on logon / boot</h2>
+        <table>
+          <thead><tr><th>Technique</th><th>Where / trigger</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Run / RunOnce keys</strong></td><td>Per-user and machine <code>...CurrentVersion\Run</code> keys fire at logon; the HKCU one needs no admin.</td></tr>
+            <tr><td><strong>Startup folder</strong></td><td>A shortcut in the user's or all-users Startup folder.</td></tr>
+            <tr><td><strong>Winlogon</strong></td><td><code>Userinit</code> / <code>Shell</code> values run at logon.</td></tr>
+            <tr><td><strong>Logon scripts</strong></td><td>The <code>UserInitMprLogonScript</code> value, or AD logon scripts.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Scheduled tasks &amp; services</h2>
+        <p>
+          The two most reliable high-privilege mechanisms. A scheduled task can fire
+          on logon, at boot, on a timer or on an event; a service starts at boot and
+          typically runs as SYSTEM. Both are first-class, documented admin features,
+          which is exactly why they are abused and why new ones should be alerted on.
+        </p>
+
+        <h2>WMI event subscriptions</h2>
+        <p>
+          A fileless, SYSTEM-level trigger: a permanent WMI subscription pairs an
+          <em>event filter</em> (a condition such as a given uptime or a process
+          starting) with a <em>consumer</em> that runs a command. It survives reboots
+          and lives in the WMI repository rather than on disk, which is why it is a
+          red-team favourite — and why Sysmon events 19–21 exist to catch it.
+        </p>
+
+        <h2>Hijacks that ride trusted code</h2>
+        <ul>
+          <li><strong>DLL search-order / sideloading</strong> — a malicious DLL placed where a trusted application loads it; the app runs the code whenever it starts.</li>
+          <li><strong>COM hijacking</strong> — pointing a frequently-instantiated CLSID under the per-user class store at an attacker DLL (no admin needed).</li>
+          <li><strong>Service / task binary replacement</strong> — overwriting a binary a privileged task already runs (overlaps with weak-permission privesc).</li>
+          <li><strong>Phantom DLLs</strong> — supplying a DLL a service looks for but does not ship.</li>
+        </ul>
+
+        <h2>Accessibility &amp; account backdoors</h2>
+        <ul>
+          <li><strong>Accessibility binaries</strong> — tampering with or Image-File-Execution-Options-hijacking the ease-of-access binaries gives a SYSTEM shell from the logon screen (effective but loud and well-signatured).</li>
+          <li><strong>Rogue local admin / RID hijack</strong> — adding an account, or aliasing one to the built-in administrator RID.</li>
+          <li><strong>Remote-access tweaks</strong> — enabling RDP and sticky-key style re-entry.</li>
+        </ul>
+        <blockquote>
+          Reliability versus noise is the whole decision. Run keys and scheduled
+          tasks are reliable but heavily monitored; WMI subscriptions and COM hijacks
+          are quieter but fiddlier. In an AD environment, domain-level persistence
+          (next page) usually beats host-level because it survives reimaging the
+          endpoint.
+        </blockquote>
+
+        <h2>Detection &amp; hardening</h2>
+        <ul>
+          <li>Baseline autoruns (Sysinternals Autoruns) and alert on new Run keys, services, scheduled tasks and WMI subscriptions (Sysmon 12&ndash;13, 19&ndash;21 &mdash; see <a href="2026-10-09-logging-and-telemetry.html">Logging</a>).</li>
+          <li>Watch for DLLs loading from user-writable paths and unusual per-user CLSID writes.</li>
+          <li>Application allow-listing (<a href="2026-10-08-applocker-bypass.html">AppLocker/WDAC</a>) limits what a persisted payload can run.</li>
+          <li>Alert on accessibility-binary tampering and IFEO debugger values.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-09-active-directory-persistence.html">Active Directory Persistence</a></li>
+          <li><a href="2026-10-09-windows-token-potato.html">Windows Token Abuse &amp; Potato Attacks</a></li>
+          <li><a href="2026-09-23-in-memory-tradecraft.html">In-Memory Post-Exploitation Tradecraft</a></li>
+          <li><a href="2026-10-09-logging-and-telemetry.html">Logging &amp; Telemetry</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

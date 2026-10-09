@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Active Directory Persistence — Satej Chaudhari</title>
+  <meta name="description" content="Domain persistence that survives reimaging and password resets — Golden/Silver/Diamond tickets and Skeleton Key, DCSync-rights and AdminSDHolder/ACL backdoors, certificate persistence (stolen CA key, Shadow Credentials), DSRM and DCShadow, plus detection and the recovery runbook.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Active Directory Persistence">
+  <meta property="og:description" content="Domain persistence that survives reimaging and password resets — Golden/Silver/Diamond tickets and Skeleton Key, DCSync-rights and AdminSDHolder/ACL backdoors, certificate persistence (stolen CA key, Shadow Credentials), DSRM and DCShadow, plus detection and the recovery runbook.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-active-directory-persistence.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Active Directory Persistence">
+  <meta name="twitter:description" content="Domain persistence that survives reimaging and password resets — Golden/Silver/Diamond tickets and Skeleton Key, DCSync-rights and AdminSDHolder/ACL backdoors, certificate persistence (stolen CA key, Shadow Credentials), DSRM and DCShadow, plus detection and the recovery runbook.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">AD</span>
+        <h1 class="post-title">Active Directory Persistence</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 12 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Host persistence dies when the endpoint is reimaged. <strong>Domain</strong>
+          persistence does not &mdash; it lives in the directory and the Kerberos
+          trust itself, so it survives machine rebuilds and often password resets.
+          This is the persistence that matters once the domain is owned, and the
+          reason recovery after a domain compromise is so painful. It builds on
+          <a href="2026-08-18-ticket-attacks.html">Kerberos Ticket Attacks</a>,
+          <a href="2026-08-18-dcsync.html">DCSync</a> and
+          <a href="2026-08-18-adcs.html">AD CS</a>.
+        </p>
+
+        <h2>Kerberos key material</h2>
+        <table>
+          <thead><tr><th>Technique</th><th>Mechanism</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Golden Ticket</strong></td><td>The <code>krbtgt</code> hash lets an attacker forge TGTs for any user &mdash; valid until krbtgt is rotated <em>twice</em>.</td></tr>
+            <tr><td><strong>Silver Ticket</strong></td><td>A service account's key forges service tickets for that one service &mdash; quieter, never touches the DC.</td></tr>
+            <tr><td><strong>Diamond / Sapphire Ticket</strong></td><td>Modifies a real TGT rather than forging from scratch, to better survive anomaly detection.</td></tr>
+            <tr><td><strong>Skeleton Key</strong></td><td>An in-memory patch on a DC so a master password authenticates as anyone (memory-resident; cleared on reboot).</td></tr>
+          </tbody>
+        </table>
+        <blockquote>
+          The <code>krbtgt</code> hash is the crown jewel: recovering from a Golden
+          Ticket means rotating <code>krbtgt</code> <strong>twice</strong> (the
+          account retains its previous key), which many IR runbooks miss the first
+          time.
+        </blockquote>
+
+        <h2>Directory ACL &amp; object backdoors</h2>
+        <ul>
+          <li><strong>DCSync rights</strong> &mdash; granting a controlled principal the replication rights lets it re-pull every hash on demand, indefinitely.</li>
+          <li><strong>AdminSDHolder / SDProp</strong> &mdash; an ACE written onto the AdminSDHolder object is re-stamped onto every protected (admin) group hourly, so backdoor rights keep returning after cleanup.</li>
+          <li><strong>ACL backdoors</strong> &mdash; <code>GenericAll</code>/<code>WriteDACL</code> over key objects, or nested group membership, to re-escalate at will (see <a href="2026-08-18-acls-dacls.html">ACLs &amp; DACLs</a>).</li>
+          <li><strong>Hidden membership</strong> &mdash; primary-group-ID tricks and SID history that enumeration overlooks.</li>
+        </ul>
+
+        <h2>Certificate &amp; credential persistence</h2>
+        <ul>
+          <li><strong>Stolen CA key</strong> &mdash; with the enterprise CA private key an attacker mints authentication certificates for any user, valid until the CA certificate expires (often years).</li>
+          <li><strong>Shadow Credentials</strong> &mdash; writing <code>msDS-KeyCredentialLink</code> on a target to authenticate as it via PKINIT without its password (see <a href="2026-09-24-shadow-credentials-pkinit.html">Shadow Credentials</a>).</li>
+          <li><strong>DSRM</strong> &mdash; the Directory Services Restore Mode local admin on a DC aliased to domain logon.</li>
+        </ul>
+
+        <h2>DCShadow</h2>
+        <p>
+          <strong>DCShadow</strong> registers a rogue domain controller long enough
+          to push arbitrary directory changes through replication &mdash; SID history,
+          ACEs, planted attributes &mdash; without going through a real DC's normal
+          write path, which makes it hard to see.
+        </p>
+
+        <h2>Detection &amp; recovery</h2>
+        <ul>
+          <li>Monitor the sensitive objects: AdminSDHolder ACE changes, new replication-capable principals, <code>msDS-KeyCredentialLink</code> writes, and replication from non-DC sources (DCShadow).</li>
+          <li>Forged tickets surface as Kerberos anomalies (lifetimes, encryption types, a TGS with no matching AS request) &mdash; see <a href="2026-10-02-detection-engineering-attack.html">Detection Engineering</a>.</li>
+          <li>Recovery after domain compromise: rotate <code>krbtgt</code> twice, review AdminSDHolder and privileged-group ACLs, audit AD CS templates and the CA key, and treat the directory as suspect &mdash; the premise of <a href="2026-10-02-ad-hardening-tiering.html">AD Hardening &amp; Tiering</a>.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-08-18-ticket-attacks.html">Kerberos Ticket Attacks</a></li>
+          <li><a href="2026-08-18-dcsync.html">DCSync</a></li>
+          <li><a href="2026-09-24-shadow-credentials-pkinit.html">Shadow Credentials, PKINIT &amp; UnPAC-the-Hash</a></li>
+          <li><a href="2026-10-02-ad-hardening-tiering.html">Active Directory Hardening &amp; Tiering</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

@@ -20,6 +20,30 @@
 
 var THEORY = [
   {
+    title: "Active Directory Persistence",
+    url: "theory/2026-10-09-active-directory-persistence.html",
+    date: "2026-10-09",
+    tag: "AD",
+    description: "Domain persistence that survives reimaging and password resets — Golden/Silver/Diamond tickets and Skeleton Key, DCSync-rights and AdminSDHolder/ACL backdoors, certificate persistence (stolen CA key, Shadow Credentials), DSRM and DCShadow, plus detection and recovery.",
+    readTime: "12 min read"
+  },
+  {
+    title: "Windows Persistence",
+    url: "theory/2026-10-09-windows-persistence.html",
+    date: "2026-10-09",
+    tag: "Red Team",
+    description: "How access survives reboot and logout on Windows — Run keys, startup, Winlogon and logon scripts, scheduled tasks and services, fileless WMI event subscriptions, DLL/COM hijacking, and accessibility/account backdoors, by trigger, with detection.",
+    readTime: "10 min read"
+  },
+  {
+    title: "Linux Persistence",
+    url: "theory/2026-10-09-linux-persistence.html",
+    date: "2026-10-09",
+    tag: "Linux",
+    description: "How access survives on Linux — scheduled execution (cron, systemd timers), login and shell triggers (SSH keys, shell init), trusted-load hijacks (LD_PRELOAD, PAM, SUID, kernel modules), and service-level persistence, with detection and hardening.",
+    readTime: "9 min read"
+  },
+  {
     title: "Linux Privilege Escalation",
     url: "theory/2026-10-09-linux-privilege-escalation.html",
     date: "2026-10-09",

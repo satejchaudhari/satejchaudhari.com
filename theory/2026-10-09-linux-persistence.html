@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Linux Persistence — Satej Chaudhari</title>
+  <meta name="description" content="How access survives on Linux — scheduled execution (cron, systemd timers, at/anacron), login and shell triggers (SSH authorized_keys, shell init, rc scripts), trusted-load hijacks (LD_PRELOAD, PAM, SUID backdoor, kernel modules), and service-level persistence — with detection and hardening.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Linux Persistence">
+  <meta property="og:description" content="How access survives on Linux — scheduled execution (cron, systemd timers, at/anacron), login and shell triggers (SSH authorized_keys, shell init, rc scripts), trusted-load hijacks (LD_PRELOAD, PAM, SUID backdoor, kernel modules), and service-level persistence — with detection and hardening.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-linux-persistence.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Linux Persistence">
+  <meta name="twitter:description" content="How access survives on Linux — scheduled execution (cron, systemd timers, at/anacron), login and shell triggers (SSH authorized_keys, shell init, rc scripts), trusted-load hijacks (LD_PRELOAD, PAM, SUID backdoor, kernel modules), and service-level persistence — with detection and hardening.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Linux</span>
+        <h1 class="post-title">Linux Persistence</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Linux persistence follows the same logic as Windows through Unix
+          mechanisms: anything that runs code on a schedule, at login, or when a
+          trusted binary loads is a candidate. The operator chooses by the privilege
+          held and the noise it makes; the defender treats this as the list of places
+          to baseline and monitor. The mechanisms, by trigger:
+        </p>
+
+        <h2>Scheduled execution</h2>
+        <table>
+          <thead><tr><th>Mechanism</th><th>Where it lives</th></tr></thead>
+          <tbody>
+            <tr><td><strong>cron</strong></td><td>User crontabs, <code>/etc/crontab</code>, <code>/etc/cron.d</code> and the <code>cron.{hourly,daily,...}</code> directories.</td></tr>
+            <tr><td><strong>systemd units &amp; timers</strong></td><td>Service units plus <code>.timer</code> units (and user-level units under <code>~/.config/systemd</code>) &mdash; the modern equivalent of cron.</td></tr>
+            <tr><td><strong>at / anacron</strong></td><td>One-shot and catch-up scheduling, easy to overlook.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Login &amp; shell triggers</h2>
+        <ul>
+          <li><strong>SSH <code>authorized_keys</code></strong> &mdash; an attacker public key in a user's (or root's) file is the most common and reliable Linux re-entry.</li>
+          <li><strong>Shell init files</strong> &mdash; <code>~/.bashrc</code>, <code>~/.profile</code>, <code>/etc/profile.d/</code> run on each interactive login.</li>
+          <li><strong>rc / init scripts</strong> &mdash; legacy <code>/etc/rc.local</code> and init scripts that run at boot.</li>
+        </ul>
+
+        <h2>Hijacks that ride trusted loads</h2>
+        <ul>
+          <li><strong><code>LD_PRELOAD</code> / <code>/etc/ld.so.preload</code></strong> &mdash; a shared object loaded into processes, intercepting library calls (also a classic userland rootkit technique).</li>
+          <li><strong>PAM modules</strong> &mdash; a tampered or added PAM module in the auth stack can accept a backdoor credential or log passwords.</li>
+          <li><strong>SUID backdoor</strong> &mdash; a root-owned SUID binary left behind for instant re-escalation (overlaps with <a href="2026-10-09-linux-privilege-escalation.html">Linux privesc</a>).</li>
+          <li><strong>Loadable kernel modules</strong> &mdash; a malicious LKM for kernel-level hiding and persistence (the loudest and most capable, needs root).</li>
+        </ul>
+
+        <h2>Service &amp; application-level</h2>
+        <ul>
+          <li><strong>Web shells</strong> on an exposed app, and cron/webhook callbacks from the application tier.</li>
+          <li><strong>New or trojaned service accounts</strong>, added SSH users, and container images baked with a backdoor.</li>
+          <li><strong>Package / update hooks</strong> &mdash; post-install scripts that re-establish access.</li>
+        </ul>
+        <blockquote>
+          As on Windows, reliability versus noise drives the choice: an SSH key is
+          reliable and quiet; a kernel module is powerful but conspicuous. A careful
+          operator also plants a <em>second</em>, different mechanism so losing one
+          does not lose access.
+        </blockquote>
+
+        <h2>Detection &amp; hardening</h2>
+        <ul>
+          <li>Baseline and monitor cron/systemd units, <code>authorized_keys</code>, shell init files, <code>ld.so.preload</code> and the PAM stack; alert on changes with <strong>auditd</strong> (file watches + execve) shipped off-host &mdash; see <a href="2026-10-09-logging-and-telemetry.html">Logging</a>.</li>
+          <li>File-integrity monitoring (AIDE/Tripwire) over system binaries, PAM, and init paths.</li>
+          <li>Restrict who can write units and SSH keys; disable password auth where keys are used; sign and verify packages.</li>
+          <li>Hunt for new SUID binaries and unexpected kernel modules (<code>lsmod</code>, <code>find -perm -4000</code>).</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-09-linux-privilege-escalation.html">Linux Privilege Escalation</a></li>
+          <li><a href="2026-10-09-windows-persistence.html">Windows Persistence</a></li>
+          <li><a href="2026-10-09-pivoting-and-tunnelling.html">Pivoting &amp; Tunnelling</a></li>
+          <li><a href="2026-10-09-logging-and-telemetry.html">Logging &amp; Telemetry</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>
