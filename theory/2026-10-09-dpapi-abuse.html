@@ -138,7 +138,7 @@
         <ul>
           <li>Monitor access to the DPAPI master-key directories and the Credential Vault, and alert on extraction of the domain backup key from a DC.</li>
           <li>Prefer not storing credentials in browsers/Credential Manager for privileged accounts; use a managed secrets vault instead.</li>
-          <li>Short session-cookie lifetimes and token-binding reduce the value of stolen cookies (ties into the AiTM problem in the <a href="external-red-team-workflow.html">workflow</a>).</li>
+          <li>Short session-cookie lifetimes and token-binding reduce the value of stolen cookies (ties into the AiTM problem in the <a href="../external-red-team-workflow.html">workflow</a>).</li>
           <li>Treat the domain backup key as crown-jewel material &mdash; its compromise means every user's saved secrets are exposed, a recovery consideration alongside <a href="2026-10-09-active-directory-persistence.html">AD persistence</a>.</li>
         </ul>
 
