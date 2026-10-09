@@ -98,6 +98,11 @@
     .webmap-item.done .webmap-item-text { color: var(--muted-2); text-decoration: line-through; }
     .webmap-item-desc { margin: 3px 0 0; font-size: 0.82rem; color: var(--muted); line-height: 1.4; }
     .webmap-item-desc.empty { color: var(--muted-2); font-style: italic; opacity: 0.7; }
+    /* step-by-step technique flow */
+    .webmap-flow { list-style: none; counter-reset: flowstep; margin: 9px 0 2px; padding: 0 0 0 2px; display: flex; flex-direction: column; gap: 0; border-left: 2px solid color-mix(in srgb, var(--sc) 40%, transparent); }
+    .webmap-flow li { counter-increment: flowstep; position: relative; margin: 0; padding: 4px 0 8px 30px; font-size: 0.82rem; color: var(--muted); line-height: 1.4; }
+    .webmap-flow li::before { content: counter(flowstep); position: absolute; left: -11px; top: 3px; width: 19px; height: 19px; border-radius: 50%; background: var(--surface); border: 1px solid color-mix(in srgb, var(--sc) 55%, var(--border)); color: var(--sc); font-family: var(--mono); font-size: 0.64rem; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+    .webmap-flow li:last-child { padding-bottom: 2px; }
     .webmap-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .webmap-chip { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 0.68rem; padding: 3px 9px; border-radius: 7px; text-decoration: none; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
     .webmap-chip svg { width: 12px; height: 12px; flex: 0 0 auto; }

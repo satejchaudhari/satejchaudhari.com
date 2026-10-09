@@ -52,6 +52,9 @@
     h += item.desc
       ? '<p class="webmap-item-desc">' + esc(item.desc) + '</p>'
       : '<p class="webmap-item-desc empty">Note coming soon</p>';
+    if (item.flow && item.flow.length) {
+      h += '<ol class="webmap-flow">' + item.flow.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join("") + '</ol>';
+    }
     var chips = (item.tools || []).map(toolChip).concat((item.vulns || []).map(vulnChip));
     if (chips.length) h += '<div class="webmap-chips">' + chips.join("") + '</div>';
     h += '</div></li>';
