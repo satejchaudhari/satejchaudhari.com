@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kubernetes &amp; Container Attacks — Satej Chaudhari</title>
+  <meta name="description" content="Crossing the container/cluster/cloud boundaries — what a pod foothold gives you (service-account token, API reach), container escape (privileged pods, host mounts, the Docker socket, runtime CVEs), Kubernetes RBAC and service-account abuse, the cluster-to-cloud metadata pivot, and detection/hardening.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Kubernetes &amp; Container Attacks">
+  <meta property="og:description" content="Crossing the container/cluster/cloud boundaries — what a pod foothold gives you (service-account token, API reach), container escape (privileged pods, host mounts, the Docker socket, runtime CVEs), Kubernetes RBAC and service-account abuse, the cluster-to-cloud metadata pivot, and detection/hardening.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-kubernetes-container-attacks.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Kubernetes &amp; Container Attacks">
+  <meta name="twitter:description" content="Crossing the container/cluster/cloud boundaries — what a pod foothold gives you (service-account token, API reach), container escape (privileged pods, host mounts, the Docker socket, runtime CVEs), Kubernetes RBAC and service-account abuse, the cluster-to-cloud metadata pivot, and detection/hardening.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Cloud</span>
+        <h1 class="post-title">Kubernetes &amp; Container Attacks</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 11 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Containers and Kubernetes add their own layer to the attack surface: a
+          compromised application now sits inside a pod, on a node, in a cluster, in a
+          cloud account &mdash; and each boundary is one an attacker tries to cross.
+          The recurring goals are <strong>escape the container to the node</strong>,
+          <strong>abuse Kubernetes RBAC and service-account tokens</strong>, and
+          <strong>pivot from the cluster into the cloud</strong>.
+        </p>
+
+        <h2>From a pod: what you start with</h2>
+        <p>
+          A web app RCE usually lands you in a container. First checks:
+        </p>
+        <pre><code># am I in a container? what can I reach?
+cat /proc/1/cgroup; ls -la /.dockerenv
+# the mounted service-account token -> talk to the Kubernetes API
+cat /run/secrets/kubernetes.io/serviceaccount/token
+env | grep -i kube     # API server address, and sometimes cloud creds</code></pre>
+
+        <h2>Container escape</h2>
+        <table>
+          <thead><tr><th>Weakness</th><th>Escape</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Privileged container</strong></td><td><code>--privileged</code> or dangerous capabilities (<code>CAP_SYS_ADMIN</code>) let you access host devices and mount the host filesystem.</td></tr>
+            <tr><td><strong>Host mounts</strong></td><td>A pod that bind-mounts the host disk, <code>/var/run/docker.sock</code>, or host paths &mdash; read/write the host directly.</td></tr>
+            <tr><td><strong>hostPID / hostNetwork</strong></td><td>Shared host namespaces expose host processes and the node network.</td></tr>
+            <tr><td><strong>Kernel / runtime CVEs</strong></td><td>runc/containerd escapes and kernel bugs that break isolation.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The classic path: a container with the Docker socket mounted can start a new
+          container that mounts <code>/</code> from the host and chroot into it &mdash;
+          instant node root.
+        </p>
+
+        <h2>Kubernetes RBAC &amp; service accounts</h2>
+        <p>
+          Every pod gets a <strong>service-account token</strong> that authenticates to
+          the API server with that account's RBAC rights. Over-permissioned service
+          accounts are the Kubernetes equivalent of an over-privileged IAM role:
+        </p>
+        <ul>
+          <li><code>create pods</code> / <code>exec</code> &mdash; schedule a privileged pod or exec into others; a path to any node.</li>
+          <li><code>get/list secrets</code> &mdash; read every secret in the namespace (database creds, cloud keys, other tokens).</li>
+          <li><code>create</code> on roles/bindings &mdash; grant yourself cluster-admin.</li>
+          <li>Access to the <strong>kubelet</strong> API or an exposed <strong>etcd</strong> &mdash; read all cluster state and secrets directly.</li>
+        </ul>
+        <blockquote>
+          The escalation graph is: <strong>pod &rarr; service-account rights &rarr;
+          cluster-admin or a node &rarr; every workload</strong>. Tools like
+          kube-hunter and the <code>kubectl auth can-i --list</code> check map what a
+          token can do &mdash; the first thing to run with any token.
+        </blockquote>
+
+        <h2>Cluster &rarr; cloud pivot</h2>
+        <p>
+          Managed clusters (EKS/AKS/GKE) tie node and pod identities to cloud IAM.
+          From a node you can often reach the <strong>cloud metadata endpoint</strong>
+          and assume the node's cloud role (see <a href="2026-10-09-aws-attack-paths.html">AWS</a>
+          and <a href="2026-10-09-entra-azure-attack-paths.html">Azure</a>), turning a
+          cluster compromise into a cloud-account compromise. IRSA/workload-identity
+          bindings are the intended control &mdash; and the thing to abuse when
+          loosely scoped.
+        </p>
+
+        <h2>Detection &amp; hardening</h2>
+        <ul>
+          <li>Pod Security Standards / admission control to forbid privileged pods, host mounts and host namespaces; drop capabilities by default.</li>
+          <li>Least-privilege RBAC; disable auto-mount of service-account tokens where not needed; network policies between namespaces.</li>
+          <li>Lock down the kubelet and etcd; never expose them; restrict metadata access from pods (IMDSv2, network policy).</li>
+          <li>Runtime security (Falco) and audit logging of the API server for <code>exec</code>, secret reads, and RBAC changes &mdash; ship to the SIEM (<a href="2026-10-09-logging-and-telemetry.html">Logging</a>).</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-09-aws-attack-paths.html">AWS Attack Paths</a></li>
+          <li><a href="2026-10-09-entra-azure-attack-paths.html">Entra ID &amp; Azure Attack Paths</a></li>
+          <li><a href="2026-10-09-linux-privilege-escalation.html">Linux Privilege Escalation</a></li>
+          <li><a href="2026-10-09-logging-and-telemetry.html">Logging &amp; Telemetry</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

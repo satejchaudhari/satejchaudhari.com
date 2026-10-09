@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Attack Paths — Satej Chaudhari</title>
+  <meta name="description" content="AWS attacks are IAM attacks — getting credentials (leaked keys, SSRF-to-IMDS, over-permissioned CI/Lambda, exposed services), orienting with STS/enumeration, IAM privilege escalation patterns (PassRole, policy self-attach, AssumeRole), lateral movement and data (role chains, cross-account, SSM, secrets, snapshots), persistence, and detection.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="AWS Attack Paths">
+  <meta property="og:description" content="AWS attacks are IAM attacks — getting credentials (leaked keys, SSRF-to-IMDS, over-permissioned CI/Lambda, exposed services), orienting with STS/enumeration, IAM privilege escalation patterns (PassRole, policy self-attach, AssumeRole), lateral movement and data (role chains, cross-account, SSM, secrets, snapshots), persistence, and detection.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-aws-attack-paths.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AWS Attack Paths">
+  <meta name="twitter:description" content="AWS attacks are IAM attacks — getting credentials (leaked keys, SSRF-to-IMDS, over-permissioned CI/Lambda, exposed services), orienting with STS/enumeration, IAM privilege escalation patterns (PassRole, policy self-attach, AssumeRole), lateral movement and data (role chains, cross-account, SSM, secrets, snapshots), persistence, and detection.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Cloud</span>
+        <h1 class="post-title">AWS Attack Paths</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 11 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          AWS attacks are IAM attacks. The hosts matter less than the
+          <strong>identities and the permissions between them</strong> &mdash; who can
+          assume which role, read which secret, or run code as what. A single leaked
+          key or an over-broad policy is usually enough to start a chain that ends in
+          account takeover. This page maps the recurring AWS paths.
+        </p>
+
+        <h2>Getting credentials</h2>
+        <ul>
+          <li><strong>Leaked access keys</strong> &mdash; long-lived <code>AKIA...</code> keys in repos, laptops, CI logs and config.</li>
+          <li><strong>SSRF &rarr; instance metadata</strong> &mdash; a server-side request to the metadata service (IMDS) returns the EC2 role's temporary credentials (see the <a href="../external-red-team-workflow.html">workflow</a>).</li>
+          <li><strong>Over-permissioned CI/CD &amp; Lambda</strong> &mdash; build and function roles whose rights far exceed their task.</li>
+          <li><strong>Exposed services</strong> &mdash; public S3 buckets, open databases and management interfaces holding secrets.</li>
+        </ul>
+
+        <h2>Orient first</h2>
+        <pre><code>aws sts get-caller-identity          # who am I
+aws iam get-account-authorization-details   # the whole IAM picture (if allowed)
+# enumerate what THIS identity can do, then look for a privesc edge
+# tools: enumerate-iam, ScoutSuite / Prowler (posture), pacu (exploitation framework)</code></pre>
+
+        <h2>IAM privilege escalation</h2>
+        <p>
+          AWS has a well-catalogued set of IAM-permission combinations that let a
+          low-privileged identity become administrator. The theme: a permission that
+          lets you <em>grant yourself more</em>, directly or by running code as a more
+          privileged role.
+        </p>
+        <table>
+          <thead><tr><th>Permission pattern</th><th>Escalation</th></tr></thead>
+          <tbody>
+            <tr><td><code>iam:CreatePolicyVersion</code> / <code>AttachUserPolicy</code></td><td>Attach an admin policy to yourself.</td></tr>
+            <tr><td><code>iam:PassRole</code> + a compute service (<code>ec2:RunInstances</code>, <code>lambda:*</code>, Glue, CloudFormation...)</td><td>Pass a more-privileged role to something you launch, then act as that role.</td></tr>
+            <tr><td><code>iam:CreateAccessKey</code> on another user</td><td>Mint keys for a more-privileged user.</td></tr>
+            <tr><td><code>sts:AssumeRole</code> with a permissive trust policy</td><td>Assume a role you were not meant to.</td></tr>
+          </tbody>
+        </table>
+        <blockquote>
+          The mental model is a graph of <strong>who can assume / pass / modify
+          whom</strong> &mdash; the AWS analogue of a BloodHound path. Tools map these
+          privesc edges automatically; the win is almost always an <code>iam:PassRole</code>
+          or a self-policy-attach away.
+        </blockquote>
+
+        <h2>Lateral movement &amp; data</h2>
+        <ul>
+          <li><strong>Role assumption chains</strong> &mdash; hop between roles and, via trust policies, into <strong>other accounts</strong> in the organisation.</li>
+          <li><strong>SSM / run-command</strong> &mdash; with the right permissions, run commands on EC2 instances without SSH.</li>
+          <li><strong>Secrets</strong> &mdash; Secrets Manager, SSM Parameter Store, and env vars hold the next set of credentials.</li>
+          <li><strong>Data</strong> &mdash; S3, RDS snapshots, and EBS snapshots are the usual objective; snapshot-and-restore sidesteps access controls on the live resource.</li>
+        </ul>
+
+        <h2>Persistence</h2>
+        <ul>
+          <li>Extra access keys on a user; a new IAM user or role with a permissive trust policy.</li>
+          <li>A Lambda backdoor triggered on a schedule or event; a modified trust policy that lets an external account assume a role.</li>
+          <li>These are the cloud equivalents of <a href="2026-10-09-windows-persistence.html">host persistence</a> &mdash; and just as important to hunt for in IAM/CloudTrail.</li>
+        </ul>
+
+        <h2>Detection &amp; hardening</h2>
+        <ul>
+          <li><strong>Least privilege &amp; no long-lived keys</strong> &mdash; prefer roles and short-lived STS tokens; scope <code>PassRole</code> tightly.</li>
+          <li><strong>IMDSv2</strong> (session-based) to blunt SSRF-to-credentials; egress controls around metadata.</li>
+          <li><strong>CloudTrail + GuardDuty</strong> &mdash; monitor for anomalous API calls, new keys/policies, cross-account assumes and snapshot sharing; ship logs centrally (see <a href="2026-10-09-logging-and-telemetry.html">Logging</a>).</li>
+          <li>Posture tools (Prowler/ScoutSuite) to find the privesc edges before an attacker does.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-09-entra-azure-attack-paths.html">Entra ID &amp; Azure Attack Paths</a></li>
+          <li><a href="2026-10-09-kubernetes-container-attacks.html">Kubernetes &amp; Container Attacks</a></li>
+          <li><a href="2026-10-09-logging-and-telemetry.html">Logging &amp; Telemetry</a></li>
+          <li><a href="../external-red-team-workflow.html">External Red Team Workflow</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

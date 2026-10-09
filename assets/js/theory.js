@@ -20,6 +20,30 @@
 
 var THEORY = [
   {
+    title: "Entra ID & Azure Attack Paths",
+    url: "theory/2026-10-09-entra-azure-attack-paths.html",
+    date: "2026-10-09",
+    tag: "Cloud",
+    description: "Attacking identity, not hosts — the Entra ID/Azure model (directory roles vs Azure RBAC, tokens and the PRT, service principals and managed identities), getting in, cloud escalation, the hybrid Entra Connect bridge in both directions, tooling (AzureHound/ROADtools/AADInternals), and detection.",
+    readTime: "12 min read"
+  },
+  {
+    title: "AWS Attack Paths",
+    url: "theory/2026-10-09-aws-attack-paths.html",
+    date: "2026-10-09",
+    tag: "Cloud",
+    description: "AWS attacks are IAM attacks — getting credentials (leaked keys, SSRF-to-IMDS, over-permissioned CI/Lambda), orienting, IAM privilege escalation patterns (PassRole, policy self-attach, AssumeRole), lateral movement and data (role chains, cross-account, SSM, snapshots), persistence, and detection.",
+    readTime: "11 min read"
+  },
+  {
+    title: "Kubernetes & Container Attacks",
+    url: "theory/2026-10-09-kubernetes-container-attacks.html",
+    date: "2026-10-09",
+    tag: "Cloud",
+    description: "Crossing the container/cluster/cloud boundaries — what a pod foothold gives you, container escape (privileged pods, host mounts, Docker socket, runtime CVEs), Kubernetes RBAC and service-account abuse, the cluster-to-cloud metadata pivot, and detection/hardening.",
+    readTime: "11 min read"
+  },
+  {
     title: "Red Team Methodology & Threat Emulation",
     url: "theory/2026-10-09-red-team-methodology.html",
     date: "2026-10-09",
