@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Red Team Workflow — Satej Chaudhari</title>
+  <meta name="description" content="A combined red-team workflow: reconnaissance (OSINT) as a tickable checklist, then Initial Access as a jumpable playbook of vectors — phishing, web, remote services, credentials, network, wireless, physical, hardware, supply chain, drive-by and cloud — each with a note, command, tools and 'on success -> next step' links into the AD attack map.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Red Team Workflow">
+  <meta property="og:description" content="Reconnaissance (OSINT) as a checklist, then Initial Access as a jumpable playbook of vectors with notes, commands, tools and next-step links.">
+  <meta property="og:url" content="https://satejchaudhari.com/red-team-workflow.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Red Team Workflow">
+  <meta name="twitter:description" content="Reconnaissance (OSINT) as a checklist, then Initial Access as a jumpable playbook of vectors with notes, commands, tools and next-step links.">
+  <link rel="canonical" href="https://satejchaudhari.com/red-team-workflow.html">
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+  <style>
+    .webmap-wrap { max-width: 980px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
+    .webmap-top { padding: 26px 0 6px; }
+    .webmap-top .eyebrow { color: var(--accent); }
+    .webmap-top h1 { font-family: "Space Grotesk", sans-serif; font-size: clamp(1.5rem, 3.5vw, 2.1rem); margin: 4px 0 2px; }
+    .webmap-hint { color: var(--muted); font-size: 0.9rem; margin: 0; max-width: 74ch; }
+    .webmap-hint b { color: var(--text); font-weight: 600; }
+
+    /* progress bar */
+    .webmap-progress-wrap { display: flex; align-items: center; gap: 14px; margin: 18px 0 10px; }
+    .webmap-bar-track { flex: 1 1 auto; height: 9px; border-radius: 999px; background: var(--surface-2, rgba(127,127,127,0.16)); overflow: hidden; }
+    #webmap-bar-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #22d3ee)); transition: width 0.3s ease; }
+    #webmap-bar-label { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); white-space: nowrap; flex: 0 0 auto; }
+
+    .webmap-controls { display: flex; gap: 8px; margin: 0 0 16px; flex-wrap: wrap; }
+    .webmap-btn { font-family: var(--mono); font-size: 0.74rem; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
+    .webmap-btn:hover { border-color: var(--accent-border); color: var(--text); }
+    #webmap-reset:hover { border-color: color-mix(in srgb, var(--h-rose, #fb7185) 55%, transparent); color: var(--h-rose, #fb7185); }
+
+    /* sections */
+    .webmap-section { border: 1px solid var(--border); border-radius: 14px; margin-bottom: 12px; overflow: hidden; background: var(--surface); }
+    .webmap-section.open { border-color: color-mix(in srgb, var(--sc) 55%, var(--border)); }
+    .webmap-section.flash { animation: webmap-flash 1.1s ease; }
+    @keyframes webmap-flash { 0%,100% { box-shadow: 0 0 0 0 transparent; } 30% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc) 40%, transparent); } }
+    .webmap-head { width: 100%; display: flex; align-items: center; gap: 13px; padding: 15px 16px; background: color-mix(in srgb, var(--sc) 13%, transparent); border: 0; cursor: pointer; text-align: left; }
+    .webmap-swatch { width: 12px; height: 12px; border-radius: 4px; background: var(--sc); flex: 0 0 auto; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc) 22%, transparent); }
+    .webmap-head-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .webmap-title { font-family: "Space Grotesk", sans-serif; font-weight: 600; font-size: 1.02rem; color: var(--text); display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+    .webmap-tag { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sc); border: 1px solid color-mix(in srgb, var(--sc) 45%, transparent); background: color-mix(in srgb, var(--sc) 12%, transparent); padding: 2px 7px; border-radius: 999px; }
+    .webmap-sub { color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
+    .webmap-progress { font-family: var(--mono); font-size: 0.74rem; color: var(--muted-2); flex: 0 0 auto; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); }
+    .webmap-progress.full { color: #0a0c10; background: var(--sc); border-color: var(--sc); }
+    .webmap-caret { flex: 0 0 auto; color: var(--muted); display: inline-flex; transition: transform 0.2s ease; }
+    .webmap-caret svg { width: 17px; height: 17px; }
+    .webmap-section.open > .webmap-head .webmap-caret { transform: rotate(90deg); }
+    .webmap-body { padding: 8px 12px 14px; }
+
+    /* groups */
+    .webmap-group { border: 1px solid var(--border); border-radius: 10px; margin-top: 8px; overflow: hidden; background: var(--bg); }
+    .webmap-group-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: transparent; border: 0; cursor: pointer; text-align: left; }
+    .webmap-group-head:hover { background: var(--surface); }
+    .webmap-group-title { flex: 1 1 auto; font-weight: 600; font-size: 0.94rem; color: var(--text); }
+    .webmap-gcount { font-family: var(--mono); font-size: 0.68rem; color: var(--muted-2); flex: 0 0 auto; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--border); }
+    .webmap-gcount.full { color: var(--sc); border-color: color-mix(in srgb, var(--sc) 50%, transparent); }
+    .webmap-group.open > .webmap-group-head .webmap-caret { transform: rotate(90deg); }
+    .webmap-group-body { padding: 4px 14px 12px; }
+
+    /* the important part: when-to-test scenario callout */
+    .webmap-scenario { display: flex; align-items: flex-start; gap: 9px; margin: 6px 0 12px; padding: 10px 12px; border-radius: 9px; border: 1px solid color-mix(in srgb, var(--sc) 40%, transparent); border-left: 3px solid var(--sc); background: color-mix(in srgb, var(--sc) 9%, transparent); }
+    .webmap-scenario svg { width: 16px; height: 16px; color: var(--sc); flex: 0 0 auto; margin-top: 2px; }
+    .webmap-scenario span { color: var(--muted); font-size: 0.86rem; line-height: 1.45; }
+    .webmap-scenario b { color: var(--text); font-weight: 600; }
+
+    /* items */
+    .webmap-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+    .webmap-item { display: flex; align-items: flex-start; gap: 11px; padding: 10px 4px; border-top: 1px solid var(--border); }
+    .webmap-item:first-child { border-top: 0; }
+    .webmap-check { width: 17px; height: 17px; margin: 2px 0 0; flex: 0 0 auto; accent-color: var(--sc); cursor: pointer; }
+    .webmap-item-body { flex: 1 1 auto; min-width: 0; }
+    .webmap-item-text { display: block; font-size: 0.92rem; color: var(--text); line-height: 1.4; cursor: pointer; }
+    .webmap-item.done .webmap-item-text { color: var(--muted-2); text-decoration: line-through; }
+    .webmap-item-desc { margin: 3px 0 0; font-size: 0.82rem; color: var(--muted); line-height: 1.4; }
+    .webmap-item-desc.empty { color: var(--muted-2); font-style: italic; opacity: 0.7; }
+    .webmap-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .webmap-chip { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 0.68rem; padding: 3px 9px; border-radius: 7px; text-decoration: none; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .webmap-chip svg { width: 12px; height: 12px; flex: 0 0 auto; }
+    .webmap-chip.tool:hover { border-color: var(--accent-border); color: var(--accent); }
+    .webmap-chip.vuln { color: var(--h-rose, #fb7185); border-color: color-mix(in srgb, var(--h-rose, #fb7185) 40%, transparent); }
+    .webmap-chip.vuln:hover { border-color: var(--h-rose, #fb7185); }
+    .webmap-chip.disabled { opacity: 0.5; cursor: default; border-style: dashed; }
+    .webmap-chip.disabled:hover { border-color: var(--border); color: inherit; }
+
+    @media (max-width: 560px) {
+      .webmap-head { padding: 13px 13px; }
+      .webmap-progress { display: none; }
+    }
+
+    .adv2-wrap { max-width: 980px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
+    .adv2-top { padding: 26px 0 6px; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+    .adv2-top .eyebrow { color: var(--accent); }
+    .adv2-top h1 { font-family: "Space Grotesk", sans-serif; font-size: clamp(1.5rem, 3.5vw, 2.1rem); margin: 4px 0 2px; }
+    .adv2-hint { color: var(--muted); font-size: 0.9rem; margin: 0; max-width: 66ch; }
+    .adv2-hint b { color: var(--text); font-weight: 600; }
+    .adv2-altlink { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); text-decoration: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px; white-space: nowrap; }
+    .adv2-altlink:hover { border-color: var(--accent-border); color: var(--accent); }
+
+    .adv2-bar { display: flex; gap: 8px; margin: 12px 0 16px; }
+    .adv2-btn { font-family: var(--mono); font-size: 0.74rem; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
+    .adv2-btn:hover { border-color: var(--accent-border); color: var(--text); }
+    /* "How to use" collapsible */
+    .adv2-howto { margin: 14px 0 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; }
+    .adv2-howto summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 9px; padding: 13px 16px; font-family: var(--mono); font-size: 0.8rem; font-weight: 600; color: var(--text); }
+    .adv2-howto summary::-webkit-details-marker { display: none; }
+    .adv2-howto summary:hover { color: var(--accent); }
+    .adv2-howto summary svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .adv2-howto .adv2-howto-caret { margin-left: auto; transition: transform 0.2s ease; }
+    .adv2-howto[open] .adv2-howto-caret { transform: rotate(90deg); }
+    .adv2-howto-body { padding: 2px 18px 16px; border-top: 1px solid var(--border); }
+    .adv2-howto-body ul { margin: 12px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 9px; }
+    .adv2-howto-body li { color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
+    .adv2-howto-body li b { color: var(--text); font-weight: 600; }
+    .adv2-howto-body li em { color: var(--accent); font-style: normal; }
+    .adv2-howto-body code { font-family: var(--mono); font-size: 0.82em; background: var(--surface-2, rgba(127,127,127,0.14)); padding: 1px 6px; border-radius: 5px; }
+    .adv2-howto-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
+
+    /* section card */
+    .adv2-section { border: 1px solid var(--border); border-left: 4px solid var(--sc); border-radius: 12px; margin-bottom: 12px; background: var(--surface); overflow: hidden; transition: box-shadow 0.2s ease; }
+    .adv2-section.open { box-shadow: 0 0 0 1px color-mix(in srgb, var(--sc) 40%, transparent); }
+    .adv2-section.flash { animation: adv2flash 1.2s ease; }
+    @keyframes adv2flash { 0% { box-shadow: 0 0 0 3px var(--sc); } 100% { box-shadow: 0 0 0 1px transparent; } }
+    .adv2-head { width: 100%; display: flex; align-items: center; gap: 13px; padding: 15px 16px; background: color-mix(in srgb, var(--sc) 14%, transparent); border: none; text-align: left; cursor: pointer; color: var(--text); }
+    .adv2-head:hover { background: color-mix(in srgb, var(--sc) 22%, transparent); }
+    .adv2-swatch { width: 12px; height: 12px; border-radius: 4px; background: var(--sc); flex: 0 0 auto; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc) 22%, transparent); }
+    .adv2-head-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+    .adv2-title { font-family: "Space Grotesk", sans-serif; font-weight: 600; font-size: 1.05rem; display: inline-flex; align-items: center; gap: 9px; }
+    .adv2-tag { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--sc); border: 1px solid color-mix(in srgb, var(--sc) 55%, transparent); background: color-mix(in srgb, var(--sc) 12%, transparent); border-radius: 999px; padding: 2px 8px; }
+    .adv2-sub { color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
+    .adv2-count { font-family: var(--mono); font-size: 0.72rem; color: var(--muted-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; flex: 0 0 auto; }
+    .adv2-caret { color: var(--muted-2); display: inline-flex; transition: transform 0.2s ease; flex: 0 0 auto; }
+    .adv2-caret svg { width: 16px; height: 16px; }
+    .adv2-section.open .adv2-caret { transform: rotate(90deg); color: var(--sc); }
+    .adv2-body { padding: 4px 14px 14px; border-top: 1px solid var(--border); }
+
+    /* technique accordion */
+    .adv2-tech { border: 1px solid var(--border); border-radius: 9px; margin-top: 10px; background: var(--surface-2); overflow: hidden; }
+    .adv2-tech.open { border-color: color-mix(in srgb, var(--sc) 45%, var(--border)); }
+    .adv2-tech-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 13px; background: none; border: none; text-align: left; cursor: pointer; color: var(--text); font-size: 0.92rem; font-weight: 500; }
+    .adv2-tech-btn:hover { background: color-mix(in srgb, var(--sc) 6%, transparent); }
+    .adv2-tech-caret { color: var(--muted-2); display: inline-flex; transition: transform 0.2s ease; flex: 0 0 auto; }
+    .adv2-tech-caret svg { width: 15px; height: 15px; }
+    .adv2-tech.open .adv2-tech-caret { transform: rotate(90deg); color: var(--sc); }
+    .adv2-tech-body { padding: 4px 14px 14px; border-top: 1px dashed var(--border); }
+
+    .adv2-links { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 2px; }
+    .adv2-chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 0.72rem; padding: 4px 10px; border-radius: 7px; text-decoration: none; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .adv2-chip svg { width: 13px; height: 13px; flex: 0 0 auto; }
+    .adv2-chip.theory:hover { border-color: var(--accent-border); color: var(--accent); }
+    .adv2-chip.cve { color: var(--h-rose, #fb7185); border-color: color-mix(in srgb, var(--h-rose, #fb7185) 45%, transparent); }
+    .adv2-chip.vuln { color: var(--h-rose, #fb7185); border-color: color-mix(in srgb, var(--h-rose, #fb7185) 40%, transparent); }
+    .adv2-chip.vuln:hover { border-color: var(--h-rose, #fb7185); }
+    .adv2-chip.disabled { opacity: 0.45; cursor: default; border-style: dashed; }
+    .adv2-chip.disabled:hover { border-color: var(--border); color: inherit; }
+    .adv2-cvebar-link.disabled { opacity: 0.55; cursor: default; font-style: italic; }
+    .adv2-cvebar-link.disabled:hover { text-decoration: none; }
+    .adv2-desc { color: var(--muted); font-size: 0.9rem; line-height: 1.55; margin: 10px 0 4px; }
+
+    .adv2-cmds { margin-top: 10px; }
+    .adv2-cmds .command-block { position: relative; margin: 6px 0 0; }
+    .adv2-cmds pre { margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 34px 9px 11px; overflow-x: auto; }
+    .adv2-cmds code { font-family: var(--mono); font-size: 0.76rem; color: var(--text); white-space: pre; display: block; }
+    .adv2-cmds .cmd-comment { color: var(--muted); font-style: italic; opacity: 0.85; }
+    .adv2-copy { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--muted); cursor: pointer; opacity: 0.5; transition: opacity 0.12s, color 0.12s, border-color 0.12s; }
+    .adv2-copy svg { width: 13px; height: 13px; }
+    .command-block:hover .adv2-copy { opacity: 1; }
+    .adv2-copy:hover { color: var(--accent); border-color: var(--accent-border); }
+    .adv2-copy.copied { color: #4ade80; border-color: #4ade80; opacity: 1; }
+    .adv2-copy.copied::after { content: "copied"; position: absolute; right: 28px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.6rem; color: #4ade80; white-space: nowrap; }
+
+    /* move-to (cross-section pivot) */
+    .adv2-moves { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .adv2-moves-l { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted-2); margin: 0 0 7px; }
+    .adv2-move-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .adv2-move { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 0.76rem; font-weight: 600; padding: 5px 11px; border-radius: 8px; cursor: pointer; color: var(--mc); border: 1px solid color-mix(in srgb, var(--mc) 55%, transparent); background: color-mix(in srgb, var(--mc) 12%, transparent); flex: 0 0 auto; }
+    .adv2-move:hover { background: color-mix(in srgb, var(--mc) 22%, transparent); }
+    .adv2-move-dot { width: 9px; height: 9px; border-radius: 3px; background: var(--mc); flex: 0 0 auto; }
+    .adv2-move svg { width: 13px; height: 13px; }
+    .adv2-move-note { color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+
+    /* CVE banner */
+    .adv2-cvebar { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 11px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--h-rose, #fb7185) 55%, transparent); background: color-mix(in srgb, var(--h-rose, #fb7185) 12%, transparent); color: var(--h-rose, #fb7185); font-family: var(--mono); font-size: 0.78rem; }
+    .adv2-cvebar svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .adv2-cvebar span { color: var(--text); }
+    .adv2-cvebar-link { margin-left: auto; color: var(--h-rose, #fb7185); text-decoration: none; font-size: 0.72rem; }
+    .adv2-cvebar-link:hover { text-decoration: underline; }
+
+    /* colour-coded outcome badges (solid, dark text — matches the result boxes) */
+    .adv2-outcomes { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .adv2-outcome { font-family: var(--mono); font-size: 0.72rem; font-weight: 600; color: #0a0c10; background: var(--oc); border-radius: 7px; padding: 5px 11px; }
+    /* linked outcome -> clearly a button that jumps to its (same-colour) section */
+    button.adv2-outcome.linked { border: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: box-shadow 0.12s, transform 0.12s, filter 0.12s; box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+    button.adv2-outcome.linked::after { content: "\2192"; font-weight: 800; opacity: 0.85; }
+    button.adv2-outcome.linked:hover { filter: brightness(1.05); transform: translateY(-1px); box-shadow: 0 0 0 2px color-mix(in srgb, var(--oc) 55%, transparent); }
+    button.adv2-outcome.linked:active { transform: translateY(0); }
+    /* terminal outcome (no section to open) -> muted ghost tag, not a solid button */
+    .adv2-outcome.terminal { background: transparent; color: var(--muted); border: 1px dashed var(--border); font-weight: 500; }
+
+    /* nested branches (Poisoning, PXE …) */
+    .adv2-branches { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+    .adv2-branch { padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid color-mix(in srgb, var(--sc) 55%, var(--border)); border-radius: 8px; background: var(--surface); }
+    .adv2-branch.warn { border-left-color: var(--h-amber, #f59e0b); }
+    .adv2-branch.cve { border-left-color: var(--h-rose, #fb7185); }
+    .adv2-branch-l { font-family: var(--mono); font-size: 0.76rem; color: var(--text); font-weight: 600; margin: 0 0 6px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .adv2-warn { color: var(--h-amber, #f59e0b); }
+    .adv2-branch-cve { font-family: var(--mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.03em; color: var(--h-rose, #fb7185); border: 1px solid color-mix(in srgb, var(--h-rose, #fb7185) 55%, transparent); background: color-mix(in srgb, var(--h-rose, #fb7185) 12%, transparent); border-radius: 999px; padding: 1px 7px; }
+    .adv2-branch-note { color: var(--muted); font-size: 0.8rem; line-height: 1.45; margin: 0 0 7px; }
+    .adv2-branch .command-block { position: relative; margin: 5px 0 0; }
+    .adv2-branch pre { margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 34px 9px 11px; overflow-x: auto; }
+    .adv2-branch code { font-family: var(--mono); font-size: 0.76rem; color: var(--text); white-space: pre; display: block; }
+    .adv2-branch .cmd-comment { color: var(--muted); font-style: italic; opacity: 0.85; }
+    .adv2-branch .adv2-outcomes { margin-top: 9px; }
+
+    @media (max-width: 720px) {
+      .adv2-top { padding: 14px 0 4px; }
+      .adv2-hint { display: none; }
+      .adv2-sub { display: none; }
+      .adv2-count { display: none; }
+    }
+
+
+    /* red-team-workflow combined-page additions */
+    .rtw-wrap { max-width: 980px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
+    .rtw-part { font-family: "Space Grotesk", sans-serif; font-size: 1.15rem; margin: 30px 0 6px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .rtw-part span { font-family: var(--mono); font-size: 0.72rem; font-weight: 500; color: var(--muted); text-transform: none; }
+    .rtw-note { border-left: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); padding-left: 12px; }
+    .rtw-nav { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 14px 0 6px; }
+    .rtw-nav-l { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-2); margin-right: 2px; }
+    .rtw-nav-sep { flex-basis: 100%; height: 0; }
+    .rtw-jump { font-family: var(--mono); font-size: 0.68rem; padding: 4px 10px; border-radius: 999px; cursor: pointer; color: var(--jc); border: 1px solid color-mix(in srgb, var(--jc) 45%, transparent); background: color-mix(in srgb, var(--jc) 10%, transparent); }
+    .rtw-jump:hover { background: color-mix(in srgb, var(--jc) 22%, transparent); }
+    a.adv2-move.ext { text-decoration: none; }
+
+  </style>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="rtw-wrap">
+    <div class="webmap-top">
+      <p class="eyebrow">Interactive</p>
+      <h1>Red Team Workflow</h1>
+    </div>
+    <p class="webmap-hint">Two surfaces in one flow. <b>Reconnaissance</b> is an OSINT <b>checklist</b> you tick as you cover it. <b>Initial Access</b> is a <b>playbook of vectors</b>: expand a technique for its note, command and tools, read the colour-coded outcome, then follow the <b>&ldquo;on success &rarr; next step&rdquo;</b> link to the follow-up. Not every method applies to every target, so these are options, not checks.</p>
+    <p class="webmap-hint">Chips link into the <b>Toolkit</b>, <b>Vulns &amp; Misconfigs</b> and <b>Theory</b>. The chain hands off into the <a href="ad-map.html">AD Attack-Path Explorer</a>. For authorised engagements only.</p>
+
+    <nav id="rtw-nav" class="rtw-nav"><!-- jump bar built by rtwmap-main.js --></nav>
+
+    <h2 class="rtw-part">1 &middot; Reconnaissance <span>OSINT &mdash; a checklist you tick</span></h2>
+    <div class="webmap-progress-wrap">
+      <div class="webmap-bar-track"><div id="rtw-recon-bar-fill"></div></div>
+      <span id="rtw-recon-bar-label">0 / 0 checks (0%)</span>
+    </div>
+    <div class="webmap-controls">
+      <button class="webmap-btn" id="rtw-recon-expand">Expand all</button>
+      <button class="webmap-btn" id="rtw-recon-collapse">Collapse all</button>
+      <button class="webmap-btn" id="rtw-recon-reset">Reset progress</button>
+    </div>
+    <div id="recon-root"><!-- checklist built by rtwmap-main.js --></div>
+
+    <h2 class="rtw-part">2 &middot; Initial Access <span>a playbook &mdash; follow the jumps, don't tick</span></h2>
+    <p class="webmap-hint rtw-note">Pick the vector that fits the attack surface recon exposed. Each technique shows what you gain and links to the logical next step on success.</p>
+    <div class="webmap-controls">
+      <button class="webmap-btn" id="rtw-access-expand">Expand all</button>
+      <button class="webmap-btn" id="rtw-access-collapse">Collapse all</button>
+    </div>
+    <div id="access-root"><!-- playbook built by rtwmap-main.js --></div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="writeups.html">Writeups</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/rtwmap.js"></script>
+  <script src="assets/js/rtwmap-main.js"></script>
+</body>
+</html>
