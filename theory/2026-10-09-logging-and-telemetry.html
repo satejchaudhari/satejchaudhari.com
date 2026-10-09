@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logging &amp; Telemetry — Satej Chaudhari</title>
+  <meta name="description" content="An in-depth reference on logging for defenders — what a log is, log sources and types, the formats (syslog, CEF, LEEF, JSON, EVTX, W3C) and normalisation schemas (ECS, OCSF, CIM), Windows Event Log and key security Event IDs, Sysmon in depth with its full event catalogue, Linux auditd/journald, the collection-to-SIEM pipeline, and log integrity.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Logging &amp; Telemetry — From Event to SIEM">
+  <meta property="og:description" content="An in-depth reference on logging for defenders — what a log is, log sources and types, the formats (syslog, CEF, LEEF, JSON, EVTX, W3C) and normalisation schemas (ECS, OCSF, CIM), Windows Event Log and key security Event IDs, Sysmon in depth with its full event catalogue, Linux auditd/journald, the collection-to-SIEM pipeline, and log integrity.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-logging-and-telemetry.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Logging &amp; Telemetry — From Event to SIEM">
+  <meta name="twitter:description" content="An in-depth reference on logging for defenders — what a log is, log sources and types, the formats (syslog, CEF, LEEF, JSON, EVTX, W3C) and normalisation schemas (ECS, OCSF, CIM), Windows Event Log and key security Event IDs, Sysmon in depth with its full event catalogue, Linux auditd/journald, the collection-to-SIEM pipeline, and log integrity.">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Blue Team</span>
+        <h1 class="post-title">Logging &amp; Telemetry — From Event to SIEM</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 18 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          Every detection, every investigation, and every bit of forensic timeline
+          work ultimately rests on logs. If an action was not recorded somewhere, in a
+          form that reached a place you can query, it effectively did not happen as far
+          as the SOC is concerned. This page is a ground-up reference on logging for
+          defenders: what a log is, where logs come from, the formats and schemas they
+          travel in (syslog, CEF, LEEF, JSON, EVTX and the normalisation standards),
+          Windows Event Log and the security Event IDs that matter, <strong>Sysmon</strong>
+          in depth with its full event catalogue, Linux auditing, the pipeline that
+          carries all of it into a SIEM, and how log integrity is kept and attacked.
+          It pairs with the <a href="2026-10-02-soc-detection-response.html">SOC</a>
+          and <a href="2026-10-02-detection-engineering-attack.html">Detection
+          Engineering</a> pages, which cover what you do with the logs once they land.
+        </p>
+
+        <h2>What a log actually is</h2>
+        <p>
+          A log is a timestamped record of a discrete event — "this happened, here,
+          then." Strip away the format and almost every log entry carries the same
+          handful of fields:
+        </p>
+        <ul>
+          <li><strong>Timestamp</strong> — when the event occurred (and ideally when it was recorded and received — the three can differ).</li>
+          <li><strong>Source</strong> — the host, device, application or sensor that produced it.</li>
+          <li><strong>Severity / priority</strong> — how important the producer thinks it is.</li>
+          <li><strong>Event identity</strong> — a category, signature, or Event ID that says <em>what kind</em> of thing happened.</li>
+          <li><strong>Body / fields</strong> — the specifics: who, what, which object, source and destination, outcome.</li>
+        </ul>
+        <p>
+          The single most important distinction is <strong>structured vs
+          unstructured</strong>. An unstructured log is a line of free text
+          (<code>Failed password for root from 10.0.0.5</code>) that a parser must pull
+          fields out of with regex. A structured log carries named fields already
+          (<code>{"event":"ssh_login","result":"fail","user":"root","src":"10.0.0.5"}</code>),
+          so it is machine-readable without guessing. Modern logging pushes everything
+          toward structure, because unparsed text does not scale to billions of events a
+          day and breaks silently when a message format changes.
+        </p>
+
+        <h2>Log sources and types</h2>
+        <p>
+          "A log" is not one thing — different layers of the stack emit very different
+          telemetry, and good coverage means pulling from all of them rather than
+          over-collecting one and ignoring the rest.
+        </p>
+        <table>
+          <thead><tr><th>Category</th><th>Examples</th><th>What it answers</th></tr></thead>
+          <tbody>
+            <tr><td>Operating system</td><td>Windows Event Log, Linux syslog / journald</td><td>Logons, process starts, services, drivers, system state</td></tr>
+            <tr><td>Security / audit</td><td>Windows Security channel, Linux auditd, sudo</td><td>Authentication, privilege use, policy and object access</td></tr>
+            <tr><td>Endpoint telemetry</td><td>Sysmon, EDR sensor events</td><td>Deep process, network, file, registry, image-load activity</td></tr>
+            <tr><td>Application</td><td>App logs, PowerShell, web apps, middleware</td><td>What a specific program did and why it failed</td></tr>
+            <tr><td>Web / proxy</td><td>IIS, Apache/Nginx access &amp; error, proxy logs</td><td>HTTP requests, user agents, URLs, response codes</td></tr>
+            <tr><td>Network / device</td><td>Firewall, router/switch, VPN, NetFlow/IPFIX, DNS, IDS/IPS</td><td>Connections, allow/deny, flows, name resolution, signatures</td></tr>
+            <tr><td>Identity</td><td>Active Directory / domain controllers, IdP (Entra ID, Okta), RADIUS</td><td>Authentication, token issue, MFA, directory changes</td></tr>
+            <tr><td>Cloud / SaaS</td><td>AWS CloudTrail, Azure Activity/Entra, GCP Audit, O365 Unified Audit</td><td>API calls, control-plane changes, admin and data access</td></tr>
+            <tr><td>Database</td><td>DB audit logs, query logs</td><td>Access to and changes of stored data</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Log formats and schemas</h2>
+        <p>
+          A log's <em>format</em> is how its fields are encoded on the wire or on disk;
+          a <em>schema</em> is the agreed set of field names everything is normalised
+          into after collection. Both matter: formats decide how hard parsing is,
+          schemas decide whether a query written once works across every source.
+        </p>
+        <table>
+          <thead><tr><th>Format</th><th>Shape</th><th>Where you meet it</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Syslog</strong> (RFC 3164 / RFC 5424)</td><td>Priority + timestamp + host + message; 5424 adds structured data</td><td>The lingua franca of network devices and Unix — the default transport</td></tr>
+            <tr><td><strong>CEF</strong> (Common Event Format)</td><td>Pipe-delimited header + <code>key=value</code> extension</td><td>ArcSight and most security appliances; very common SIEM input</td></tr>
+            <tr><td><strong>LEEF</strong> (Log Event Extended Format)</td><td>Pipe-delimited header + tab/delimited <code>key=value</code></td><td>IBM QRadar's native event format</td></tr>
+            <tr><td><strong>JSON / NDJSON</strong></td><td>Native key/value objects, one per line</td><td>Modern apps, cloud, container and agent output</td></tr>
+            <tr><td><strong>Windows Event Log</strong> (EVTX)</td><td>Binary on disk, XML when rendered; rich provider/Event-ID model</td><td>Everything on Windows, including Sysmon</td></tr>
+            <tr><td><strong>W3C Extended</strong></td><td>Space-separated columns with a <code>#Fields:</code> header</td><td>IIS and many proxies</td></tr>
+            <tr><td><strong>Common / Combined Log</strong></td><td>Positional text fields</td><td>Apache / Nginx access logs</td></tr>
+            <tr><td><strong>GELF</strong></td><td>Compressed JSON, chunkable</td><td>Graylog ingestion</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Syslog — the common carrier</h3>
+        <p>
+          Syslog is both a message format and a transport, and it underpins most of the
+          others. Each message carries a <strong>PRI</strong> value computed as
+          <code>facility &times; 8 + severity</code>, so one integer encodes both what
+          subsystem produced the event and how urgent it is. The severities run 0–7:
+        </p>
+        <table>
+          <thead><tr><th>Code</th><th>Severity</th><th>Code</th><th>Severity</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>Emergency</td><td>4</td><td>Warning</td></tr>
+            <tr><td>1</td><td>Alert</td><td>5</td><td>Notice</td></tr>
+            <tr><td>2</td><td>Critical</td><td>6</td><td>Informational</td></tr>
+            <tr><td>3</td><td>Error</td><td>7</td><td>Debug</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The older <strong>RFC 3164</strong> ("BSD syslog") is loose and has a
+          low-resolution timestamp with no year or timezone; the newer
+          <strong>RFC 5424</strong> fixes this with ISO-8601 timestamps, explicit
+          hostnames and app names, and a structured-data section. Syslog travels over
+          UDP/514 (fire-and-forget, lossy), TCP/514 (reliable), or TLS/6514
+          (encrypted). A typical RFC 5424 line:
+        </p>
+        <pre><code>&lt;34&gt;1 2026-10-09T22:14:15.003Z web01 sshd 1234 ID47 - Failed password for root from 10.0.0.5 port 4242
+# &lt;34&gt; = PRI: facility 4 (auth) * 8 + severity 2 (critical)
+# then: version, timestamp, host, app, PID, msg-id, structured-data (-), message</code></pre>
+
+        <h3>CEF — the SIEM workhorse</h3>
+        <p>
+          The Common Event Format is what a huge number of security products speak into
+          a SIEM. It is a fixed pipe-delimited header followed by a free-form set of
+          <code>key=value</code> pairs using standardised dictionary keys
+          (<code>src</code>, <code>dst</code>, <code>spt</code>, <code>dpt</code>,
+          <code>suser</code>, <code>act</code>, and so on):
+        </p>
+        <pre><code>CEF:0|Security|Threatmanager|1.0|100|worm successfully stopped|10|src=10.0.0.1 dst=2.1.2.2 spt=1232 suser=jsmith act=blocked
+
+# header fields, in order:
+# CEF:Version | Device Vendor | Device Product | Device Version
+#   | Signature ID | Name | Severity | Extension (key=value ...)</code></pre>
+        <p>
+          The seven header fields are mandatory and positional; everything after the
+          final pipe is the extension dictionary. <strong>LEEF</strong> (QRadar's
+          format) is the same idea with a slightly different header
+          (<code>LEEF:2.0|Vendor|Product|Version|EventID|</code>) and a declarable
+          delimiter for its key/value body.
+        </p>
+
+        <h3>Normalisation schemas</h3>
+        <p>
+          Formats get a log <em>in</em>; a schema makes logs from different sources
+          <em>comparable</em>. Rather than write one detection for a Cisco firewall and
+          another for a Palo Alto, you map both into a common field model and write the
+          rule once. The ones worth knowing:
+        </p>
+        <ul>
+          <li><strong>ECS</strong> (Elastic Common Schema) — the field model behind the Elastic Stack (e.g. <code>source.ip</code>, <code>event.action</code>, <code>user.name</code>).</li>
+          <li><strong>OCSF</strong> (Open Cybersecurity Schema Framework) — a vendor-neutral schema backed by AWS, Splunk and others, increasingly the lingua franca for security data lakes.</li>
+          <li><strong>CIM</strong> (Splunk Common Information Model) — Splunk's normalisation model that its detections and dashboards key on.</li>
+          <li><strong>OpenTelemetry</strong> — the observability standard unifying logs, metrics and traces, now with a logging data model.</li>
+        </ul>
+        <blockquote>
+          Rule of thumb: <strong>formats are a parsing problem, schemas are a coverage
+          problem.</strong> A new format just needs a parser; a new schema decision
+          affects every detection you have ever written. Pick a schema early and map
+          everything to it.
+        </blockquote>
+
+        <h2>Windows Event Log</h2>
+        <p>
+          Windows is the richest logging environment most defenders deal with. Events
+          are written by <strong>providers</strong> into <strong>channels</strong>,
+          stored as binary <code>.evtx</code>, and rendered as XML. The classic channels
+          are <strong>Security</strong>, <strong>System</strong>,
+          <strong>Application</strong> and <strong>Setup</strong>, alongside hundreds of
+          per-component <em>Operational</em> logs (PowerShell, Sysmon, Windows Defender,
+          Task Scheduler, and so on). Each event has a numeric <strong>Event ID</strong>
+          that identifies what happened, scoped to its provider.
+        </p>
+        <p>
+          Many high-value events are <strong>off by default</strong> and must be turned
+          on through <strong>Advanced Audit Policy</strong> — process-creation auditing
+          (4688, ideally with command-line capture) and object-access auditing are the
+          usual first wins. The security Event IDs that recur in investigations:
+        </p>
+        <table>
+          <thead><tr><th>Event ID</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>4624 / 4625</td><td>Successful / failed logon (check Logon Type: 2 interactive, 3 network, 10 RDP)</td></tr>
+            <tr><td>4634 / 4647</td><td>Logoff / user-initiated logoff</td></tr>
+            <tr><td>4672</td><td>Special privileges assigned — an admin-equivalent logon</td></tr>
+            <tr><td>4688</td><td>Process creation (enable command-line auditing for the full picture)</td></tr>
+            <tr><td>4697 / 7045</td><td>Service installed (Security / System channel) — classic persistence</td></tr>
+            <tr><td>4720 / 4726</td><td>User account created / deleted</td></tr>
+            <tr><td>4728 / 4732 / 4756</td><td>Member added to a (global / local / universal) security group</td></tr>
+            <tr><td>4768 / 4769 / 4771</td><td>Kerberos TGT issued / service ticket issued / pre-auth failed</td></tr>
+            <tr><td>4776</td><td>NTLM credential validation</td></tr>
+            <tr><td>5140 / 5145</td><td>Network share accessed / a share object was checked</td></tr>
+            <tr><td>4698</td><td>Scheduled task created</td></tr>
+            <tr><td>4104</td><td>PowerShell script-block logging — the actual code that ran</td></tr>
+            <tr><td>1102</td><td>The Security audit log was cleared — almost always worth an alert</td></tr>
+          </tbody>
+        </table>
+        <p>
+          At scale these are shipped off the host with <strong>Windows Event
+          Forwarding (WEF)</strong> to a Windows Event Collector, or by an agent
+          (Winlogbeat, the Elastic/Splunk agents, NXLog), so that clearing a local log
+          no longer destroys the evidence.
+        </p>
+
+        <h2>Sysmon — endpoint visibility done right</h2>
+        <p>
+          The default Windows logs leave large gaps: no network-connection record per
+          process, no image-load detail, thin registry coverage. <strong>Sysmon</strong>
+          (System Monitor, from Sysinternals) fills them. It installs a driver and a
+          service that watch the system and write richly-detailed events to the
+          <code>Microsoft-Windows-Sysmon/Operational</code> channel — crucially,
+          including the <strong>SHA/MD5/IMPHASH hashes</strong> of images, the
+          <strong>parent process</strong> lineage, and a stable
+          <strong>ProcessGUID</strong> that lets you stitch activity together across
+          events. It is the single highest-value free source of endpoint telemetry, and
+          most detection content assumes it is present.
+        </p>
+        <p>
+          Sysmon is driven entirely by its <strong>configuration file</strong>: an XML
+          policy of include/exclude filters that decides what is logged, because logging
+          everything would bury the signal. The widely-used community baselines
+          (SwiftOnSecurity's config, and Olaf Hartong's modular <em>sysmon-modular</em>,
+          which is mapped to MITRE ATT&amp;CK) are the normal starting point. Its event
+          catalogue:
+        </p>
+        <table>
+          <thead><tr><th>Event ID</th><th>Event</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Process creation</td><td>Full command line, hashes, parent — the backbone of endpoint detection</td></tr>
+            <tr><td>2</td><td>File creation time changed</td><td>Timestomping, a classic anti-forensics tell</td></tr>
+            <tr><td>3</td><td>Network connection</td><td>Which process talked to which IP/port — not in default logs</td></tr>
+            <tr><td>4 / 16</td><td>Sysmon service state / config change</td><td>Tampering with Sysmon itself</td></tr>
+            <tr><td>5</td><td>Process terminated</td><td>Lifetime bracketing, closing the process timeline</td></tr>
+            <tr><td>6</td><td>Driver loaded</td><td>Malicious / unsigned drivers, BYOVD</td></tr>
+            <tr><td>7</td><td>Image (DLL) loaded</td><td>DLL side-loading, injected or unsigned modules</td></tr>
+            <tr><td>8</td><td>CreateRemoteThread</td><td>Classic process injection into another process</td></tr>
+            <tr><td>9</td><td>RawAccessRead</td><td>Raw disk reads — e.g. grabbing SAM/NTDS past the filesystem</td></tr>
+            <tr><td>10</td><td>ProcessAccess</td><td>One process opening a handle to another — LSASS access stands out</td></tr>
+            <tr><td>11</td><td>FileCreate</td><td>Dropped files, tool and payload staging</td></tr>
+            <tr><td>12 / 13 / 14</td><td>Registry add-delete / value set / rename</td><td>Run-key and service persistence, config changes</td></tr>
+            <tr><td>15</td><td>FileCreateStreamHash</td><td>Alternate Data Streams (mark-of-the-web, hidden payloads)</td></tr>
+            <tr><td>17 / 18</td><td>Named pipe created / connected</td><td>C2 and lateral-movement framework comms</td></tr>
+            <tr><td>19 / 20 / 21</td><td>WMI filter / consumer / binding</td><td>WMI event-subscription persistence</td></tr>
+            <tr><td>22</td><td>DNS query</td><td>Per-process name resolution — C2 domains, DGA, exfil</td></tr>
+            <tr><td>23 / 26</td><td>File delete (archived / detected)</td><td>Anti-forensics, and recovery of deleted tooling</td></tr>
+            <tr><td>24</td><td>Clipboard change</td><td>Clipboard capture / data theft</td></tr>
+            <tr><td>25</td><td>Process tampering</td><td>Process hollowing / herpaderping-style image replacement</td></tr>
+            <tr><td>27 / 28 / 29</td><td>File block (executable / shredding) / executable detected</td><td>Newer preventive and detection controls</td></tr>
+          </tbody>
+        </table>
+        <blockquote>
+          Sysmon Event 1 (process creation with command line, hashes and parent) plus
+          Event 3 (network) and Event 10 (process access, for LSASS) cover an enormous
+          share of real-world attacker behaviour. If you do nothing else on an endpoint,
+          get those three flowing into the SIEM.
+        </blockquote>
+
+        <h2>Linux and Unix logging</h2>
+        <p>
+          The Unix world splits into the traditional text pipeline and the Linux audit
+          subsystem:
+        </p>
+        <ul>
+          <li>
+            <strong>syslog daemons</strong> — <code>rsyslog</code> and
+            <code>syslog-ng</code> receive, filter and forward syslog, writing to
+            <code>/var/log/</code> (<code>auth.log</code> or <code>secure</code> for
+            authentication, <code>messages</code>/<code>syslog</code> for general
+            events).
+          </li>
+          <li>
+            <strong>journald</strong> — systemd's binary, indexed journal, read with
+            <code>journalctl</code>; it can forward to a syslog daemon for shipping.
+          </li>
+          <li>
+            <strong>auditd</strong> — the Linux Audit framework, the closest analogue to
+            Windows security auditing. Kernel-level rules (watch a file, watch a syscall)
+            produce detailed records read with <code>ausearch</code>/<code>aureport</code>.
+            It is the source for execution, file-access and privilege-change visibility
+            on Linux, and the basis of many container/host EDR sensors.
+          </li>
+        </ul>
+        <pre><code># auditd rule: record every execve (process execution) with a searchable key
+-a always,exit -F arch=b64 -S execve -k proc_exec
+# then review:
+ausearch -k proc_exec --start today | aureport -x --summary</code></pre>
+
+        <h2>The pipeline: from event to SIEM</h2>
+        <p>
+          A log is only useful once it reaches somewhere you can search it. Every mature
+          logging setup is a pipeline with the same stages, and problems at any stage
+          silently cost you visibility:
+        </p>
+        <ol>
+          <li><strong>Generate</strong> — the source emits the event (and you must have enabled the right auditing for it to exist at all).</li>
+          <li><strong>Collect</strong> — an agent or receiver gathers it: Winlogbeat / Elastic Agent, Splunk Universal Forwarder, Fluent Bit / Fluentd, NXLog, or a syslog daemon.</li>
+          <li><strong>Transport</strong> — ship it off-host, ideally encrypted and buffered (TLS syslog, a message queue like Kafka) so a burst or an outage does not drop events.</li>
+          <li><strong>Parse &amp; normalise</strong> — extract fields and map them into your schema (ECS/OCSF/CIM) so detections are source-agnostic.</li>
+          <li><strong>Enrich</strong> — add context the raw event lacks: GeoIP, asset owner and criticality, threat-intel matches, user identity.</li>
+          <li><strong>Store &amp; index</strong> — land it in the SIEM/data lake with hot/warm/cold tiers to balance query speed against retention cost.</li>
+          <li><strong>Analyse</strong> — detections, dashboards, hunting and investigation run on top (see the <a href="2026-10-02-detection-engineering-attack.html">Detection Engineering</a> page).</li>
+        </ol>
+        <p>
+          The economics matter as much as the plumbing. SIEM licensing and storage are
+          usually priced on <strong>volume</strong>, so teams filter at the edge (drop
+          known-noise events), sample high-volume low-value sources, and route full-fidelity
+          copies to cheaper storage. Over-collecting a noisy source while missing a quiet,
+          high-value one is the most common and most expensive logging mistake.
+        </p>
+
+        <h2>Log integrity, retention and time</h2>
+        <p>
+          Logs are evidence, and evidence has requirements beyond "it exists somewhere":
+        </p>
+        <ul>
+          <li>
+            <strong>Time synchronisation.</strong> Correlating across hosts is impossible
+            if clocks drift, so every source runs NTP and logs should be normalised to
+            <strong>UTC</strong> on ingest. Keep the three timestamps — event time,
+            collection time, ingest time — distinct.
+          </li>
+          <li>
+            <strong>Tamper-resistance.</strong> The first thing an intruder does is try to
+            cover tracks: clearing the Windows Security log (Event <strong>1102</strong>),
+            stopping the Sysmon or EDR service, deleting <code>/var/log</code> files, or
+            disabling auditing (ATT&amp;CK <strong>T1562 Impair Defenses</strong> /
+            <strong>T1070 Indicator Removal</strong>). The defence is to <strong>get logs
+            off the host immediately</strong> — WEF, agent forwarding, remote syslog — so
+            the authoritative copy is somewhere the attacker on the endpoint cannot reach,
+            and to alert on the tamper events themselves (1102, Sysmon service-state change,
+            audit-policy changes).
+          </li>
+          <li>
+            <strong>Retention.</strong> Driven by both investigation needs (dwell time can
+            be months, so short retention blinds you to the start of an intrusion) and
+            compliance (e.g. PCI-DSS wants a year, with ninety days immediately available).
+          </li>
+          <li>
+            <strong>Coverage, not volume.</strong> The goal is the events that answer
+            attacker techniques, not the most gigabytes — map your logging to ATT&amp;CK
+            and verify the detections you care about actually have the data they need.
+          </li>
+        </ul>
+
+        <h2>The takeaway</h2>
+        <p>
+          Logging is the substrate everything defensive stands on: you cannot detect,
+          investigate or prove what you never recorded. The craft is in choosing the
+          right <em>sources</em> (OS, endpoint, identity, network, cloud), getting them
+          into clean <em>formats</em> and a single <em>schema</em>, enabling the auditing
+          that makes the valuable events exist at all (Advanced Audit Policy, Sysmon with
+          a good config), and running a pipeline that ships everything off-host into a
+          SIEM where it is durable, time-correct and searchable. Do that well and the
+          detection and response work the rest of the Blue Team pages describe has
+          something solid to stand on; skimp on it and every layer above inherits the
+          blind spots.
+        </p>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-02-soc-detection-response.html">Building a SOC — Detection to Response</a></li>
+          <li><a href="2026-10-02-detection-engineering-attack.html">Detection Engineering with MITRE ATT&amp;CK</a></li>
+          <li><a href="2026-09-23-windows-telemetry-logging.html">Windows Telemetry &amp; PowerShell Logging</a></li>
+          <li><a href="2026-10-02-edr-xdr-endpoint-detection.html">EDR/XDR — How Endpoint Detection Works</a></li>
+          <li><a href="2026-10-08-amsi-bypass-modern.html">Modern AMSI &amp; ETW Bypasses</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

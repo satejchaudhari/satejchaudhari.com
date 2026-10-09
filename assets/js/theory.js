@@ -20,6 +20,14 @@
 
 var THEORY = [
   {
+    title: "Logging & Telemetry — From Event to SIEM",
+    url: "theory/2026-10-09-logging-and-telemetry.html",
+    date: "2026-10-09",
+    tag: "Blue Team",
+    description: "An in-depth logging reference for defenders — what a log is, log sources and types, the formats (syslog, CEF, LEEF, JSON, EVTX, W3C) and normalisation schemas (ECS, OCSF, CIM), Windows Event Log with the key security Event IDs, Sysmon in depth with its full event catalogue, Linux auditd/journald, the collection-to-SIEM pipeline, and log integrity/retention.",
+    readTime: "18 min read"
+  },
+  {
     title: "Modern AMSI & ETW Bypasses — Why They Still Work",
     url: "theory/2026-10-08-amsi-bypass-modern.html",
     date: "2026-10-08",
