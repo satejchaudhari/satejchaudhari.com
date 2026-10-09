@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>C2 Infrastructure &amp; OPSEC — Satej Chaudhari</title>
+  <meta name="description" content="Designing command-and-control infrastructure that survives — why to decouple implants from the team server, redirectors (HTTP/DNS, staging/long-haul/short-haul), blending traffic (malleable profiles, domain categorisation, domain fronting, sleep/jitter), channel choice, OPSEC discipline, and the defender&#x27;s detection view.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="C2 Infrastructure &amp; OPSEC">
+  <meta property="og:description" content="Designing command-and-control infrastructure that survives — why to decouple implants from the team server, redirectors (HTTP/DNS, staging/long-haul/short-haul), blending traffic (malleable profiles, domain categorisation, domain fronting, sleep/jitter), channel choice, OPSEC discipline, and the defender&#x27;s detection view.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-c2-infrastructure-opsec.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="C2 Infrastructure &amp; OPSEC">
+  <meta name="twitter:description" content="Designing command-and-control infrastructure that survives — why to decouple implants from the team server, redirectors (HTTP/DNS, staging/long-haul/short-haul), blending traffic (malleable profiles, domain categorisation, domain fronting, sleep/jitter), channel choice, OPSEC discipline, and the defender&#x27;s detection view.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Red Team</span>
+        <h1 class="post-title">C2 Infrastructure &amp; OPSEC</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          A payload is only as good as the infrastructure it calls home to. The
+          <a href="2026-09-23-command-and-control.html">C2 Frameworks</a> page covers
+          the implant/listener mechanics; this one covers the <em>infrastructure</em>
+          design that keeps a channel alive and attributable to no one &mdash;
+          redirectors, traffic shaping, and the OPSEC decisions that separate a
+          durable operation from one that gets a domain burned on day one.
+        </p>
+
+        <h2>Why not point the implant at the team server</h2>
+        <p>
+          If implants beacon straight to your C2 server, one detection burns
+          everything: the server IP is blocklisted, and defenders pivot to every host
+          that ever talked to it. The fix is <strong>decoupling</strong> &mdash;
+          layers between the implant and the team server so the front can be replaced
+          without losing the backend.
+        </p>
+
+        <h2>Redirectors</h2>
+        <p>
+          A redirector is a cheap, disposable host that forwards legitimate-looking
+          C2 traffic to the team server and drops everything else. It is the front
+          the target sees; when it is burned you stand up another and keep the
+          backend. Common forms:
+        </p>
+        <ul>
+          <li><strong>HTTP(S) redirectors</strong> &mdash; a web server / reverse proxy that forwards only valid beacon traffic (matching your profile) and serves a decoy site to everyone else.</li>
+          <li><strong>DNS redirectors</strong> &mdash; for DNS C2, where the authoritative server for your domain relays queries.</li>
+          <li><strong>Separate staging / long-haul / short-haul</strong> redirectors, so payload hosting, slow persistence beacons and interactive sessions do not share fate.</li>
+        </ul>
+
+        <h2>Blending the traffic</h2>
+        <table>
+          <thead><tr><th>Technique</th><th>Idea</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Malleable / traffic profiles</strong></td><td>Shape the C2 so requests and responses look like ordinary web traffic (headers, URIs, cookies, timing) rather than a default framework signature.</td></tr>
+            <tr><td><strong>Domain categorisation / aged domains</strong></td><td>Use domains with a benign reputation and a sensible category so web proxies allow them.</td></tr>
+            <tr><td><strong>Domain fronting &amp; CDN</strong></td><td>Route through a trusted CDN so the visible destination is a high-reputation host (increasingly limited as providers disable it).</td></tr>
+            <tr><td><strong>Sleep &amp; jitter</strong></td><td>Long, randomised beacon intervals to defeat beaconing-detection; in-memory sleep obfuscation to survive memory scans.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Channels</h2>
+        <p>
+          <strong>HTTPS</strong> is the default &mdash; it blends with normal web
+          traffic and is encrypted. <strong>DNS</strong> is slow but egresses almost
+          everywhere, making it a good fallback/long-haul channel.
+          <strong>Domain fronting</strong>, mail and cloud-service channels exist for
+          constrained egress. Mature operations run a fast interactive channel and a
+          separate slow, resilient one that survives the first being cut.
+        </p>
+        <blockquote>
+          The organising principle is <strong>separation of concerns</strong>:
+          staging, long-haul persistence and interactive operation each get their own
+          front and ideally their own channel, so burning one does not cascade. Add
+          kill-dates and guardrails so stray implants do not beacon forever.
+        </blockquote>
+
+        <h2>OPSEC discipline</h2>
+        <ul>
+          <li>Never reuse infrastructure across engagements or clients; rotate domains and redirectors.</li>
+          <li>Lock redirectors to expected profiles and geographies; everything off-profile gets the decoy, not the backend.</li>
+          <li>Keep the team server off the internet directly; reach it only through redirectors or a VPN.</li>
+          <li>Log what you do for deconfliction, and set guardrails (scope checks, kill-dates) so the operation cannot run away.</li>
+        </ul>
+
+        <h2>Detection (the defender's view)</h2>
+        <ul>
+          <li>Beaconing analytics &mdash; regular, low-variance callbacks to a rare destination &mdash; defeat naive C2; jitter is the counter, and still leaves statistical traces.</li>
+          <li>Newly-registered / low-reputation domains, JA3/JA3S TLS fingerprints, and default framework profiles are high-signal.</li>
+          <li>DNS volume and entropy anomalies catch DNS C2; see <a href="2026-10-02-detection-engineering-attack.html">Detection Engineering</a> and <a href="2026-10-09-logging-and-telemetry.html">Logging</a>.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-09-23-command-and-control.html">Command &amp; Control (C2) Frameworks</a></li>
+          <li><a href="2026-09-23-sliver-c2.html">Sliver C2 — Architecture &amp; Concepts</a></li>
+          <li><a href="2026-09-23-defense-evasion.html">Windows Defense Evasion — AV, EDR &amp; ASR</a></li>
+          <li><a href="2026-10-02-detection-engineering-attack.html">Detection Engineering with MITRE ATT&amp;CK</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Collection &amp; Exfiltration — Satej Chaudhari</title>
+  <meta name="description" content="Reaching and removing data, and testing whether anyone notices — collection (finding and staging crown jewels), exfiltration channels (C2, cloud HTTPS, DNS, email, physical), beating DLP and egress controls (encrypt/chunk/allowed destinations), and the detection and defence that are the real deliverable.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Data Collection &amp; Exfiltration">
+  <meta property="og:description" content="Reaching and removing data, and testing whether anyone notices — collection (finding and staging crown jewels), exfiltration channels (C2, cloud HTTPS, DNS, email, physical), beating DLP and egress controls (encrypt/chunk/allowed destinations), and the detection and defence that are the real deliverable.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-collection-and-exfiltration.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Data Collection &amp; Exfiltration">
+  <meta name="twitter:description" content="Reaching and removing data, and testing whether anyone notices — collection (finding and staging crown jewels), exfiltration channels (C2, cloud HTTPS, DNS, email, physical), beating DLP and egress controls (encrypt/chunk/allowed destinations), and the detection and defence that are the real deliverable.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Red Team</span>
+        <h1 class="post-title">Data Collection &amp; Exfiltration</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          The objective of most engagements is data &mdash; proving an attacker could
+          reach and remove it. Collection is finding and staging what matters;
+          exfiltration is getting it out past the controls meant to stop it. For a
+          red team the point is less the theft itself than <em>demonstrating the path
+          and testing whether anyone notices</em>, which makes the detection angle
+          central.
+        </p>
+
+        <h2>Collection &mdash; find and stage</h2>
+        <ul>
+          <li><strong>Find it</strong> &mdash; file shares, SharePoint/Confluence, mailboxes, databases, code repos and cloud storage; search for keywords, document types and obvious crown jewels (PII, source, financials, secrets).</li>
+          <li><strong>Stage it</strong> &mdash; collect to a single working location, then compress and often encrypt into an archive so the transfer is one object you control.</li>
+          <li><strong>Mind the footprint</strong> &mdash; mass file access and large archive creation are themselves detectable; scope tightly rather than hoovering everything.</li>
+        </ul>
+
+        <h2>Exfiltration channels</h2>
+        <table>
+          <thead><tr><th>Channel</th><th>Character</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Over the C2 channel</strong></td><td>Simplest &mdash; the existing beacon carries the data; slow and ties volume to the implant.</td></tr>
+            <tr><td><strong>HTTPS to a cloud service</strong></td><td>Upload to a sanctioned-looking SaaS/storage provider so it blends with normal traffic &mdash; a very common real-world path.</td></tr>
+            <tr><td><strong>DNS exfiltration</strong></td><td>Encode data into DNS queries; slow but egresses where little else does.</td></tr>
+            <tr><td><strong>Email / collaboration</strong></td><td>Send to an external mailbox or share link where those are allowed.</td></tr>
+            <tr><td><strong>Physical</strong></td><td>Removable media on an on-site engagement.</td></tr>
+          </tbody>
+        </table>
+        <blockquote>
+          The art is matching the channel to the environment's blind spot: a place
+          that already allows large outbound transfers (a cloud backup, a sanctioned
+          file-sharing SaaS) is quieter than a novel channel, because it hides in
+          traffic the organisation has decided to trust.
+        </blockquote>
+
+        <h2>Beating DLP and egress controls</h2>
+        <ul>
+          <li><strong>Encrypt and encode</strong> so content inspection cannot match on keywords or file signatures.</li>
+          <li><strong>Chunk and throttle</strong> so volume stays under thresholds and does not spike.</li>
+          <li><strong>Use allowed destinations</strong> &mdash; a provider the org already permits defeats destination-based blocking.</li>
+          <li><strong>Blend timing</strong> with business hours and normal traffic patterns.</li>
+        </ul>
+
+        <h2>Detection &amp; defence (the real deliverable)</h2>
+        <p>
+          The value to the client is which of these the blue team catches. Defences
+          and the signals they produce:
+        </p>
+        <ul>
+          <li><strong>DLP</strong> on content and destinations, and <strong>egress filtering</strong> that only allows known destinations &mdash; the primary controls.</li>
+          <li><strong>Volume &amp; baseline analytics</strong> &mdash; a host uploading far more than normal, to an unusual destination, at an unusual time.</li>
+          <li><strong>DNS analytics</strong> (query volume, length, entropy) for DNS exfil; see <a href="2026-10-09-logging-and-telemetry.html">Logging</a>.</li>
+          <li><strong>Data access monitoring</strong> &mdash; mass reads of a share or mailbox, and large archive creation on an endpoint.</li>
+          <li>Report the gaps: which channel worked, what it would have taken to catch it, and where to add coverage &mdash; see <a href="2026-10-02-detection-engineering-attack.html">Detection Engineering</a>.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="2026-10-09-c2-infrastructure-opsec.html">C2 Infrastructure &amp; OPSEC</a></li>
+          <li><a href="2026-10-09-logging-and-telemetry.html">Logging &amp; Telemetry</a></li>
+          <li><a href="2026-10-02-detection-engineering-attack.html">Detection Engineering with MITRE ATT&amp;CK</a></li>
+          <li><a href="2026-10-02-soc-detection-response.html">Building a SOC — Detection to Response</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Red Team Methodology &amp; Threat Emulation — Satej Chaudhari</title>
+  <meta name="description" content="What a red-team engagement actually is — red team vs pentest vs purple team, the engagement lifecycle from scoping and ATT&amp;CK-mapped emulation planning through recon, access, privesc, persistence, movement and actions-on-objective to reporting, ATT&amp;CK as the common language, and OPSEC/safety.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Red Team Methodology &amp; Threat Emulation">
+  <meta property="og:description" content="What a red-team engagement actually is — red team vs pentest vs purple team, the engagement lifecycle from scoping and ATT&amp;CK-mapped emulation planning through recon, access, privesc, persistence, movement and actions-on-objective to reporting, ATT&amp;CK as the common language, and OPSEC/safety.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-09-red-team-methodology.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Red Team Methodology &amp; Threat Emulation">
+  <meta name="twitter:description" content="What a red-team engagement actually is — red team vs pentest vs purple team, the engagement lifecycle from scoping and ATT&amp;CK-mapped emulation planning through recon, access, privesc, persistence, movement and actions-on-objective to reporting, ATT&amp;CK as the common language, and OPSEC/safety.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Red Team</span>
+        <h1 class="post-title">Red Team Methodology &amp; Threat Emulation</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-09">2026-10-09</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+        <p>
+          A red-team engagement is not a pentest with cooler tools. A pentest finds
+          as many vulnerabilities as possible in a scope; a red team pursues a
+          specific objective the way a real adversary would &mdash; quietly,
+          end-to-end &mdash; to test whether the organisation can <em>detect and
+          respond</em>, not just whether a bug exists. This page is the shape of that
+          engagement and how it ties together the rest of the red-team material here.
+        </p>
+
+        <h2>Red team vs. pentest vs. purple team</h2>
+        <table>
+          <thead><tr><th>Mode</th><th>Goal</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Penetration test</strong></td><td>Breadth &mdash; find and prove as many vulnerabilities as possible in scope.</td></tr>
+            <tr><td><strong>Red team</strong></td><td>Objective-driven &mdash; reach a defined goal (the "crown jewels") emulating a real threat, testing people, process and tech including detection.</td></tr>
+            <tr><td><strong>Purple team</strong></td><td>Collaborative &mdash; red and blue work together to build and validate detections technique by technique (see <a href="2026-10-02-detection-engineering-attack.html">Detection Engineering</a>).</td></tr>
+          </tbody>
+        </table>
+
+        <h2>The engagement lifecycle</h2>
+        <ol>
+          <li><strong>Scoping &amp; rules of engagement</strong> &mdash; objective (the "flag"), in-scope targets and techniques, deconfliction, and a get-out-of-jail contact. Decide the start posture: external, assumed-breach, or a specific scenario.</li>
+          <li><strong>Threat modelling &amp; emulation plan</strong> &mdash; pick a relevant adversary and map the TTPs you will emulate to MITRE ATT&amp;CK, so the test mirrors a plausible real attacker.</li>
+          <li><strong>Reconnaissance</strong> &mdash; OSINT and attack-surface mapping (the recon half of the <a href="../external-red-team-workflow.html">workflow</a>).</li>
+          <li><strong>Initial access</strong> &mdash; the vector that fits the surface (the initial-access half of the workflow).</li>
+          <li><strong>Foothold, privesc &amp; persistence</strong> &mdash; stabilise, escalate (<a href="2026-10-09-linux-privilege-escalation.html">Linux</a> / <a href="2026-10-09-windows-token-potato.html">Windows</a>), and persist appropriately for the scenario.</li>
+          <li><strong>Enumerate &amp; move</strong> &mdash; graph the environment (<a href="2026-10-09-bloodhound-ad-enumeration.html">BloodHound</a>), harvest credentials (<a href="2026-10-09-lsass-credential-extraction.html">LSASS</a>/<a href="2026-10-09-dpapi-abuse.html">DPAPI</a>), <a href="2026-10-09-pivoting-and-tunnelling.html">pivot</a>, and move toward the objective (the <a href="../ad-map.html">AD map</a>).</li>
+          <li><strong>Actions on objective</strong> &mdash; reach and demonstrate access to the crown jewels; <a href="2026-10-09-collection-and-exfiltration.html">collect/exfiltrate</a> as proof.</li>
+          <li><strong>Reporting &amp; retest</strong> &mdash; narrative of the path, the detections that did and did not fire, remediation, and a replay to confirm fixes.</li>
+        </ol>
+
+        <h2>ATT&amp;CK as the common language</h2>
+        <p>
+          Mapping every action to <a href="2026-10-02-detection-engineering-attack.html">MITRE
+          ATT&amp;CK</a> gives red and blue a shared vocabulary: the red team can
+          emulate a named actor's technique set, and the blue team can measure
+          coverage technique-by-technique. Adversary-emulation plans (e.g. the CTID
+          library) turn "act like this threat group" into a concrete, ordered list of
+          TTPs to execute and detect.
+        </p>
+        <blockquote>
+          The deliverable that matters is not "we got Domain Admin" &mdash; it is a
+          <strong>timeline of what you did, what the defenders saw, and where the
+          gaps were</strong>. A red team that reports only the kill chain, and not the
+          detection outcome at each step, has done half the job.
+        </blockquote>
+
+        <h2>OPSEC &amp; safety throughout</h2>
+        <ul>
+          <li>Emulate the <em>threat</em>, but stay within RoE &mdash; no destructive actions, careful with production, deconflict with the blue team's live alerts.</li>
+          <li>Keep meticulous logs for deconfliction and the report; every action timestamped and attributable to the engagement.</li>
+          <li>Balance stealth against progress to the objective &mdash; the point is realism, which includes getting caught sometimes and seeing what happens.</li>
+        </ul>
+
+        <h2>Related reading</h2>
+        <ul class="related-list">
+          <li><a href="../external-red-team-workflow.html">External Red Team Workflow</a></li>
+          <li><a href="2026-10-02-detection-engineering-attack.html">Detection Engineering with MITRE ATT&amp;CK</a></li>
+          <li><a href="2026-10-02-soc-detection-response.html">Building a SOC — Detection to Response</a></li>
+          <li><a href="../ad-map.html">AD Attack-Path Explorer</a></li>
+        </ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

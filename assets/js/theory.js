@@ -20,6 +20,38 @@
 
 var THEORY = [
   {
+    title: "Red Team Methodology & Threat Emulation",
+    url: "theory/2026-10-09-red-team-methodology.html",
+    date: "2026-10-09",
+    tag: "Red Team",
+    description: "What a red-team engagement actually is — red team vs pentest vs purple team, the lifecycle from scoping and ATT&CK-mapped emulation planning through recon, access, privesc, persistence, movement and actions-on-objective to reporting, and OPSEC/safety.",
+    readTime: "10 min read"
+  },
+  {
+    title: "C2 Infrastructure & OPSEC",
+    url: "theory/2026-10-09-c2-infrastructure-opsec.html",
+    date: "2026-10-09",
+    tag: "Red Team",
+    description: "Designing command-and-control infrastructure that survives — decoupling implants from the team server, redirectors (HTTP/DNS, staging/long-haul/short-haul), blending traffic (malleable profiles, domain categorisation, fronting, sleep/jitter), channel choice, OPSEC, and the defender's detection view.",
+    readTime: "10 min read"
+  },
+  {
+    title: "Data Collection & Exfiltration",
+    url: "theory/2026-10-09-collection-and-exfiltration.html",
+    date: "2026-10-09",
+    tag: "Red Team",
+    description: "Reaching and removing data, and testing whether anyone notices — collection (finding and staging crown jewels), exfiltration channels (C2, cloud HTTPS, DNS, email, physical), beating DLP and egress controls, and the detection/defence that are the real deliverable.",
+    readTime: "9 min read"
+  },
+  {
+    title: "Password Cracking",
+    url: "theory/2026-10-09-password-cracking.html",
+    date: "2026-10-09",
+    tag: "Red Team",
+    description: "Turning captured hashes into passwords with strategy — identifying the hash/mode, the wordlist -> rules -> targeted lists -> masks -> hybrid -> brute order, hashcat/John and *2john helpers, feeding cracked patterns back into spraying, and the defensive takeaways.",
+    readTime: "9 min read"
+  },
+  {
     title: "BloodHound & AD Enumeration",
     url: "theory/2026-10-09-bloodhound-ad-enumeration.html",
     date: "2026-10-09",
