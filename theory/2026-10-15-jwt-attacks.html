@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JWT Attacks — Satej Chaudhari</title>
-  <meta name="description" content="Attacking the verification logic — JWT anatomy, alg:none, unverified signatures, weak HMAC secrets, RS256→HS256 confusion and jku/kid abuse, why letting the token dictate verification is the root cause, and pinning the algorithm/key.">
+  <meta name="description" content="Attacking the verification logic — JWT anatomy, alg:none, unverified signatures, weak-secret cracking with hashcat, RS256→HS256 confusion and jku/kid abuse (worked with jwt_tool), and pinning the algorithm/key.">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
   <meta property="og:title" content="JWT Attacks">
-  <meta property="og:description" content="Attacking the verification logic — JWT anatomy, alg:none, unverified signatures, weak HMAC secrets, RS256→HS256 confusion and jku/kid abuse, why letting the token dictate verification is the root cause, and pinning the algorithm/key.">
+  <meta property="og:description" content="Attacking the verification logic — JWT anatomy, alg:none, unverified signatures, weak-secret cracking with hashcat, RS256→HS256 confusion and jku/kid abuse (worked with jwt_tool), and pinning the algorithm/key.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-jwt-attacks.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-15">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="JWT Attacks">
-  <meta name="twitter:description" content="Attacking the verification logic — JWT anatomy, alg:none, unverified signatures, weak HMAC secrets, RS256→HS256 confusion and jku/kid abuse, why letting the token dictate verification is the root cause, and pinning the algorithm/key.">
+  <meta name="twitter:description" content="Attacking the verification logic — JWT anatomy, alg:none, unverified signatures, weak-secret cracking with hashcat, RS256→HS256 confusion and jku/kid abuse (worked with jwt_tool), and pinning the algorithm/key.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -54,8 +54,6 @@
         <a href="../toolkit.html">Toolkit</a>
         <a href="../vulns.html">Vulns &amp; Misconfigs</a>
         <a href="../writeups.html">Writeups</a>
-        <a href="../maps.html">Maps</a>
-        <a href="../search.html">Search</a>
       </nav>
       <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -82,59 +80,71 @@
 
       <div class="post-body">
 
-<p>JSON Web Tokens (JWTs) are the default session/authorisation token for modern
-APIs and SPAs. A JWT is a signed statement the client carries and the server
-trusts — which makes the <em>verification</em> logic a high-value target. Most
-JWT vulnerabilities are failures to verify the signature correctly, and they lead
-straight to authentication bypass and privilege escalation.</p>
+<p>JSON Web Tokens are the default session and authorisation token for modern
+APIs and single-page apps. A JWT is a signed claim the client carries and the
+server trusts, which makes the server's <em>verification</em> logic the target.
+Most JWT vulnerabilities are failures to verify the signature correctly, and
+they lead straight to authentication bypass and privilege escalation.</p>
 
 <h2>Anatomy</h2>
-<p>A JWT is three Base64URL parts separated by dots:
-<code>header.payload.signature</code>. The header names the algorithm
-(<code>alg</code>); the payload holds claims (<code>sub</code>, <code>role</code>,
-<code>exp</code>); the signature covers the first two parts under a key. The
-entire security model rests on the server <strong>recomputing and checking that
-signature</strong> before trusting any claim.</p>
+<p>Three base64url parts separated by dots:
+<code>header.payload.signature</code>. Decode them with any tool:</p>
+<pre><code># header   {"alg":"HS256","typ":"JWT"}
+# payload  {"sub":"alice","role":"user","exp":1735689600}
+# signature  HMAC/RSA over  base64url(header) + "." + base64url(payload)
+
+echo &lt;token&gt; | cut -d. -f1 | base64 -d 2>/dev/null   # read the header
+jwt_tool &lt;token&gt;                                       # inspect + attack toolkit</code></pre>
+<p>The entire model rests on the server recomputing and checking that signature
+before trusting any claim.</p>
 
 <h2>The classic failures</h2>
 <table>
   <thead><tr><th>Flaw</th><th>Mechanism</th><th>Result</th></tr></thead>
   <tbody>
-    <tr><td><code>alg: none</code></td><td>Server accepts an unsigned token</td><td>Forge any claims — full bypass</td></tr>
-    <tr><td>Signature not verified</td><td>Server decodes but never checks the signature</td><td>Tamper with claims freely</td></tr>
-    <tr><td>Weak HMAC secret</td><td>Symmetric key is guessable/crackable offline</td><td>Sign arbitrary tokens</td></tr>
-    <tr><td>RS256 → HS256 confusion</td><td>Server verifies an HS256 token using the public RSA key as the HMAC secret</td><td>Forge tokens with the public key</td></tr>
-    <tr><td><code>jku</code>/<code>kid</code> abuse</td><td>Attacker controls where the verification key is fetched from, or injects via kid</td><td>Server verifies with an attacker key</td></tr>
+    <tr><td><code>alg:none</code></td><td>Server accepts an unsigned token</td><td>Forge any claims</td></tr>
+    <tr><td>Signature not checked</td><td>App decodes but never verifies</td><td>Tamper freely</td></tr>
+    <tr><td>Weak HMAC secret</td><td>Symmetric key is crackable offline</td><td>Mint valid tokens</td></tr>
+    <tr><td>RS256 → HS256 confusion</td><td>Server verifies an HS256 token using the RSA <em>public</em> key as the HMAC secret</td><td>Forge with a public key</td></tr>
+    <tr><td><code>jku</code>/<code>kid</code> abuse</td><td>Attacker controls where the verify key is fetched, or injects via <code>kid</code></td><td>Verify with an attacker key</td></tr>
   </tbody>
 </table>
 
-<h2>Why the algorithm confusion works</h2>
-<p>The <code>alg</code>/<code>none</code> and RS256→HS256 issues share a root
-cause: the server lets the <em>token</em> dictate how it is verified. If the
-header can downgrade the algorithm or switch from asymmetric to symmetric, the
-attacker controls the verification path. The fix is that the server must pin the
-expected algorithm and key, and ignore the token's claims about them.</p>
+<h2>Worked examples</h2>
+<pre><code># alg:none — strip the signature, set alg to none, flip a claim
+jwt_tool &lt;token&gt; -X a                              # automated "none" attack
+# → header {"alg":"none"},  payload role=admin,  empty signature
+
+# weak HMAC secret — crack it offline, then sign your own token
+hashcat -m 16500 token.txt /usr/share/wordlists/rockyou.txt
+jwt_tool &lt;token&gt; -S hs256 -p 'cracked-secret' -I -pc role -pv admin
+
+# RS256 → HS256 confusion — sign with the server's PUBLIC key as the HMAC key
+jwt_tool &lt;token&gt; -X k -pk public.pem</code></pre>
+<p>The <code>alg:none</code> and algorithm-confusion attacks share one root
+cause: the server lets the <em>token</em> dictate how it is verified. The fix is
+that the server pins the expected algorithm and key and ignores the header's
+claims about them.</p>
 
 <h2>What attackers change</h2>
-<p>Once verification is defeated, the valuable claims are identity and authority:
-flip <code>role: user</code> to <code>role: admin</code>, change <code>sub</code>
-to another user, or extend <code>exp</code>. Because JWTs are often stateless,
-the server cannot easily revoke a forged token mid-life.</p>
+<p>Once verification is defeated, the valuable claims are identity and authority
+— flip <code>role: user</code> to <code>role: admin</code>, change
+<code>sub</code> to another user, or extend <code>exp</code>. Because JWTs are
+usually stateless, a forged token cannot easily be revoked mid-life.</p>
 
-<h2>Detection &amp; prevention</h2>
+<h2>Prevention</h2>
 <ul>
-  <li><strong>Pin the algorithm</strong> server-side; never honour
-      <code>alg: none</code>; do not let the token choose asymmetric vs symmetric.</li>
-  <li><strong>Strong, rotated keys;</strong> long random HMAC secrets; validate
-      <code>kid</code>/<code>jku</code> against an allow-list, never fetch keys
+  <li><strong>Pin the algorithm server-side;</strong> never honour
+      <code>alg:none</code>; do not let a token switch asymmetric↔symmetric.</li>
+  <li><strong>Use long, random, rotated keys;</strong> validate
+      <code>kid</code>/<code>jku</code> against an allow-list — never fetch keys
       from attacker-controlled URLs.</li>
-  <li><strong>Validate all claims</strong> — <code>exp</code>, <code>aud</code>,
-      <code>iss</code> — on every request.</li>
-  <li><strong>Consider stateful sessions or a revocation list</strong> for
-      sensitive apps so a leaked token can be killed.</li>
-  <li><strong>Detection:</strong> tokens with <code>none</code>/unexpected
-      algorithms, signature-verification failures, and claim values inconsistent
-      with the issuing flow.</li>
+  <li><strong>Validate every claim</strong> — <code>exp</code>, <code>aud</code>,
+      <code>iss</code> — on each request.</li>
+  <li><strong>For sensitive apps</strong>, keep a server-side session or
+      revocation list so a leaked token can be killed.</li>
+  <li><strong>Detect</strong> tokens with <code>none</code>/unexpected algorithms
+      and signature-verification failures.</li>
 </ul>
 <p>Testing detail: <a href="../vuln-detail.html?vuln=jwt-vulns">JWT vuln entry</a>.</p>
 

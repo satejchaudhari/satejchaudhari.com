@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>File Upload Attacks — Satej Chaudhari</title>
-  <meta name="description" content="From upload to RCE and beyond — the execute-what-you-store chain, why each individual validation check fails, stored XSS/traversal/SSRF/DoS via uploads, and the store-outside-webroot + allow-list + rename architecture that fixes it.">
+  <meta name="description" content="From upload to RCE and beyond — the execute-what-you-store chain, the bypass matrix for every single validation check, stored XSS/traversal/SSRF/DoS via uploads, and the store-outside-webroot + allow-list + rename architecture.">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
   <meta property="og:title" content="File Upload Attacks">
-  <meta property="og:description" content="From upload to RCE and beyond — the execute-what-you-store chain, why each individual validation check fails, stored XSS/traversal/SSRF/DoS via uploads, and the store-outside-webroot + allow-list + rename architecture that fixes it.">
+  <meta property="og:description" content="From upload to RCE and beyond — the execute-what-you-store chain, the bypass matrix for every single validation check, stored XSS/traversal/SSRF/DoS via uploads, and the store-outside-webroot + allow-list + rename architecture.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-file-upload-attacks.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-15">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="File Upload Attacks">
-  <meta name="twitter:description" content="From upload to RCE and beyond — the execute-what-you-store chain, why each individual validation check fails, stored XSS/traversal/SSRF/DoS via uploads, and the store-outside-webroot + allow-list + rename architecture that fixes it.">
+  <meta name="twitter:description" content="From upload to RCE and beyond — the execute-what-you-store chain, the bypass matrix for every single validation check, stored XSS/traversal/SSRF/DoS via uploads, and the store-outside-webroot + allow-list + rename architecture.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -54,8 +54,6 @@
         <a href="../toolkit.html">Toolkit</a>
         <a href="../vulns.html">Vulns &amp; Misconfigs</a>
         <a href="../writeups.html">Writeups</a>
-        <a href="../maps.html">Maps</a>
-        <a href="../search.html">Search</a>
       </nav>
       <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -82,56 +80,61 @@
 
       <div class="post-body">
 
-<p>File-upload functionality is a perennial source of serious bugs because it
-lets a user put a file of their choosing onto the server's filesystem. If the
-application then serves or executes that file, an upload can become remote code
-execution; even when it cannot, uploads enable stored XSS, SSRF, path traversal,
-and denial of service.</p>
+<p>File upload is a perennial source of serious bugs because it lets a user place
+a file of their choosing on the server's filesystem. If the application later
+serves or executes that file, an upload becomes remote code execution; even when
+it cannot, uploads enable stored XSS, path traversal, SSRF via parsers, and
+denial of service.</p>
 
-<h2>The dangerous case: uploaded code that executes</h2>
-<p>The worst outcome is uploading a server-executable file (a web shell in the
-app's language) into a directory the web server will execute, then requesting it.
-Everything defenders do around uploads is ultimately about preventing that chain:
-controlling <em>what</em> is stored, <em>where</em> it is stored, and whether it
-can ever be <em>executed or served</em>.</p>
+<h2>The worst case: upload code that executes</h2>
+<p>The classic chain is uploading a server-executable file into a directory the
+web server will run, then requesting it:</p>
+<pre><code># a minimal PHP web shell, uploaded as shell.php, then:
+GET /uploads/shell.php?c=id      →  runs `id` on the server</code></pre>
+<p>Everything defenders do is about preventing that chain — controlling
+<em>what</em> is stored, <em>where</em>, and whether it can ever be
+<em>executed or served inline</em>.</p>
 
-<h2>Why validation so often fails</h2>
+<h2>Why single checks fail</h2>
 <table>
-  <thead><tr><th>Weak check</th><th>Why it fails</th></tr></thead>
+  <thead><tr><th>Weak check</th><th>Bypass</th></tr></thead>
   <tbody>
-    <tr><td>Extension deny-list</td><td>Alternate executable extensions and case/trailing tricks slip through</td></tr>
-    <tr><td>Content-Type trust</td><td>The client sets it; it is not evidence of the real content</td></tr>
-    <tr><td>Magic-byte check only</td><td>A file can be a valid image <em>and</em> contain code (polyglot)</td></tr>
-    <tr><td>Client-side validation</td><td>Trivially bypassed — it is not a security control</td></tr>
+    <tr><td>Extension block-list</td><td><code>.phtml .php5 .pht .phar</code>, case tricks, trailing dot/space</td></tr>
+    <tr><td>Content-Type trust</td><td>Client sets it — send <code>image/png</code> with PHP body</td></tr>
+    <tr><td>Magic-byte check only</td><td>Polyglot: valid GIF header + code (<code>GIF89a;&lt;?php …</code>)</td></tr>
+    <tr><td>Double extension</td><td><code>shell.php.jpg</code> on misconfigured Apache</td></tr>
+    <tr><td>Null byte (legacy)</td><td><code>shell.php%00.jpg</code></td></tr>
+    <tr><td>Client-side validation</td><td>Not a control — bypass in the proxy</td></tr>
   </tbody>
 </table>
-<p>Because every individual check can be fooled, robust upload security relies on
-<em>architecture</em>, not a single filter.</p>
+<p>Because each individual filter can be fooled, robust upload security relies on
+<em>architecture</em>, not one check.</p>
 
 <h2>Beyond RCE</h2>
 <ul>
-  <li><strong>Stored XSS:</strong> an uploaded HTML/SVG served inline runs script
-      in the victim's session.</li>
-  <li><strong>Path traversal:</strong> a crafted filename writes outside the
-      intended directory, overwriting config or planting files.</li>
-  <li><strong>SSRF/XXE via parsers:</strong> uploaded documents processed
-      server-side (images, XML, office files) can trigger
-      <a href="2026-10-15-ssrf.html">SSRF</a> or XXE.</li>
-  <li><strong>DoS:</strong> zip bombs, pixel floods, giant files.</li>
+  <li><strong>Stored XSS</strong> — an uploaded <code>.html</code>/<code>.svg</code>
+      served inline runs script in the victim's session.</li>
+  <li><strong>Path traversal</strong> — a crafted filename
+      (<code>../../var/www/shell.php</code>) writes outside the intended folder.</li>
+  <li><strong>SSRF / XXE via parsers</strong> — server-side image/XML/office
+      processing can be steered to fetch internal URLs (see
+      <a href="2026-10-15-ssrf.html">SSRF</a>).</li>
+  <li><strong>DoS</strong> — zip bombs, decompression bombs, pixel floods.</li>
 </ul>
 
-<h2>Detection &amp; prevention</h2>
+<h2>Prevention</h2>
 <ul>
   <li><strong>Store uploads outside the web root</strong> (or in object storage)
       and serve them through a handler that never executes them.</li>
-  <li><strong>Serve with <code>Content-Disposition: attachment</code></strong> and
-      a correct, fixed content type; strip execution permissions.</li>
-  <li><strong>Allow-list</strong> acceptable types, validate real content, and
-      <strong>rename</strong> files to server-generated names with a safe extension.</li>
-  <li><strong>Isolate processing</strong> of uploaded documents; keep parsers
-      patched and sandboxed.</li>
-  <li><strong>Detection:</strong> new executable files appearing in web
-      directories, and requests to recently uploaded paths.</li>
+  <li><strong>Serve with</strong> <code>Content-Disposition: attachment</code> and
+      a fixed, correct <code>Content-Type</code>; strip execute permissions.</li>
+  <li><strong>Allow-list</strong> the acceptable types, validate the real content,
+      and <strong>rename</strong> to a server-generated name with a safe
+      extension — never trust the uploaded name.</li>
+  <li><strong>Isolate and patch</strong> the libraries that parse uploaded
+      documents.</li>
+  <li><strong>Detect</strong> new executable files appearing under web
+      directories and requests to freshly uploaded paths.</li>
 </ul>
 <p>Testing steps: <a href="../vuln-detail.html?vuln=file-upload">file-upload vuln entry</a>.</p>
 
