@@ -20,6 +20,78 @@
 
 var THEORY = [
   {
+    title: "Server-Side Request Forgery (SSRF)",
+    url: "theory/2026-10-15-ssrf.html",
+    date: "2026-10-15",
+    tag: "Web",
+    description: "Making the server issue requests of your choosing — why fetch features are vulnerable, the implicit-trust targets (cloud metadata, internal panels, localhost), blind vs non-blind, why deny-lists fail, and allow-list/IMDSv2 defences.",
+    readTime: "9 min read"
+  },
+  {
+    title: "Insecure Deserialization",
+    url: "theory/2026-10-15-insecure-deserialization.html",
+    date: "2026-10-15",
+    tag: "Web",
+    description: "Why deserialising untrusted data becomes RCE — serialisation across languages, gadget chains in libraries you already ship, where serialized blobs appear, recognising magic bytes, and the don't-deserialise-untrusted-input fix.",
+    readTime: "9 min read"
+  },
+  {
+    title: "Server-Side Template Injection",
+    url: "theory/2026-10-15-server-side-template-injection.html",
+    date: "2026-10-15",
+    tag: "Web",
+    description: "When user input is parsed as template code — template engines as languages, the {{7*7}}→49 probe, why SSTI escalates to RCE, SSTI vs XSS, and passing input as data not template source.",
+    readTime: "8 min read"
+  },
+  {
+    title: "File Upload Attacks",
+    url: "theory/2026-10-15-file-upload-attacks.html",
+    date: "2026-10-15",
+    tag: "Web",
+    description: "From upload to RCE and beyond — the execute-what-you-store chain, why each individual validation check fails, stored XSS/traversal/SSRF/DoS via uploads, and the store-outside-webroot + allow-list + rename architecture.",
+    readTime: "8 min read"
+  },
+  {
+    title: "JWT Attacks",
+    url: "theory/2026-10-15-jwt-attacks.html",
+    date: "2026-10-15",
+    tag: "Web",
+    description: "Attacking the verification logic — JWT anatomy, alg:none, unverified signatures, weak HMAC secrets, RS256→HS256 confusion and jku/kid abuse, why letting the token dictate verification is the root cause, and pinning the algorithm/key.",
+    readTime: "9 min read"
+  },
+  {
+    title: "Linux Credential Access & Looting",
+    url: "theory/2026-10-15-linux-credential-access-and-looting.html",
+    date: "2026-10-15",
+    tag: "Linux",
+    description: "Harvesting secrets on Linux — where they live (dotfiles, configs, process args, /etc/shadow), SSH keys as the crown jewels, memory and /proc sources, and the least-privilege/auditd defences.",
+    readTime: "9 min read"
+  },
+  {
+    title: "Linux Lateral Movement & SSH",
+    url: "theory/2026-10-15-linux-lateral-movement-and-ssh.html",
+    date: "2026-10-15",
+    tag: "Linux",
+    description: "Moving through Linux estates on trust — SSH key reuse, agent forwarding and hijacking, known_hosts mapping, orchestration planes and NFS trust, SSH tunnelling/pivoting, and how to harden and detect it.",
+    readTime: "9 min read"
+  },
+  {
+    title: "GCP Attack Paths",
+    url: "theory/2026-10-15-gcp-attack-paths.html",
+    date: "2026-10-15",
+    tag: "Cloud",
+    description: "Attacking Google Cloud IAM — the service-account model and hierarchy, foothold routes (leaked SA keys, SSRF-to-metadata, public buckets), the impersonation/actAs/token-minting escalation primitives, and audit-log detection.",
+    readTime: "10 min read"
+  },
+  {
+    title: "Red Team Reporting & Deliverables",
+    url: "theory/2026-10-15-red-team-reporting.html",
+    date: "2026-10-15",
+    tag: "Red Team",
+    description: "Turning an operation into something the client can fix — the four audiences, report structure, the attack narrative, rating findings by business impact and failed control, and remediation/retest.",
+    readTime: "9 min read"
+  },
+  {
     title: "Phishing & Pretext Delivery",
     url: "theory/2026-10-15-phishing-and-pretext-delivery.html",
     date: "2026-10-15",
@@ -223,7 +295,7 @@ var THEORY = [
     title: "Web API Fuzzing",
     url: "theory/2026-10-07-web-api-fuzzing.html",
     date: "2026-10-07",
-    tag: "WEB",
+    tag: "Web",
     description: "How to attack Web APIs with a fuzzer — the REST / SOAP / GraphQL models, why APIs are fuzzed differently from web servers, finding endpoints and parameters for each style, and the three kinds of API fuzzing (parameter, data-format, sequence).",
     readTime: "10 min read"
   },

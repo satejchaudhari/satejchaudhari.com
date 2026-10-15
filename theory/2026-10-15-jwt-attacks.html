@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JWT Attacks — Satej Chaudhari</title>
+  <meta name="description" content="Attacking the verification logic — JWT anatomy, alg:none, unverified signatures, weak HMAC secrets, RS256→HS256 confusion and jku/kid abuse, why letting the token dictate verification is the root cause, and pinning the algorithm/key.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="JWT Attacks">
+  <meta property="og:description" content="Attacking the verification logic — JWT anatomy, alg:none, unverified signatures, weak HMAC secrets, RS256→HS256 confusion and jku/kid abuse, why letting the token dictate verification is the root cause, and pinning the algorithm/key.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-jwt-attacks.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-15">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="JWT Attacks">
+  <meta name="twitter:description" content="Attacking the verification logic — JWT anatomy, alg:none, unverified signatures, weak HMAC secrets, RS256→HS256 confusion and jku/kid abuse, why letting the token dictate verification is the root cause, and pinning the algorithm/key.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Web</span>
+        <h1 class="post-title">JWT Attacks</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-15">2026-10-15</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+<p>JSON Web Tokens (JWTs) are the default session/authorisation token for modern
+APIs and SPAs. A JWT is a signed statement the client carries and the server
+trusts — which makes the <em>verification</em> logic a high-value target. Most
+JWT vulnerabilities are failures to verify the signature correctly, and they lead
+straight to authentication bypass and privilege escalation.</p>
+
+<h2>Anatomy</h2>
+<p>A JWT is three Base64URL parts separated by dots:
+<code>header.payload.signature</code>. The header names the algorithm
+(<code>alg</code>); the payload holds claims (<code>sub</code>, <code>role</code>,
+<code>exp</code>); the signature covers the first two parts under a key. The
+entire security model rests on the server <strong>recomputing and checking that
+signature</strong> before trusting any claim.</p>
+
+<h2>The classic failures</h2>
+<table>
+  <thead><tr><th>Flaw</th><th>Mechanism</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td><code>alg: none</code></td><td>Server accepts an unsigned token</td><td>Forge any claims — full bypass</td></tr>
+    <tr><td>Signature not verified</td><td>Server decodes but never checks the signature</td><td>Tamper with claims freely</td></tr>
+    <tr><td>Weak HMAC secret</td><td>Symmetric key is guessable/crackable offline</td><td>Sign arbitrary tokens</td></tr>
+    <tr><td>RS256 → HS256 confusion</td><td>Server verifies an HS256 token using the public RSA key as the HMAC secret</td><td>Forge tokens with the public key</td></tr>
+    <tr><td><code>jku</code>/<code>kid</code> abuse</td><td>Attacker controls where the verification key is fetched from, or injects via kid</td><td>Server verifies with an attacker key</td></tr>
+  </tbody>
+</table>
+
+<h2>Why the algorithm confusion works</h2>
+<p>The <code>alg</code>/<code>none</code> and RS256→HS256 issues share a root
+cause: the server lets the <em>token</em> dictate how it is verified. If the
+header can downgrade the algorithm or switch from asymmetric to symmetric, the
+attacker controls the verification path. The fix is that the server must pin the
+expected algorithm and key, and ignore the token's claims about them.</p>
+
+<h2>What attackers change</h2>
+<p>Once verification is defeated, the valuable claims are identity and authority:
+flip <code>role: user</code> to <code>role: admin</code>, change <code>sub</code>
+to another user, or extend <code>exp</code>. Because JWTs are often stateless,
+the server cannot easily revoke a forged token mid-life.</p>
+
+<h2>Detection &amp; prevention</h2>
+<ul>
+  <li><strong>Pin the algorithm</strong> server-side; never honour
+      <code>alg: none</code>; do not let the token choose asymmetric vs symmetric.</li>
+  <li><strong>Strong, rotated keys;</strong> long random HMAC secrets; validate
+      <code>kid</code>/<code>jku</code> against an allow-list, never fetch keys
+      from attacker-controlled URLs.</li>
+  <li><strong>Validate all claims</strong> — <code>exp</code>, <code>aud</code>,
+      <code>iss</code> — on every request.</li>
+  <li><strong>Consider stateful sessions or a revocation list</strong> for
+      sensitive apps so a leaked token can be killed.</li>
+  <li><strong>Detection:</strong> tokens with <code>none</code>/unexpected
+      algorithms, signature-verification failures, and claim values inconsistent
+      with the issuing flow.</li>
+</ul>
+<p>Testing detail: <a href="../vuln-detail.html?vuln=jwt-vulns">JWT vuln entry</a>.</p>
+
+<h2>Related reading</h2>
+<ul class="related-list">
+  <li><a href="../vuln-detail.html?vuln=jwt-vulns">JWT Vulnerabilities — Vulns entry</a></li>
+  <li><a href="2026-10-07-web-api-fuzzing.html">Web API Fuzzing</a></li>
+  <li><a href="2026-10-15-insecure-deserialization.html">Insecure Deserialization</a></li>
+  <li><a href="2026-10-09-entra-azure-attack-paths.html">Entra ID &amp; Azure Attack Paths</a></li>
+  <li><a href="../web-map.html">Web Pentest Checklist</a></li>
+</ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

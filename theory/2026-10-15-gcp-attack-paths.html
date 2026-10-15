@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GCP Attack Paths — Satej Chaudhari</title>
+  <meta name="description" content="Attacking Google Cloud IAM — the service-account model and hierarchy, foothold routes (leaked SA keys, SSRF-to-metadata, public buckets), the impersonation/actAs/token-minting escalation primitives, and audit-log detection.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="GCP Attack Paths">
+  <meta property="og:description" content="Attacking Google Cloud IAM — the service-account model and hierarchy, foothold routes (leaked SA keys, SSRF-to-metadata, public buckets), the impersonation/actAs/token-minting escalation primitives, and audit-log detection.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-gcp-attack-paths.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-15">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="GCP Attack Paths">
+  <meta name="twitter:description" content="Attacking Google Cloud IAM — the service-account model and hierarchy, foothold routes (leaked SA keys, SSRF-to-metadata, public buckets), the impersonation/actAs/token-minting escalation primitives, and audit-log detection.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Cloud</span>
+        <h1 class="post-title">GCP Attack Paths</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-15">2026-10-15</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+<p>Google Cloud rounds out the cloud trio alongside
+<a href="2026-10-09-aws-attack-paths.html">AWS</a> and
+<a href="2026-10-09-entra-azure-attack-paths.html">Entra/Azure</a>. GCP's model
+is distinctive: identity is organised around <strong>service accounts</strong>,
+and the key escalation primitives come from the ways one identity is allowed to
+<em>act as</em> or <em>mint tokens for</em> another. As with the others, cloud
+attacks here are IAM attacks — hosts are almost incidental.</p>
+
+<h2>The GCP identity model</h2>
+<p>Resources live in a hierarchy: organisation → folders → projects →
+resources, with IAM policy inherited down the tree. Human users and
+<strong>service accounts</strong> (SAs) are granted roles at some level of that
+hierarchy. SAs are the interesting identities: workloads run as them, and their
+permissions are frequently broader than they need. The metadata server on a
+Compute Engine VM hands out the attached SA's access token — the GCP analogue of
+AWS IMDS.</p>
+
+<h2>Getting a foothold identity</h2>
+<table>
+  <thead><tr><th>Entry</th><th>Mechanism</th></tr></thead>
+  <tbody>
+    <tr><td>Leaked SA key</td><td>A JSON key file in a repo, image, or bucket authenticates directly and does not expire</td></tr>
+    <tr><td>SSRF → metadata</td><td>Reach <code>metadata.google.internal</code> to read the VM's SA token (see <a href="2026-10-15-ssrf.html">SSRF</a>)</td></tr>
+    <tr><td>Public storage</td><td>Open Cloud Storage buckets leaking code/keys/data</td></tr>
+    <tr><td>OAuth consent</td><td>Over-scoped Workspace app grants</td></tr>
+  </tbody>
+</table>
+
+<h2>The signature escalation primitives</h2>
+<p>GCP privilege escalation is largely about <strong>impersonation and
+token minting</strong> — a small set of IAM permissions that let one identity
+become another:</p>
+<ul>
+  <li><strong>Service Account Token Creator</strong>
+      (<code>iam.serviceAccounts.getAccessToken</code>): mint access tokens for a
+      more-privileged SA and act as it.</li>
+  <li><strong>actAs / deploy-as:</strong> permission to deploy a workload (a
+      function, a VM, Cloud Run) <em>as</em> a privileged SA runs your code with
+      that SA's rights — the GCP cousin of AWS <code>iam:PassRole</code>.</li>
+  <li><strong>Set IAM policy</strong> (<code>setIamPolicy</code>) on a project or
+      SA: grant yourself more, directly.</li>
+  <li><strong>SA key creation:</strong> create a new key for a privileged SA and
+      authenticate as it.</li>
+</ul>
+<p>Each is a one-hop "become a bigger identity" edge; chained across the
+hierarchy they reach project or organisation ownership. Tools like the GCP
+IAM privilege-escalation research sets and enumeration via <code>gcloud</code>
+map these edges.</p>
+
+<h2>Lateral movement, data, and persistence</h2>
+<ul>
+  <li><strong>Lateral:</strong> impersonation chains across SAs and projects;
+      the org hierarchy means a high-level grant reaches many projects at once.</li>
+  <li><strong>Data:</strong> Cloud Storage buckets, BigQuery datasets, and
+      Secret Manager are the targets once you hold a capable identity.</li>
+  <li><strong>Persistence:</strong> a fresh SA key (long-lived), an added IAM
+      binding, or a scheduled job keep access even after the entry is closed.</li>
+</ul>
+
+<h2>Detection &amp; hardening</h2>
+<ul>
+  <li><strong>Kill long-lived SA keys;</strong> prefer workload identity and
+      short-lived tokens; alert on SA key creation.</li>
+  <li><strong>Constrain impersonation and actAs;</strong> treat Token Creator and
+      setIamPolicy as highly privileged and grant them narrowly.</li>
+  <li><strong>Enforce the metadata token endpoint protections</strong> and
+      segment workloads so SSRF cannot reach a powerful SA.</li>
+  <li><strong>Mine Cloud Audit Logs</strong> for <code>generateAccessToken</code>,
+      <code>setIamPolicy</code>, and key-creation events — the escalation edges
+      above all appear there.</li>
+</ul>
+
+<h2>Related reading</h2>
+<ul class="related-list">
+  <li><a href="2026-10-09-aws-attack-paths.html">AWS Attack Paths</a></li>
+  <li><a href="2026-10-09-entra-azure-attack-paths.html">Entra ID &amp; Azure Attack Paths</a></li>
+  <li><a href="2026-10-09-kubernetes-container-attacks.html">Kubernetes &amp; Container Attacks</a></li>
+  <li><a href="2026-10-15-ssrf.html">Server-Side Request Forgery</a></li>
+  <li><a href="../cloud-map.html">Cloud Attack Path Explorer</a></li>
+</ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

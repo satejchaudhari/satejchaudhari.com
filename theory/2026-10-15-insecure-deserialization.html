@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Insecure Deserialization — Satej Chaudhari</title>
+  <meta name="description" content="Why deserialising untrusted data becomes RCE — serialisation across languages, gadget chains in libraries you already ship, where serialized blobs appear, recognising magic bytes, and the don&#x27;t-deserialise-untrusted-input fix.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Insecure Deserialization">
+  <meta property="og:description" content="Why deserialising untrusted data becomes RCE — serialisation across languages, gadget chains in libraries you already ship, where serialized blobs appear, recognising magic bytes, and the don&#x27;t-deserialise-untrusted-input fix.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-insecure-deserialization.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-15">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Insecure Deserialization">
+  <meta name="twitter:description" content="Why deserialising untrusted data becomes RCE — serialisation across languages, gadget chains in libraries you already ship, where serialized blobs appear, recognising magic bytes, and the don&#x27;t-deserialise-untrusted-input fix.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Web</span>
+        <h1 class="post-title">Insecure Deserialization</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-15">2026-10-15</time>
+          <span>&middot; 9 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+<p>Insecure deserialization is one of the most impactful web bugs because it so
+often leads directly to remote code execution. Applications serialise objects to
+store or transmit them; if they later <strong>deserialise attacker-controlled
+data back into live objects</strong> without validation, the attacker can
+influence what gets instantiated and what runs during that reconstruction.</p>
+
+<h2>Serialisation in one minute</h2>
+<p>Serialisation turns an in-memory object into a byte stream (Java serialized
+objects, .NET <code>BinaryFormatter</code>/<code>ViewState</code>, Python pickle,
+PHP <code>serialize()</code>, Ruby Marshal, or structured formats like YAML/JSON
+with type hints). Deserialisation reverses it. The danger is that in many
+languages this process can <em>execute code</em> — constructors, magic methods,
+or type handlers run as the object is rebuilt.</p>
+
+<h2>Why it becomes RCE: gadget chains</h2>
+<p>The attacker rarely needs the app's own classes to be malicious. Instead they
+assemble a <strong>gadget chain</strong>: a sequence of methods already present
+in the application's libraries that, when triggered during deserialisation,
+chain together into a dangerous operation such as command execution. Tools like
+ysoserial (Java) and ysoserial.net catalogue these chains for common libraries.
+The key insight is that the vulnerability lives in <em>deserialising untrusted
+data at all</em> — the gadgets are just the libraries you already ship.</p>
+
+<table>
+  <thead><tr><th>Where serialized data appears</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td>Cookies / session tokens</td><td>Base64 Java/PHP objects in a cookie</td></tr>
+    <tr><td>Hidden form fields / ViewState</td><td>.NET <code>__VIEWSTATE</code></td></tr>
+    <tr><td>APIs accepting typed formats</td><td>YAML/XML with type tags, pickle endpoints</td></tr>
+    <tr><td>Caches &amp; message queues</td><td>Serialized objects passed between services</td></tr>
+  </tbody>
+</table>
+
+<h2>Spotting it</h2>
+<p>Recognisable magic bytes give it away: Java streams begin
+<code>ac ed 00 05</code> (Base64 <code>rO0</code>), .NET and PHP have
+characteristic shapes, Python pickle its opcodes. Any such blob coming from the
+client is a red flag.</p>
+
+<h2>Detection &amp; prevention</h2>
+<ul>
+  <li><strong>Do not deserialise untrusted input</strong> into live objects.
+      Prefer simple data formats (plain JSON without type resolution) and map
+      fields explicitly.</li>
+  <li><strong>If you must,</strong> sign/encrypt serialized state so the client
+      cannot tamper with it, and enforce strict type allow-lists
+      (look-ahead deserialisation, resolve-class filters).</li>
+  <li><strong>Retire dangerous APIs</strong> (<code>BinaryFormatter</code>,
+      unsafe YAML loaders, pickle on untrusted data).</li>
+  <li><strong>Detection:</strong> serialized magic bytes from clients,
+      deserialisation exceptions, and unexpected child processes from app
+      servers (an RCE gadget firing).</li>
+</ul>
+<p>See the <a href="../vuln-detail.html?vuln=insecure-deserialization">deserialization vuln entry</a> for testing steps.</p>
+
+<h2>Related reading</h2>
+<ul class="related-list">
+  <li><a href="../vuln-detail.html?vuln=insecure-deserialization">Insecure Deserialization — Vulns entry</a></li>
+  <li><a href="2026-10-15-server-side-template-injection.html">Server-Side Template Injection</a></li>
+  <li><a href="2026-10-15-file-upload-attacks.html">File Upload Attacks</a></li>
+  <li><a href="2026-10-07-web-api-fuzzing.html">Web API Fuzzing</a></li>
+  <li><a href="../web-map.html">Web Pentest Checklist</a></li>
+</ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

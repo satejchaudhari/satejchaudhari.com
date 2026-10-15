@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Server-Side Template Injection — Satej Chaudhari</title>
+  <meta name="description" content="When user input is parsed as template code — template engines as languages, the {{7*7}}→49 probe, why SSTI escalates to RCE via object introspection, SSTI vs XSS, and passing input as data not template source.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Server-Side Template Injection">
+  <meta property="og:description" content="When user input is parsed as template code — template engines as languages, the {{7*7}}→49 probe, why SSTI escalates to RCE via object introspection, SSTI vs XSS, and passing input as data not template source.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-server-side-template-injection.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-15">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Server-Side Template Injection">
+  <meta name="twitter:description" content="When user input is parsed as template code — template engines as languages, the {{7*7}}→49 probe, why SSTI escalates to RCE via object introspection, SSTI vs XSS, and passing input as data not template source.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Web</span>
+        <h1 class="post-title">Server-Side Template Injection</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-15">2026-10-15</time>
+          <span>&middot; 8 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+<p>Server-Side Template Injection (SSTI) happens when user input is embedded
+into a server-side template that is then evaluated by the template engine. Because
+template engines are small programming languages, injecting into one can escalate
+from reflecting text to executing arbitrary code on the server. It is a common
+foothold on modern web apps and a frequent HackTheBox route.</p>
+
+<h2>Template engines are languages</h2>
+<p>Engines like Jinja2 (Python), Twig (PHP), Freemarker/Velocity (Java), ERB
+(Ruby) and Nunjucks (Node) expand placeholders, evaluate expressions, and call
+methods. If the application builds a template by concatenating user input —
+rather than passing that input as <em>data</em> to a fixed template — the user's
+input is parsed as template code.</p>
+
+<h2>The classic detection probe</h2>
+<p>The universal first test is a mathematical expression in template syntax,
+e.g. <code>{{7*7}}</code>. If the response contains <code>49</code>, the input is
+being evaluated by the engine — a positive SSTI signal. (This is exactly the
+non-destructive probe the <em>htb-recon</em> tooling runs.) From a confirmed
+evaluation, the escalation path depends on the engine: expose an object that can
+reach the runtime, and template evaluation becomes code execution.</p>
+
+<table>
+  <thead><tr><th>Engine</th><th>Language</th><th>Simple eval probe</th></tr></thead>
+  <tbody>
+    <tr><td>Jinja2 / Nunjucks</td><td>Python / Node</td><td><code>{{7*7}}</code> → 49</td></tr>
+    <tr><td>Twig</td><td>PHP</td><td><code>{{7*7}}</code> → 49</td></tr>
+    <tr><td>Freemarker / Velocity</td><td>Java</td><td><code>${7*7}</code> → 49</td></tr>
+    <tr><td>ERB</td><td>Ruby</td><td><code>&lt;%= 7*7 %&gt;</code> → 49</td></tr>
+  </tbody>
+</table>
+
+<h2>Why it reaches code execution</h2>
+<p>Template languages expose object introspection — from a benign object you can
+often walk the object graph to reach the runtime's facilities (process calls,
+file access). The sandbox many engines ship is routinely escapable, which is why
+SSTI is treated as RCE-equivalent until proven otherwise. The conceptual fix is
+to never let input <em>be</em> the template.</p>
+
+<h2>SSTI vs XSS</h2>
+<p>Reflected input that renders as HTML is XSS (client-side). The same input
+rendering through the <em>server's</em> template engine is SSTI (server-side) and
+far more serious. The <code>{{7*7}}</code>→49 result distinguishes them: XSS
+would show the literal string, SSTI shows the computed value.</p>
+
+<h2>Detection &amp; prevention</h2>
+<ul>
+  <li><strong>Pass user input as data,</strong> never concatenate it into
+      template source; use the engine's parameterised rendering.</li>
+  <li><strong>Use logic-less or sandboxed templates</strong> where possible, and
+      keep engines patched (sandbox escapes are common CVEs).</li>
+  <li><strong>Detection:</strong> template-evaluation error messages, and app
+      servers spawning shells shortly after rendering user-influenced content.</li>
+</ul>
+<p>Testing detail: <a href="../vuln-detail.html?vuln=ssti">SSTI vuln entry</a>.</p>
+
+<h2>Related reading</h2>
+<ul class="related-list">
+  <li><a href="../vuln-detail.html?vuln=ssti">Server-Side Template Injection — Vulns entry</a></li>
+  <li><a href="2026-10-15-ssrf.html">Server-Side Request Forgery</a></li>
+  <li><a href="2026-10-15-insecure-deserialization.html">Insecure Deserialization</a></li>
+  <li><a href="2026-10-07-web-api-fuzzing.html">Web API Fuzzing</a></li>
+  <li><a href="../web-map.html">Web Pentest Checklist</a></li>
+</ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>
