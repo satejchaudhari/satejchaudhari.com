@@ -101,8 +101,10 @@
           collector with a domain account, import the result, and explore.
         </p>
         <pre><code># collect (any domain user is enough for most of the graph)
-SharpHound.exe -c All
-# the result imports into the BloodHound UI / graph database for querying</code></pre>
+SharpHound.exe -c All                     # from a Windows foothold
+# from Linux / with creds only, no host access:
+bloodhound-python -d corp.local -u user -p '&lt;pass&gt;' -ns &lt;dc-ip&gt; -c all
+# the resulting .json imports into the BloodHound UI / graph database for querying</code></pre>
 
         <h2>Nodes &amp; edges &mdash; the mental model</h2>
         <p>

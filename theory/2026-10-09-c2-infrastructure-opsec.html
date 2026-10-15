@@ -112,6 +112,14 @@
           <li><strong>DNS redirectors</strong> &mdash; for DNS C2, where the authoritative server for your domain relays queries.</li>
           <li><strong>Separate staging / long-haul / short-haul</strong> redirectors, so payload hosting, slow persistence beacons and interactive sessions do not share fate.</li>
         </ul>
+        <pre><code># simplest HTTPS redirector: forward only valid beacon traffic to the team server
+# Apache mod_rewrite — match your C2 profile's URIs/User-Agent, else serve a decoy
+RewriteEngine On
+RewriteCond %{REQUEST_URI} ^/(api|updates)/ [NC]
+RewriteRule ^.*$ https://TEAMSERVER%{REQUEST_URI} [P]
+RewriteRule ^.*$ https://decoy-site.example/ [R=302,L]   # everyone else
+# a quick TCP relay for non-HTTP channels:
+socat TCP4-LISTEN:443,fork TCP4:TEAMSERVER:443</code></pre>
 
         <h2>Blending the traffic</h2>
         <table>

@@ -99,6 +99,10 @@
             <tr><td><strong>at / anacron</strong></td><td>One-shot and catch-up scheduling, easy to overlook.</td></tr>
           </tbody>
         </table>
+        <pre><code># canonical cron + systemd-timer examples (also in the Linux privesc map):
+echo '* * * * * /path/x.sh' | crontab -                 # per-user cron
+systemctl --user enable --now x.timer                   # user-level timer, survives logout with linger
+# hunt: diff crontabs/units against a baseline; auditd watch on cron and unit dirs</code></pre>
 
         <h2>Login &amp; shell triggers</h2>
         <ul>

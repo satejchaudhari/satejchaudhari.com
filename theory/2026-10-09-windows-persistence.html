@@ -101,6 +101,10 @@
             <tr><td><strong>Logon scripts</strong></td><td>The <code>UserInitMprLogonScript</code> value, or AD logon scripts.</td></tr>
           </tbody>
         </table>
+        <pre><code># the two canonical examples (both also in the Windows privesc map):
+reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v Updater /d "C:\...\x.exe"  # user logon, no admin
+schtasks /create /tn Updater /tr "C:\...\x.exe" /sc onlogon /ru SYSTEM              # SYSTEM at logon (admin)
+# hunt: autoruns, Sysmon EID 13 (Run-key write) and EID 1 on the spawned child</code></pre>
 
         <h2>Scheduled tasks &amp; services</h2>
         <p>

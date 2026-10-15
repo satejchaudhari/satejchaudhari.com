@@ -137,6 +137,14 @@
           <li><strong>ROADtools / AADInternals</strong> &mdash; enumerate and manipulate Entra, abuse PHS/PTA/Seamless SSO, and work with tokens.</li>
           <li><strong>Microsoft Graph &amp; Azure CLI</strong> &mdash; the legitimate APIs, which are also the attacker's primary interface.</li>
         </ul>
+        <pre><code># enumerate the tenant (ROADtools) and graph role/ownership paths (AzureHound)
+roadrecon auth -u user@corp.com -p '&lt;pass&gt;' ; roadrecon gather ; roadrecon gui
+azurehound -u user@corp.com -p '&lt;pass&gt;' list --tenant corp.com -o output.json
+
+# act through the legitimate CLI once you hold a principal
+az login --service-principal -u &lt;appId&gt; -p &lt;secret&gt; --tenant &lt;tid&gt;
+az account get-access-token --resource https://graph.microsoft.com   # replayable token
+az role assignment list --all -o table                               # who can do what</code></pre>
 
         <h2>Detection &amp; hardening</h2>
         <ul>
