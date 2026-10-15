@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search — Satej Chaudhari</title>
+  <meta name="description" content="Search across everything on the site — theory pages, vulnerabilities & misconfigurations, toolkit tools, interactive maps, references and writeups.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+
+  <style>
+    .search-wrap { max-width: 840px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
+    .search-top { padding: 28px 0 10px; }
+    .search-top .eyebrow { color: var(--accent); }
+    .search-top h1 { font-family: "Space Grotesk", sans-serif; font-size: clamp(1.5rem, 3.5vw, 2.1rem); margin: 4px 0 10px; }
+    .search-box { position: sticky; top: 0; background: var(--bg); padding: 10px 0 14px; z-index: 5; display: flex; align-items: center; gap: 12px; }
+    #search-input { flex: 1 1 auto; font-family: var(--mono); font-size: 1rem; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    #search-input:focus { outline: none; border-color: var(--accent-border); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+    #search-count { font-family: var(--mono); font-size: 0.72rem; color: var(--muted-2); white-space: nowrap; }
+    .search-empty { color: var(--muted); font-size: 0.9rem; padding: 18px 0; }
+
+    .search-hit { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 7px; text-decoration: none; background: var(--surface); transition: border-color .12s, transform .08s; }
+    .search-hit:hover { border-color: var(--accent-border); transform: translateX(2px); }
+    .search-type { flex: 0 0 auto; font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted-2); min-width: 66px; text-align: center; }
+    .search-type-theory { color: #22d3ee; border-color: color-mix(in srgb,#22d3ee 45%,transparent); }
+    .search-type-vuln { color: #fb7185; border-color: color-mix(in srgb,#fb7185 45%,transparent); }
+    .search-type-tool { color: #a78bfa; border-color: color-mix(in srgb,#a78bfa 45%,transparent); }
+    .search-type-map { color: #3b9ee5; border-color: color-mix(in srgb,#3b9ee5 45%,transparent); }
+    .search-type-reference { color: #f59e0b; border-color: color-mix(in srgb,#f59e0b 45%,transparent); }
+    .search-type-writeup { color: #4ade80; border-color: color-mix(in srgb,#4ade80 45%,transparent); }
+    .search-type-technique { color: #fb7185; border-color: color-mix(in srgb,#fb7185 45%,transparent); }
+    .search-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .search-title { color: var(--text); font-weight: 600; font-size: 0.92rem; }
+    .search-sub { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .search-tag { flex: 0 0 auto; font-family: var(--mono); font-size: 0.62rem; color: var(--muted-2); }
+    @media (max-width: 600px) { .search-sub { white-space: normal; } .search-tag { display: none; } }
+  </style>
+</head>
+<body>
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="index.html"><span class="brand-mark">SC</span><span class="brand-name">Satej Chaudhari</span></a>
+      <nav class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="writeups.html">Writeups</a>
+        <a href="maps.html">Maps</a>
+        <a href="search.html">Search</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="search-wrap">
+    <div class="search-top">
+      <p class="eyebrow">Search</p>
+      <h1>Search everything</h1>
+    </div>
+    <div class="search-box">
+      <input id="search-input" type="search" placeholder="kerberoast, lsass, SSRF, T1003, ffuf…" autocomplete="off" spellcheck="false">
+      <span id="search-count"></span>
+    </div>
+    <div id="search-results"></div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="writeups.html">Writeups</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/theory.js"></script>
+  <script src="assets/js/vulns.js"></script>
+  <script src="assets/js/toolkit.js"></script>
+  <script src="assets/js/posts.js"></script>
+  <script src="assets/js/attack.js"></script>
+  <script src="assets/js/search-main.js"></script>
+</body>
+</html>

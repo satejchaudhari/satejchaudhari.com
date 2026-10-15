@@ -583,7 +583,7 @@ var THEORY = [
     title: "OSINT Fundamentals",
     url: "theory/2026-08-18-osint-fundamentals.html",
     date: "2026-08-18",
-    tag: "RECON",
+    tag: "Recon",
     description: "What open source intelligence actually is \u2014 the intelligence cycle, the passive/active boundary, source reliability, and the legal limits that apply to it.",
     readTime: "8 min read"
   },
@@ -599,7 +599,7 @@ var THEORY = [
     title: "The CIA Triad",
     url: "theory/2026-07-04-cia-triad.html",
     date: "2026-07-04",
-    tag: "FUNDAMENTALS",
+    tag: "Fundamentals",
     description: "Confidentiality, Integrity, and Availability — the three properties nearly every security control is ultimately protecting.",
     readTime: "4 min read"
   }
