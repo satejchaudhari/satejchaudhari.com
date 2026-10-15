@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operator Cheatsheet — Satej Chaudhari</title>
+  <meta name="description" content="A filterable operator cheatsheet — reverse shells, listeners and TTY upgrades, file transfer, port forwarding, Windows/Linux enumeration, SMB/AD and web content discovery. Set LHOST/LPORT once and every command updates.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Operator Cheatsheet">
+  <meta property="og:description" content="Reverse shells, file transfer, pivoting, enumeration and web discovery — filterable, with live LHOST/LPORT substitution and one-click copy.">
+  <meta property="og:url" content="https://satejchaudhari.com/cheatsheet.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Operator Cheatsheet">
+  <meta name="twitter:description" content="Reverse shells, file transfer, pivoting, enumeration and web discovery — filterable, with live LHOST/LPORT substitution and one-click copy.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+
+  <style>
+    .cheat-wrap { max-width: 980px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
+    .cheat-top { padding: 26px 0 6px; }
+    .cheat-top .eyebrow { color: var(--accent); }
+    .cheat-top h1 { font-family: "Space Grotesk", sans-serif; font-size: clamp(1.5rem, 3.5vw, 2.1rem); margin: 4px 0 2px; }
+    .cheat-hint { color: var(--muted); font-size: 0.9rem; margin: 0 0 14px; max-width: 70ch; }
+    .cheat-controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 20px; position: sticky; top: 0; background: var(--bg); padding: 10px 0; z-index: 5; }
+    .cheat-controls label { font-family: var(--mono); font-size: 0.7rem; color: var(--muted-2); text-transform: uppercase; letter-spacing: 0.06em; display: flex; flex-direction: column; gap: 4px; }
+    .cheat-controls input { font-family: var(--mono); font-size: 0.85rem; padding: 8px 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    #cheat-lhost { width: 160px; } #cheat-lport { width: 90px; } #cheat-search { width: 240px; max-width: 100%; }
+    .cheat-controls input:focus { outline: none; border-color: var(--accent-border); }
+
+    .cheat-group { margin-bottom: 26px; }
+    .cheat-h { font-family: "Space Grotesk", sans-serif; font-size: 1.1rem; margin: 0 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); color: var(--text); }
+    .cheat-item { margin-bottom: 14px; }
+    .cheat-label { font-family: var(--mono); font-size: 0.74rem; color: var(--accent); margin-bottom: 4px; font-weight: 600; }
+    .cheat-cmdwrap { position: relative; }
+    .cheat-cmd { margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 40px 10px 12px; overflow-x: auto; }
+    .cheat-cmd code { font-family: var(--mono); font-size: 0.78rem; color: var(--text); white-space: pre; display: block; }
+    .cheat-note { color: var(--muted); font-size: 0.8rem; margin: 5px 0 0; font-style: italic; }
+    .cheat-copy { position: absolute; top: 7px; right: 7px; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--muted); cursor: pointer; opacity: 0.55; transition: opacity .12s, color .12s, border-color .12s; }
+    .cheat-copy svg { width: 14px; height: 14px; }
+    .cheat-cmdwrap:hover .cheat-copy { opacity: 1; }
+    .cheat-copy:hover { color: var(--accent); border-color: var(--accent-border); }
+    .cheat-copy.copied { color: #4ade80; border-color: #4ade80; opacity: 1; }
+    .cheat-copy.copied::after { content: "copied"; position: absolute; right: 30px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.6rem; color: #4ade80; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="index.html"><span class="brand-mark">SC</span><span class="brand-name">Satej Chaudhari</span></a>
+      <nav class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="cheat-wrap">
+    <div class="cheat-top">
+      <p class="eyebrow">Reference</p>
+      <h1>Operator Cheatsheet</h1>
+      <p class="cheat-hint">Reverse shells, listeners, file transfer, pivoting and enumeration one-liners. Set <b>LHOST</b> / <b>LPORT</b> once and every command updates; click a command to copy. For authorised testing only.</p>
+    </div>
+
+    <div class="cheat-controls">
+      <label>LHOST<input id="cheat-lhost" type="text" value="10.10.14.1" spellcheck="false"></label>
+      <label>LPORT<input id="cheat-lport" type="text" value="4444" spellcheck="false"></label>
+      <label>Filter<input id="cheat-search" type="text" placeholder="e.g. smb, transfer, ssh" spellcheck="false"></label>
+    </div>
+
+    <div id="cheat-root"><!-- built by assets/js/cheatsheet-main.js --></div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="writeups.html">Writeups</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/cheatsheet.js"></script>
+  <script src="assets/js/cheatsheet-main.js"></script>
+</body>
+</html>
