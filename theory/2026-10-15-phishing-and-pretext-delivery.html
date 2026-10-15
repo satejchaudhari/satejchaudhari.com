@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phishing &amp; Pretext Delivery — Satej Chaudhari</title>
+  <meta name="description" content="How a modern phishing operation is built stage by stage — pretext, look-alike infrastructure and sender trust (SPF/DKIM/DMARC), delivery channels beyond email, the credential-harvest vs code-execution fork, and the control that stops each stage.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Phishing &amp; Pretext Delivery">
+  <meta property="og:description" content="How a modern phishing operation is built stage by stage — pretext, look-alike infrastructure and sender trust (SPF/DKIM/DMARC), delivery channels beyond email, the credential-harvest vs code-execution fork, and the control that stops each stage.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-phishing-and-pretext-delivery.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-15">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Phishing &amp; Pretext Delivery">
+  <meta name="twitter:description" content="How a modern phishing operation is built stage by stage — pretext, look-alike infrastructure and sender trust (SPF/DKIM/DMARC), delivery channels beyond email, the credential-harvest vs code-execution fork, and the control that stops each stage.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Red Team</span>
+        <h1 class="post-title">Phishing &amp; Pretext Delivery</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-15">2026-10-15</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+<p>Phishing is the most common way real intrusions start, and on a red-team
+engagement it is usually the cheapest route past a hardened perimeter: you are
+not fighting the firewall, you are convincing a person to run your code or hand
+over a credential. This page is the conceptual map of how a modern phishing
+operation is built and, just as importantly, how each stage is detected — so
+the controls you are testing are the ones you can actually reason about.</p>
+
+<h2>The anatomy of a campaign</h2>
+<p>Every phishing operation decomposes into the same stages, and defenders have
+a control at each one:</p>
+<table>
+  <thead><tr><th>Stage</th><th>What happens</th><th>Primary control</th></tr></thead>
+  <tbody>
+    <tr><td>Pretext</td><td>A believable story — IT notice, invoice, HR policy, shared document</td><td>User awareness, reporting culture</td></tr>
+    <tr><td>Infrastructure</td><td>Look-alike domain, mail sender, landing page, redirector</td><td>Domain age/reputation, DMARC, URL rewriting</td></tr>
+    <tr><td>Delivery</td><td>Email, SMS (smishing), voice (vishing), LinkedIn, Teams</td><td>Secure email gateway, attachment detonation</td></tr>
+    <tr><td>Lure action</td><td>Click a link, open an attachment, enter a credential, approve MFA</td><td>MFA type, browser isolation, EDR</td></tr>
+    <tr><td>Payload / harvest</td><td>Credential capture, token theft, or code execution</td><td>EDR, conditional access, logging</td></tr>
+  </tbody>
+</table>
+
+<h2>Pretext and target selection</h2>
+<p>The pretext is the product. It is built from OSINT (see
+<a href="2026-08-18-osint-fundamentals.html">OSINT Fundamentals</a>): the
+organisation's email format, the tools it advertises in job posts, the people
+whose roles make a request plausible, and the events (a merger, a migration, a
+benefits-enrolment window) that make urgency believable. Targeting trades
+breadth for stealth — a single well-researched spear-phish against a service
+desk or a developer is quieter and more effective than a thousand-recipient
+blast that one report burns.</p>
+
+<h2>Infrastructure and sender trust</h2>
+<p>Mail only lands if it survives authentication. Three records decide this:</p>
+<ul>
+  <li><strong>SPF</strong> says which servers may send for a domain.</li>
+  <li><strong>DKIM</strong> cryptographically signs the message.</li>
+  <li><strong>DMARC</strong> ties the two to the visible <code>From:</code> and
+      tells receivers what to do on failure (none / quarantine / reject).</li>
+</ul>
+<p>Operators acquire a domain, age it, warm the sending IP, and configure all
+three correctly for <em>their own</em> look-alike domain — so the mail is
+technically authentic, just not from who it appears to be. Look-alikes exploit
+homoglyphs, extra words (<code>company-support.com</code>), or alternate TLDs.
+A redirector or reverse proxy sits between the victim and the real payload so
+the sensitive host is never exposed to scanners.</p>
+
+<h2>Delivery vectors beyond email</h2>
+<p>Email gateways are the most mature control, so operators increasingly move
+to channels with weaker filtering: <strong>smishing</strong> (SMS with a short
+link), <strong>vishing</strong> (a phone call to the help desk — the classic
+2023–2024 route to resetting an MFA factor), and <strong>chat</strong>
+(Teams/Slack messages from a compromised or look-alike tenant, which many
+organisations do not filter at all). The pretext adapts to the channel; the
+goal is unchanged.</p>
+
+<h2>The two payload families</h2>
+<p>Everything downstream is one of two things:</p>
+<ol>
+  <li><strong>Credential / token harvest</strong> — a landing page that captures
+      a password, or an adversary-in-the-middle proxy that captures the
+      post-MFA session (covered in depth in
+      <a href="2026-10-15-aitm-token-and-session-theft.html">AiTM, Token &amp; Session Theft</a>).</li>
+  <li><strong>Code execution</strong> — an attachment or linked file that runs a
+      loader, giving a C2 foothold (covered in
+      <a href="2026-10-15-payload-and-maldoc-tradecraft.html">Payload &amp; Maldoc Tradecraft</a>).</li>
+</ol>
+<p>Which one you choose is dictated by the target's controls: if MFA is
+phishing-resistant (FIDO2), credential harvest is pointless and you pivot to
+execution; if application control is strict, execution is hard and you pivot to
+token theft.</p>
+
+<h2>How phishing is detected and stopped</h2>
+<ul>
+  <li><strong>Mail layer:</strong> DMARC reject on look-alikes, attachment
+      detonation sandboxes, URL rewriting/time-of-click checks, and impersonation
+      rules for executive names.</li>
+  <li><strong>Identity layer:</strong> phishing-resistant MFA (FIDO2/WebAuthn)
+      neutralises both credential <em>and</em> token phishing because the
+      authenticator is bound to the origin; number-matching blunts MFA fatigue.</li>
+  <li><strong>Endpoint layer:</strong> EDR on the execution chain, ASR rules
+      blocking Office child processes and macros from the internet.</li>
+  <li><strong>Human layer:</strong> a fast, blame-free report button is the
+      single highest-value control — it turns one alert user into early warning
+      for everyone.</li>
+</ul>
+<p>On an authorised engagement the deliverable is not "we phished N people" but
+"here is which control failed and where" — the matrix at the top of this page is
+how you frame it.</p>
+
+<h2>Related reading</h2>
+<ul class="related-list">
+  <li><a href="2026-10-15-aitm-token-and-session-theft.html">AiTM, Token &amp; Session Theft</a></li>
+  <li><a href="2026-10-15-payload-and-maldoc-tradecraft.html">Payload &amp; Maldoc Tradecraft</a></li>
+  <li><a href="2026-08-18-osint-fundamentals.html">OSINT Fundamentals</a></li>
+  <li><a href="2026-10-09-red-team-methodology.html">Red Team Methodology &amp; Threat Emulation</a></li>
+  <li><a href="../external-red-team-workflow.html">External Red Team Workflow</a></li>
+</ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

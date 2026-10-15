@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows Local Privilege Escalation — Satej Chaudhari</title>
+  <meta name="description" content="Turning a low-privileged shell into SYSTEM — the misconfiguration classes (service binaries/paths/ACLs, DLL hijacking, scheduled tasks, AlwaysInstallElevated, autoruns, token privileges), the &#x27;writable + privileged&#x27; theme, stored-credential hunting, and hardening.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Windows Local Privilege Escalation">
+  <meta property="og:description" content="Turning a low-privileged shell into SYSTEM — the misconfiguration classes (service binaries/paths/ACLs, DLL hijacking, scheduled tasks, AlwaysInstallElevated, autoruns, token privileges), the &#x27;writable + privileged&#x27; theme, stored-credential hunting, and hardening.">
+  <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-windows-local-privilege-escalation.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta property="article:published_time" content="2026-10-15">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Windows Local Privilege Escalation">
+  <meta name="twitter:description" content="Turning a low-privileged shell into SYSTEM — the misconfiguration classes (service binaries/paths/ACLs, DLL hijacking, scheduled tasks, AlwaysInstallElevated, autoruns, token privileges), the &#x27;writable + privileged&#x27; theme, stored-credential hunting, and hardening.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">SC</span>
+        <span class="brand-name">Satej Chaudhari</span>
+      </a>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="../theory.html" aria-current="page">Theory</a>
+        <a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap post">
+    <a class="post-back" href="../theory.html">&larr; back to theory</a>
+
+    <article>
+      <header class="post-header">
+        <span class="tag">Red Team</span>
+        <h1 class="post-title">Windows Local Privilege Escalation</h1>
+        <p class="post-meta">
+          <time datetime="2026-10-15">2026-10-15</time>
+          <span>&middot; 10 min read</span>
+        </p>
+      </header>
+
+      <div class="post-body">
+
+<p>You have a shell as a low-privileged user — a service account, a web-app
+identity, a standard domain user on a workstation. Local privilege escalation is
+the step that turns that into SYSTEM or local administrator, from where you can
+dump credentials, install persistence, and move on. On Windows the routes almost
+all reduce to one idea: <strong>a privileged component trusts something a
+low-privileged user can control</strong>. This page organises the common classes
+and the enumeration that finds them. It complements
+<a href="2026-10-09-windows-token-potato.html">Windows Token Abuse &amp; Potato
+Attacks</a> (the token-centric SYSTEM routes) and
+<a href="2026-08-18-windows-tokens-uac.html">Windows Access Tokens &amp; UAC</a>.</p>
+
+<h2>Always start with enumeration</h2>
+<p>Privilege escalation is an enumeration problem first. Automated enumerators
+(WinPEAS, PrivescCheck, Seatbelt) and the built-in commands
+(<code>whoami /priv</code>, <code>whoami /all</code>,
+<code>systeminfo</code>) surface the misconfigurations below. The single most
+important line is often <code>whoami /priv</code> — a dangerous privilege there
+is frequently a direct path to SYSTEM.</p>
+
+<h2>The misconfiguration classes</h2>
+<table>
+  <thead><tr><th>Class</th><th>The trusted thing the user controls</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td>Service binary permissions</td><td>A service runs as SYSTEM from an executable the user can overwrite</td><td>Replace binary → SYSTEM on restart</td></tr>
+    <tr><td>Unquoted service path</td><td>A space in an unquoted path lets Windows run an earlier file the user can plant</td><td>SYSTEM on service start</td></tr>
+    <tr><td>Weak service config (ACL)</td><td>User can reconfigure the service's binary path or account</td><td>Point the service at attacker code</td></tr>
+    <tr><td>DLL hijacking / search order</td><td>A privileged process loads a DLL from a writable directory</td><td>Code in the privileged process</td></tr>
+    <tr><td>Scheduled tasks</td><td>A SYSTEM task runs a script/binary the user can modify</td><td>SYSTEM when the task fires</td></tr>
+    <tr><td>AlwaysInstallElevated</td><td>Policy lets any user install MSIs as SYSTEM</td><td>Install a crafted package → SYSTEM</td></tr>
+    <tr><td>Autoruns &amp; startup</td><td>Writable autorun entry or startup folder used by a privileged context</td><td>Code at logon/boot</td></tr>
+    <tr><td>Registry/Env (PATH)</td><td>Writable PATH entry or auto-run registry key</td><td>Hijack a binary a privileged process calls</td></tr>
+    <tr><td>Token privileges</td><td>SeImpersonate/SeAssignPrimaryToken held by a service account</td><td>Potato-style SYSTEM — see the token page</td></tr>
+    <tr><td>Stored credentials</td><td>Passwords in files, registry, Unattend.xml, Group Policy Preferences</td><td>Reuse to a higher-privileged account</td></tr>
+  </tbody>
+</table>
+
+<h2>The recurring theme: writable + privileged</h2>
+<p>Scan the list and the pattern is clear — every route is some privileged
+execution path (a service, a task, a DLL load, an installer policy) whose inputs
+a lower-privileged user can write. The attacker's work is enumeration to find the
+overlap; the fix is to remove it. This is why privilege escalation hygiene is
+mostly about <strong>permissions and least privilege</strong>, not patching.</p>
+
+<h2>Credentials left lying around</h2>
+<p>Separately from misconfigurations, Windows hosts accumulate secrets: answer
+files from deployment (<code>Unattend.xml</code>, <code>sysprep.inf</code>),
+Group Policy Preferences passwords (the infamous reversible-encrypted
+<code>cpassword</code>), saved RDP/credential-manager entries, PowerShell history,
+and config files. Harvesting these often skips escalation entirely by handing you
+a higher-privileged credential — overlapping with
+<a href="2026-08-18-windows-credential-storage.html">Windows Credential Storage</a>.</p>
+
+<h2>Detection and hardening</h2>
+<ul>
+  <li><strong>Fix the ACLs:</strong> service binaries, service configuration,
+      scheduled-task files and their directories should not be writable by
+      standard users; audit with the same enumerators attackers use.</li>
+  <li><strong>Quote service paths</strong> and remove writable
+      <code>PATH</code> directories.</li>
+  <li><strong>Disable AlwaysInstallElevated;</strong> never ship GPP passwords.</li>
+  <li><strong>Least privilege for service accounts;</strong> prefer virtual or
+      managed service accounts and avoid granting
+      <code>SeImpersonatePrivilege</code> broadly.</li>
+  <li><strong>Telemetry:</strong> new/modified services and scheduled tasks,
+      service binary replacement, and MSI installs by non-admins are all
+      high-signal events — see
+      <a href="2026-10-09-logging-and-telemetry.html">Logging &amp; Telemetry</a>.</li>
+</ul>
+
+<h2>Related reading</h2>
+<ul class="related-list">
+  <li><a href="2026-10-09-windows-token-potato.html">Windows Token Abuse &amp; Potato Attacks</a></li>
+  <li><a href="2026-08-18-windows-tokens-uac.html">Windows Access Tokens &amp; UAC</a></li>
+  <li><a href="2026-08-18-windows-credential-storage.html">Windows Credential Storage</a></li>
+  <li><a href="2026-10-09-linux-privilege-escalation.html">Linux Privilege Escalation</a></li>
+  <li><a href="2026-09-24-sccm-mecm-abuse.html">SCCM / MECM Abuse</a></li>
+</ul>
+
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="../writeups.html">Writeups</a>
+        <a href="../theory.html">Theory</a>
+<a href="../toolkit.html">Toolkit</a>
+        <a href="../vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="../disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/post-enhance.js"></script>
+</body>
+</html>

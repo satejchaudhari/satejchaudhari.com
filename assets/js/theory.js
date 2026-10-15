@@ -20,6 +20,54 @@
 
 var THEORY = [
   {
+    title: "Phishing & Pretext Delivery",
+    url: "theory/2026-10-15-phishing-and-pretext-delivery.html",
+    date: "2026-10-15",
+    tag: "Red Team",
+    description: "How a modern phishing operation is built stage by stage — pretext, look-alike infrastructure and sender trust (SPF/DKIM/DMARC), delivery channels beyond email, the credential-harvest vs code-execution fork, and the control that stops each stage.",
+    readTime: "10 min read"
+  },
+  {
+    title: "AiTM, Token & Session Theft",
+    url: "theory/2026-10-15-aitm-token-and-session-theft.html",
+    date: "2026-10-15",
+    tag: "Red Team",
+    description: "Why MFA is not the finish line — adversary-in-the-middle reverse-proxy phishing, the Entra primary refresh token, browser/OAuth token theft, device-code phishing, and why phishing-resistant MFA plus token binding breaks the class.",
+    readTime: "10 min read"
+  },
+  {
+    title: "Payload & Maldoc Tradecraft",
+    url: "theory/2026-10-15-payload-and-maldoc-tradecraft.html",
+    date: "2026-10-15",
+    tag: "Red Team",
+    description: "The initial-execution arms race explained through Mark-of-the-Web — macros, container files, LNK/OneNote, HTML smuggling and trusted installers, what killed each vector, and the ASR/app-control/telemetry that detects the chain.",
+    readTime: "10 min read"
+  },
+  {
+    title: "Process Injection — Concepts & Detection",
+    url: "theory/2026-10-15-process-injection-and-loaders.html",
+    date: "2026-10-15",
+    tag: "Evasion",
+    description: "A conceptual catalogue of the named process-injection techniques, the shared memory/cross-process signal that detects them, and the telemetry and hardening behind it.",
+    readTime: "9 min read"
+  },
+  {
+    title: "Browser Credential & Token Theft",
+    url: "theory/2026-10-15-browser-credential-theft.html",
+    date: "2026-10-15",
+    tag: "Red Team",
+    description: "The browser holds saved passwords and MFA-satisfied session cookies — DPAPI and App-Bound Encryption, why session-cookie theft bypasses MFA, cloud-CLI caches and password managers, and how it is detected and mitigated.",
+    readTime: "9 min read"
+  },
+  {
+    title: "Windows Local Privilege Escalation",
+    url: "theory/2026-10-15-windows-local-privilege-escalation.html",
+    date: "2026-10-15",
+    tag: "Red Team",
+    description: "Turning a low-privileged shell into SYSTEM — the misconfiguration classes (service binaries/paths/ACLs, DLL hijacking, scheduled tasks, AlwaysInstallElevated, autoruns, token privileges), the 'writable + privileged' theme, and hardening.",
+    readTime: "10 min read"
+  },
+  {
     title: "Entra ID & Azure Attack Paths",
     url: "theory/2026-10-09-entra-azure-attack-paths.html",
     date: "2026-10-09",
