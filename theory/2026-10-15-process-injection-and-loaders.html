@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Process Injection — Concepts &amp; Detection — Satej Chaudhari</title>
-  <meta name="description" content="A conceptual catalogue of the named process-injection techniques (remote thread, APC, thread hijacking, hollowing, DLL/search-order, image-backed loading), the shared memory/cross-process signal that detects them, and the telemetry and hardening behind it.">
+  <meta name="description" content="A conceptual catalogue of the named process-injection techniques, the shared unbacked-executable-memory / cross-process signal that detects them, the Sysmon event IDs and hunts behind it, and PPL/ASR/exploit-protection hardening.">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
   <meta property="og:title" content="Process Injection — Concepts &amp; Detection">
-  <meta property="og:description" content="A conceptual catalogue of the named process-injection techniques (remote thread, APC, thread hijacking, hollowing, DLL/search-order, image-backed loading), the shared memory/cross-process signal that detects them, and the telemetry and hardening behind it.">
+  <meta property="og:description" content="A conceptual catalogue of the named process-injection techniques, the shared unbacked-executable-memory / cross-process signal that detects them, the Sysmon event IDs and hunts behind it, and PPL/ASR/exploit-protection hardening.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-process-injection-and-loaders.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-15">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Process Injection — Concepts &amp; Detection">
-  <meta name="twitter:description" content="A conceptual catalogue of the named process-injection techniques (remote thread, APC, thread hijacking, hollowing, DLL/search-order, image-backed loading), the shared memory/cross-process signal that detects them, and the telemetry and hardening behind it.">
+  <meta name="twitter:description" content="A conceptual catalogue of the named process-injection techniques, the shared unbacked-executable-memory / cross-process signal that detects them, the Sysmon event IDs and hunts behind it, and PPL/ASR/exploit-protection hardening.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -54,8 +54,6 @@
         <a href="../toolkit.html">Toolkit</a>
         <a href="../vulns.html">Vulns &amp; Misconfigs</a>
         <a href="../writeups.html">Writeups</a>
-        <a href="../maps.html">Maps</a>
-        <a href="../search.html">Search</a>
       </nav>
       <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -83,34 +81,32 @@
       <div class="post-body">
 
 <p>"Process injection" names the family of techniques for getting code to run
-inside a process — frequently a process other than the attacker's own — to
-borrow its trust, its network reach, or simply to hide. For a defender and for
-an operator reasoning about OPSEC, the useful view is not a recipe but a
-<em>map of the named techniques and the telemetry each one generates</em>. That
-is what this page is: a conceptual catalogue and its detection story. It pairs
-with <a href="2026-09-23-in-memory-tradecraft.html">In-Memory Post-Exploitation
+inside a process — frequently one other than the attacker's own — to borrow its
+trust, its network reach, or simply to hide. The useful view for both defender
+and operator is not a recipe but a <em>map of the named techniques and the
+telemetry each one generates</em>. That is what this page is. It pairs with
+<a href="2026-09-23-in-memory-tradecraft.html">In-Memory Post-Exploitation
 Tradecraft</a> and the detection material in
 <a href="2026-10-09-logging-and-telemetry.html">Logging &amp; Telemetry</a>.</p>
 
 <h2>Why injection exists</h2>
 <ul>
-  <li><strong>Blending:</strong> activity inside a common, trusted process is
-      harder to pick out than a lone unknown binary.</li>
-  <li><strong>Trust inheritance:</strong> the host process may own a logon
-      session, outbound network access, or privileges the attacker's process
-      lacks.</li>
-  <li><strong>Resilience:</strong> code hosted in a long-lived process survives
-      the death of the initial foothold.</li>
+  <li><strong>Blending</strong> — activity inside a common, trusted process is
+      harder to spot than a lone unknown binary.</li>
+  <li><strong>Trust inheritance</strong> — the host process may own a logon
+      session, outbound network access, or privileges the attacker's lacks.</li>
+  <li><strong>Resilience</strong> — code in a long-lived process survives the
+      death of the initial foothold.</li>
 </ul>
 
 <h2>The named techniques, at a glance</h2>
-<p>You will see these names in EDR alerts, ATT&amp;CK (T1055 and its
-sub-techniques), and malware reports. Knowing the <em>concept</em> is enough to
-recognise and hunt them:</p>
+<p>You will see these in EDR alerts, ATT&amp;CK (T1055 and sub-techniques), and
+malware reports. Knowing the <em>concept</em> is enough to recognise and hunt
+them:</p>
 <table>
   <thead><tr><th>Technique</th><th>One-line concept</th><th>Tell-tale signal</th></tr></thead>
   <tbody>
-    <tr><td>Remote-thread injection</td><td>Write code into another process, start a thread on it</td><td>Cross-process memory write + remote thread creation</td></tr>
+    <tr><td>Remote-thread injection</td><td>Write code into another process, start a thread on it</td><td>Cross-process write + remote thread</td></tr>
     <tr><td>APC injection</td><td>Queue code to run on an existing alertable thread</td><td>Cross-process APC queueing</td></tr>
     <tr><td>Thread hijacking</td><td>Redirect an existing thread to attacker code</td><td>Thread context set from another process</td></tr>
     <tr><td>Process hollowing</td><td>Launch a legit process suspended, replace its image</td><td>Image/disk mismatch; suspended-create then unmap</td></tr>
@@ -120,41 +116,40 @@ recognise and hunt them:</p>
 </table>
 
 <h2>The signal that ties them together</h2>
-<p>Most of these end with the same observable: a region of
-<strong>executable memory that is not backed by a file on disk</strong>, and/or
-a <strong>cross-process operation</strong> (one process writing to or creating
+<p>Most of these end with the same observable: a region of <strong>executable
+memory not backed by a file on disk</strong>, and/or a
+<strong>cross-process operation</strong> (one process writing to or creating
 execution in another). Benign software rarely does either, so defenders and
 memory scanners (PE-sieve, Moneta, EDR memory inspection) treat "RX/RWX private
 memory" and "cross-process write + execute" as high-value hunting heuristics.
-Understanding that single idea explains why injection is noisy and why so much
-offensive effort goes into making the payload <em>resemble</em> normal loaded
-code rather than inventing new injection primitives.</p>
+That single idea explains why injection is noisy, and why so much offensive
+effort goes into making the payload <em>resemble</em> normal loaded code rather
+than inventing new primitives.</p>
 
-<h2>Where the telemetry comes from</h2>
-<ul>
-  <li><strong>Kernel callbacks &amp; ETW:</strong> the OS raises events on process
-      and thread creation and on image loads — the raw material EDR correlates.</li>
-  <li><strong>Sysmon:</strong> event ID 8 (CreateRemoteThread), 10 (ProcessAccess
-      with suspicious rights), 7 (ImageLoad) are the classic injection trio. See
-      <a href="2026-10-09-logging-and-telemetry.html">Logging &amp; Telemetry</a>.</li>
-  <li><strong>Memory scanning:</strong> periodic or on-signal scans for anomalous
-      executable regions.</li>
-  <li><strong>Process lineage:</strong> a trusted process spawned by an
-      unexpected parent, or exhibiting network/behaviour it never normally shows.</li>
-</ul>
+<h2>Where the telemetry comes from — and how to hunt it</h2>
+<p>The OS raises events on process/thread creation and image loads; Sysmon
+surfaces the classic injection trio, and EDR correlates them:</p>
+<pre><code>Sysmon Event ID 8   CreateRemoteThread   (remote-thread injection)
+Sysmon Event ID 10  ProcessAccess        (OpenProcess with PROCESS_VM_WRITE / VM_OPERATION)
+Sysmon Event ID 7   ImageLoad            (unsigned / unexpected module)
+
+# example hunt: who opened lsass with write/inject rights? (EID 10)
+#   TargetImage endswith lsass.exe AND GrantedAccess in (0x1F0FFF,0x1438,0x1FFFFF)
+# example hunt: CreateRemoteThread into a browser/office process (EID 8)</code></pre>
 
 <h2>Hardening and response</h2>
 <ul>
-  <li><strong>Attack Surface Reduction</strong> rules that block process-injection
-      behaviours and credential-store access.</li>
+  <li><strong>ASR rules</strong> that block process-injection behaviours and
+      credential-store access.</li>
   <li><strong>Protected Process Light (PPL)</strong> for sensitive processes such
       as LSASS, raising the bar on who can open and write to them — see
-      <a href="2026-10-09-lsass-credential-extraction.html">LSASS Dumping &amp; Credential Extraction</a>.</li>
-  <li><strong>Exploit-protection mitigations</strong> (CFG, ACG/arbitrary-code
-      guard, blocking non-Microsoft binaries) for browsers and Office.</li>
-  <li><strong>Hunt the artefact, not the API:</strong> alert on the memory and
+      <a href="2026-10-09-lsass-credential-extraction.html">LSASS Dumping &amp;
+      Credential Extraction</a>.</li>
+  <li><strong>Exploit-protection mitigations</strong> (CFG, ACG, blocking
+      non-Microsoft binaries) for browsers and Office.</li>
+  <li><strong>Hunt the artefact, not the API</strong> — alert on the memory and
       cross-process signals above, which survive changes in the specific
-      technique used.</li>
+      technique.</li>
 </ul>
 
 <h2>Related reading</h2>

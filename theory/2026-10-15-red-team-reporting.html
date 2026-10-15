@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Red Team Reporting &amp; Deliverables — Satej Chaudhari</title>
-  <meta name="description" content="Turning an operation into something the client can fix — the four audiences, report structure, the attack narrative, rating findings by business impact and failed control, and remediation/retest.">
+  <meta name="description" content="Turning an operation into something the client can fix — the four audiences, report structure, a worked finding skeleton, the attack narrative, rating by business impact and failed control, and remediation/retest.">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
   <meta property="og:title" content="Red Team Reporting &amp; Deliverables">
-  <meta property="og:description" content="Turning an operation into something the client can fix — the four audiences, report structure, the attack narrative, rating findings by business impact and failed control, and remediation/retest.">
+  <meta property="og:description" content="Turning an operation into something the client can fix — the four audiences, report structure, a worked finding skeleton, the attack narrative, rating by business impact and failed control, and remediation/retest.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-red-team-reporting.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-15">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Red Team Reporting &amp; Deliverables">
-  <meta name="twitter:description" content="Turning an operation into something the client can fix — the four audiences, report structure, the attack narrative, rating findings by business impact and failed control, and remediation/retest.">
+  <meta name="twitter:description" content="Turning an operation into something the client can fix — the four audiences, report structure, a worked finding skeleton, the attack narrative, rating by business impact and failed control, and remediation/retest.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -54,8 +54,6 @@
         <a href="../toolkit.html">Toolkit</a>
         <a href="../vulns.html">Vulns &amp; Misconfigs</a>
         <a href="../writeups.html">Writeups</a>
-        <a href="../maps.html">Maps</a>
-        <a href="../search.html">Search</a>
       </nav>
       <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -83,10 +81,10 @@
       <div class="post-body">
 
 <p>A red-team engagement is only as valuable as what the client can act on
-afterwards. The report is the deliverable — not the shells. This page covers how
-to turn an operation into findings an organisation can prioritise and fix, which
-is a distinct skill from gaining access and one that separates a professional
-engagement from a joyride. It complements
+afterwards. The report is the deliverable — not the shells. Turning an operation
+into findings an organisation can prioritise and fix is a distinct skill from
+gaining access, and it is what separates a professional engagement from a
+joyride. This complements
 <a href="2026-10-09-red-team-methodology.html">Red Team Methodology &amp; Threat
 Emulation</a>.</p>
 
@@ -94,40 +92,52 @@ Emulation</a>.</p>
 <table>
   <thead><tr><th>Audience</th><th>Wants</th></tr></thead>
   <tbody>
-    <tr><td>Executives / board</td><td>Business risk, in plain language: what could happen, how bad, are we better than last time</td></tr>
-    <tr><td>Security leadership</td><td>Which controls failed, systemic themes, prioritised remediation and strategy</td></tr>
+    <tr><td>Executives / board</td><td>Business risk in plain language: what could happen, how bad, are we better than last time</td></tr>
+    <tr><td>Security leadership</td><td>Which controls failed, systemic themes, prioritised remediation</td></tr>
     <tr><td>Engineers / IT</td><td>Exact reproduction steps, affected assets, specific fixes</td></tr>
     <tr><td>Blue team</td><td>Timeline and IOCs to validate their detections against your activity</td></tr>
   </tbody>
 </table>
-<p>A good report serves all four without making any of them wade through the
+<p>A good report serves all four without making any one of them wade through the
 others' material — hence the structure below.</p>
 
 <h2>Structure of a red-team report</h2>
 <ol>
   <li><strong>Executive summary</strong> — the story in one page: scope, what you
-      achieved, the business impact, and the headline recommendations. No jargon.</li>
+      achieved, business impact, headline recommendations. No jargon.</li>
   <li><strong>Engagement overview</strong> — scope, rules of engagement, timeline,
-      and the threat you emulated.</li>
+      the threat you emulated.</li>
   <li><strong>Attack narrative</strong> — the kill chain told as a story: initial
       access → escalation → lateral movement → objective, with evidence. This is
       what makes a red-team report distinct from a vuln scan.</li>
   <li><strong>Findings</strong> — each with risk rating, affected assets,
       reproduction, impact, and remediation.</li>
   <li><strong>Detection &amp; response analysis</strong> — what the blue team saw,
-      what they missed, and where detection should improve (the "purple" value).</li>
+      what they missed, where detection should improve (the "purple" value).</li>
   <li><strong>Strategic recommendations</strong> — systemic fixes, not just
       per-finding patches.</li>
-  <li><strong>Appendices</strong> — full IOC list, tooling, and timeline for the
+  <li><strong>Appendices</strong> — full IOC list, tooling, timeline for the
       defenders.</li>
 </ol>
 
-<h2>Rating findings honestly</h2>
-<p>Risk is impact × likelihood in the client's context, not raw CVSS. A
-medium-severity bug that sits on the only path to the crown jewels outranks a
-"critical" on an isolated test box. Tie each finding to business impact and to the
-<strong>control that failed</strong> — "phishing-resistant MFA was not enforced,"
-not merely "we phished a user." The audit matrix in
+<h2>A finding, written well</h2>
+<p>Each finding follows the same skeleton so a reader can scan it fast:</p>
+<pre><code>Title:        Kerberoastable service account with a weak password
+Risk:         High   (Likelihood: High — any domain user; Impact: High — DA path)
+Affected:     svc_sql (SPN MSSQLSvc/sql01.corp.local)
+ATT&amp;CK:       T1558.003 (Kerberoasting)
+Evidence:     TGS requested as low-priv user; cracked offline in 4 minutes
+Reproduction: 1) request the SPN ticket  2) crack the RC4 hash offline
+Impact:       svc_sql is local admin on 30 hosts and in Account Operators
+Remediation:  30+ char managed/gMSA password; AES-only; alert on mass TGS requests
+</code></pre>
+
+<h2>Rate findings honestly</h2>
+<p>Risk is impact × likelihood <em>in the client's context</em>, not raw CVSS. A
+medium-severity bug on the only path to the crown jewels outranks a "critical" on
+an isolated test box. Tie each finding to business impact and to the
+<strong>control that failed</strong> — "phishing-resistant MFA was not enforced",
+not merely "we phished a user". The audit matrix in
 <a href="2026-10-15-phishing-and-pretext-delivery.html">Phishing &amp; Pretext
 Delivery</a> is an example of framing by failed control.</p>
 
@@ -135,18 +145,18 @@ Delivery</a> is an example of framing by failed control.</p>
 <p>Scanners produce finding lists; red teams produce <em>chains</em>. The value
 of the narrative is showing how individually-minor issues combined into total
 compromise, so the client understands that fixing any one link breaks the chain.
-Keep it evidence-backed (screenshots, timestamps, affected hostnames) and mapped
-to <a href="2026-10-02-detection-engineering-attack.html">MITRE ATT&amp;CK</a> so
+Keep it evidence-backed (screenshots, timestamps, hostnames) and mapped to
+<a href="2026-10-02-detection-engineering-attack.html">MITRE ATT&amp;CK</a> so
 defenders can line it up against their coverage.</p>
 
 <h2>Remediation and retest</h2>
 <ul>
   <li><strong>Make fixes specific and prioritised</strong> — ordered by risk, with
       quick wins flagged separately from strategic work.</li>
-  <li><strong>Prefer systemic fixes:</strong> one tiering or MFA change often
+  <li><strong>Prefer systemic fixes</strong> — one tiering or MFA change often
       closes a whole class of findings.</li>
-  <li><strong>Offer a retest</strong> so the client can prove the chain is broken
-      — and so the engagement ends on evidence, not assertion.</li>
+  <li><strong>Offer a retest</strong> so the client can prove the chain is broken,
+      and the engagement ends on evidence, not assertion.</li>
 </ul>
 
 <h2>Related reading</h2>
