@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Linux Lateral Movement &amp; SSH — Satej Chaudhari</title>
-  <meta name="description" content="Moving through Linux estates on trust — SSH key reuse, agent forwarding and hijacking, known_hosts mapping, orchestration planes and NFS trust, SSH tunnelling/pivoting, and how to harden and detect it.">
+  <meta name="description" content="Moving through Linux estates on trust — key reuse, agent forwarding and hijacking via SSH_AUTH_SOCK, known_hosts mapping, orchestration/NFS trust, and SSH local/remote/dynamic/ProxyJump tunnelling, with hardening and detection.">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
   <meta property="og:title" content="Linux Lateral Movement &amp; SSH">
-  <meta property="og:description" content="Moving through Linux estates on trust — SSH key reuse, agent forwarding and hijacking, known_hosts mapping, orchestration planes and NFS trust, SSH tunnelling/pivoting, and how to harden and detect it.">
+  <meta property="og:description" content="Moving through Linux estates on trust — key reuse, agent forwarding and hijacking via SSH_AUTH_SOCK, known_hosts mapping, orchestration/NFS trust, and SSH local/remote/dynamic/ProxyJump tunnelling, with hardening and detection.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-linux-lateral-movement-and-ssh.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-15">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Linux Lateral Movement &amp; SSH">
-  <meta name="twitter:description" content="Moving through Linux estates on trust — SSH key reuse, agent forwarding and hijacking, known_hosts mapping, orchestration planes and NFS trust, SSH tunnelling/pivoting, and how to harden and detect it.">
+  <meta name="twitter:description" content="Moving through Linux estates on trust — key reuse, agent forwarding and hijacking via SSH_AUTH_SOCK, known_hosts mapping, orchestration/NFS trust, and SSH local/remote/dynamic/ProxyJump tunnelling, with hardening and detection.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -54,8 +54,6 @@
         <a href="../toolkit.html">Toolkit</a>
         <a href="../vulns.html">Vulns &amp; Misconfigs</a>
         <a href="../writeups.html">Writeups</a>
-        <a href="../maps.html">Maps</a>
-        <a href="../search.html">Search</a>
       </nav>
       <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -85,70 +83,76 @@
 <p>Lateral movement on Linux estates runs on trust relationships, and the
 dominant one is SSH. Where Windows networks move on Kerberos tickets and NTLM
 hashes, Linux networks move on SSH keys, agent forwarding, and the assumption
-that "this host can already reach that host." This page covers how that trust is
-abused to pivot, and how to tunnel through it. It builds on
+that "this host can already reach that host". This builds on
 <a href="2026-10-15-linux-credential-access-and-looting.html">Linux Credential
 Access &amp; Looting</a> and the protocol-agnostic
 <a href="2026-10-09-pivoting-and-tunnelling.html">Pivoting &amp; Tunnelling</a>.</p>
 
-<h2>SSH key reuse</h2>
+<h2>Key reuse</h2>
 <p>A private key harvested from one host often unlocks several others, because
-teams reuse keys across a fleet or a deployment identity is authorised widely.
-<code>authorized_keys</code> on a host lists who may log in; a matching private
-key elsewhere is a ready-made path. Mapping "which key opens which host" turns a
-single foothold into a graph of reachable systems.</p>
+teams reuse a key across a fleet or a deployment identity is authorised widely.
+Match keys to hosts and walk the graph:</p>
+<pre><code>chmod 600 id_rsa
+ssh -i id_rsa user@next-host          # reuse the key directly
+# authorized_keys on each host lists who may log in; a matching private key
+# elsewhere is a ready-made path.</code></pre>
 
 <h2>Agent forwarding and hijacking</h2>
 <p>SSH agent forwarding (<code>ssh -A</code>) lets a remote host use your local
 keys for onward hops — convenient, and dangerous. If you land on a host where a
-higher-privileged user has a <strong>forwarded agent</strong> socket, you can use
-their agent to authenticate onward as them, without ever seeing the key. This is
-the Linux equivalent of token theft, and it is why forwarding to untrusted hosts
-is discouraged.</p>
+higher-privileged user has a <strong>forwarded agent</strong>, you can use their
+agent to authenticate onward <em>as them</em>, without ever seeing the key. It
+is the Linux analogue of token theft:</p>
+<pre><code># find a forwarded agent socket owned by another user (as root)
+ls -l /tmp/ssh-*/agent.*
+SSH_AUTH_SOCK=/tmp/ssh-XXXX/agent.1234 ssh-add -l   # list that agent's keys
+SSH_AUTH_SOCK=/tmp/ssh-XXXX/agent.1234 ssh victim@target   # auth as them</code></pre>
 
+<h2>The trust mechanisms, and how they move you</h2>
 <table>
-  <thead><tr><th>Trust mechanism</th><th>How it moves you</th></tr></thead>
+  <thead><tr><th>Mechanism</th><th>How it moves you</th></tr></thead>
   <tbody>
     <tr><td>Reused private keys</td><td>One key authenticates to many hosts</td></tr>
     <tr><td>Forwarded SSH agent</td><td>Use another user's keys via their agent socket</td></tr>
-    <tr><td>known_hosts / config</td><td>Maps the network and preferred identities/jump hosts</td></tr>
+    <tr><td><code>known_hosts</code> / <code>config</code></td><td>Maps the network and preferred jump hosts</td></tr>
     <tr><td>Host-based auth / NFS trust</td><td>Hosts trust each other by identity, not user</td></tr>
     <tr><td>CI/CD &amp; orchestration keys</td><td>Deployment identities reach the whole fleet</td></tr>
   </tbody>
 </table>
 
-<h2>Pivoting and tunnelling through SSH</h2>
-<p>SSH is also the transport for pivoting: local and remote port forwards expose
-internal services to your box or your box to the target network, dynamic forwards
-(<code>-D</code>) give a SOCKS proxy through the compromised host, and jump hosts
-(<code>-J</code>) chain hops. The mechanics and the non-SSH alternatives
-(chisel, ligolo, SOCKS over C2) are covered in
+<h2>Pivoting through SSH</h2>
+<p>SSH is also the transport for reaching networks you cannot route to directly:</p>
+<pre><code>ssh -L 8080:10.0.0.5:80 user@pivot      # local: reach the target's :80 on your :8080
+ssh -R 9001:127.0.0.1:9001 user@you     # remote: expose YOUR service to the target net
+ssh -D 1080 user@pivot                  # dynamic SOCKS proxy -> use with proxychains
+ssh -J user@pivot user@deep-host        # ProxyJump: chain through a bastion</code></pre>
+<p>The non-SSH alternatives (chisel, ligolo-ng, SOCKS over C2) are in
 <a href="2026-10-09-pivoting-and-tunnelling.html">Pivoting &amp; Tunnelling</a>;
-the point here is that a single SSH foothold is usually enough to reach an entire
-internal segment.</p>
+the point here is that a single SSH foothold usually reaches an entire internal
+segment.</p>
 
 <h2>Other Linux lateral vectors</h2>
 <ul>
-  <li><strong>Reused service credentials:</strong> a DB/API password found on one
+  <li><strong>Reused service credentials</strong> — a DB/API password from one
       host authenticating to a shared backend.</li>
-  <li><strong>Orchestration planes:</strong> Ansible, Salt, Puppet, and
-      Kubernetes control planes run commands fleet-wide — compromise the
-      controller and you reach everything it manages.</li>
-  <li><strong>NFS and shared mounts:</strong> writable shared storage used by
+  <li><strong>Orchestration planes</strong> — Ansible, Salt, Puppet and
+      Kubernetes control planes run commands fleet-wide; own the controller and
+      you reach everything it manages.</li>
+  <li><strong>NFS and shared mounts</strong> — writable shared storage used by
       multiple hosts can carry payloads or leak keys.</li>
 </ul>
 
 <h2>Detection &amp; hardening</h2>
 <ul>
-  <li><strong>Unique, passphrase-protected keys;</strong> rotate and inventory
-      them; prefer short-lived certificates over long-lived keys.</li>
-  <li><strong>Disable agent forwarding to untrusted hosts;</strong> use
-      <code>ProxyJump</code> instead of forwarding where possible.</li>
-  <li><strong>Harden sshd</strong> (no host-based auth, no root login) and
-      segment the network so one foothold cannot reach everything.</li>
-  <li><strong>Detection:</strong> logins from unexpected source hosts, use of one
-      key across many hosts in a short window, and new SOCKS/forward sessions —
-      ship SSH auth logs to a SIEM.</li>
+  <li><strong>Unique, passphrase-protected keys;</strong> inventory and rotate
+      them; prefer short-lived SSH certificates over long-lived keys.</li>
+  <li><strong>Disable agent forwarding to untrusted hosts;</strong> prefer
+      <code>ProxyJump</code> over <code>-A</code>.</li>
+  <li><strong>Harden <code>sshd</code></strong> (no host-based auth, no root
+      login) and segment the network.</li>
+  <li><strong>Detect</strong> logins from unexpected source hosts, one key used
+      across many hosts quickly, and new SOCKS/forward sessions — ship SSH auth
+      logs to a SIEM.</li>
 </ul>
 
 <h2>Related reading</h2>

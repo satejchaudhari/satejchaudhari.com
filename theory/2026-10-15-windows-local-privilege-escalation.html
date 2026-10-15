@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Windows Local Privilege Escalation — Satej Chaudhari</title>
-  <meta name="description" content="Turning a low-privileged shell into SYSTEM — the misconfiguration classes (service binaries/paths/ACLs, DLL hijacking, scheduled tasks, AlwaysInstallElevated, autoruns, token privileges), the &#x27;writable + privileged&#x27; theme, stored-credential hunting, and hardening.">
+  <meta name="description" content="Turning a low-privileged shell into SYSTEM — enumerating with whoami /priv and winPEAS, the misconfiguration classes and the exact commands that find each, the &#x27;writable + privileged&#x27; theme, stored-credential hunting, and hardening.">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Satej Chaudhari">
   <meta property="og:title" content="Windows Local Privilege Escalation">
-  <meta property="og:description" content="Turning a low-privileged shell into SYSTEM — the misconfiguration classes (service binaries/paths/ACLs, DLL hijacking, scheduled tasks, AlwaysInstallElevated, autoruns, token privileges), the &#x27;writable + privileged&#x27; theme, stored-credential hunting, and hardening.">
+  <meta property="og:description" content="Turning a low-privileged shell into SYSTEM — enumerating with whoami /priv and winPEAS, the misconfiguration classes and the exact commands that find each, the &#x27;writable + privileged&#x27; theme, stored-credential hunting, and hardening.">
   <meta property="og:url" content="https://satejchaudhari.com/theory/2026-10-15-windows-local-privilege-escalation.html">
   <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
   <meta property="article:published_time" content="2026-10-15">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Windows Local Privilege Escalation">
-  <meta name="twitter:description" content="Turning a low-privileged shell into SYSTEM — the misconfiguration classes (service binaries/paths/ACLs, DLL hijacking, scheduled tasks, AlwaysInstallElevated, autoruns, token privileges), the &#x27;writable + privileged&#x27; theme, stored-credential hunting, and hardening.">
+  <meta name="twitter:description" content="Turning a low-privileged shell into SYSTEM — enumerating with whoami /priv and winPEAS, the misconfiguration classes and the exact commands that find each, the &#x27;writable + privileged&#x27; theme, stored-credential hunting, and hardening.">
   <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
 
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
@@ -54,8 +54,6 @@
         <a href="../toolkit.html">Toolkit</a>
         <a href="../vulns.html">Vulns &amp; Misconfigs</a>
         <a href="../writeups.html">Writeups</a>
-        <a href="../maps.html">Maps</a>
-        <a href="../search.html">Search</a>
       </nav>
       <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -83,72 +81,82 @@
       <div class="post-body">
 
 <p>You have a shell as a low-privileged user — a service account, a web-app
-identity, a standard domain user on a workstation. Local privilege escalation is
-the step that turns that into SYSTEM or local administrator, from where you can
-dump credentials, install persistence, and move on. On Windows the routes almost
-all reduce to one idea: <strong>a privileged component trusts something a
-low-privileged user can control</strong>. This page organises the common classes
-and the enumeration that finds them. It complements
+identity, or a standard domain user on a workstation. Local privilege escalation
+turns that into SYSTEM or local administrator, from where you can dump
+credentials, install persistence, and move on. Almost every Windows route
+reduces to one idea: <strong>a privileged component trusts something a
+low-privileged user can control.</strong> This complements
 <a href="2026-10-09-windows-token-potato.html">Windows Token Abuse &amp; Potato
-Attacks</a> (the token-centric SYSTEM routes) and
-<a href="2026-08-18-windows-tokens-uac.html">Windows Access Tokens &amp; UAC</a>.</p>
+Attacks</a> and <a href="2026-08-18-windows-tokens-uac.html">Windows Access
+Tokens &amp; UAC</a>.</p>
 
-<h2>Always start with enumeration</h2>
-<p>Privilege escalation is an enumeration problem first. Automated enumerators
-(WinPEAS, PrivescCheck, Seatbelt) and the built-in commands
-(<code>whoami /priv</code>, <code>whoami /all</code>,
-<code>systeminfo</code>) surface the misconfigurations below. The single most
-important line is often <code>whoami /priv</code> — a dangerous privilege there
-is frequently a direct path to SYSTEM.</p>
+<h2>Always enumerate first</h2>
+<p>Privilege escalation is an enumeration problem. The single most important line
+is <code>whoami /priv</code> — a dangerous privilege there is frequently a direct
+path to SYSTEM:</p>
+<pre><code>whoami /priv           # SeImpersonate / SeBackup / SeDebug = likely win
+whoami /all            # groups and integrity level
+systeminfo             # OS build + hotfixes (for CVE matching)
+# automated:
+winPEAS.exe quiet cmd fast
+.\PrivescCheck.ps1 -Extended        # or Seatbelt.exe -group=all</code></pre>
 
 <h2>The misconfiguration classes</h2>
 <table>
-  <thead><tr><th>Class</th><th>The trusted thing the user controls</th><th>Result</th></tr></thead>
+  <thead><tr><th>Class</th><th>What the user controls</th><th>Result</th></tr></thead>
   <tbody>
-    <tr><td>Service binary permissions</td><td>A service runs as SYSTEM from an executable the user can overwrite</td><td>Replace binary → SYSTEM on restart</td></tr>
-    <tr><td>Unquoted service path</td><td>A space in an unquoted path lets Windows run an earlier file the user can plant</td><td>SYSTEM on service start</td></tr>
-    <tr><td>Weak service config (ACL)</td><td>User can reconfigure the service's binary path or account</td><td>Point the service at attacker code</td></tr>
-    <tr><td>DLL hijacking / search order</td><td>A privileged process loads a DLL from a writable directory</td><td>Code in the privileged process</td></tr>
-    <tr><td>Scheduled tasks</td><td>A SYSTEM task runs a script/binary the user can modify</td><td>SYSTEM when the task fires</td></tr>
-    <tr><td>AlwaysInstallElevated</td><td>Policy lets any user install MSIs as SYSTEM</td><td>Install a crafted package → SYSTEM</td></tr>
-    <tr><td>Autoruns &amp; startup</td><td>Writable autorun entry or startup folder used by a privileged context</td><td>Code at logon/boot</td></tr>
-    <tr><td>Registry/Env (PATH)</td><td>Writable PATH entry or auto-run registry key</td><td>Hijack a binary a privileged process calls</td></tr>
-    <tr><td>Token privileges</td><td>SeImpersonate/SeAssignPrimaryToken held by a service account</td><td>Potato-style SYSTEM — see the token page</td></tr>
-    <tr><td>Stored credentials</td><td>Passwords in files, registry, Unattend.xml, Group Policy Preferences</td><td>Reuse to a higher-privileged account</td></tr>
+    <tr><td>Service binary permissions</td><td>A SYSTEM service's exe is writable</td><td>Replace it → SYSTEM on restart</td></tr>
+    <tr><td>Unquoted service path</td><td>A space in an unquoted path runs an earlier file</td><td>Plant that file → SYSTEM</td></tr>
+    <tr><td>Weak service config (ACL)</td><td>You can reconfigure binPath / account</td><td>Point the service at your code</td></tr>
+    <tr><td>DLL hijack / search order</td><td>A privileged process loads a DLL from a writable dir</td><td>Code in the privileged process</td></tr>
+    <tr><td>Scheduled tasks</td><td>A SYSTEM task runs a writable script/binary</td><td>SYSTEM when it fires</td></tr>
+    <tr><td>AlwaysInstallElevated</td><td>Policy lets any user install MSIs as SYSTEM</td><td>Install a crafted package</td></tr>
+    <tr><td>Token privileges</td><td>SeImpersonate/SeAssignPrimaryToken held</td><td>Potato → SYSTEM (see token page)</td></tr>
+    <tr><td>Stored credentials</td><td>Passwords in files / registry / GPP</td><td>Reuse to a higher account</td></tr>
   </tbody>
 </table>
 
+<h2>Finding each one</h2>
+<pre><code># services whose binary or config a non-admin can modify (needs accesschk/winPEAS)
+accesschk.exe -uwcqv "Everyone" *           # writable services
+# unquoted service paths
+wmic service get name,pathname,startname | findstr /i /v """ | findstr /i /v "C:\Windows"
+# scheduled tasks running as SYSTEM
+schtasks /query /fo LIST /v | findstr /i "TaskName Run As User SYSTEM"
+# AlwaysInstallElevated (both keys must be 1)
+reg query HKCU\Software\Policies\Microsoft\Windows\Installer /v AlwaysInstallElevated
+reg query HKLM\Software\Policies\Microsoft\Windows\Installer /v AlwaysInstallElevated</code></pre>
+
 <h2>The recurring theme: writable + privileged</h2>
-<p>Scan the list and the pattern is clear — every route is some privileged
-execution path (a service, a task, a DLL load, an installer policy) whose inputs
-a lower-privileged user can write. The attacker's work is enumeration to find the
-overlap; the fix is to remove it. This is why privilege escalation hygiene is
-mostly about <strong>permissions and least privilege</strong>, not patching.</p>
+<p>Every route is some privileged execution path — a service, a task, a DLL load,
+an installer policy — whose inputs a lower-privileged user can write. The work is
+enumeration to find the overlap; the fix is to remove it. That is why privesc
+hygiene is mostly about <strong>permissions and least privilege</strong>, not
+patching.</p>
 
 <h2>Credentials left lying around</h2>
-<p>Separately from misconfigurations, Windows hosts accumulate secrets: answer
-files from deployment (<code>Unattend.xml</code>, <code>sysprep.inf</code>),
-Group Policy Preferences passwords (the infamous reversible-encrypted
-<code>cpassword</code>), saved RDP/credential-manager entries, PowerShell history,
-and config files. Harvesting these often skips escalation entirely by handing you
-a higher-privileged credential — overlapping with
-<a href="2026-08-18-windows-credential-storage.html">Windows Credential Storage</a>.</p>
+<p>Separately from misconfigurations, Windows hosts accumulate secrets that skip
+escalation entirely by handing you a higher-privileged account:</p>
+<pre><code>findstr /si password *.xml *.ini *.config *.txt 2>nul
+reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"  # autologon
+cmdkey /list                                   # saved credentials
+# Group Policy Preferences cpassword (reversible), unattend.xml, etc.
+findstr /S /I cpassword \\&lt;domain&gt;\sysvol\*.xml</code></pre>
+<p>This overlaps with
+<a href="2026-08-18-windows-credential-storage.html">Windows Credential
+Storage</a>.</p>
 
-<h2>Detection and hardening</h2>
+<h2>Detection &amp; hardening</h2>
 <ul>
-  <li><strong>Fix the ACLs:</strong> service binaries, service configuration,
-      scheduled-task files and their directories should not be writable by
-      standard users; audit with the same enumerators attackers use.</li>
-  <li><strong>Quote service paths</strong> and remove writable
-      <code>PATH</code> directories.</li>
-  <li><strong>Disable AlwaysInstallElevated;</strong> never ship GPP passwords.</li>
-  <li><strong>Least privilege for service accounts;</strong> prefer virtual or
-      managed service accounts and avoid granting
-      <code>SeImpersonatePrivilege</code> broadly.</li>
-  <li><strong>Telemetry:</strong> new/modified services and scheduled tasks,
-      service binary replacement, and MSI installs by non-admins are all
-      high-signal events — see
-      <a href="2026-10-09-logging-and-telemetry.html">Logging &amp; Telemetry</a>.</li>
+  <li><strong>Fix the ACLs</strong> — service binaries/config, task files and
+      their directories should not be writable by standard users.</li>
+  <li><strong>Quote service paths;</strong> remove writable <code>PATH</code>
+      entries; disable AlwaysInstallElevated; never ship GPP passwords.</li>
+  <li><strong>Least privilege for service accounts;</strong> prefer managed/virtual
+      accounts and don't grant <code>SeImpersonatePrivilege</code> broadly.</li>
+  <li><strong>Detect</strong> new/modified services and tasks, service-binary
+      replacement, and MSI installs by non-admins (see
+      <a href="2026-10-09-logging-and-telemetry.html">Logging &amp; Telemetry</a>).</li>
 </ul>
 
 <h2>Related reading</h2>
