@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Linux Privilege Escalation — Guided Playbook — Satej Chaudhari</title>
+  <meta name="description" content="A guided, colour-coded Linux privilege-escalation playbook — expand a stage (sudo, SUID/capabilities, cron/PATH, writable files, credential reuse, kernel CVEs), get enumeration commands and theory links, and follow the pivots to root.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Satej Chaudhari">
+  <meta property="og:title" content="Linux Privilege Escalation — Guided Playbook">
+  <meta property="og:description" content="A guided, colour-coded Linux privilege-escalation playbook — enumeration commands, theory links, and pivots to root.">
+  <meta property="og:url" content="https://satejchaudhari.com/linux-privesc-map.html">
+  <meta property="og:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Linux Privilege Escalation — Guided Playbook">
+  <meta name="twitter:description" content="A guided, colour-coded Linux privilege-escalation playbook — enumeration commands, theory links, and pivots to root.">
+  <meta name="twitter:image" content="https://satejchaudhari.com/assets/img/og-default.png">
+
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/adv2.css">
+  <script>
+  (function(){
+    try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.querySelector('.theme-toggle');
+      if(b)b.addEventListener('click',function(){
+        var d=document.documentElement,c=d.getAttribute('data-theme')||'dark',n=c==='dark'?'light':'dark';
+        d.setAttribute('data-theme',n);try{localStorage.setItem('theme',n);}catch(e){}
+      });
+      var nt=document.querySelector('.nav-toggle'),nv=document.querySelector('.site-nav');
+      if(nt&&nv&&!nt.dataset.bound){nt.dataset.bound='1';nt.addEventListener('click',function(){var o=nv.classList.toggle('open');nt.setAttribute('aria-expanded',o?'true':'false');});}
+    });
+  })();
+  </script>
+</head>
+<body>
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap-wide">
+      <a class="brand" href="index.html"><span class="brand-mark">SC</span><span class="brand-name">Satej Chaudhari</span></a>
+      <nav class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="writeups.html">Writeups</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="adv2-wrap">
+    <div class="adv2-top">
+      <div>
+        <p class="eyebrow">Interactive</p>
+        <h1>Linux Privilege Escalation — Guided Playbook</h1>
+      </div>
+      <a class="adv2-altlink" href="windows-privesc-map.html">Windows privesc map &#8599;</a>
+    </div>
+    <p class="adv2-hint">Start at <b>Low-Privileged Shell</b>, run the enumeration, then follow the coloured <b>Move&nbsp;to</b> pivots as each misconfiguration leads toward <b>root</b>. Enumeration-focused; weaponisation detail is in the linked theory pages.</p>
+
+    <div class="adv2-bar">
+      <button class="adv2-btn" id="privmap-expand">Expand all</button>
+      <button class="adv2-btn" id="privmap-collapse">Collapse all</button>
+    </div>
+
+    <div id="privmap-root"><!-- built by assets/js/privmap-main.js from assets/js/linux-privesc-map.js --></div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap-wide">
+      <p>&copy; 2026 Satej Chaudhari</p>
+      <div class="footer-links">
+        <a href="writeups.html">Writeups</a>
+        <a href="theory.html">Theory</a>
+        <a href="toolkit.html">Toolkit</a>
+        <a href="vulns.html">Vulns &amp; Misconfigs</a>
+        <a href="disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/linux-privesc-map.js"></script>
+  <script src="assets/js/privmap-main.js"></script>
+</body>
+</html>

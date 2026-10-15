@@ -1,0 +1,131 @@
+/* adv2.css — shared styles for the guided attack/privesc maps (extracted from the AD/Cloud map pages) */
+    .adv2-wrap { max-width: 980px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
+    .adv2-top { padding: 26px 0 6px; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+    .adv2-top .eyebrow { color: var(--accent); }
+    .adv2-top h1 { font-family: "Space Grotesk", sans-serif; font-size: clamp(1.5rem, 3.5vw, 2.1rem); margin: 4px 0 2px; }
+    .adv2-hint { color: var(--muted); font-size: 0.9rem; margin: 0; max-width: 66ch; }
+    .adv2-hint b { color: var(--text); font-weight: 600; }
+    .adv2-altlink { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); text-decoration: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px; white-space: nowrap; }
+    .adv2-altlink:hover { border-color: var(--accent-border); color: var(--accent); }
+
+    .adv2-bar { display: flex; gap: 8px; margin: 12px 0 16px; }
+    .adv2-btn { font-family: var(--mono); font-size: 0.74rem; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
+    .adv2-btn:hover { border-color: var(--accent-border); color: var(--text); }
+    /* "How to use" collapsible */
+    .adv2-howto { margin: 14px 0 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; }
+    .adv2-howto summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 9px; padding: 13px 16px; font-family: var(--mono); font-size: 0.8rem; font-weight: 600; color: var(--text); }
+    .adv2-howto summary::-webkit-details-marker { display: none; }
+    .adv2-howto summary:hover { color: var(--accent); }
+    .adv2-howto summary svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .adv2-howto .adv2-howto-caret { margin-left: auto; transition: transform 0.2s ease; }
+    .adv2-howto[open] .adv2-howto-caret { transform: rotate(90deg); }
+    .adv2-howto-body { padding: 2px 18px 16px; border-top: 1px solid var(--border); }
+    .adv2-howto-body ul { margin: 12px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 9px; }
+    .adv2-howto-body li { color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
+    .adv2-howto-body li b { color: var(--text); font-weight: 600; }
+    .adv2-howto-body li em { color: var(--accent); font-style: normal; }
+    .adv2-howto-body code { font-family: var(--mono); font-size: 0.82em; background: var(--surface-2, rgba(127,127,127,0.14)); padding: 1px 6px; border-radius: 5px; }
+    .adv2-howto-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
+
+    /* section card */
+    .adv2-section { border: 1px solid var(--border); border-left: 4px solid var(--sc); border-radius: 12px; margin-bottom: 12px; background: var(--surface); overflow: hidden; transition: box-shadow 0.2s ease; }
+    .adv2-section.open { box-shadow: 0 0 0 1px color-mix(in srgb, var(--sc) 40%, transparent); }
+    .adv2-section.flash { animation: adv2flash 1.2s ease; }
+    @keyframes adv2flash { 0% { box-shadow: 0 0 0 3px var(--sc); } 100% { box-shadow: 0 0 0 1px transparent; } }
+    .adv2-head { width: 100%; display: flex; align-items: center; gap: 13px; padding: 15px 16px; background: color-mix(in srgb, var(--sc) 14%, transparent); border: none; text-align: left; cursor: pointer; color: var(--text); }
+    .adv2-head:hover { background: color-mix(in srgb, var(--sc) 22%, transparent); }
+    .adv2-swatch { width: 12px; height: 12px; border-radius: 4px; background: var(--sc); flex: 0 0 auto; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc) 22%, transparent); }
+    .adv2-head-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+    .adv2-title { font-family: "Space Grotesk", sans-serif; font-weight: 600; font-size: 1.05rem; display: inline-flex; align-items: center; gap: 9px; }
+    .adv2-tag { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--sc); border: 1px solid color-mix(in srgb, var(--sc) 55%, transparent); background: color-mix(in srgb, var(--sc) 12%, transparent); border-radius: 999px; padding: 2px 8px; }
+    .adv2-sub { color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
+    .adv2-count { font-family: var(--mono); font-size: 0.72rem; color: var(--muted-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; flex: 0 0 auto; }
+    .adv2-caret { color: var(--muted-2); display: inline-flex; transition: transform 0.2s ease; flex: 0 0 auto; }
+    .adv2-caret svg { width: 16px; height: 16px; }
+    .adv2-section.open .adv2-caret { transform: rotate(90deg); color: var(--sc); }
+    .adv2-body { padding: 4px 14px 14px; border-top: 1px solid var(--border); }
+
+    /* technique accordion */
+    .adv2-tech { border: 1px solid var(--border); border-radius: 9px; margin-top: 10px; background: var(--surface-2); overflow: hidden; }
+    .adv2-tech.open { border-color: color-mix(in srgb, var(--sc) 45%, var(--border)); }
+    .adv2-tech-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 13px; background: none; border: none; text-align: left; cursor: pointer; color: var(--text); font-size: 0.92rem; font-weight: 500; }
+    .adv2-tech-btn:hover { background: color-mix(in srgb, var(--sc) 6%, transparent); }
+    .adv2-tech-caret { color: var(--muted-2); display: inline-flex; transition: transform 0.2s ease; flex: 0 0 auto; }
+    .adv2-tech-caret svg { width: 15px; height: 15px; }
+    .adv2-tech.open .adv2-tech-caret { transform: rotate(90deg); color: var(--sc); }
+    .adv2-tech-body { padding: 4px 14px 14px; border-top: 1px dashed var(--border); }
+
+    .adv2-links { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 2px; }
+    .adv2-chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 0.72rem; padding: 4px 10px; border-radius: 7px; text-decoration: none; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .adv2-chip svg { width: 13px; height: 13px; flex: 0 0 auto; }
+    .adv2-chip.theory:hover { border-color: var(--accent-border); color: var(--accent); }
+    .adv2-chip.cve { color: var(--h-rose, #fb7185); border-color: color-mix(in srgb, var(--h-rose, #fb7185) 45%, transparent); }
+    .adv2-chip.vuln { color: var(--h-rose, #fb7185); border-color: color-mix(in srgb, var(--h-rose, #fb7185) 40%, transparent); }
+    .adv2-chip.vuln:hover { border-color: var(--h-rose, #fb7185); }
+    .adv2-chip.disabled { opacity: 0.45; cursor: default; border-style: dashed; }
+    .adv2-chip.disabled:hover { border-color: var(--border); color: inherit; }
+    .adv2-cvebar-link.disabled { opacity: 0.55; cursor: default; font-style: italic; }
+    .adv2-cvebar-link.disabled:hover { text-decoration: none; }
+    .adv2-desc { color: var(--muted); font-size: 0.9rem; line-height: 1.55; margin: 10px 0 4px; }
+
+    .adv2-cmds { margin-top: 10px; }
+    .adv2-cmds .command-block { position: relative; margin: 6px 0 0; }
+    .adv2-cmds pre { margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 34px 9px 11px; overflow-x: auto; }
+    .adv2-cmds code { font-family: var(--mono); font-size: 0.76rem; color: var(--text); white-space: pre; display: block; }
+    .adv2-cmds .cmd-comment { color: var(--muted); font-style: italic; opacity: 0.85; }
+    .adv2-copy { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--muted); cursor: pointer; opacity: 0.5; transition: opacity 0.12s, color 0.12s, border-color 0.12s; }
+    .adv2-copy svg { width: 13px; height: 13px; }
+    .command-block:hover .adv2-copy { opacity: 1; }
+    .adv2-copy:hover { color: var(--accent); border-color: var(--accent-border); }
+    .adv2-copy.copied { color: #4ade80; border-color: #4ade80; opacity: 1; }
+    .adv2-copy.copied::after { content: "copied"; position: absolute; right: 28px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.6rem; color: #4ade80; white-space: nowrap; }
+
+    /* move-to (cross-section pivot) */
+    .adv2-moves { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .adv2-moves-l { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted-2); margin: 0 0 7px; }
+    .adv2-move-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .adv2-move { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 0.76rem; font-weight: 600; padding: 5px 11px; border-radius: 8px; cursor: pointer; color: var(--mc); border: 1px solid color-mix(in srgb, var(--mc) 55%, transparent); background: color-mix(in srgb, var(--mc) 12%, transparent); flex: 0 0 auto; }
+    .adv2-move:hover { background: color-mix(in srgb, var(--mc) 22%, transparent); }
+    .adv2-move-dot { width: 9px; height: 9px; border-radius: 3px; background: var(--mc); flex: 0 0 auto; }
+    .adv2-move svg { width: 13px; height: 13px; }
+    .adv2-move-note { color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+
+    /* CVE banner */
+    .adv2-cvebar { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 11px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--h-rose, #fb7185) 55%, transparent); background: color-mix(in srgb, var(--h-rose, #fb7185) 12%, transparent); color: var(--h-rose, #fb7185); font-family: var(--mono); font-size: 0.78rem; }
+    .adv2-cvebar svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .adv2-cvebar span { color: var(--text); }
+    .adv2-cvebar-link { margin-left: auto; color: var(--h-rose, #fb7185); text-decoration: none; font-size: 0.72rem; }
+    .adv2-cvebar-link:hover { text-decoration: underline; }
+
+    /* colour-coded outcome badges (solid, dark text — matches the result boxes) */
+    .adv2-outcomes { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .adv2-outcome { font-family: var(--mono); font-size: 0.72rem; font-weight: 600; color: #0a0c10; background: var(--oc); border-radius: 7px; padding: 5px 11px; }
+    /* linked outcome -> clearly a button that jumps to its (same-colour) section */
+    button.adv2-outcome.linked { border: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: box-shadow 0.12s, transform 0.12s, filter 0.12s; box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+    button.adv2-outcome.linked::after { content: "\2192"; font-weight: 800; opacity: 0.85; }
+    button.adv2-outcome.linked:hover { filter: brightness(1.05); transform: translateY(-1px); box-shadow: 0 0 0 2px color-mix(in srgb, var(--oc) 55%, transparent); }
+    button.adv2-outcome.linked:active { transform: translateY(0); }
+    /* terminal outcome (no section to open) -> muted ghost tag, not a solid button */
+    .adv2-outcome.terminal { background: transparent; color: var(--muted); border: 1px dashed var(--border); font-weight: 500; }
+
+    /* nested branches */
+    .adv2-branches { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+    .adv2-branch { padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid color-mix(in srgb, var(--sc) 55%, var(--border)); border-radius: 8px; background: var(--surface); }
+    .adv2-branch.warn { border-left-color: var(--h-amber, #f59e0b); }
+    .adv2-branch.cve { border-left-color: var(--h-rose, #fb7185); }
+    .adv2-branch-l { font-family: var(--mono); font-size: 0.76rem; color: var(--text); font-weight: 600; margin: 0 0 6px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .adv2-warn { color: var(--h-amber, #f59e0b); }
+    .adv2-branch-cve { font-family: var(--mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.03em; color: var(--h-rose, #fb7185); border: 1px solid color-mix(in srgb, var(--h-rose, #fb7185) 55%, transparent); background: color-mix(in srgb, var(--h-rose, #fb7185) 12%, transparent); border-radius: 999px; padding: 1px 7px; }
+    .adv2-branch-note { color: var(--muted); font-size: 0.8rem; line-height: 1.45; margin: 0 0 7px; }
+    .adv2-branch .command-block { position: relative; margin: 5px 0 0; }
+    .adv2-branch pre { margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 34px 9px 11px; overflow-x: auto; }
+    .adv2-branch code { font-family: var(--mono); font-size: 0.76rem; color: var(--text); white-space: pre; display: block; }
+    .adv2-branch .cmd-comment { color: var(--muted); font-style: italic; opacity: 0.85; }
+    .adv2-branch .adv2-outcomes { margin-top: 9px; }
+
+    @media (max-width: 720px) {
+      .adv2-top { padding: 14px 0 4px; }
+      .adv2-hint { display: none; }
+      .adv2-sub { display: none; }
+      .adv2-count { display: none; }
+    }
