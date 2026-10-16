@@ -10200,6 +10200,218 @@ var TOOLKIT = [
     ]
   },
   {
+    "category": "Evasion & Obfuscation",
+    "tools": [
+      {
+        "id": "obfuscar",
+        "name": "Obfuscar",
+        "url": "https://github.com/obfuscar/obfuscar",
+        "description": "Minimalistic open-source (MIT) obfuscator for .NET assemblies — renames metadata and hides string literals in a compiled C#/VB/F# DLL or EXE.",
+        "brief": "Obfuscar is a small, open-source (MIT) obfuscator for .NET. It works on the *compiled* assembly — the IL and metadata in your C#/VB/F# .dll or .exe — not the source, so it slots in as a post-build step. It renames namespaces, types, methods, fields, properties and events to short, often unprintable names, hides string literals behind a runtime decryptor, and writes a mapping file so you can still read your own stack traces.\n\nIt is deliberately minimalistic: it does metadata renaming and string hiding well and leaves control-flow flattening and anti-debug tricks to heavier tools. By default it keeps the public API (so a library stays usable) and obfuscates everything non-public.\n\nScope: Obfuscar only understands managed .NET assemblies. Native C/C++ compiled to machine code has no .NET metadata to rename, so Obfuscar does not apply to it (see the note below). It is maintained by LeXtudio Inc. and ships as two NuGet packages: Obfuscar.GlobalTool (a dotnet global tool for modern .NET) and Obfuscar (for .NET Framework).",
+        "quickReference": [
+          {
+            "label": "Install as a .NET global tool",
+            "cmd": "dotnet tool install --global Obfuscar.GlobalTool"
+          },
+          {
+            "label": "Run against a project file",
+            "cmd": "obfuscar.console obfuscar.xml"
+          },
+          {
+            "label": "Minimal project file (paths must be absolute)",
+            "cmd": "<Obfuscator>\n  <Var name=\"InPath\"  value=\"C:\\src\\MyApp\\bin\\Release\\net8.0\" />\n  <Var name=\"OutPath\" value=\"C:\\src\\MyApp\\bin\\Obfuscated\" />\n  <Module file=\"C:\\src\\MyApp\\bin\\Release\\net8.0\\MyApp.dll\" />\n</Obfuscator>"
+          },
+          {
+            "label": "Detailed log of every rename",
+            "cmd": "obfuscar.console -v:d obfuscar.xml"
+          }
+        ],
+        "sections": [
+          {
+            "title": "How it works",
+            "type": "notes",
+            "items": [
+              "Obfuscar reads the compiled assembly's metadata and IL (via System.Reflection.Metadata / PEReader) — not your source. You build the project normally, then Obfuscar rewrites the output assembly into OutPath.",
+              "Renaming: namespaces, types, methods, fields, properties and events get new short names (reused across unrelated scopes when ReuseNames is on). Overloads, overrides and interface/virtual methods are kept consistent so the assembly still runs.",
+              "String hiding (HideStrings, on by default): string literals are moved into an encrypted blob and decrypted at runtime by an injected method, so you can't just pull secrets out of the binary with 'strings' or a decompiler's string view.",
+              "Public surface: KeepPublicApi (default true) leaves public types/members named so a library keeps its API; HidePrivateApi (default true) renames everything non-public. For a self-contained EXE where nothing external calls in, set KeepPublicApi=false to rename the public API too.",
+              "Extras: OptimizeMethods tidies the IL, SuppressIldasm injects SuppressIldasmAttribute, and a Mapping.txt (or Mapping.xml when XmlMapping=true) records every old → new name so you can de-obfuscate your own crash reports.",
+              "It is not a packer or a control-flow obfuscator — the logic is still there, just hard to read. Treat it as raising the cost of casual reverse engineering, not as a security boundary."
+            ]
+          },
+          {
+            "title": "Install",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Modern .NET (recommended) — global tool",
+                "cmd": "dotnet tool install --global Obfuscar.GlobalTool\n# installs the 'obfuscar.console' command on PATH\nobfuscar.console --version"
+              },
+              {
+                "label": "Local tool (pinned per-repo)",
+                "cmd": "dotnet new tool-manifest              # once per repo -> .config/dotnet-tools.json\ndotnet tool install Obfuscar.GlobalTool\ndotnet tool run obfuscar.console obfuscar.xml"
+              },
+              {
+                "label": ".NET Framework (classic package)",
+                "cmd": "# the 'Obfuscar' package ships Obfuscar.Console.exe under its tools folder\nnuget install Obfuscar              # or add a PackageReference to Obfuscar\npackages\\Obfuscar.<version>\\tools\\Obfuscar.Console.exe obfuscar.xml"
+              }
+            ]
+          },
+          {
+            "title": "Run it (CLI)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Usage",
+                "cmd": "obfuscar.console [options] <project_file> [project_file ...]\n#   -v:<level>, --verbosity:<level>   q(uiet) | m(inimal) | n(ormal) | d(etailed) | diag(nostic)\n#   -V, --version                     print version\n#   -h, --help                        show help"
+              },
+              {
+                "label": "Typical",
+                "cmd": "obfuscar.console obfuscar.xml           # obfuscate per the project file\nobfuscar.console -v:d obfuscar.xml      # detailed log of every rename"
+              }
+            ]
+          },
+          {
+            "title": "The project file (obfuscar.xml)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "A realistic config",
+                "cmd": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<Obfuscator>\n  <!-- In current Obfuscar these paths must be ABSOLUTE -->\n  <Var name=\"InPath\"  value=\"C:\\src\\MyApp\\bin\\Release\\net8.0\" />\n  <Var name=\"OutPath\" value=\"C:\\src\\MyApp\\bin\\Obfuscated\" />\n\n  <!-- global behaviour (values shown are the defaults unless noted) -->\n  <Var name=\"KeepPublicApi\"   value=\"false\" />   <!-- rename the public API too (good for an EXE) -->\n  <Var name=\"HidePrivateApi\"  value=\"true\" />\n  <Var name=\"HideStrings\"     value=\"true\" />\n  <Var name=\"RenameProperties\" value=\"true\" />\n  <Var name=\"RenameEvents\"     value=\"true\" />\n  <Var name=\"OptimizeMethods\"  value=\"true\" />\n  <Var name=\"SuppressIldasm\"   value=\"true\" />\n  <Var name=\"XmlMapping\"       value=\"false\" />  <!-- Mapping.txt vs Mapping.xml -->\n\n  <!-- the assembly to process (absolute path) -->\n  <Module file=\"C:\\src\\MyApp\\bin\\Release\\net8.0\\MyApp.dll\" />\n\n  <!-- keep names that reflection / serialization look up at runtime -->\n  <SkipNamespace name=\"MyApp.Models\" />\n  <SkipType name=\"MyApp.Plugins.IPlugin\" />\n  <SkipProperty type=\"MyApp.Config\" name=\"*\" />\n</Obfuscator>"
+              },
+              {
+                "label": "Common <Var> knobs and their defaults",
+                "cmd": "# InPath (.)   OutPath (.)   LogFile (\"\")\n# KeepPublicApi=true    HidePrivateApi=true\n# RenameFields=true  RenameProperties=true  RenameEvents=true\n# HideStrings=true   OptimizeMethods=true   SuppressIldasm=true\n# MarkedOnly=false   ReuseNames=true        XmlMapping=false\n# UseUnicodeNames=false  UseKoreanNames=false  RegenerateDebugInfo=false\n# InPath must exist; $(...) substitution and %ENV% expansion are NOT supported."
+              }
+            ]
+          },
+          {
+            "title": "Keeping code from breaking — exclusions",
+            "type": "table",
+            "columns": [
+              "Mechanism",
+              "Use it for"
+            ],
+            "rows": [
+              [
+                "<SkipNamespace name= />",
+                "Leave a whole namespace (DTOs, models) untouched. name= supports * glob; rx= takes a regex."
+              ],
+              [
+                "<SkipType name= />",
+                "Keep a specific type's name — reflection, DI registration, plugin contracts."
+              ],
+              [
+                "<SkipMethod type= name= />",
+                "Keep a method's name (serialization callbacks, handlers bound by name)."
+              ],
+              [
+                "<SkipProperty type= name= />",
+                "Keep property names — JSON/XML serialization, data binding."
+              ],
+              [
+                "<SkipField type= name= /> / <SkipEvent type= name= />",
+                "Keep a field or event by name."
+              ],
+              [
+                "<SkipStringHiding type= />",
+                "Don't encrypt string literals in this type (e.g. resource keys read at runtime)."
+              ],
+              [
+                "<ForceType name= />",
+                "Force a type to be processed that would otherwise be skipped."
+              ],
+              [
+                "[Obfuscation(Exclude = true)]",
+                "Attribute on a type/member to skip it; ApplyToMembers = true cascades to its members. (System.Reflection.ObfuscationAttribute — no extra reference needed.)"
+              ],
+              [
+                "MarkedOnly = true",
+                "Invert the model: obfuscate ONLY members marked with [Obfuscation], and leave everything else alone."
+              ]
+            ]
+          },
+          {
+            "title": "Use it on a C# project (after build)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Manual pipeline",
+                "cmd": "dotnet build -c Release\nobfuscar.console obfuscar.xml\n# ship bin\\Obfuscated\\MyApp.dll ; keep Mapping.txt privately to decode crash stacks"
+              },
+              {
+                "label": "Wire it as a post-build step in the .csproj",
+                "cmd": "<!-- runs obfuscar after every Release build of this project -->\n<Target Name=\"Obfuscate\" AfterTargets=\"Build\" Condition=\"'$(Configuration)' == 'Release'\">\n  <Exec Command=\"obfuscar.console obfuscar.xml\" WorkingDirectory=\"$(ProjectDir)\" />\n</Target>"
+              },
+              {
+                "label": "What you get",
+                "cmd": "# OutPath now holds the obfuscated MyApp.dll (+ any processed deps)\n# plus Mapping.txt  (old name -> new name, for your own debugging)"
+              }
+            ]
+          },
+          {
+            "title": "C and native code — what Obfuscar does NOT do",
+            "type": "notes",
+            "items": [
+              "Obfuscar is a .NET-only tool. It operates on managed assemblies — the IL and metadata emitted by the C#, VB.NET or F# compilers. There is nothing in it for native code.",
+              "C or C++ compiled to native machine code (a plain .exe/.dll with no CLR metadata) has no managed type/method names to rename, so Obfuscar cannot process it and rejects it as not a valid .NET assembly. Protecting native code needs a native obfuscator/packer — a different class of tool.",
+              "Mixed projects: if a .NET app P/Invokes a native C DLL, only the managed assembly is obfuscated; the native DLL is left as-is. P/Invoke keeps working — Obfuscar can rename the managed method, but the native entry point is named by the DllImport attribute, which is preserved.",
+              "So read the title's 'C#' as the real target. 'C' here is only to say explicitly: native C/C++ is out of scope for Obfuscar."
+            ]
+          },
+          {
+            "title": "Verify the result",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Smoke-test, then inspect in a decompiler",
+                "cmd": "dotnet bin\\Obfuscated\\MyApp.dll          # confirm the obfuscated build still runs\n# open the original and obfuscated DLL side by side in ILSpy / dnSpy:\n#   - private type/method names are now a, b, c... (or unprintable)\n#   - the Strings view is empty where HideStrings encrypted literals\n#   - Mapping.txt maps every old name -> new name"
+              }
+            ]
+          },
+          {
+            "title": "Notes & gotchas",
+            "type": "notes",
+            "items": [
+              "Reflection breaks silently: anything that resolves a type or member by string name (DI containers, JSON/XML serializers, XAML, Type.GetType, Activator.CreateInstance) must be excluded with a Skip rule or [Obfuscation(Exclude=true)], or it fails only at runtime.",
+              "Sign AFTER obfuscating: obfuscation rewrites the assembly, so strong-name or Authenticode signing must run on the obfuscated output — a signature applied before is invalidated.",
+              "Keep Mapping.txt private but safe: it de-obfuscates your own crash dumps. Ship the obfuscated DLL; archive the mapping somewhere only you can read.",
+              "Paths: $(...) variable substitution and %ENV% expansion are no longer supported, and relative paths are deprecated — use absolute paths in the config (InPath must exist).",
+              "It's obfuscation, not encryption: a determined analyst can still recover logic. Never rely on it to hide hard-coded secrets — don't ship secrets in the binary at all.",
+              "Run Obfuscar only on assemblies you trust — it parses PE/metadata with APIs that are not hardened against malicious input."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Obfuscar — GitHub (MIT)",
+                "url": "https://github.com/obfuscar/obfuscar"
+              },
+              {
+                "label": "Obfuscar — documentation",
+                "url": "https://docs.obfuscar.com/"
+              },
+              {
+                "label": "Obfuscar — official site",
+                "url": "https://www.obfuscar.com/"
+              },
+              {
+                "label": "Obfuscar.GlobalTool on NuGet",
+                "url": "https://www.nuget.org/packages/Obfuscar.GlobalTool/"
+              },
+              {
+                "label": "System.Reflection.ObfuscationAttribute (.NET docs)",
+                "url": "https://learn.microsoft.com/dotnet/api/system.reflection.obfuscationattribute"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
     category: "Phishing",
     tools: [
       {
