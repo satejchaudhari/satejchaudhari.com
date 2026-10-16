@@ -3656,103 +3656,269 @@ var TOOLKIT = [
         ]
       },
       {
-        id: "adaptix-c2",
-        name: "Adaptix C2",
-        url: "https://github.com/Adaptix-Framework/AdaptixC2",
-        description: "Open-source, extensible command-and-control framework for red team operations.",
-        brief: "Adaptix C2 is an open-source, extensible command-and-control framework built around a team server, configurable listeners, and generated agents (\"beacons\") that operators task from a shared console — a free alternative to commercial C2 platforms like Cobalt Strike.",
-        quickReference: [
-          { label: "Start the team server", cmd: "adaptixserver -profile profile.json" },
-          { label: "Connect as an operator", cmd: "adaptixclient --connect <server>:<port>" },
-          { label: "Add a listener", cmd: "Listeners > Add > choose HTTP/HTTPS/TCP" },
-          { label: "Generate an agent", cmd: "Build > Agent > select listener + output format" },
-          { label: "Task a beacon", cmd: "beacon> shell whoami" }
+        "id": "adaptix-c2",
+        "name": "Adaptix C2",
+        "url": "https://github.com/Adaptix-Framework/AdaptixC2",
+        "description": "Open-source, extensible post-exploitation and C2 framework — a Go team server with a cross-platform Qt client.",
+        "brief": "AdaptixC2 is an open-source command-and-control framework for authorised red teaming. The team server (adaptixserver) is written in Go; the GUI client (AdaptixClient) is C++/Qt6 and runs on Linux, Windows and macOS. Listeners and agents (\"beacons\") are plugins called extenders, loaded from a YAML profile. This guide builds both halves from source and runs them on a single host (client and server on the same box) — the normal production split is a hardened VPS for the team server with operators connecting remotely.\n\nThe defaults are lab defaults: the team server listens on 0.0.0.0:4321 with the password \"pass\". Change the password and bind locally before you expose anything.",
+        "quickReference": [
+          {
+            "label": "Install build deps (Linux, as root)",
+            "cmd": "sudo ./pre_install_linux_all.sh all"
+          },
+          {
+            "label": "Build server + client",
+            "cmd": "make server && make client   # artifacts in ./dist"
+          },
+          {
+            "label": "Generate the TLS cert (inside dist/)",
+            "cmd": "cd dist && bash ssl_gen.sh"
+          },
+          {
+            "label": "Start the team server",
+            "cmd": "./adaptixserver -profile profile.yaml"
+          },
+          {
+            "label": "Start the GUI client",
+            "cmd": "./AdaptixClient"
+          }
         ],
-        sections: [
+        "sections": [
           {
-            title: "Architecture",
-            type: "table",
-            columns: ["Component", "Description"],
-            rows: [
-              ["Team Server", "The central process agents call back to and operators connect to — holds all engagement state"],
-              ["Listener", "Defines how an agent communicates with the team server — HTTP(S), TCP, or SMB, each with its own config"],
-              ["Agent / Beacon", "The payload running on a compromised host, checking in on an interval defined at build/runtime"],
-              ["Operator", "A user connected to the team server with permission to view and task agents"],
-              ["Profile", "A config file (traffic shaping, ports, certs) the team server starts with"]
+            "title": "Architecture",
+            "type": "table",
+            "columns": [
+              "Component",
+              "What it is"
+            ],
+            "rows": [
+              [
+                "Team server (adaptixserver)",
+                "Go process holding all engagement state. Serves operators over TLS on the team-server port, and agents through listeners."
+              ],
+              [
+                "GUI client (AdaptixClient)",
+                "C++/Qt6 client that connects to the team server. Multiple operators can connect at once and share visibility."
+              ],
+              [
+                "Profile (profile.yaml)",
+                "The team server's config: bind interface, port, endpoint, operator auth, TLS cert/key, and which extenders to load."
+              ],
+              [
+                "Extender",
+                "Listeners and agents ship as plugins: Beacon listeners (HTTP/S, SMB, TCP, DNS/DoH), the Beacon agent, and the Gopher TCP/mTLS listener + agent."
+              ],
+              [
+                "Listener",
+                "Defines how agents reach the team server. Created and configured from the client once connected."
+              ],
+              [
+                "Agent / beacon",
+                "The payload on the target. Checks in on a sleep/jitter interval and is tasked from the operator console."
+              ]
             ]
           },
           {
-            title: "Listeners",
-            type: "table",
-            columns: ["Concept", "Description"],
-            rows: [
-              ["HTTP(S) listener", "Most common — blends with normal web traffic, supports custom headers/URIs for traffic shaping"],
-              ["TCP listener", "Used for peer-to-peer agent chaining/pivoting rather than direct external callbacks"],
-              ["Redirector", "A reverse proxy sitting in front of the listener so the team server's real address is never exposed directly"],
-              ["Traffic shaping", "Customizing headers, URIs, and response profiles so beacon traffic doesn't look default/templated"]
+            "title": "Install & build (Linux)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "1. Clone and install dependencies",
+                "cmd": "git clone https://github.com/Adaptix-Framework/AdaptixC2\ncd AdaptixC2\n# installs Go 1.25+, mingw-w64, Qt6, cmake, etc. (server | client | all)\nsudo ./pre_install_linux_all.sh all"
+              },
+              {
+                "label": "2. Build — everything lands in ./dist",
+                "cmd": "make server      # -> dist/adaptixserver  (+ ssl_gen.sh, profile.yaml, 404page.html)\nmake client      # -> dist/AdaptixClient   (use 'make client-fast' for a parallel build)\nmake extenders   # -> dist/extenders/*      (the listeners + agents)\n# or build all three at once:\nmake all"
+              },
+              {
+                "label": "Note on the Go fork",
+                "cmd": "# the pre-install script also fetches Adaptix's go-win7 fork, used to compile\n# the Gopher agent with Windows 7 support. A Docker build (make docker-build-all)\n# is available if you don't want to install the toolchains on the host."
+              }
             ]
           },
           {
-            title: "Payloads",
-            type: "table",
-            columns: ["Concept", "Description"],
-            rows: [
-              ["Output formats", "Agents can typically be generated as EXE, DLL, service binary, or raw shellcode depending on the delivery method"],
-              ["Staged vs. stageless", "Staged payloads pull the full agent after initial execution; stageless embed everything up front — tradeoff between initial payload size and callback footprint"],
-              ["Listener binding", "Each generated agent is tied to a specific listener at build time"],
-              ["Sleep / jitter", "Callback interval and randomization, configurable at build time and adjustable later from the beacon console"]
+            "title": "Create the team-server TLS certificate",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Use the shipped helper (inside dist/)",
+                "cmd": "cd dist\nbash ssl_gen.sh\n#   -> server.rsa.key  server.rsa.crt    (self-signed RSA-2048, valid 10 years)"
+              },
+              {
+                "label": "…or generate it manually (equivalent)",
+                "cmd": "openssl req -x509 -nodes -newkey rsa:2048 \\\n  -keyout server.rsa.key -out server.rsa.crt -days 3650 -subj \"/CN=localhost\""
+              },
+              {
+                "label": "Key point",
+                "cmd": "# the file names here must match the cert:/key: fields in profile.yaml.\n# ssl_gen.sh also documents an ECDSA option (secp384r1) if you prefer EC keys."
+              }
             ]
           },
           {
-            title: "Operators",
-            type: "table",
-            columns: ["Concept", "Description"],
-            rows: [
-              ["Multi-operator support", "Several operators can connect to the same team server at once, sharing visibility into agents and logs"],
-              ["Shared session log", "Tasking and output from any operator is visible to the rest of the team — useful for deconfliction on an engagement"]
+            "title": "The server profile (profile.yaml)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "The Teamserver block is what you edit to start",
+                "cmd": "Teamserver:\n  interface: \"0.0.0.0\"     # use 127.0.0.1 to bind local-only (client+server same host)\n  port: 4321               # team-server / operator port\n  endpoint: \"/endpoint\"    # client connects to https://<host>:4321/endpoint\n  password: \"pass\"         # CHANGE THIS — the shared team password\n  only_password: true      # true = password only;  false = use the operators map below\n  operators:\n    operator1: \"pass1\"     # per-operator creds (when only_password: false)\n  cert: \"server.rsa.crt\"   # must match the files generated above\n  key:  \"server.rsa.key\"\n  extenders:               # listeners + agents to load — keep the defaults\n    - \"extenders/beacon_listener_http/config.yaml\"\n    - \"extenders/beacon_agent/config.yaml\""
+              },
+              {
+                "label": "Before first run",
+                "cmd": "# change password from the default, and set interface to 127.0.0.1 for a\n# single-host lab. Port 4321 is the well-known default and is widely scanned."
+              }
             ]
           },
           {
-            title: "Beacons & Tasking",
-            type: "table",
-            columns: ["Command", "Description"],
-            rows: [
-              ["shell <cmd>", "Run a shell command on the compromised host"],
-              ["cd <path>", "Change the beacon's working directory"],
-              ["ls / dir", "List files in the current directory"],
-              ["download <path>", "Pull a file back to the team server"],
-              ["upload <local> <remote>", "Push a file to the compromised host"],
-              ["sleep <seconds> <jitter%>", "Adjust the beacon's check-in interval and jitter"],
-              ["exit", "Terminate the beacon"]
+            "title": "Start the team server",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Run it from dist/ (cert, profile and extenders are relative paths)",
+                "cmd": "cd dist\n./adaptixserver -profile profile.yaml       # add -debug for verbose logging\n# it binds the interface:port from the profile (default 0.0.0.0:4321) over TLS\n# and loads each extender listed in the profile."
+              }
             ]
           },
           {
-            title: "OPSEC Notes",
-            type: "table",
-            columns: ["Consideration", "Description"],
-            rows: [
-              ["Sleep & jitter", "Set both to something that resembles normal background traffic for the environment, not the defaults"],
-              ["Redirectors", "Never expose the team server directly — front every listener with a redirector"],
-              ["Payload variation", "Reuse of identical payload signatures across engagements is an easy detection/attribution vector"],
-              ["Cleanup", "Tear down listeners and remove agents at the end of an engagement — don't leave infrastructure live"]
+            "title": "Connect the client — same host",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Launch the GUI and fill in the connection dialog",
+                "cmd": "cd dist\n./AdaptixClient        # opens the Qt GUI; add a New Profile in the connect dialog:\n#   Project   any local name for this saved connection\n#   Host      127.0.0.1        (client and server on the same box)\n#   Port      4321             (the Teamserver port from the profile)\n#   Endpoint  /endpoint        (must match the profile)\n#   Username  any operator name (e.g. op1)\n#   Password  the Teamserver password (or an operator password)\n# Click Connect — the client talks to https://127.0.0.1:4321/endpoint."
+              },
+              {
+                "label": "Self-signed cert",
+                "cmd": "# the client accepts the self-signed cert for a local/lab setup; for real ops\n# use a proper domain + trusted cert and front the listener with a redirector."
+              }
             ]
           },
           {
-            title: "Common Workflows",
-            type: "commands",
-            commands: [
-              { label: "Stand up a listener and generate a payload", cmd: "# 1. Start the team server\nadaptixserver -profile profile.json\n# 2. Connect as an operator\nadaptixclient --connect <server>:<port>\n# 3. Listeners > Add > HTTP(S), configure host/URI\n# 4. Build > Agent > select the listener, choose output format\n# 5. Deliver the generated agent to the target" },
-              { label: "Task an active beacon", cmd: "# In the operator console:\n# 1. Select the checked-in beacon\n# 2. beacon> shell whoami\n# 3. beacon> ls\n# 4. beacon> download <interesting_file>" }
+            "title": "Operator usage — listener, agent, interact",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "1. Create a listener",
+                "cmd": "# In the client:  Listeners  ->  Create  ->  BeaconHTTP\n#   BindHost 0.0.0.0, BindPort 443 (or 80), and the Callback host/port the\n#   agent will reach. Other types: BeaconSMB, BeaconTCP, BeaconDNS, Gopher."
+              },
+              {
+                "label": "2. Generate an agent for that listener",
+                "cmd": "# Agents -> Generate :  pick the listener, agent = beacon, and an output format\n#   (exe / dll / service exe / raw shellcode). The agent is bound to that listener."
+              },
+              {
+                "label": "3. Run it on the target, then interact",
+                "cmd": "# execute the agent on the target host -> it checks in and appears in the Agents\n# table. Right-click the agent -> Console (Interact) to open its task console."
+              }
             ]
           },
           {
-            title: "Notes & Tips",
-            type: "notes",
-            items: [
-              "Use only against systems you own or are explicitly authorized to test as part of a scoped engagement.",
-              "Treat every generated agent like any other payload — build and test it in a controlled environment first.",
-              "Document and tear down all listener/redirector infrastructure at the end of an engagement.",
-              "Default sleep/jitter values are a starting point, not an OPSEC strategy — tune them to the environment."
+            "title": "Beacon console commands",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "sleep <sec> [jitter%]",
+                "Set the check-in interval and jitter"
+              ],
+              [
+                "shell <cmd>",
+                "Run a command via cmd.exe"
+              ],
+              [
+                "powershell <cmd>",
+                "Run a command via PowerShell"
+              ],
+              [
+                "run <prog> [args]",
+                "Execute a program directly (no shell)"
+              ],
+              [
+                "ls / cd / pwd / cat / cp / mv / mkdir / rm",
+                "Filesystem navigation and manipulation"
+              ],
+              [
+                "ps / disks / getuid",
+                "Process list, drives, current token/user"
+              ],
+              [
+                "upload <local> <remote> / download <remote>",
+                "Move files to and from the host"
+              ],
+              [
+                "bof <file.o> [args]",
+                "Run a Beacon Object File in-process"
+              ],
+              [
+                "socks <port> [auth]",
+                "Open a SOCKS proxy through the beacon"
+              ],
+              [
+                "rportfwd / lportfwd <...>",
+                "Reverse / local port forward"
+              ],
+              [
+                "link / unlink",
+                "Attach or detach SMB/TCP peer agents (pivoting)"
+              ],
+              [
+                "jobs",
+                "List and manage background jobs"
+              ],
+              [
+                "rev2self",
+                "Drop an impersonation token"
+              ],
+              [
+                "killdate / workingtime",
+                "Agent self-restrictions (expiry / active hours)"
+              ],
+              [
+                "exfil / profile / set",
+                "Configure exfil chunking and runtime beacon options"
+              ]
+            ]
+          },
+          {
+            "title": "OPSEC & lab notes",
+            "type": "notes",
+            "items": [
+              "Authorised testing only. Build and detonate agents in a controlled environment, and only against systems you own or are scoped to test.",
+              "Change the default team-server password before the first start — anyone who reaches port 4321 with the default password gets full control of your C2.",
+              "For a single-host lab, set interface to 127.0.0.1 so the team server is not exposed on the network.",
+              "The self-signed cert is fine locally; for real engagements use a proper domain and certificate and put a redirector in front of every listener so the team server is never exposed directly.",
+              "Tune sleep and jitter to the environment — the defaults are a starting point, not an OPSEC strategy — and tear listeners/agents down at the end of the engagement."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "AdaptixC2 — GitHub",
+                "url": "https://github.com/Adaptix-Framework/AdaptixC2"
+              },
+              {
+                "label": "AdaptixC2 — official documentation (GitBook)",
+                "url": "https://adaptix-framework.gitbook.io/adaptix-framework"
+              },
+              {
+                "label": "Extension-Kit (extra listeners, agents, BOFs)",
+                "url": "https://github.com/Adaptix-Framework/Extension-Kit"
+              },
+              {
+                "label": "Theory — Command & Control (C2) Frameworks",
+                "url": "theory/2026-09-23-command-and-control.html"
+              },
+              {
+                "label": "Theory — C2 Infrastructure & OPSEC",
+                "url": "theory/2026-10-09-c2-infrastructure-opsec.html"
+              },
+              {
+                "label": "Toolkit — Sliver",
+                "url": "tool-detail.html?tool=sliver"
+              }
             ]
           }
         ]
