@@ -3811,6 +3811,91 @@ var TOOLKIT = [
             ]
           },
           {
+            "title": "The client at a glance — panels & views",
+            "type": "table",
+            "columns": [
+              "Panel / view",
+              "What it gives you"
+            ],
+            "rows": [
+              [
+                "Sessions table",
+                "The live list of agents — check-in time, user, host, PID, process, OS, internal/external IP. Right-click to interact, task, or act on several at once; the health checker flags stale/lost agents."
+              ],
+              [
+                "Session graph",
+                "A visual map of agents and their links — SMB/TCP peer chains and pivots shown as a graph rather than a flat list."
+              ],
+              [
+                "Agent console",
+                "The per-agent task console where you type beacon commands; shows each queued task and its output."
+              ],
+              [
+                "Tasks & Jobs",
+                "Every task and long-running job across all agents, with status, output and which operator ran it — stored on the team server."
+              ],
+              [
+                "Listeners",
+                "Create, view and stop listeners (BeaconHTTP/S, SMB, TCP, DNS/DoH, Gopher)."
+              ],
+              [
+                "File browser",
+                "A graphical remote filesystem per agent — navigate, upload, download and delete without typing paths."
+              ],
+              [
+                "Process browser",
+                "A graphical process list per agent — inspect and kill processes, and pick injection targets."
+              ],
+              [
+                "Remote terminal",
+                "An interactive pty-style shell for an agent, separate from the task console."
+              ],
+              [
+                "Downloads",
+                "Manager for files pulled back from targets — track, re-sync and remove them."
+              ],
+              [
+                "Screenshots",
+                "Gallery of screenshots captured from agents."
+              ],
+              [
+                "Credentials",
+                "Central credentials manager — looted/collected creds stored on the server and shared across operators."
+              ],
+              [
+                "Targets",
+                "Targets manager — hosts in scope, annotated and tracked across the engagement."
+              ],
+              [
+                "Tunnels",
+                "SOCKS4/5 (with optional auth) proxies and local/reverse port-forwards set up through an agent, listed and managed in one place."
+              ],
+              [
+                "Chat",
+                "Team chat between operators on the same server — multiplayer deconfliction."
+              ],
+              [
+                "Logs",
+                "The server/operator event log."
+              ],
+              [
+                "AxScript console",
+                "The AxScript engine — extend and automate the client (custom commands, menus, UI, BOF wrappers), e.g. with the Extension-Kit."
+              ]
+            ]
+          },
+          {
+            "title": "Collaboration, pivoting & scripting",
+            "type": "notes",
+            "items": [
+              "Multiplayer: several operators connect to one team server and share sessions, tasks, downloads, credentials, targets, chat and logs in real time — the point of the server/client split.",
+              "Pivoting: route tooling through a beacon with socks (SOCKS4/5, optional auth) or rportfwd/lportfwd, all managed from the Tunnels panel; reach internal-only hosts by linking SMB/TCP peer agents (link/unlink), which then appear as edges in the session graph.",
+              "BOF support: run Beacon Object Files in-process (sync and async) with bof; the official Extension-Kit adds ready-made BOFs and command packs you load as extenders.",
+              "Scripting: the client is driven by the AxScript engine — add commands, menus and automation from the AxScript console, and auto-load .axs scripts via the axscripts list in profile.yaml.",
+              "Agent control: KillDate expires an agent after a date and WorkingTime limits it to set hours, so beacons stay quiet outside the engagement window."
+            ]
+          },
+          {
             "title": "Beacon console commands",
             "type": "table",
             "columns": [
