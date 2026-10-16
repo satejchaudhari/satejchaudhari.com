@@ -3896,73 +3896,257 @@ var TOOLKIT = [
             ]
           },
           {
-            "title": "Beacon console commands",
+            "title": "Beacon commands — files & navigation",
             "type": "table",
             "columns": [
-              "Command",
+              "Command (syntax)",
               "What it does"
             ],
             "rows": [
               [
-                "sleep <sec> [jitter%]",
-                "Set the check-in interval and jitter"
+                "pwd",
+                "Print the current working directory"
               ],
               [
+                "cd <path>",
+                "Change the working directory (e.g. cd C:\\Windows)"
+              ],
+              [
+                "ls [path]",
+                "List a directory or file details (default: current dir)"
+              ],
+              [
+                "cat <file>",
+                "Read the first 2048 bytes of a file"
+              ],
+              [
+                "cp <src> <dst>",
+                "Copy a file"
+              ],
+              [
+                "mv <src> <dst>",
+                "Move a file"
+              ],
+              [
+                "mkdir <path>",
+                "Create a directory"
+              ],
+              [
+                "rm <path>",
+                "Remove a file or folder"
+              ],
+              [
+                "disks",
+                "List mounted drives"
+              ],
+              [
+                "download <file>",
+                "Download a file from the host to the team server"
+              ],
+              [
+                "upload <local> <remote>",
+                "Upload a file to the host (upload /tmp/x.txt C:\\Temp\\x.txt)"
+              ],
+              [
+                "exfil list | stop | start | cancel <id>",
+                "Manage in-flight downloads (pause/resume/cancel)"
+              ]
+            ]
+          },
+          {
+            "title": "Beacon commands — execution & tokens",
+            "type": "table",
+            "columns": [
+              "Command (syntax)",
+              "What it does"
+            ],
+            "rows": [
+              [
                 "shell <cmd>",
-                "Run a command via cmd.exe"
+                "Run a command via cmd.exe (shell whoami /all)"
               ],
               [
                 "powershell <cmd>",
-                "Run a command via PowerShell"
+                "Run a command via powershell.exe"
               ],
               [
-                "run <prog> [args]",
-                "Execute a program directly (no shell)"
+                "run [-s] [-o] [-i] <prog> [args]",
+                "Start a NEW process — -s suspended, -o capture output, -i impersonate (run -s cmd.exe /c whoami)"
               ],
               [
-                "ls / cd / pwd / cat / cp / mv / mkdir / rm",
-                "Filesystem navigation and manipulation"
+                "execute bof [-a] <file.o> [args]",
+                "Run a Beacon Object File in-process; -a = async (execute bof /home/op/whoami.o)"
               ],
               [
-                "ps / disks / getuid",
-                "Process list, drives, current token/user"
+                "ps list",
+                "Show the process list"
               ],
               [
-                "upload <local> <remote> / download <remote>",
-                "Move files to and from the host"
+                "ps kill <pid>",
+                "Kill a process by PID"
               ],
               [
-                "bof <file.o> [args]",
-                "Run a Beacon Object File in-process"
-              ],
-              [
-                "socks <port> [auth]",
-                "Open a SOCKS proxy through the beacon"
-              ],
-              [
-                "rportfwd / lportfwd <...>",
-                "Reverse / local port forward"
-              ],
-              [
-                "link / unlink",
-                "Attach or detach SMB/TCP peer agents (pivoting)"
-              ],
-              [
-                "jobs",
-                "List and manage background jobs"
+                "getuid",
+                "Print the user of the current token"
               ],
               [
                 "rev2self",
-                "Drop an impersonation token"
-              ],
-              [
-                "killdate / workingtime",
-                "Agent self-restrictions (expiry / active hours)"
-              ],
-              [
-                "exfil / profile / set",
-                "Configure exfil chunking and runtime beacon options"
+                "Revert to the agent's original access token"
               ]
+            ]
+          },
+          {
+            "title": "Beacon commands — pivoting & tunnelling",
+            "type": "table",
+            "columns": [
+              "Command (syntax)",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "socks start <port> [-auth user pass]",
+                "Open a SOCKS4a/5 proxy through the agent (SOCKS5 auth optional)"
+              ],
+              [
+                "socks stop <port>",
+                "Stop a SOCKS proxy"
+              ],
+              [
+                "rportfwd start <port> <fwdhost> <fwdport>",
+                "Reverse port-forward: agent listens, relays via the server"
+              ],
+              [
+                "rportfwd stop <port>",
+                "Stop a reverse port-forward"
+              ],
+              [
+                "lportfwd start <lhost> <lport> <fwdhost> <fwdport>",
+                "Local port-forward: server listens, relays through the agent"
+              ],
+              [
+                "lportfwd stop <lport>",
+                "Stop a local port-forward"
+              ],
+              [
+                "link smb <host> <pipename>",
+                "Connect to / re-establish an SMB peer agent (link smb 192.168.1.2 pipe_a1b2)"
+              ],
+              [
+                "link tcp <host> <port>",
+                "Connect to / re-establish a TCP peer agent"
+              ],
+              [
+                "unlink <id>",
+                "Disconnect a linked peer agent"
+              ]
+            ]
+          },
+          {
+            "title": "Beacon commands — session, jobs & profile",
+            "type": "table",
+            "columns": [
+              "Command (syntax)",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "sleep <time> [jitter%]",
+                "Set check-in interval and jitter (sleep 30m5s 10 = 30m5s ± 10%)"
+              ],
+              [
+                "interact",
+                "Shortcut for sleep 0 — go fully interactive"
+              ],
+              [
+                "jobs list",
+                "List long-running / background jobs"
+              ],
+              [
+                "jobs kill <id>",
+                "Kill a background job"
+              ],
+              [
+                "terminate thread | process",
+                "Stop the beacon thread (leave process) or kill the process"
+              ],
+              [
+                "profile killdate <DD.MM.YYYY hh:mm:ss>",
+                "Auto-stop the beacon at a date/time (GMT; 0 disables)"
+              ],
+              [
+                "profile workingtime <HH:mm-HH:mm>",
+                "Restrict the beacon to active hours (0 disables)"
+              ],
+              [
+                "profile download.chunksize <bytes>",
+                "Set the exfil chunk size for downloads (default 128000)"
+              ],
+              [
+                "burst set <...> | burst show",
+                "DNS burst-mode tuning (DNS listener only)"
+              ]
+            ]
+          },
+          {
+            "title": "BOFs & extensions — the model",
+            "type": "table",
+            "columns": [
+              "Type",
+              "What it is and how it loads"
+            ],
+            "rows": [
+              [
+                "Extender",
+                "A SERVER-side plugin for a listener or an agent (BeaconHTTP, the Beacon agent, Gopher…). Loaded by the extenders: list in profile.yaml when the team server starts."
+              ],
+              [
+                "AxScript extension (.axs)",
+                "A CLIENT-side script that adds commands, menus, dialogs and BOF wrappers through the ax.* API. Loaded from the client (Extender panel) or auto-loaded via axscripts: in profile.yaml."
+              ],
+              [
+                "BOF (Beacon Object File)",
+                "A small COFF .o object compiled from C and run in-process by the agent via 'execute bof'. Normally wrapped by an AxScript command that packs its arguments."
+              ],
+              [
+                "Extension-Kit",
+                "The official pack of AxScript extensions + BOFs (AD, Creds, Elevation, Execution, Injection, Lateral Movement, Postex, Process…), pulled in by one top-level extension-kit.axs."
+              ]
+            ]
+          },
+          {
+            "title": "Load an extension in the client",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Option 1 — load at runtime from the client",
+                "cmd": "# clone the official kit (or your own scripts)\ngit clone https://github.com/Adaptix-Framework/Extension-Kit\n# In the client:  Extender panel  ->  Load  ->  select the .axs\n#   load Extension-Kit/extension-kit.axs to pull in every module at once.\n# New commands appear in the beacon console and right-click menus immediately."
+              },
+              {
+                "label": "Option 2 — auto-load at team-server start",
+                "cmd": "# list scripts under axscripts: in profile.yaml so every operator gets them:\nTeamserver:\n  axscripts:\n    - \"Extension-Kit/extension-kit.axs\""
+              },
+              {
+                "label": "How a loader .axs chains its modules",
+                "cmd": "// a top-level loader just script_loads each sub-extension, relative to itself:\nvar path = ax.script_dir();\nax.script_load(path + \"Elevation-BOF/elevate.axs\");\nax.script_load(path + \"Creds-BOF/creds.axs\");"
+              }
+            ]
+          },
+          {
+            "title": "Example — add your own BOF-backed command",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "1. Build the BOF (a COFF .o from C, both arches)",
+                "cmd": "# BOFs are object files compiled with mingw — build x64 and x86:\nx86_64-w64-mingw32-gcc -c whoami.c -o _bin/whoami.x64.o\ni686-w64-mingw32-gcc   -c whoami.c -o _bin/whoami.x86.o\n# (the Extension-Kit uses a Makefile/CMake per folder to do this.)"
+              },
+              {
+                "label": "2. Wrap it in an AxScript command (myext.axs)",
+                "cmd": "var metadata = { name: \"MyExt\", description: \"example BOF command\" };\n\n// define the command and its help/example\nvar cmd = ax.create_command(\"whoami-bof\", \"Run whoami via a BOF\", \"whoami-bof\");\n\n// the pre-hook runs when the operator types the command\ncmd.setPreHook(function (id, cmdline, parsed_json, ...parsed_lines) {\n    // pick the object file matching the agent's architecture\n    let bof = ax.script_dir() + \"_bin/whoami.\" + ax.arch(id) + \".o\";\n    // pack BOF arguments; types = cstr | wstr | int | short | bytes\n    let args = ax.bof_pack(\"cstr int\", [\"example\", 1337]);\n    // queue it on the agent as an 'execute bof' task\n    ax.execute_alias(id, cmdline, `execute bof \"${bof}\" ${args}`, \"Task: whoami (BOF)\");\n});\n\n// bind the command to the beacon agent, Windows only\nvar group = ax.create_commands_group(\"MyExt\", [cmd]);\nax.register_commands_group(group, [\"beacon\"], [\"windows\"], []);"
+              },
+              {
+                "label": "3. Load myext.axs in the client",
+                "cmd": "# Extender panel -> Load -> myext.axs\n# 'whoami-bof' is now available in the beacon console; running it compiles the\n# args with bof_pack and tasks the agent with: execute bof \"..._bin/whoami.x64.o\" <packed>"
+              }
             ]
           },
           {
