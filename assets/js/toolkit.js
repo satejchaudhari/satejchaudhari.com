@@ -4370,6 +4370,24 @@ var TOOLKIT = [
             ]
           },
           {
+            "title": "Obfuscating .NET post-ex tooling (Obfuscar)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Context",
+                "cmd": "# execute-assembly (Extension-Kit, Execution-BOF) runs a .NET assembly inside\n# the agent's process:   execute-assembly [--async] <assembly.exe> [args]\n# C# tools (Seatbelt, Rubeus, SharpHound) are .NET assemblies, so they can be\n# obfuscated at BUILD TIME with Obfuscar before they are loaded."
+              },
+              {
+                "label": "Obfuscate, then run (authorised testing)",
+                "cmd": "obfuscar.console tool-obfuscar.xml        # build-time: rename + hide strings\nexecute-assembly /opt/tools/Seatbelt.exe -group=user   # in the beacon console"
+              },
+              {
+                "label": "What it does and does not change",
+                "cmd": "# changes STATIC indicators only (symbol names, string literals) and hampers\n# reverse engineering of a recovered sample. It does NOT bypass AMSI (the CLR\n# is hosted in-process and the assembly bytes are still scanned) or behavioural\n# EDR. Test the obfuscated build with real args first — reflection-bound tools\n# can break under renaming. See the Obfuscar toolkit entry for the workflow."
+              }
+            ]
+          },
+          {
             "title": "Troubleshooting & gotchas",
             "type": "table",
             "columns": [
@@ -4495,6 +4513,10 @@ var TOOLKIT = [
               {
                 "label": "Toolkit — Sliver",
                 "url": "tool-detail.html?tool=sliver"
+              },
+              {
+                "label": "Toolkit — Obfuscar (obfuscate .NET post-ex tooling)",
+                "url": "tool-detail.html?tool=obfuscar"
               }
             ]
           }
@@ -10225,7 +10247,7 @@ var TOOLKIT = [
             "items": [
               "Obfuscar reads the compiled assembly's metadata and IL (via System.Reflection.Metadata / PEReader) — not your source. You build the project normally, then Obfuscar rewrites the output assembly into OutPath.",
               "Renaming: namespaces, types, methods, fields, properties and events get new short names (reused across unrelated scopes when ReuseNames is on). Overloads, overrides and interface/virtual methods are kept consistent so the assembly still runs.",
-              "String hiding (HideStrings, on by default): string literals are moved into an encrypted blob and decrypted at runtime by an injected method, so you can't just pull secrets out of the binary with 'strings' or a decompiler's string view.",
+              "String hiding (HideStrings, on by default): string literals are moved into an encrypted blob and decrypted at runtime by an injected method, so you can't just pull text out of the binary with 'strings' or a decompiler's string view.",
               "Public surface: KeepPublicApi (default true) leaves public types/members named so a library keeps its API; HidePrivateApi (default true) renames everything non-public. For a self-contained EXE where nothing external calls in, set KeepPublicApi=false to rename the public API too.",
               "Extras: OptimizeMethods tidies the IL, SuppressIldasm injects SuppressIldasmAttribute, and a Mapping.txt (or Mapping.xml when XmlMapping=true) records every old → new name so you can de-obfuscate your own crash reports.",
               "It is not a packer or a control-flow obfuscator — the logic is still there, just hard to read. Treat it as raising the cost of casual reverse engineering, not as a security boundary."
@@ -10269,12 +10291,138 @@ var TOOLKIT = [
             "commands": [
               {
                 "label": "A realistic config",
-                "cmd": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<Obfuscator>\n  <!-- In current Obfuscar these paths must be ABSOLUTE -->\n  <Var name=\"InPath\"  value=\"C:\\src\\MyApp\\bin\\Release\\net8.0\" />\n  <Var name=\"OutPath\" value=\"C:\\src\\MyApp\\bin\\Obfuscated\" />\n\n  <!-- global behaviour (values shown are the defaults unless noted) -->\n  <Var name=\"KeepPublicApi\"   value=\"false\" />   <!-- rename the public API too (good for an EXE) -->\n  <Var name=\"HidePrivateApi\"  value=\"true\" />\n  <Var name=\"HideStrings\"     value=\"true\" />\n  <Var name=\"RenameProperties\" value=\"true\" />\n  <Var name=\"RenameEvents\"     value=\"true\" />\n  <Var name=\"OptimizeMethods\"  value=\"true\" />\n  <Var name=\"SuppressIldasm\"   value=\"true\" />\n  <Var name=\"XmlMapping\"       value=\"false\" />  <!-- Mapping.txt vs Mapping.xml -->\n\n  <!-- the assembly to process (absolute path) -->\n  <Module file=\"C:\\src\\MyApp\\bin\\Release\\net8.0\\MyApp.dll\" />\n\n  <!-- keep names that reflection / serialization look up at runtime -->\n  <SkipNamespace name=\"MyApp.Models\" />\n  <SkipType name=\"MyApp.Plugins.IPlugin\" />\n  <SkipProperty type=\"MyApp.Config\" name=\"*\" />\n</Obfuscator>"
+                "cmd": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<Obfuscator>\n  <!-- In current Obfuscar these paths must be ABSOLUTE -->\n  <Var name=\"InPath\"  value=\"C:\\src\\MyApp\\bin\\Release\\net8.0\" />\n  <Var name=\"OutPath\" value=\"C:\\src\\MyApp\\bin\\Obfuscated\" />\n\n  <!-- global behaviour (values shown are the defaults unless noted) -->\n  <Var name=\"KeepPublicApi\"   value=\"false\" />   <!-- rename the public API too (good for an EXE) -->\n  <Var name=\"HidePrivateApi\"  value=\"true\" />\n  <Var name=\"HideStrings\"     value=\"true\" />\n  <Var name=\"RenameProperties\" value=\"true\" />\n  <Var name=\"RenameEvents\"     value=\"true\" />\n  <Var name=\"OptimizeMethods\"  value=\"true\" />\n  <Var name=\"SuppressIldasm\"   value=\"true\" />\n  <Var name=\"XmlMapping\"       value=\"false\" />  <!-- Mapping.txt vs Mapping.xml -->\n\n  <!-- resolve dependencies from here if they are not beside the module -->\n  <AssemblySearchPath path=\"C:\\src\\MyApp\\bin\\Release\\net8.0\" />\n\n  <!-- the assembly to process (absolute path) -->\n  <Module file=\"C:\\src\\MyApp\\bin\\Release\\net8.0\\MyApp.dll\" />\n\n  <!-- keep names that reflection / serialization look up at runtime -->\n  <SkipNamespace name=\"MyApp.Models\" />\n  <SkipType name=\"MyApp.Plugins.IPlugin\" />\n  <SkipProperty type=\"MyApp.Config\" name=\"*\" />\n</Obfuscator>"
               },
               {
-                "label": "Common <Var> knobs and their defaults",
-                "cmd": "# InPath (.)   OutPath (.)   LogFile (\"\")\n# KeepPublicApi=true    HidePrivateApi=true\n# RenameFields=true  RenameProperties=true  RenameEvents=true\n# HideStrings=true   OptimizeMethods=true   SuppressIldasm=true\n# MarkedOnly=false   ReuseNames=true        XmlMapping=false\n# UseUnicodeNames=false  UseKoreanNames=false  RegenerateDebugInfo=false\n# InPath must exist; $(...) substitution and %ENV% expansion are NOT supported."
+                "label": "Top-level elements",
+                "cmd": "# <Var name= value= />        a setting (see the configuration reference below)\n# <Module file= />            an assembly to obfuscate (absolute path; repeatable)\n# <AssemblySearchPath path= />  extra folder(s) to resolve referenced assemblies\n# <Include path= />           pull in another .xml config fragment (absolute path)\n# <Skip* ... /> / <ForceType>   exclusion / inclusion rules (see exclusions table)"
               }
+            ]
+          },
+          {
+            "title": "Configuration reference — every setting",
+            "type": "table",
+            "columns": [
+              "<Var> name",
+              "Default",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "InPath",
+                ".",
+                "Folder holding the built assemblies; must exist. Obfuscar reads inputs and resolves dependencies from here."
+              ],
+              [
+                "OutPath",
+                ".",
+                "Folder for the obfuscated output and the Mapping file."
+              ],
+              [
+                "LogFile",
+                "(empty)",
+                "Write the obfuscation log to this file as well as the console."
+              ],
+              [
+                "KeepPublicApi",
+                "true",
+                "Leave public types/members named (library-safe). Set false to rename the public API too (self-contained EXE)."
+              ],
+              [
+                "HidePrivateApi",
+                "true",
+                "Rename non-public types/members."
+              ],
+              [
+                "RenameFields",
+                "true",
+                "Rename fields."
+              ],
+              [
+                "RenameProperties",
+                "true",
+                "Rename properties."
+              ],
+              [
+                "KeepProperties",
+                "false",
+                "Keep property names even when renaming is on (overrides RenameProperties) — useful for binding/serialization."
+              ],
+              [
+                "RenameEvents",
+                "true",
+                "Rename events."
+              ],
+              [
+                "HideStrings",
+                "true",
+                "Move string literals into an encrypted blob, decrypted at runtime by an injected method."
+              ],
+              [
+                "OptimizeMethods",
+                "true",
+                "Run an IL optimisation pass on obfuscated methods."
+              ],
+              [
+                "SuppressIldasm",
+                "true",
+                "Add SuppressIldasmAttribute to deter ildasm.exe."
+              ],
+              [
+                "ReuseNames",
+                "true",
+                "Reuse the same short names across unrelated scopes (smaller output, more confusing to read)."
+              ],
+              [
+                "UseUnicodeNames",
+                "false",
+                "Use unprintable Unicode characters for new names."
+              ],
+              [
+                "UseKoreanNames",
+                "false",
+                "Use Korean glyphs for new names."
+              ],
+              [
+                "CustomChars",
+                "(empty)",
+                "Supply your own character set to draw new names from."
+              ],
+              [
+                "MarkedOnly",
+                "false",
+                "Invert the model: obfuscate ONLY members marked with [Obfuscation], leave everything else."
+              ],
+              [
+                "XmlMapping",
+                "false",
+                "Write the name map as Mapping.xml instead of Mapping.txt."
+              ],
+              [
+                "RegenerateDebugInfo",
+                "false",
+                "Regenerate PDB debug symbols for the obfuscated output."
+              ],
+              [
+                "AnalyzeXaml",
+                "false",
+                "Scan XAML (WPF) and avoid renaming members it references by name."
+              ],
+              [
+                "SkipGenerated",
+                "false",
+                "Skip compiler-generated members."
+              ],
+              [
+                "SkipSpecialName",
+                "false",
+                "Skip special-name members (e.g. property/event accessors, operators)."
+              ],
+              [
+                "CustomAttributesToPreservePropertyNames",
+                "(empty)",
+                "Attributes whose decorated properties keep their names (e.g. serializer attributes)."
+              ]
             ]
           },
           {
@@ -10310,8 +10458,16 @@ var TOOLKIT = [
                 "Don't encrypt string literals in this type (e.g. resource keys read at runtime)."
               ],
               [
+                "attrib= / typeattrib= / inherits= / static=",
+                "Narrow any Skip rule by visibility (public/private/...), declaring-type visibility, base type, or static-ness."
+              ],
+              [
                 "<ForceType name= />",
-                "Force a type to be processed that would otherwise be skipped."
+                "Force a type to be processed that a broader rule would otherwise skip."
+              ],
+              [
+                "<AssemblySearchPath path= /> / <Include path= />",
+                "Resolve dependencies from extra folders; pull in a shared config fragment (both absolute paths)."
               ],
               [
                 "[Obfuscation(Exclude = true)]",
@@ -10321,6 +10477,20 @@ var TOOLKIT = [
                 "MarkedOnly = true",
                 "Invert the model: obfuscate ONLY members marked with [Obfuscation], and leave everything else alone."
               ]
+            ]
+          },
+          {
+            "title": "Marking code with attributes",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Exclude from the source with the standard .NET attribute",
+                "cmd": "using System.Reflection;\n\n// keep this type AND all its members (reflection / plugin contract)\n[Obfuscation(Exclude = true, ApplyToMembers = true)]\npublic class PluginContract { /* ... */ }\n\n// keep a single member (ApplyToMembers is irrelevant on a member)\n[Obfuscation(Exclude = true)]\npublic string ConfigKey { get; set; }\n\n// note: a bare [Obfuscation] defaults to Exclude = true, i.e. it excludes."
+              },
+              {
+                "label": "MarkedOnly mode — opt-in instead of opt-out",
+                "cmd": "<!-- in obfuscar.xml -->\n<Var name=\"MarkedOnly\" value=\"true\" />\n\n// now ONLY members you explicitly mark for renaming are touched:\n[Obfuscation(Exclude = false, ApplyToMembers = true)]\ninternal class SecretBits { /* renamed */ }\n// everything without an [Obfuscation(Exclude=false)] is left as-is."
+              }
             ]
           },
           {
@@ -10339,6 +10509,34 @@ var TOOLKIT = [
                 "label": "What you get",
                 "cmd": "# OutPath now holds the obfuscated MyApp.dll (+ any processed deps)\n# plus Mapping.txt  (old name -> new name, for your own debugging)"
               }
+            ]
+          },
+          {
+            "title": "Using Obfuscar with AdaptixC2",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Why the two meet",
+                "cmd": "# AdaptixC2 agents can run a .NET assembly in memory via the Extension-Kit's\n# Execution-BOF:   execute-assembly [--async] <assembly.exe> [args]\n# Many C# post-ex tools (Seatbelt, Rubeus, SharpHound, Certify) and in-house\n# tooling are ordinary .NET assemblies, so the SAME build-time obfuscation\n# above applies to a red-team tool exactly as it does to a product."
+              },
+              {
+                "label": "Obfuscate the tool, then load it (authorised testing)",
+                "cmd": "# 1. build the C# tool, then run Obfuscar over its output assembly\nobfuscar.console tool-obfuscar.xml      # -> bin\\Obfuscated\\Seatbelt.exe\n\n# 2. in the AdaptixC2 beacon console, run the obfuscated build in-process\nexecute-assembly /opt/tools/Seatbelt.exe -group=user"
+              },
+              {
+                "label": "Build caveats that bite here",
+                "cmd": "# - TEST the obfuscated build with its real arguments first.\n# - Tools that map CLI options to field/property names by reflection, or use\n#   reflection internally, can break under RenameFields/RenameProperties —\n#   exclude those with a Skip rule or [Obfuscation(Exclude=true)].\n# - The entry point still works: execute-assembly invokes the assembly's\n#   EntryPoint token, which Obfuscar updates when it renames."
+              }
+            ]
+          },
+          {
+            "title": "What obfuscation does and does not change",
+            "type": "notes",
+            "items": [
+              "It changes static indicators: renaming removes meaningful symbol names, and HideStrings removes readable string literals — so signatures keyed on those no longer match, and a recovered sample is harder to read.",
+              "It does NOT bypass AMSI or behavioural EDR. With AdaptixC2's execute-assembly the CLR is loaded in-process and AMSI still scans the assembly bytes; run-time behaviour (API calls, child processes, network) is unchanged. Obfuscar is one layer, not an evasion tool.",
+              "Defender's view: the HideStrings decryptor stub and Obfuscar's naming scheme are themselves fingerprintable, and the higher-signal detections are in-process CLR load (clr.dll/clrjit.dll appearing in a non-.NET process) and the AMSI assembly scan — hunt those rather than the tool's original strings.",
+              "See the AdaptixC2 toolkit entry for execute-assembly and the Extension-Kit."
             ]
           },
           {
@@ -10362,13 +10560,47 @@ var TOOLKIT = [
             ]
           },
           {
+            "title": "Troubleshooting",
+            "type": "table",
+            "columns": [
+              "Symptom",
+              "Cause / fix"
+            ],
+            "rows": [
+              [
+                "\"Path specified by InPath variable must exist\"",
+                "Point InPath at the real build output folder, as an absolute path; build the project first."
+              ],
+              [
+                "\"Module file attribute must be an absolute path\"",
+                "Use absolute paths. $(...) substitution and %ENV% expansion were removed; relative paths are deprecated."
+              ],
+              [
+                "Tool works before obfuscation but not after",
+                "Reflection resolved a renamed name. Exclude the reflected types/members with a Skip rule or [Obfuscation(Exclude=true)], or keep that assembly's public API."
+              ],
+              [
+                "MissingMethod/MissingField at runtime",
+                "A member referenced by string name was renamed — add it to the exclusions; test with the real inputs."
+              ],
+              [
+                "Invalid strong-name / Authenticode signature",
+                "Sign AFTER obfuscating — obfuscation rewrites the assembly and invalidates an earlier signature."
+              ],
+              [
+                "WPF: resource or binding not found",
+                "Enable AnalyzeXaml and/or Skip the types the XAML references by name."
+              ]
+            ]
+          },
+          {
             "title": "Notes & gotchas",
             "type": "notes",
             "items": [
-              "Reflection breaks silently: anything that resolves a type or member by string name (DI containers, JSON/XML serializers, XAML, Type.GetType, Activator.CreateInstance) must be excluded with a Skip rule or [Obfuscation(Exclude=true)], or it fails only at runtime.",
-              "Sign AFTER obfuscating: obfuscation rewrites the assembly, so strong-name or Authenticode signing must run on the obfuscated output — a signature applied before is invalidated.",
+              "Reflection breaks silently: anything that resolves a type or member by string name (DI containers, JSON/XML serializers, XAML, Type.GetType, Activator.CreateInstance) must be excluded, or it fails only at runtime.",
+              "Sign AFTER obfuscating: obfuscation rewrites the assembly, so strong-name or Authenticode signing must run on the obfuscated output.",
               "Keep Mapping.txt private but safe: it de-obfuscates your own crash dumps. Ship the obfuscated DLL; archive the mapping somewhere only you can read.",
-              "Paths: $(...) variable substitution and %ENV% expansion are no longer supported, and relative paths are deprecated — use absolute paths in the config (InPath must exist).",
+              "Paths: $(...) variable substitution and %ENV% expansion are no longer supported, and relative paths are deprecated — use absolute paths (InPath must exist).",
               "It's obfuscation, not encryption: a determined analyst can still recover logic. Never rely on it to hide hard-coded secrets — don't ship secrets in the binary at all.",
               "Run Obfuscar only on assemblies you trust — it parses PE/metadata with APIs that are not hardened against malicious input."
             ]
@@ -10396,6 +10628,10 @@ var TOOLKIT = [
               {
                 "label": "System.Reflection.ObfuscationAttribute (.NET docs)",
                 "url": "https://learn.microsoft.com/dotnet/api/system.reflection.obfuscationattribute"
+              },
+              {
+                "label": "Toolkit — AdaptixC2 (execute-assembly / Extension-Kit)",
+                "url": "tool-detail.html?tool=adaptix-c2"
               }
             ]
           }
