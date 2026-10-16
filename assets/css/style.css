@@ -1568,7 +1568,11 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
   margin-top: 2px;
 }
 
-/* inline-SVG diagrams in tool/vuln detail pages (type:"figure") */
+/* inline-SVG diagrams and screenshots in tool/vuln detail pages (type:"figure") */
 .detail-figure { margin: 18px 0; padding: 0; text-align: center; }
 .detail-figure svg { max-width: 100%; height: auto; }
+.detail-figimg { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; display: block; margin: 0 auto; }
 .detail-figcap { margin-top: 10px; color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+.detail-figcredit { display: inline-block; font-size: 0.78rem; opacity: 0.8; }
+.detail-figcredit::before { content: "— "; }
+.detail-figcredit a { color: var(--muted); text-decoration: underline; }

@@ -3823,6 +3823,12 @@ var TOOLKIT = [
             ]
           },
           {
+            "title": "The connection dialog",
+            "type": "figure",
+            "caption": "AdaptixClient's new-connection dialog. The six fields map onto the profile: Host/Port are the Teamserver interface:port (4321), Endpoint must equal the profile's endpoint (/endpoint), and Username/Password are an operator name plus the Teamserver (or per-operator) password.",
+            "svg": "<svg id='axcon' viewBox='0 0 470 372' xmlns='http://www.w3.org/2000/svg' role='img' aria-label='AdaptixClient connection dialog mockup with fields Project, Host, Port, Endpoint, Username and Password, and Connect and Cancel buttons.'><defs><clipPath id='axconclip'><rect x='8' y='8' width='454' height='356' rx='8'/></clipPath><style>#axcon .lab{fill:#9a9cb0;font-family:Inter,Segoe UI,sans-serif;font-size:12.5px}#axcon .val{fill:#d6d7e0;font-family:'JetBrains Mono',monospace;font-size:12px}#axcon .in{fill:#23242f;stroke:#3b3d4e;stroke-width:1}#axcon .bt{font-family:Inter,Segoe UI,sans-serif;font-size:12.5px;font-weight:600}</style></defs><g clip-path='url(#axconclip)'><rect x='8' y='8' width='454' height='356' fill='#1e1f29'/><rect x='8' y='8' width='454' height='32' fill='#2a2b38'/><text x='24' y='29' fill='#d6d7e0' font-family='Inter,Segoe UI,sans-serif' font-size='13' font-weight='600'>New connection &#8212; Teamserver profile</text><circle cx='446' cy='24' r='5' fill='#d9933f'/><text x='28' y='78' class='lab'>Project</text><rect class='in' x='150' y='63' width='292' height='26' rx='4'/><text x='160' y='80' class='val'>MyLab</text><text x='28' y='114' class='lab'>Host</text><rect class='in' x='150' y='99' width='292' height='26' rx='4'/><text x='160' y='116' class='val'>127.0.0.1</text><text x='28' y='150' class='lab'>Port</text><rect class='in' x='150' y='135' width='292' height='26' rx='4'/><text x='160' y='152' class='val'>4321</text><text x='28' y='186' class='lab'>Endpoint</text><rect class='in' x='150' y='171' width='292' height='26' rx='4'/><text x='160' y='188' class='val'>/endpoint</text><text x='28' y='222' class='lab'>Username</text><rect class='in' x='150' y='207' width='292' height='26' rx='4'/><text x='160' y='224' class='val'>op1</text><text x='28' y='258' class='lab'>Password</text><rect class='in' x='150' y='243' width='292' height='26' rx='4'/><text x='160' y='261' class='val'>&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</text><rect x='232' y='312' width='100' height='32' rx='5' fill='#2a2b38' stroke='#3b3d4e'/><text x='282' y='333' text-anchor='middle' class='bt' fill='#d6d7e0'>Cancel</text><rect x='342' y='312' width='100' height='32' rx='5' fill='#3d7dfd'/><text x='392' y='333' text-anchor='middle' class='bt' fill='#ffffff'>Connect</text></g><rect x='8' y='8' width='454' height='356' rx='8' fill='none' stroke='#3b3d4e' stroke-width='1.5'/></svg>"
+          },
+          {
             "title": "Operator usage — listener, agent, interact",
             "type": "commands",
             "commands": [
@@ -3841,6 +3847,18 @@ var TOOLKIT = [
             ]
           },
           {
+            "title": "New listener — BeaconHTTP (Main settings)",
+            "type": "figure",
+            "caption": "The BeaconHTTP listener editor, Main-settings tab, with the shipped defaults: bind port 443, method POST, the three default URIs, the Firefox/20 User-Agent, the X-Beacon-Id heartbeat header and a random 32-hex encryption key. The HTTP Headers, Page Error and Page Payload tabs shape the rest of the response. Change every default before you expose a listener — each is a published IOC.",
+            "svg": "<svg id='axlis' viewBox='0 0 644 578' xmlns='http://www.w3.org/2000/svg' role='img' aria-label='AdaptixClient Create Listener dialog mockup for BeaconHTTP, showing the Main settings tab: Host and port bind, Callback addresses, Method, URIs, User-Agents, Heartbeat Header, Encryption key and a Use SSL option.'><defs><clipPath id='axlisclip'><rect x='8' y='8' width='628' height='562' rx='8'/></clipPath><style>#axlis .lab{fill:#9a9cb0;font-family:Inter,Segoe UI,sans-serif;font-size:12px}#axlis .val{fill:#d6d7e0;font-family:'JetBrains Mono',monospace;font-size:11.5px}#axlis .mut{fill:#8b8da0;font-family:'JetBrains Mono',monospace;font-size:11.5px}#axlis .in{fill:#23242f;stroke:#3b3d4e;stroke-width:1}#axlis .cap{fill:#9a9cb0;font-family:Inter,Segoe UI,sans-serif;font-size:11px}</style></defs><g clip-path='url(#axlisclip)'><rect x='8' y='8' width='628' height='562' fill='#1e1f29'/><rect x='8' y='8' width='628' height='32' fill='#2a2b38'/><text x='24' y='29' fill='#d6d7e0' font-family='Inter,Segoe UI,sans-serif' font-size='13' font-weight='600'>Create listener</text><circle cx='620' cy='24' r='5' fill='#d9933f'/><text x='24' y='62' class='lab'>Type</text><rect class='in' x='110' y='48' width='220' height='25' rx='4'/><text x='120' y='65' class='val'>BeaconHTTP</text><text x='318' y='65' class='mut'>&#9662;</text><rect x='16' y='86' width='140' height='28' rx='4' fill='#1e1f29' stroke='#3d7dfd' stroke-width='1.5'/><text x='86' y='104' text-anchor='middle' fill='#d6d7e0' font-family='Inter,Segoe UI,sans-serif' font-size='11.5'>Main settings</text><text x='182' y='104' class='cap'>HTTP Headers</text><text x='292' y='104' class='cap'>Page Error</text><text x='392' y='104' class='cap'>Page Payload</text><line x1='16' y1='114' x2='628' y2='114' stroke='#3b3d4e'/><text x='24' y='146' class='lab'>Host &amp; port (Bind)</text><rect class='in' x='180' y='131' width='210' height='25' rx='4'/><text x='190' y='148' class='val'>0.0.0.0</text><text x='378' y='148' class='mut'>&#9662;</text><rect class='in' x='400' y='131' width='74' height='25' rx='4'/><text x='410' y='148' class='val'>443</text><text x='24' y='184' class='lab'>Callback addresses</text><rect class='in' x='180' y='169' width='294' height='38' rx='4'/><text x='190' y='192' class='val'>https://cdn.example.com:443</text><rect x='480' y='169' width='24' height='18' rx='3' fill='#2a2b38' stroke='#3b3d4e'/><text x='492' y='182' text-anchor='middle' class='mut'>+</text><rect x='480' y='189' width='24' height='18' rx='3' fill='#2a2b38' stroke='#3b3d4e'/><text x='492' y='202' text-anchor='middle' class='mut'>&#8722;</text><text x='24' y='230' class='lab'>Method</text><rect class='in' x='180' y='215' width='140' height='25' rx='4'/><text x='190' y='232' class='val'>POST</text><text x='308' y='232' class='mut'>&#9662;</text><text x='24' y='268' class='lab'>URIs</text><rect class='in' x='180' y='253' width='294' height='54' rx='4'/><text x='190' y='272' class='val'>/api/v1/status</text><text x='190' y='289' class='val'>/updates/check.php</text><text x='190' y='306' class='val'>/content.html</text><text x='24' y='336' class='lab'>User-Agents</text><rect class='in' x='180' y='321' width='438' height='25' rx='4'/><text x='190' y='338' class='val'>Mozilla/5.0 (Windows NT 6.2; rv:20.0) Gecko/20121202 Firefox/20.0</text><text x='24' y='374' class='lab'>Heartbeat Header</text><rect class='in' x='180' y='359' width='220' height='25' rx='4'/><text x='190' y='376' class='val'>X-Beacon-Id</text><text x='24' y='412' class='lab'>Encryption key</text><rect class='in' x='180' y='397' width='330' height='25' rx='4'/><text x='190' y='414' class='val'>9f3a7c1e5b8d2046a1c9ef7308b5d2a6</text><rect x='520' y='397' width='98' height='25' rx='4' fill='#2a2b38' stroke='#3b3d4e'/><text x='569' y='414' text-anchor='middle' fill='#d6d7e0' font-family='Inter,Segoe UI,sans-serif' font-size='11.5'>Generate</text><rect x='180' y='438' width='16' height='16' rx='3' fill='#23242f' stroke='#3b3d4e'/><text x='206' y='451' class='lab'>Use SSL (HTTPS) &#8212; auto-generate cert/key if empty</text><line x1='16' y1='486' x2='628' y2='486' stroke='#3b3d4e'/><rect x='408' y='506' width='100' height='32' rx='5' fill='#2a2b38' stroke='#3b3d4e'/><text x='458' y='527' text-anchor='middle' fill='#d6d7e0' font-family='Inter,Segoe UI,sans-serif' font-size='12.5' font-weight='600'>Cancel</text><rect x='518' y='506' width='100' height='32' rx='5' fill='#3d7dfd'/><text x='568' y='527' text-anchor='middle' fill='#ffffff' font-family='Inter,Segoe UI,sans-serif' font-size='12.5' font-weight='600'>Create</text></g><rect x='8' y='8' width='628' height='562' rx='8' fill='none' stroke='#3b3d4e' stroke-width='1.5'/></svg>"
+          },
+          {
+            "title": "Generate agent — beacon",
+            "type": "figure",
+            "caption": "The beacon build dialog. Choose the listener to bind to, architecture (x64/x86) and output format (Exe, Service Exe, DLL or raw Shellcode); set the initial Sleep and Jitter (defaults 4s / 0%). 'Set killdate' and 'Set workingtime' bake in time limits, 'IAT Hiding' empties the import table, and the DNS-settings box appears for BeaconDNS listeners.",
+            "svg": "<svg id='axgen' viewBox='0 0 600 486' xmlns='http://www.w3.org/2000/svg' role='img' aria-label='AdaptixClient Generate Agent dialog mockup for the beacon agent: Listener, Arch, Format, Sleep and Jitter, killdate and workingtime options, IAT Hiding, and Generate and Cancel buttons.'><defs><clipPath id='axgenclip'><rect x='8' y='8' width='584' height='470' rx='8'/></clipPath><style>#axgen .lab{fill:#9a9cb0;font-family:Inter,Segoe UI,sans-serif;font-size:12px}#axgen .val{fill:#d6d7e0;font-family:'JetBrains Mono',monospace;font-size:11.5px}#axgen .mut{fill:#8b8da0;font-family:'JetBrains Mono',monospace;font-size:11.5px}#axgen .in{fill:#23242f;stroke:#3b3d4e;stroke-width:1}</style></defs><g clip-path='url(#axgenclip)'><rect x='8' y='8' width='584' height='470' fill='#1e1f29'/><rect x='8' y='8' width='584' height='32' fill='#2a2b38'/><text x='24' y='29' fill='#d6d7e0' font-family='Inter,Segoe UI,sans-serif' font-size='13' font-weight='600'>Generate agent &#8212; beacon</text><circle cx='576' cy='24' r='5' fill='#d9933f'/><text x='24' y='70' class='lab'>Listener</text><rect class='in' x='150' y='55' width='420' height='26' rx='4'/><text x='160' y='73' class='val'>http-443   (BeaconHTTP)</text><text x='558' y='73' class='mut'>&#9662;</text><text x='24' y='108' class='lab'>Arch</text><rect class='in' x='150' y='93' width='150' height='26' rx='4'/><text x='160' y='111' class='val'>x64</text><text x='288' y='111' class='mut'>&#9662;</text><text x='24' y='146' class='lab'>Format</text><rect class='in' x='150' y='131' width='150' height='26' rx='4'/><text x='160' y='149' class='val'>Exe</text><text x='288' y='149' class='mut'>&#9662;</text><text x='318' y='149' class='mut'>Service Exe &#183; DLL &#183; Shellcode</text><text x='24' y='184' class='lab'>Sleep (Jitter %)</text><rect class='in' x='150' y='169' width='150' height='26' rx='4'/><text x='160' y='187' class='val'>4s</text><rect class='in' x='310' y='169' width='80' height='26' rx='4'/><text x='320' y='187' class='val'>0</text><text x='400' y='187' class='mut'>%</text><rect x='150' y='214' width='16' height='16' rx='3' fill='#23242f' stroke='#3b3d4e'/><text x='176' y='227' class='lab'>Set 'killdate'</text><rect x='320' y='214' width='16' height='16' rx='3' fill='#23242f' stroke='#3b3d4e'/><text x='346' y='227' class='lab'>Set 'workingtime'</text><rect x='150' y='246' width='16' height='16' rx='3' fill='#3d7dfd'/><path d='M153 254 l3 3 l6 -7' fill='none' stroke='#fff' stroke-width='1.6'/><text x='176' y='259' class='lab'>IAT Hiding (empty import table)</text><rect x='24' y='286' width='552' height='96' rx='6' fill='#191a22' stroke='#3b3d4e'/><rect x='40' y='278' width='96' height='16' fill='#1e1f29'/><text x='44' y='291' class='lab'>DNS settings</text><text x='40' y='320' class='mut'>DNS Mode     DNS (Direct UDP) &#9662;</text><text x='40' y='344' class='mut'>Resolvers    8.8.8.8, 1.1.1.1, 9.9.9.9</text><text x='40' y='368' class='mut'>(shown for BeaconDNS listeners; HTTP uses the proxy/UA tab)</text><rect x='366' y='404' width='100' height='32' rx='5' fill='#2a2b38' stroke='#3b3d4e'/><text x='416' y='425' text-anchor='middle' fill='#d6d7e0' font-family='Inter,Segoe UI,sans-serif' font-size='12.5' font-weight='600'>Cancel</text><rect x='476' y='404' width='100' height='32' rx='5' fill='#3d7dfd'/><text x='526' y='425' text-anchor='middle' fill='#ffffff' font-family='Inter,Segoe UI,sans-serif' font-size='12.5' font-weight='600'>Generate</text></g><rect x='8' y='8' width='584' height='470' rx='8' fill='none' stroke='#3b3d4e' stroke-width='1.5'/></svg>"
+          },
+          {
             "title": "Listener types & configuration",
             "type": "table",
             "columns": [
@@ -3850,7 +3868,7 @@ var TOOLKIT = [
             "rows": [
               [
                 "BeaconHTTP / HTTPS",
-                "The workhorse. Bind host/port + callback addresses, GET or POST, the URI list, User-Agent list, the heartbeat header (default X-Beacon-Id), a hex encryption key, optional SSL (cert/key), Host/Request/Server headers, Trust X-Forwarded-For, and custom 404 (error) and payload pages for traffic shaping."
+                "The workhorse. Bind host/port + callback addresses, method POST or GET (default POST), the URI list, User-Agent list, the heartbeat header (default X-Beacon-Id), a hex encryption key, optional SSL (cert/key auto-generated if blank), Host/Request/Server headers, Trust X-Forwarded-For, and custom Page Error (404) and Page Payload responses for traffic shaping."
               ],
               [
                 "BeaconSMB",
@@ -3896,7 +3914,7 @@ var TOOLKIT = [
               ],
               [
                 "Sleep (jitter %)",
-                "Initial check-in interval and jitter, adjustable later with sleep."
+                "Initial check-in interval and jitter (default 4s, 0% — set e.g. 1h 2m 5s), adjustable later with sleep."
               ],
               [
                 "Transport extras",
@@ -4005,6 +4023,12 @@ var TOOLKIT = [
                 "The AxScript engine — extend and automate the client (custom commands, menus, UI, BOF wrappers), e.g. with the Extension-Kit."
               ]
             ]
+          },
+          {
+            "title": "The client window at work",
+            "type": "figure",
+            "caption": "A representative AdaptixClient layout: the menu bar (Projects / AxScript / Settings), the view toolbar (Sessions, Graph, Listeners, Tunnels, Downloads, Credentials, Logs), the sessions table of live agents, and the per-agent task console below — here getuid, a nanodump BOF and a SOCKS proxy. A peer reached over SMB shows 'smb' in its Listener column rather than an HTTP listener name.",
+            "svg": "<svg id='axwin' viewBox='0 0 924 504' xmlns='http://www.w3.org/2000/svg' role='img' aria-label='AdaptixClient main window mockup: menu bar (Projects, AxScript, Settings), a view toolbar, the sessions table of agents, and the beacon task console.'><defs><clipPath id='axwinclip'><rect x='8' y='8' width='908' height='488' rx='8'/></clipPath><style>#axwin .t{fill:#d6d7e0;font-family:Inter,Segoe UI,sans-serif;font-size:12px}#axwin .hd{fill:#9a9cb0;font-family:Inter,Segoe UI,sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.3px}#axwin .cell{fill:#cfd0da;font-family:'JetBrains Mono',monospace;font-size:10.5px}#axwin .mono{font-family:'JetBrains Mono',monospace;font-size:11px}</style></defs><g clip-path='url(#axwinclip)'><rect x='8' y='8' width='908' height='488' fill='#1e1f29'/><rect x='8' y='8' width='908' height='28' fill='#2a2b38'/><text x='22' y='26' fill='#d6d7e0' font-family='Inter,Segoe UI,sans-serif' font-size='12' font-weight='600'>AdaptixClient</text><text x='120' y='26' fill='#8b8da0' font-family='Inter,Segoe UI,sans-serif' font-size='11'>&#8212; MyLab @ 127.0.0.1:4321</text><rect x='8' y='36' width='908' height='24' fill='#232430'/><text x='22' y='52' class='t'>Projects</text><text x='92' y='52' class='t'>AxScript</text><text x='168' y='52' class='t'>Settings</text><rect x='16' y='68' width='78' height='26' rx='4' fill='#1e1f29' stroke='#3d7dfd' stroke-width='1.5'/><text x='55' y='85' text-anchor='middle' class='t'>Sessions</text><text x='112' y='85' fill='#9a9cb0' font-family='Inter,Segoe UI,sans-serif' font-size='12'>Graph</text><text x='168' y='85' fill='#9a9cb0' font-family='Inter,Segoe UI,sans-serif' font-size='12'>Listeners</text><text x='244' y='85' fill='#9a9cb0' font-family='Inter,Segoe UI,sans-serif' font-size='12'>Tunnels</text><text x='312' y='85' fill='#9a9cb0' font-family='Inter,Segoe UI,sans-serif' font-size='12'>Downloads</text><text x='396' y='85' fill='#9a9cb0' font-family='Inter,Segoe UI,sans-serif' font-size='12'>Credentials</text><text x='484' y='85' fill='#9a9cb0' font-family='Inter,Segoe UI,sans-serif' font-size='12'>Logs</text><rect x='16' y='104' width='892' height='24' fill='#2a2b38'/><text x='26' y='120' class='hd'>ID</text><text x='104' y='120' class='hd'>LISTENER</text><text x='196' y='120' class='hd'>INTERNAL</text><text x='300' y='120' class='hd'>USER</text><text x='430' y='120' class='hd'>COMPUTER</text><text x='532' y='120' class='hd'>OS</text><text x='664' y='120' class='hd'>PID</text><text x='730' y='120' class='hd'>PROCESS</text><text x='852' y='120' class='hd'>LAST</text><rect x='16' y='128' width='892' height='26' fill='#20212c'/><text x='26' y='145' class='cell'>a1b2c3d4</text><text x='104' y='145' class='cell'>http-443</text><text x='196' y='145' class='cell'>10.10.14.5</text><text x='300' y='145' class='cell'>CORP\\jdoe</text><text x='430' y='145' class='cell'>WKS01</text><text x='532' y='145' class='cell'>Windows 10 22H2</text><text x='664' y='145' class='cell'>4820</text><text x='730' y='145' class='cell'>explorer.exe</text><text x='852' y='145' class='cell'>3s</text><rect x='16' y='154' width='892' height='26' fill='#23242f'/><text x='26' y='171' class='cell'>9f8e7d6c</text><text x='104' y='171' class='cell'>http-443</text><text x='196' y='171' class='cell'>10.10.14.9</text><text x='300' y='171' class='cell'>CORP\\svc_sql</text><text x='430' y='171' class='cell'>SQL01</text><text x='532' y='171' class='cell'>Server 2019</text><text x='664' y='171' class='cell'>2210</text><text x='730' y='171' class='cell'>sqlservr.exe</text><text x='852' y='171' class='cell'>11s</text><rect x='16' y='180' width='892' height='26' fill='#20212c'/><text x='26' y='197' class='cell'>5a4b3c2d</text><text x='104' y='197' fill='#d9933f' class='mono'>smb</text><text x='196' y='197' class='cell'>10.10.20.7</text><text x='300' y='197' class='cell'>CORP\\Administrator</text><text x='430' y='197' class='cell'>DC01</text><text x='532' y='197' class='cell'>Server 2022</text><text x='664' y='197' class='cell'>680</text><text x='730' y='197' class='cell'>lsass.exe</text><text x='852' y='197' class='cell'>1m 4s</text><rect x='16' y='220' width='892' height='268' rx='4' fill='#17171f'/><text x='26' y='244' class='mono'><tspan fill='#4ec9b0'>op1</tspan> <tspan fill='#8b8da0'>[a1b2c3d4]</tspan> <tspan fill='#d9933f'>beacon &gt;</tspan> <tspan fill='#e8e8f0'>getuid</tspan></text><text x='26' y='266' class='mono' fill='#b8b9c6'>[*] Task: get username of current token</text><text x='26' y='286' class='mono' fill='#6ab04c'>[+] CORP\\jdoe</text><text x='26' y='316' class='mono'><tspan fill='#4ec9b0'>op1</tspan> <tspan fill='#8b8da0'>[a1b2c3d4]</tspan> <tspan fill='#d9933f'>beacon &gt;</tspan> <tspan fill='#e8e8f0'>execute bof /opt/kit/Creds-BOF/_bin/nanodump.x64.o</tspan></text><text x='26' y='338' class='mono' fill='#b8b9c6'>[*] Task: execute BOF [3a1f] queued</text><text x='26' y='358' class='mono' fill='#6ab04c'>[+] BOF output</text><text x='26' y='378' class='mono' fill='#b8b9c6'>[*] Minidump written: 2.41 MB &#8594; downloads/lsass_DC01.dmp</text><text x='26' y='400' class='mono'><tspan fill='#4ec9b0'>op1</tspan> <tspan fill='#8b8da0'>[a1b2c3d4]</tspan> <tspan fill='#d9933f'>beacon &gt;</tspan> <tspan fill='#e8e8f0'>socks start 1080</tspan></text><text x='26' y='422' class='mono' fill='#6ab04c'>[+] SOCKS5 proxy started on team server :1080</text><text x='26' y='452' class='mono'><tspan fill='#4ec9b0'>op1</tspan> <tspan fill='#8b8da0'>[a1b2c3d4]</tspan> <tspan fill='#d9933f'>beacon &gt;</tspan> <tspan fill='#e8e8f0'>_</tspan></text></g><rect x='8' y='8' width='908' height='488' rx='8' fill='none' stroke='#3b3d4e' stroke-width='1.5'/></svg>"
           },
           {
             "title": "Collaboration, pivoting & scripting",
@@ -4210,6 +4234,15 @@ var TOOLKIT = [
             ]
           },
           {
+            "title": "What the beacon console looks like",
+            "type": "figure",
+            "src": "assets/img/adaptix-c2/beacon-console.webp",
+            "alt": "AdaptixClient beacon console running kerbeus asktgt and s4u, showing the task header/footer framing and base64 Kerberos tickets in the output.",
+            "caption": "The real beacon console. Each command is framed by a '[*] Task …' header and a '+--- Task [id] closed ---+' footer; '[+]' marks output and '[*]' marks status. Here the Kerbeus BOF requests a TGT (asktgt) and then performs an S4U impersonation, printing the base64 .kirbi tickets.",
+            "credit": "Screenshot: AdaptixC2 Extension-Kit (GPLv3)",
+            "creditUrl": "https://github.com/Adaptix-Framework/Extension-Kit"
+          },
+          {
             "title": "BOFs & extensions — the model",
             "type": "table",
             "columns": [
@@ -4282,6 +4315,24 @@ var TOOLKIT = [
             ]
           },
           {
+            "title": "A loaded command group — Creds-BOF",
+            "type": "figure",
+            "src": "assets/img/adaptix-c2/creds-bof.webp",
+            "alt": "Creds-BOF command group help listing credential commands such as nanodump, lsadump_sam, cookie-monster and hashdump.",
+            "caption": "Once a module is loaded, typing its group name prints every command it added. Creds-BOF contributes the credential-theft set — nanodump (plus PPL dump/medic), lsadump_sam/secrets/cache, hashdump, cookie-monster and askcreds.",
+            "credit": "Screenshot: AdaptixC2 Extension-Kit (GPLv3)",
+            "creditUrl": "https://github.com/Adaptix-Framework/Extension-Kit"
+          },
+          {
+            "title": "A loaded command group — SQL-BOF",
+            "type": "figure",
+            "src": "assets/img/adaptix-c2/sql-bof.webp",
+            "alt": "SQL-BOF command group help listing mssql subcommands such as query, links, enableole, impersonate and xpcmd.",
+            "caption": "The AD-BOF module's SQL-BOF commands (mssql …) for attacking SQL Server: enumerate databases, tables and linked servers; toggle xp_cmdshell / OLE / CLR; impersonate logins; and run commands — each as an in-process BOF.",
+            "credit": "Screenshot: AdaptixC2 Extension-Kit (GPLv3)",
+            "creditUrl": "https://github.com/Adaptix-Framework/Extension-Kit"
+          },
+          {
             "title": "Load an extension in the client",
             "type": "commands",
             "commands": [
@@ -4298,6 +4349,15 @@ var TOOLKIT = [
                 "cmd": "// a top-level loader just script_loads each sub-extension, relative to itself:\nvar path = ax.script_dir();\nax.script_load(path + \"Elevation-BOF/elevate.axs\");\nax.script_load(path + \"Creds-BOF/creds.axs\");"
               }
             ]
+          },
+          {
+            "title": "Where you load a script — the AxScript menu",
+            "type": "figure",
+            "src": "assets/img/adaptix-c2/axscript-menu.webp",
+            "alt": "AdaptixClient menu bar with the AxScript menu open, showing 'AxScript console' and 'Script manager'.",
+            "caption": "AxScript → Script manager is where you load an .axs extension (its context menu → Load new). The AxScript console beside it runs ad-hoc ax.* script against the live client.",
+            "credit": "Screenshot: AdaptixC2 Extension-Kit (GPLv3)",
+            "creditUrl": "https://github.com/Adaptix-Framework/Extension-Kit"
           },
           {
             "title": "Example — add your own BOF-backed command",
@@ -4384,8 +4444,8 @@ var TOOLKIT = [
                 "Team-server/operator port 4321 by default; HTTP listeners commonly 443/4443."
               ],
               [
-                "404 / error page",
-                "The shipped dark-themed '404 - Page Not Found' page is fingerprintable when left default."
+                "404 / payload pages",
+                "The listener's default Page Error body is the literal 'ERROR 404 - PAGE NOT FOUND' HTML, and the default Page Payload wraps beacon data in {\"status\": \"ok\", \"data\": \"...\", \"metrics\": \"sync\"} — both are fingerprintable when left default."
               ],
               [
                 "Network pivoting",

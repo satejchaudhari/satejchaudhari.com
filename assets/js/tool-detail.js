@@ -248,11 +248,28 @@
     return out;
   }
 
-  /* figure: an author-supplied inline SVG diagram (+ optional caption).
-     sec.svg is trusted site data (same as every other field in the data file). */
+  /* figure: an author-supplied diagram or screenshot (+ optional caption/credit).
+     sec.svg is trusted site data (inline SVG); sec.src is a raster image path.
+     sec.caption is plain text; sec.credit (+ optional sec.creditUrl) is an
+     attribution line rendered after the caption. */
   function renderFigure(sec) {
-    const cap = sec.caption ? `<figcaption class="detail-figcap">${escapeHtml(sec.caption)}</figcaption>` : "";
-    return `<figure class="detail-figure">${sec.svg || ""}${cap}</figure>`;
+    let media = "";
+    if (sec.src) {
+      const alt = escapeAttr(sec.alt || sec.caption || "");
+      media = `<img class="detail-figimg" src="${escapeAttr(sec.src)}" alt="${alt}" loading="lazy">`;
+    } else if (sec.svg) {
+      media = sec.svg;
+    }
+    let capInner = sec.caption ? escapeHtml(sec.caption) : "";
+    if (sec.credit) {
+      const creditText = escapeHtml(sec.credit);
+      const credit = sec.creditUrl
+        ? `<a href="${escapeAttr(sec.creditUrl)}" target="_blank" rel="noopener">${creditText}</a>`
+        : creditText;
+      capInner += `${capInner ? " " : ""}<span class="detail-figcredit">${credit}</span>`;
+    }
+    const cap = capInner ? `<figcaption class="detail-figcap">${capInner}</figcaption>` : "";
+    return `<figure class="detail-figure">${media}${cap}</figure>`;
   }
 
   function renderReferences(items) {

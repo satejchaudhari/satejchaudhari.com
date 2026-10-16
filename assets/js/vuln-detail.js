@@ -177,7 +177,19 @@
     else if (sec.type === "commands") html += renderCommands(sec.commands || []);
     else if (sec.type === "notes") html += renderNotes(sec.items || []);
     else if (sec.type === "references") html += renderReferences(sec.items || []);
-    else if (sec.type === "figure") html += `<figure class="detail-figure">${sec.svg || ""}${sec.caption ? `<figcaption class="detail-figcap">${escapeHtml(sec.caption)}</figcaption>` : ""}</figure>`;
+    else if (sec.type === "figure") {
+      const media = sec.src
+        ? `<img class="detail-figimg" src="${escapeAttr(sec.src)}" alt="${escapeAttr(sec.alt || sec.caption || "")}" loading="lazy">`
+        : (sec.svg || "");
+      let capInner = sec.caption ? escapeHtml(sec.caption) : "";
+      if (sec.credit) {
+        const credit = sec.creditUrl
+          ? `<a href="${escapeAttr(sec.creditUrl)}" target="_blank" rel="noopener">${escapeHtml(sec.credit)}</a>`
+          : escapeHtml(sec.credit);
+        capInner += `${capInner ? " " : ""}<span class="detail-figcredit">${credit}</span>`;
+      }
+      html += `<figure class="detail-figure">${media}${capInner ? `<figcaption class="detail-figcap">${capInner}</figcaption>` : ""}</figure>`;
+    }
     html += `</details>`;
   });
   html += `</div>`;
