@@ -196,6 +196,8 @@
       html += renderNotes(sec.items || []);
     } else if (sec.type === "references") {
       html += renderReferences(sec.items || []);
+    } else if (sec.type === "figure") {
+      html += renderFigure(sec);
     }
 
     html += `</details>`;
@@ -244,6 +246,13 @@
     });
     out += `</ul>`;
     return out;
+  }
+
+  /* figure: an author-supplied inline SVG diagram (+ optional caption).
+     sec.svg is trusted site data (same as every other field in the data file). */
+  function renderFigure(sec) {
+    const cap = sec.caption ? `<figcaption class="detail-figcap">${escapeHtml(sec.caption)}</figcaption>` : "";
+    return `<figure class="detail-figure">${sec.svg || ""}${cap}</figure>`;
   }
 
   function renderReferences(items) {

