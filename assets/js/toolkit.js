@@ -996,6 +996,15 @@ var TOOLKIT = [
             ]
           },
           {
+            title: "OPSEC-safe collection",
+            type: "commands",
+            commands: [
+              { label: "DCOnly — query only the DC over LDAP, never touch member hosts", cmd: "SharpHound.exe -c DCOnly\nbloodhound-python -u user -p pass -d domain.local -c DCOnly -dc dc.domain.local -ns <dc-ip>\nnxc ldap dc.domain.local -u user -p pass --bloodhound -c DCOnly\n# collects trusts, ACLs, group membership, GPOs, OUs and cert templates from the DC,\n# and SKIPS Session/LoggedOn/LocalGroup, which otherwise reach EVERY host over SMB" },
+              { label: "Throttle + jitter to stay under rate-based detection (SharpHound)", cmd: "SharpHound.exe -c DCOnly --throttle 1000 --jitter 30 --domaincontroller dc.domain.local\n#   --throttle 1000      wait ~1000 ms between requests\n#   --jitter 30          vary that delay by +/-30%\n#   --domaincontroller   pin to one DC instead of fanning out" },
+              { label: "If you must collect sessions, do it quietly", cmd: "# --stealth touches far fewer hosts (only the most reliable sources) than a full\n# sweep; it is still SMB traffic, so reserve it for when you actually need sessions:\nSharpHound.exe -c Session --stealth --throttle 1500 --jitter 30" }
+            ]
+          },
+          {
             title: "Importing Data",
             type: "table",
             columns: ["Concept", "Description"],
@@ -1037,6 +1046,8 @@ var TOOLKIT = [
             items: [
               "Refresh collection periodically on longer engagements — group memberships and ACLs change, and a stale graph shows paths that no longer exist.",
               "SharpHound generates a real amount of LDAP and SMB traffic — expect it to be noisy on a monitored network.",
+              "Prefer -c DCOnly on a monitored network: it only talks LDAP to the DC and never connects to member hosts, so it avoids the Session/LoggedOn/LocalGroup SMB sweep that -c All performs across every machine.",
+              "The loudest signal is one account LDAP-enumerating the whole directory in seconds — run collection as a normal user, from a non-DC host, during business hours, and use --throttle/--jitter to blend in.",
               "BloodHound CE replaced the legacy Neo4j-desktop-based community edition — collector output format is the same .zip either way.",
               "Treat every edge as a lead to verify, not a guarantee — confirm a path manually (e.g. with NetExec) before relying on it during an engagement."
             ]
