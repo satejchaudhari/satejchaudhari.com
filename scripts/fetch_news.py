@@ -23,6 +23,10 @@ FEEDS = [
     ("SANS ISC", "https://isc.sans.edu/rssfeed_full.xml"),
     ("The Record", "https://therecord.media/feed/"),
     ("CISA Advisories", "https://www.cisa.gov/cybersecurity-advisories/all.xml"),
+    # India-focused cybersecurity sources
+    ("ETCISO", "https://ciso.economictimes.indiatimes.com/rss/topstories"),
+    ("The Cyber Express", "https://thecyberexpress.com/feed/"),
+    ("The420", "https://the420.in/feed/"),
 ]
 
 MAX_AGE_HOURS = 72
