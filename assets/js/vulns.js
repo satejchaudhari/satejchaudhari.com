@@ -4402,6 +4402,90 @@ var VULNS = [
         ]
       },
       {
+        id: "timeroasting-vuln",
+        name: "Timeroasting",
+        severity: "Medium",
+        ref: "https://github.com/SecuraBV/Timeroast",
+        description: "Windows' authenticated NTP (MS-SNTP) hands any unauthenticated client a MAC keyed on a computer or trust account's password hash — harvest them for every RID and crack offline.",
+        brief: "A Windows DC acting as a time server answers authenticated NTP (MS-SNTP) requests with a message authentication code computed as MD5(MD4(account_password) || response). The key is chosen by RID, and the server never checks that the requester knows anything — so an unauthenticated attacker who can reach UDP/123 can request this for every RID and collect a crackable hash for each computer and trust account.\n\nImpact: machine-account passwords are random and rotated by default, so most are uncrackable — the real wins are accounts with manually-set or weak passwords (appliances, non-Windows domain members, stale machines with rotation disabled) and inter-domain trust accounts, whose keys can forge inter-realm tickets. It is also a fully unauthenticated way to enumerate computer accounts by RID.",
+        quickReference: [
+          { label: "NetExec module (triggers on a null session)", cmd: "nxc smb <dc-ip> -u '' -p '' -M timeroast" },
+          { label: "Standalone (pure NTP, no SMB)", cmd: "python3 timeroast.py <dc-ip> -o timeroast.hashes" },
+          { label: "Hash format", cmd: "<rid>:$sntp-ms$<hash>$<salt>" },
+          { label: "Crack", cmd: "hashcat -m 31300 timeroast.hashes rockyou.txt" }
+        ],
+        sections: [
+          {
+            title: "Root Cause",
+            type: "notes",
+            items: [
+              "MS-SNTP (authenticated NTP) lets a client ask the DC to authenticate its time reply. The DC returns MD5(MD4(password) || NTP_response[:48]), where the password is that of the account whose RID the client placed in the request's key identifier.",
+              "The exchange is unauthenticated: the DC never verifies the requester knows the account password, so anyone who can send UDP/123 to a DC can harvest the MAC for any RID.",
+              "This is by design, not a patchable bug — it only yields a usable credential when the underlying account password is weak enough to crack offline."
+            ]
+          },
+          {
+            title: "Where to Look",
+            type: "notes",
+            items: [
+              "Any reachable domain controller running the Windows Time service on UDP/123 — effectively every DC.",
+              "Value is highest against machine accounts with rotation disabled (DONT_EXPIRE / a GPO), non-Windows or appliance computer accounts joined with a chosen password, and inter-domain / forest TRUST accounts.",
+              "Standard Windows machine accounts rotate a 120-character random password every ~30 days — those hashes are present but practically uncrackable, so don't waste cycles on them."
+            ]
+          },
+          {
+            title: "How It's Tested",
+            type: "commands",
+            commands: [
+              { label: "1. Harvest the hashes (unauthenticated)", cmd: "# NetExec module — triggers on a null SMB session:\nnxc smb <dc-ip> -u '' -p '' -M timeroast\n# if null sessions are blocked, use the standalone tool (pure NTP, no SMB):\npython3 timeroast.py <dc-ip> -o timeroast.hashes\n# each line:  <rid>:$sntp-ms$<hash>$<salt>" },
+              { label: "2. Crack offline", cmd: "hashcat -m 31300 timeroast.hashes /usr/share/wordlists/rockyou.txt\n#   -m 31300   MS-SNTP. add a rules file for manually-set passwords" },
+              { label: "3. Map a cracked RID back to its account", cmd: "# RID -> account name (any method that lists RIDs):\nnxc smb <dc-ip> -u <user> -p '<pass>' --rid-brute\n# a cracked TRUST account's key can then forge an inter-realm (referral) TGT" }
+            ]
+          },
+          {
+            title: "Impact",
+            type: "table",
+            columns: ["Target account", "What a cracked password gives you"],
+            rows: [
+              ["Weak / manually-set machine account", "Authenticate as that computer — silver tickets, resource access, a foothold identity"],
+              ["Inter-domain trust account", "Forge inter-realm referral TGTs — cross the trust into another domain"],
+              ["Any computer account", "Unauthenticated RID enumeration of the domain's computers, even without a crack"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["NetExec -M timeroast", "Harvest $sntp-ms$ hashes from a DC (triggers on a null session)"],
+              ["SecuraBV Timeroast (timeroast.py)", "Standalone collector — pure NTP, works where null sessions are blocked, with RID/rate control"],
+              ["hashcat", "Offline cracking, mode 31300 (MS-SNTP)"],
+              ["NetExec --rid-brute", "Map a cracked RID back to the account name"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "SecuraBV — Timeroast (tool + whitepaper)", url: "https://github.com/SecuraBV/Timeroast" },
+              { label: "hashcat — example hashes (mode 31300)", url: "https://hashcat.net/wiki/doku.php?id=example_hashes" },
+              { label: "Toolkit — NetExec (timeroast module)", url: "tool-detail.html?tool=netexec" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Keep machine-account password rotation ON (the default): a random, rotated password makes the harvested hash uncrackable. Hunt for computer accounts with rotation disabled.",
+              "Give non-Windows / appliance computer accounts, and any manually-joined machine, a long random password.",
+              "Rotate inter-domain trust passwords periodically — a weak trust key is the highest-value crack here.",
+              "Restrict which networks can reach UDP/123 on domain controllers; MS-SNTP can't be disabled without breaking authenticated time clients, so segment instead.",
+              "Detect: a single source sending a burst of authenticated NTP requests that cycle RIDs against a DC."
+            ]
+          }
+        ]
+      },
+      {
         id: "unconstrained-delegation",
         name: "Unconstrained Delegation",
         severity: "Critical",

