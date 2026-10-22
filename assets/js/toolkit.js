@@ -610,6 +610,637 @@ var TOOLKIT = [
             ]
           },
           {
+            "title": "Modules (-M) — full reference (124)",
+            "type": "table",
+            "columns": [
+              "Module (-M)",
+              "Protocol",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "-M adcs",
+                "ldap",
+                "Find PKI Enrollment Services in Active Directory and Certificate Templates Names"
+              ],
+              [
+                "-M add-computer",
+                "smb, ldap",
+                "Adds or deletes a domain computer via SAMR (SMB) or LDAP"
+              ],
+              [
+                "-M aws-credentials",
+                "ssh, smb, winrm",
+                "Search for aws credentials files."
+              ],
+              [
+                "-M backup_operator",
+                "smb",
+                "Exploit user in backup operator group to dump NTDS @mpgn_x64"
+              ],
+              [
+                "-M badsuccessor",
+                "ldap",
+                "Check if vulnerable to bad successor attack (DMSA)"
+              ],
+              [
+                "-M bitlocker",
+                "smb, wmi",
+                "Enumerating BitLocker Status on target(s) If it is enabled or disabled."
+              ],
+              [
+                "-M certipy-find",
+                "ldap",
+                "certipy find command with options to export the result to text/csv/json. Default: Show only vulnerable templates"
+              ],
+              [
+                "-M change-password",
+                "smb",
+                "Change or reset user passwords via various protocols"
+              ],
+              [
+                "-M coerce_plus",
+                "smb",
+                "Module to check if the Target is vulnerable to any coerce vulns. Set LISTENER IP for coercion."
+              ],
+              [
+                "-M daclread",
+                "ldap",
+                "Read and backup the Discretionary Access Control List of objects. Be careful, this module cannot read the DACLS recursively, see more explanation in the options."
+              ],
+              [
+                "-M dns-nonsecure",
+                "ldap",
+                "Detects DNS zones that allow nonsecure dynamic updates"
+              ],
+              [
+                "-M dpapi_hash",
+                "smb, wmi, winrm, mssql",
+                "Remotely dump Dpapi hash based on masterkeys"
+              ],
+              [
+                "-M drop-library-ms",
+                "smb",
+                "Creates and uploads an arbitrary .library-ms on writable shares, leveraging CVE-2025-24054 for looting NTLMv2 hash"
+              ],
+              [
+                "-M drop-sc",
+                "smb",
+                "Drop a searchConnector-ms file on each writable share"
+              ],
+              [
+                "-M dump-computers",
+                "ldap",
+                "Dumps FQDN and OS of all computers in the domain"
+              ],
+              [
+                "-M empire_exec",
+                "smb, mssql",
+                "Uses Empire's RESTful API to generate a launcher for the specified listener and executes it"
+              ],
+              [
+                "-M enable_cmdshell",
+                "mssql",
+                "Enable or disable xp_cmdshell in MSSQL Server"
+              ],
+              [
+                "-M entra-id",
+                "ldap",
+                "Find the Entra ID sync server"
+              ],
+              [
+                "-M enum_av",
+                "smb",
+                "Gathers information on all endpoint protection solutions installed on the the remote host(s) via LsarLookupNames (no privilege needed)"
+              ],
+              [
+                "-M enum_ca",
+                "smb",
+                "Anonymously uses RPC endpoints to hunt for ADCS CAs"
+              ],
+              [
+                "-M enum_cve",
+                "smb",
+                "Enumerate common (useful) CVEs by querying the registry for the OS version and UBR."
+              ],
+              [
+                "-M enum_dns",
+                "smb, wmi",
+                "Uses WMI to dump DNS from an AD DNS Server"
+              ],
+              [
+                "-M enum_impersonate",
+                "mssql",
+                "Enumerate users with impersonation privileges"
+              ],
+              [
+                "-M enum_interfaces",
+                "smb",
+                "Retrieve the list of network interfaces info (Name, IP Address, Subnet Mask, Default Gateway) from remote Windows registry (formerly --interfaces)"
+              ],
+              [
+                "-M enum_links",
+                "mssql",
+                "Enumerate linked SQL Servers and their login configurations."
+              ],
+              [
+                "-M enum_logins",
+                "mssql",
+                "Enumerate SQL Server logins (SQL, Domain, Local users)"
+              ],
+              [
+                "-M eventlog_creds",
+                "smb",
+                "Extracting Credentials From Windows Logs (Event ID: 4688 and SYSMON)"
+              ],
+              [
+                "-M exec_on_link",
+                "mssql",
+                "Execute commands on a SQL Server linked server"
+              ],
+              [
+                "-M find-computer",
+                "ldap",
+                "Finds computers in the domain via the provided text"
+              ],
+              [
+                "-M get-desc-users",
+                "ldap",
+                "Get description of the users. May contain password"
+              ],
+              [
+                "-M get-info-users",
+                "ldap",
+                "Get the info field of all users. May contain password"
+              ],
+              [
+                "-M get-network",
+                "ldap",
+                "Query all DNS records with the corresponding IP from the domain."
+              ],
+              [
+                "-M get-scriptpath",
+                "ldap",
+                "Get the scriptPath attribute of all users."
+              ],
+              [
+                "-M get-unixUserPassword",
+                "ldap",
+                "Get unixUserPassword attribute from all users in ldap"
+              ],
+              [
+                "-M get-userPassword",
+                "ldap",
+                "Get userPassword attribute from all users in ldap"
+              ],
+              [
+                "-M get_netconnections",
+                "smb, wmi",
+                "Uses WMI to query network connections."
+              ],
+              [
+                "-M gpp_autologin",
+                "smb",
+                "Searches the domain controller for registry.xml to find autologon information and returns the username and password."
+              ],
+              [
+                "-M gpp_password",
+                "smb",
+                "Retrieves the plaintext password and other information for accounts pushed through Group Policy Preferences."
+              ],
+              [
+                "-M gpp_privileges",
+                "smb",
+                "Extracts privileges assigned via GPOs and resolves SIDs via LDAP."
+              ],
+              [
+                "-M groupmembership",
+                "ldap",
+                "Query the groups to which a user belongs."
+              ],
+              [
+                "-M handlekatz",
+                "smb",
+                "Get lsass dump using handlekatz64 and parse the result with pypykatz"
+              ],
+              [
+                "-M hash_spider",
+                "smb",
+                "Dump lsass recursively from a given hash using BH to find local admins"
+              ],
+              [
+                "-M hyperv-host",
+                "smb",
+                "Performs a registry query on the VM to lookup its HyperV Host"
+              ],
+              [
+                "-M iis",
+                "smb",
+                "Checks for credentials in IIS Application Pool configuration files using appcmd.exe"
+              ],
+              [
+                "-M impersonate",
+                "smb",
+                "List and impersonate tokens to run command as locally logged on users"
+              ],
+              [
+                "-M install_elevated",
+                "smb",
+                "Checks for AlwaysInstallElevated"
+              ],
+              [
+                "-M ioxidresolver",
+                "smb, wmi",
+                "This module helps you to identify hosts that have additional active interfaces"
+              ],
+              [
+                "-M keepass_discover",
+                "smb",
+                "Search for KeePass-related files and process."
+              ],
+              [
+                "-M keepass_trigger",
+                "smb",
+                "Set up a malicious KeePass trigger to export the database in cleartext."
+              ],
+              [
+                "-M laps",
+                "ldap",
+                "Retrieves all LAPS passwords which the account has read permissions for."
+              ],
+              [
+                "-M link_enable_cmdshell",
+                "mssql",
+                "Enable or disable xp_cmdshell on a linked MSSQL server"
+              ],
+              [
+                "-M link_xpcmd",
+                "mssql",
+                "Run xp_cmdshell commands on a linked SQL server"
+              ],
+              [
+                "-M lockscreendoors",
+                "smb",
+                "Detect Windows lock screen backdoors by checking FileDescriptions of accessibility binaries."
+              ],
+              [
+                "-M lsassy",
+                "smb",
+                "Dump lsass and parse the result remotely with lsassy"
+              ],
+              [
+                "-M maq",
+                "ldap",
+                "Retrieves the MachineAccountQuota domain-level attribute and check SeMachineAccountPrivilege (GPO/SYSVOL)"
+              ],
+              [
+                "-M masky",
+                "smb",
+                "Remotely dump domain user credentials via an ADCS and a KDC"
+              ],
+              [
+                "-M met_inject",
+                "smb, mssql",
+                "Downloads the Meterpreter stager and injects it into memory"
+              ],
+              [
+                "-M mobaxterm",
+                "smb, wmi, winrm, mssql",
+                "Remotely dump MobaXterm credentials via RemoteRegistry or NTUSER.dat export"
+              ],
+              [
+                "-M modify-group",
+                "smb, ldap",
+                "Modify the group membership of users and computers"
+              ],
+              [
+                "-M mremoteng",
+                "smb, wmi, winrm, mssql",
+                "Dump mRemoteNG Passwords in AppData and in Desktop / Documents folders (digging recursively in them)"
+              ],
+              [
+                "-M ms17-010",
+                "smb",
+                "MS17-010 - EternalBlue - NOT TESTED OUTSIDE LAB ENVIRONMENT"
+              ],
+              [
+                "-M msol",
+                "smb",
+                "Dump MSOL cleartext password and Entra ID credentials from the localDB on the Entra ID Connect Server"
+              ],
+              [
+                "-M mssql_cbt",
+                "mssql",
+                "Checks whether Channel Binding is enabled on the MSSQL database"
+              ],
+              [
+                "-M mssql_coerce",
+                "mssql",
+                "Execute SQL commands To interact with a specified LISTENER for coercion/exfiltration"
+              ],
+              [
+                "-M mssql_dumper",
+                "mssql",
+                "Search for Sensitive Data across all databases"
+              ],
+              [
+                "-M mssql_priv",
+                "mssql",
+                "Enumerate and exploit MSSQL privileges"
+              ],
+              [
+                "-M nanodump",
+                "smb, mssql",
+                "Get lsass dump using nanodump and parse the result with pypykatz"
+              ],
+              [
+                "-M nopac",
+                "smb",
+                "Check if the DC is vulnerable to CVE-2021-42278 and CVE-2021-42287 to impersonate DA from standard domain user"
+              ],
+              [
+                "-M notepad",
+                "smb",
+                "Extracts content from Windows Notepad tab state binary files."
+              ],
+              [
+                "-M notepad++",
+                "smb",
+                "Extracts notepad++ unsaved files."
+              ],
+              [
+                "-M ntds-dump-raw",
+                "smb, wmi, winrm",
+                "Extracting the ntds.dit, SAM, and SYSTEM files from DC by accessing the raw hard drive."
+              ],
+              [
+                "-M ntdsutil",
+                "smb",
+                "Dump NTDS with ntdsutil"
+              ],
+              [
+                "-M ntlmv1",
+                "smb",
+                "Detect if lmcompatibilitylevel on the target is set to lower than 3 (which means ntlmv1 is enabled)"
+              ],
+              [
+                "-M obsolete",
+                "ldap",
+                "Extract all obsolete operating systems from LDAP"
+              ],
+              [
+                "-M onelogon",
+                "smb",
+                "Scan GPOs and registry for machine accounts vulnerable to Onelogon"
+              ],
+              [
+                "-M pi",
+                "smb",
+                "Run command as logged on users via Process Injection"
+              ],
+              [
+                "-M powershell_history",
+                "smb",
+                "Extracts PowerShell history for all users and looks for sensitive commands."
+              ],
+              [
+                "-M pre2k",
+                "ldap",
+                "Identify pre-created computer accounts, save the results to a file, and obtain TGTs for each"
+              ],
+              [
+                "-M presence",
+                "smb",
+                "Traces Domain and Enterprise Admin presence in the target over SMB"
+              ],
+              [
+                "-M printnightmare",
+                "smb",
+                "Check if host vulnerable to printnightmare"
+              ],
+              [
+                "-M procdump",
+                "smb",
+                "Get lsass dump using procdump64 and parse the result with pypykatz"
+              ],
+              [
+                "-M putty",
+                "smb",
+                "Query the registry for users who saved ssh private keys in PuTTY. Download the private keys if found."
+              ],
+              [
+                "-M raisechild",
+                "ldap",
+                "Compromise parent domain from child domain via trust abuse"
+              ],
+              [
+                "-M rclone",
+                "smb",
+                "Searches for rclone.conf and deobscures credentials"
+              ],
+              [
+                "-M rdcman",
+                "smb, wmi, winrm, mssql",
+                "Remotely dump Remote Desktop Connection Manager (sysinternals) credentials"
+              ],
+              [
+                "-M rdp",
+                "smb, wmi",
+                "Enables/Disables RDP"
+              ],
+              [
+                "-M recent_files",
+                "smb",
+                "Extracts recently modified files"
+              ],
+              [
+                "-M recyclebin",
+                "smb",
+                "Lists and exports users' recycle bins"
+              ],
+              [
+                "-M reg-query",
+                "smb",
+                "Performs a registry query on the machine"
+              ],
+              [
+                "-M reg-winlogon",
+                "smb",
+                "Collect autologon credential stored in the registry"
+              ],
+              [
+                "-M remote-uac",
+                "smb",
+                "Enable or disable remote UAC"
+              ],
+              [
+                "-M remove-mic",
+                "smb",
+                "Check if host vulnerable to CVE-2019-1040"
+              ],
+              [
+                "-M resetnightmare",
+                "ldap",
+                "Exploit ResetNightmare (CVE-2026-27912) to reset any account's password via Kerberos change password"
+              ],
+              [
+                "-M runasppl",
+                "smb",
+                "Check if the registry value RunAsPPL is set or not"
+              ],
+              [
+                "-M sccm",
+                "ldap",
+                "Find a SCCM infrastructure in the Active Directory"
+              ],
+              [
+                "-M sccm-recon6",
+                "smb",
+                "Check if target is a Distribution point or Primary Site Server through winreg (RECON-6)"
+              ],
+              [
+                "-M schtask_as",
+                "smb",
+                "Remotely execute a scheduled task as a logged on user"
+              ],
+              [
+                "-M scuffy",
+                "smb",
+                "Creates and dumps an arbitrary .scf file with the icon property containing a UNC path to the declared SMB server against all writeable shares"
+              ],
+              [
+                "-M security-questions",
+                "smb",
+                "Gets security questions and answers for users on computer"
+              ],
+              [
+                "-M shadow-creds",
+                "ldap",
+                "List, add, inspect, remove, clear, backup, or revert Shadow Credentials on a user or computer"
+              ],
+              [
+                "-M shadowrdp",
+                "smb",
+                "Enables or disables shadow RDP"
+              ],
+              [
+                "-M slinky",
+                "smb",
+                "Creates windows shortcuts with the icon attribute containing a URI to the specified server (default SMB) in all shares with write permissions"
+              ],
+              [
+                "-M smbghost",
+                "smb",
+                "Module to check for the SMB dialect 3.1.1 and compression capability of the host, which is an indicator for the SMBGhost vulnerability (CVE-2020-0796)."
+              ],
+              [
+                "-M snipped",
+                "smb",
+                "Downloads screenshots taken by the (new) Snipping Tool."
+              ],
+              [
+                "-M spider_plus",
+                "smb",
+                "List files recursively and save a JSON share-file metadata to the 'OUTPUT_FOLDER'. See module options for finer configuration."
+              ],
+              [
+                "-M spooler",
+                "smb, wmi",
+                "Detect if print spooler is enabled or not"
+              ],
+              [
+                "-M subnets",
+                "ldap",
+                "Retrieves the different Sites and Subnets of an Active Directory"
+              ],
+              [
+                "-M teams_localdb",
+                "smb",
+                "Retrieves the cleartext ssoauthcookie from the local Microsoft Teams database, if teams is open we kill all Teams process"
+              ],
+              [
+                "-M test_connection",
+                "smb, mssql",
+                "Pings a host"
+              ],
+              [
+                "-M timeroast",
+                "smb",
+                "Timeroasting exploits Windows NTP authentication to request password hashes of any computer or trust account"
+              ],
+              [
+                "-M tombstone",
+                "ldap",
+                "Query, restore and delete AD objects"
+              ],
+              [
+                "-M uac",
+                "smb",
+                "Checks UAC status"
+              ],
+              [
+                "-M user-desc",
+                "ldap",
+                "Get user descriptions stored in Active Directory"
+              ],
+              [
+                "-M veeam",
+                "smb",
+                "Extracts credentials from local Veeam SQL Database"
+              ],
+              [
+                "-M vnc",
+                "smb, wmi, winrm",
+                "Loot Passwords from VNC server and client configurations"
+              ],
+              [
+                "-M wam",
+                "smb, wmi, winrm, mssql",
+                "Dump access token from Token Broker Cache. More info here https://blog.xpnsec.com/wam-bam/. Module by zblurx"
+              ],
+              [
+                "-M wcc",
+                "smb",
+                "Check various security configuration items on Windows machines"
+              ],
+              [
+                "-M wdigest",
+                "smb",
+                "Creates/Deletes the 'UseLogonCredential' registry key enabling WDigest cred dumping on Windows >= 8.1"
+              ],
+              [
+                "-M web_delivery",
+                "smb, mssql",
+                "Kicks off a Metasploit Payload using the exploit/multi/script/web_delivery module"
+              ],
+              [
+                "-M webdav",
+                "smb",
+                "Checks whether the WebClient service is running on the target"
+              ],
+              [
+                "-M whoami",
+                "ldap",
+                "Get details of provided user"
+              ],
+              [
+                "-M wifi",
+                "smb, wmi, winrm, mssql",
+                "Get key of all wireless interfaces"
+              ],
+              [
+                "-M winscp",
+                "smb",
+                "Looks for WinSCP.ini files in the registry and default locations and tries to extract credentials."
+              ],
+              [
+                "-M zerologon",
+                "smb, wmi",
+                "Module to check if the DC is vulnerable to Zerologon aka CVE-2020-1472"
+              ]
+            ]
+          },
+          {
             title: "Common Workflows",
             type: "commands",
             commands: [
@@ -627,6 +1258,7 @@ var TOOLKIT = [
               "--continue-on-success is easy to forget and will make a spray stop dead at the first valid hit — add it by default.",
               "Build the spray list from data you already have: jq the samaccountname out of a BloodHound *_users.json, or use --users / --rid-brute; filter disabled accounts so you don't burn guesses.",
               "Timeroasting (-M timeroast) needs no credentials — it abuses MS-SNTP on the DC and returns computer/trust-account hashes that crack with hashcat -m 31300, worthwhile mainly against weakly-set machine or trust passwords.",
+              "List the modules for a protocol with nxc <protocol> -L; run one with -M <name>, and see its settings with nxc <protocol> -M <name> --options (pass options as -o KEY=value).",
               "NetExec is the maintained fork of CrackMapExec (cme) — same mental model, a handful of renamed flags.",
               "Combine LDAP enumeration output directly into BloodHound rather than reading it as a flat list — attack-path context is the whole point.",
               "Prefer --no-bruteforce with paired username:password files so you're not accidentally testing every combination against a locked-out-prone environment."
@@ -1046,6 +1678,16 @@ var TOOLKIT = [
             ]
           },
           {
+            title: "Alternative collectors (OPSEC)",
+            type: "commands",
+            commands: [
+              { label: "AD Explorer snapshot — a signed MS tool, one LDAP connection", cmd: "# Sysinternals AD Explorer: connect to the DC, File -> Create Snapshot -> <name>.dat\n# it reads like legitimate admin activity and makes ONE LDAP connection (no mass sweep).\n# convert the snapshot offline into BloodHound JSON:\nADExplorerSnapshot.py <snapshot>.dat -o bh_out/" },
+              { label: "BOFHound — collect through a beacon, no SharpHound on disk", cmd: "# run targeted LDAP from your C2 (the ldapsearch BOF) or pyldapsearch, then parse the\n# LOGS offline into BloodHound JSON — no collector process touches the target:\npyldapsearch bank.local/<user>:'<pass>' '(objectClass=*)' '*'\nbofhound -i ~/.pyldapsearch/logs/ -o bh_out/\n# (or point -i at your Cobalt Strike / beacon log directory)" },
+              { label: "SOAPHound — collect over ADWS, not LDAP", cmd: "# uses AD Web Services (SOAP, tcp/9389) instead of LDAP, so it slips past\n# LDAP-query-based detections (SACL / event 1644, etc.):\nSOAPHound.exe --buildcache -c cache.txt\nSOAPHound.exe -c cache.txt --bhdump -o bh_out/" },
+              { label: "RustHound-CE — one static binary, DCOnly", cmd: "# a dependency-free Rust collector; handy when you can't run .NET or Python on the box:\nrusthound-ce -d bank.local -u <user>@bank.local -p '<pass>' -z\n# -z zips the output for direct upload to BloodHound CE" }
+            ]
+          },
+          {
             title: "BloodHound CE — load and view the graph",
             type: "commands",
             commands: [
@@ -1073,6 +1715,7 @@ var TOOLKIT = [
               "Prefer -c DCOnly: it only talks LDAP to the DC and never connects to member hosts, avoiding the Session/LoggedOn/LocalGroup SMB sweep that -c All runs against every machine.",
               "The loudest signal is one account LDAP-enumerating the whole directory in seconds — run as a normal user, from a non-DC host, in business hours. SharpHound can --throttle/--jitter; bloodhound-python and nxc cannot, so pace those yourself and keep them to DCOnly.",
               "Don't leave collector output on the target — exfil the .zip off-host and delete it; the JSON is sensitive loot.",
+              "No single collector is quietest for every job: AD Explorer blends in as admin tooling, BOFHound keeps collection inside your C2, SOAPHound avoids LDAP entirely by using ADWS — pick by what the environment actually monitors.",
               "Refresh collection periodically on long engagements — ACLs and memberships change, and a stale graph shows paths that no longer exist.",
               "BloodHound CE replaced the legacy Neo4j-desktop edition; all three collectors here feed the same CE .zip format (nxc defaults to the CE collector).",
               "Treat every edge as a lead to verify — confirm a path (e.g. with NetExec) before relying on it during an engagement."
