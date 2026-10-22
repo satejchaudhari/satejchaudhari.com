@@ -1,0 +1,56 @@
+name: Refresh security news
+
+on:
+  schedule:
+    # every 3 hours, on the hour (UTC)
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+# contents: write -> commit the refreshed data; pages/id-token -> deploy Pages
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Share the "pages" concurrency group with the deploy workflow so the two
+# never deploy at the same time. Do not cancel an in-progress deploy.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch feeds (stdlib Python, no dependencies)
+        run: python3 scripts/fetch_news.py
+
+      - name: Commit refreshed feed if it changed
+        run: |
+          if [ -n "$(git status --porcelain assets/js/news-data.js)" ]; then
+            git config user.name "news-bot"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add assets/js/news-data.js
+            git commit -m "chore(news): auto-refresh security feed"
+            git push
+          else
+            echo "No change in news-data.js"
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

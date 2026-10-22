@@ -1576,3 +1576,19 @@ summary.tool-detail-section-title:hover::after { border-color: var(--accent); }
 .detail-figcredit { display: inline-block; font-size: 0.78rem; opacity: 0.8; }
 .detail-figcredit::before { content: "— "; }
 .detail-figcredit a { color: var(--muted); text-decoration: underline; }
+
+/* News page (news.html) + homepage preview */
+.news-meta { color: var(--muted); font-size: 0.82rem; margin: 10px 0 0; font-family: 'JetBrains Mono', monospace; }
+.news-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.news-chip { font: inherit; font-size: 0.8rem; padding: 5px 13px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; transition: color .15s, border-color .15s; }
+.news-chip:hover { color: var(--text); }
+.news-chip.is-active { color: var(--text); border-color: var(--accent); }
+.news-item { padding: 18px 0; border-bottom: 1px solid var(--border); }
+.news-item:last-child { border-bottom: 0; }
+.news-item-head { display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px; }
+.news-src { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--accent); }
+.news-time { font-size: 0.74rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+.news-title { margin: 0 0 6px; font-size: 1.05rem; line-height: 1.4; font-weight: 600; }
+.news-title a { color: var(--text); text-decoration: none; }
+.news-title a:hover { text-decoration: underline; }
+.news-sum { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.55; }
