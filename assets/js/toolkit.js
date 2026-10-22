@@ -978,78 +978,83 @@ var TOOLKIT = [
         description: "Graphs Active Directory attack paths from collected relationship data.",
         brief: "BloodHound ingests Active Directory relationship data — group memberships, ACLs, sessions, delegation rights — and renders it as a graph, turning \"who can do what to whom\" into a visual attack path. The single most useful query on almost any engagement is shortest-path-to-Domain-Admin.",
         quickReference: [
-          { label: "Collect everything (Windows)", cmd: "SharpHound.exe -c All" },
-          { label: "Collect everything (cross-platform)", cmd: "bloodhound-python -u user -p pass -d domain.local -c All" },
-          { label: "Collect straight from NetExec", cmd: "nxc ldap dc.domain.local -u user -p pass --bloodhound -c All" },
-          { label: "Import & analyze", cmd: "Upload the resulting .zip in BloodHound CE, then run \"Shortest Paths to Domain Admins\"" }
+          { label: "SharpHound — DCOnly (Windows)", cmd: "SharpHound.exe -c DCOnly --throttle 1000 --jitter 30" },
+          { label: "bloodhound-python — DCOnly (Linux)", cmd: "bloodhound-python -u <user> -p '<pass>' -d bank.local -c DCOnly -dc dc01.bank.local -ns <dc-ip> --dns-tcp --zip" },
+          { label: "nxc — DCOnly (NetExec)", cmd: "nxc ldap dc01.bank.local -u <user> -p '<pass>' --bloodhound -c DCOnly --dns-server <dc-ip>" },
+          { label: "View — BloodHound CE", cmd: "docker compose up -d  →  http://localhost:8080  →  upload the .zip  →  \"Shortest Paths to Domain Admins\"" }
         ],
         sections: [
           {
-            title: "Collection",
+            title: "Collectors at a glance",
             type: "table",
-            columns: ["Command / Option", "Description"],
+            columns: ["Component", "Role"],
             rows: [
-              ["SharpHound.exe -c All", "Default Windows ingestor — run from a domain-joined context"],
-              ["bloodhound-python -u user -p pass -d domain.local -c All", "Impacket-based ingestor — runs from Linux, no domain-joined host required"],
-              ["nxc ldap <dc> -u user -p pass --bloodhound -c All", "Collect directly from an already-open NetExec session instead of running a separate ingestor"],
-              ["-c All / Default / Session / ACL / Group / LocalAdmin", "Scope collection down when a full run is too slow or too noisy for the environment"]
+              ["SharpHound", "The Windows/.NET ingestor — run from a domain-joined or domain-context host; richest session/local-admin data."],
+              ["bloodhound-python", "Impacket-based ingestor — runs from Linux/remote with a credential, no domain-joined host needed."],
+              ["nxc ldap --bloodhound", "NetExec's built-in collector — reuse an existing session; defaults to the BloodHound CE collector."],
+              ["BloodHound CE", "The app itself — ingests any collector's .zip and draws the graph. Not a collector: it's where you view and query."],
+              ["Collection method (-c)", "DCOnly (LDAP-only, quiet) up to All (adds Session/LoggedOn/LocalGroup — SMB to every host, loud)."]
             ]
           },
           {
-            title: "OPSEC-safe collection",
+            title: "SharpHound — Windows ingestor (OPSEC-safe)",
             type: "commands",
             commands: [
-              { label: "DCOnly — query only the DC over LDAP, never touch member hosts", cmd: "SharpHound.exe -c DCOnly\nbloodhound-python -u user -p pass -d domain.local -c DCOnly -dc dc.domain.local -ns <dc-ip>\nnxc ldap dc.domain.local -u user -p pass --bloodhound -c DCOnly\n# collects trusts, ACLs, group membership, GPOs, OUs and cert templates from the DC,\n# and SKIPS Session/LoggedOn/LocalGroup, which otherwise reach EVERY host over SMB" },
-              { label: "Throttle + jitter to stay under rate-based detection (SharpHound)", cmd: "SharpHound.exe -c DCOnly --throttle 1000 --jitter 30 --domaincontroller dc.domain.local\n#   --throttle 1000      wait ~1000 ms between requests\n#   --jitter 30          vary that delay by +/-30%\n#   --domaincontroller   pin to one DC instead of fanning out" },
-              { label: "If you must collect sessions, do it quietly", cmd: "# --stealth touches far fewer hosts (only the most reliable sources) than a full\n# sweep; it is still SMB traffic, so reserve it for when you actually need sessions:\nSharpHound.exe -c Session --stealth --throttle 1500 --jitter 30" }
+              { label: "DCOnly — LDAP to the DC only, no member-host touch", cmd: "SharpHound.exe -c DCOnly --outputdirectory C:\\Windows\\Temp\n# trusts, ACLs, group membership, GPOs, OUs and cert templates from the DC;\n# SKIPS Session/LoggedOn/LocalGroup, which otherwise reach EVERY host over SMB" },
+              { label: "Throttle, jitter and pin one DC", cmd: "SharpHound.exe -c DCOnly --throttle 1000 --jitter 30 --domaincontroller dc01.bank.local\n#   --throttle 1000      ~1000 ms between requests\n#   --jitter 30          vary that delay by +/-30%\n#   --domaincontroller   one DC instead of fanning out" },
+              { label: "Quiet session collection (only when you need sessions)", cmd: "SharpHound.exe -c Session --stealth --throttle 1500 --jitter 30\n# --stealth touches only the most reliable sources — far fewer hosts than a full sweep" },
+              { label: "Then get the output off the host", cmd: "# exfil the C:\\Windows\\Temp\\*_BloodHound.zip and delete it —\n# don't leave collector output (sensitive loot) sitting on the target." }
             ]
           },
           {
-            title: "Importing Data",
-            type: "table",
-            columns: ["Concept", "Description"],
-            rows: [
-              ["BloodHound CE upload", "Drag the collector's output .zip into the web UI's upload panel"],
-              ["Incremental re-import", "Re-run collection and re-upload periodically — AD relationships change, and a stale graph shows paths that no longer exist"]
+            title: "bloodhound-python — Linux collector (OPSEC-safe)",
+            type: "commands",
+            commands: [
+              { label: "DCOnly collection (recommended first pass)", cmd: "bloodhound-python -u <user> -p '<pass>' -d bank.local \\\n  -c DCOnly \\\n  -dc dc01.bank.local -ns <dc-ip> --dns-tcp \\\n  --zip\n#   -c DCOnly   LDAP to the DC only — no Session/LocalGroup SMB sweep\n#   -dc  the DC FQDN (must resolve)   -ns  use the DC as nameserver\n#   --dns-tcp  avoid flaky UDP on segmented/VPN networks   --zip  one upload-ready archive" },
+              { label: "With an NT hash or a Kerberos ticket", cmd: "# pass-the-hash (empty LM):\nbloodhound-python -u <user> --hashes :<NT-hash> -d bank.local -c DCOnly -dc dc01.bank.local -ns <dc-ip> --zip\n# Kerberos — uses the TGT in $KRB5CCNAME (quieter, or when NTLM is disabled):\nexport KRB5CCNAME=<user>.ccache\nbloodhound-python -u <user> -k -d bank.local -c DCOnly -dc dc01.bank.local -ns <dc-ip> --zip" },
+              { label: "Fix the two errors you hit first", cmd: "# name resolution — the -dc FQDN must resolve:\necho \"<dc-ip>  dc01.bank.local bank.local\" | sudo tee -a /etc/hosts\n# clock skew (KRB_AP_ERR_SKEW) — sync to the DC:\nsudo ntpdate <dc-ip>\n# note: bloodhound-python has NO throttle/jitter — DCOnly + a normal user is the OPSEC here" }
             ]
           },
           {
-            title: "Built-in Queries",
+            title: "nxc (NetExec) — --bloodhound (OPSEC-safe)",
+            type: "commands",
+            commands: [
+              { label: "DCOnly collection via NetExec", cmd: "nxc ldap dc01.bank.local -u <user> -p '<pass>' \\\n  --bloodhound -c DCOnly \\\n  --dns-server <dc-ip> --dns-tcp\n#   --bloodhound  defaults to the BloodHound CE collector\n#   -c DCOnly     LDAP-only; -c also takes All, ACL, Group, Trusts, ADCS, ... (comma-separated)\n#   output .zip lands in ~/.nxc/logs/" },
+              { label: "With an NT hash or Kerberos", cmd: "# pass-the-hash:\nnxc ldap dc01.bank.local -u <user> -H <NT-hash> --bloodhound -c DCOnly --dns-server <dc-ip>\n# Kerberos:\nnxc ldap dc01.bank.local -u <user> -k --bloodhound -c DCOnly --dns-server <dc-ip>" },
+              { label: "Add AD CS (ESC) edges — CE collector only", cmd: "nxc ldap dc01.bank.local -u <user> -p '<pass>' --bloodhound -c DCOnly,ADCS --dns-server <dc-ip>\n# ADCS collection is only compatible with the BloodHound-CE collector (the nxc default)" }
+            ]
+          },
+          {
+            title: "BloodHound CE — load and view the graph",
+            type: "commands",
+            commands: [
+              { label: "1. Start BloodHound CE (Docker)", cmd: "curl -L https://ghst.ly/getbhce -o docker-compose.yml\ndocker compose up -d\n# grab the one-time random admin password:\ndocker compose logs bloodhound | grep -i 'Initial Password'" },
+              { label: "2. Log in and ingest", cmd: "# open http://localhost:8080  (admin + that password; it forces a reset on first login)\n# Administration -> File Ingest -> Upload File(s)\n# drop the collector's *_bloodhound.zip (or the loose *.json) and wait for 'Complete'" },
+              { label: "3. View the graph", cmd: "# Explore -> run a built-in query, e.g. \"Shortest Paths to Domain Admins\"\n# or type Cypher directly:\nMATCH p=shortestPath((n)-[*1..]->(g:Group)) WHERE g.objectid ENDS WITH \"-512\" RETURN p" }
+            ]
+          },
+          {
+            title: "Queries worth running",
             type: "table",
             columns: ["Query", "What it surfaces"],
             rows: [
-              ["Shortest Paths to Domain Admins", "Every shortest path from any node to a Domain Admins member — usually the first query to run"],
-              ["Find All Domain Admins", "Just the membership list, no path analysis"],
-              ["Shortest Paths from Kerberoastable Users", "Whether a Kerberoastable account (one with an SPN) sits on a path to something valuable"],
-              ["Find Computers where Domain Users are Local Admin", "Broad local-admin exposure across the domain — often a fast win"]
+              ["Shortest Paths to Domain Admins", "Every shortest path to a Domain Admins member — usually the first query to run"],
+              ["Find Computers where Domain Users are Local Admin", "Broad local-admin exposure across the domain — often a fast win"],
+              ["Shortest Paths from Kerberoastable Users", "Whether an SPN account sits on a path to something valuable"],
+              ["MATCH p=shortestPath((n)-[*1..]->(g:Group)) WHERE g.objectid ENDS WITH \"-512\" RETURN p", "Cypher: shortest path to Domain Admins (RID 512), typed into the Cypher bar"],
+              ["MATCH (n:User {name:\"JDOE@BANK.LOCAL\"})-[r]->(m) RETURN n,r,m", "Cypher: all outbound edges from one principal, once you've picked a start node"]
             ]
           },
           {
-            title: "Path / Cypher Queries",
-            type: "table",
-            columns: ["Example", "Description"],
-            rows: [
-              ["MATCH p=shortestPath((u:User)-[*]->(g:Group {name:\"DOMAIN ADMINS@DOMAIN.LOCAL\"})) RETURN p", "Custom shortest-path query typed directly into BloodHound CE's Cypher bar"],
-              ["MATCH (n {name:\"STUDENT1@DOMAIN.LOCAL\"})-[r]->(m) RETURN n,r,m", "All outbound edges from a specific principal — useful once you've picked a starting point"]
-            ]
-          },
-          {
-            title: "Common Workflows",
-            type: "commands",
-            commands: [
-              { label: "Standard collection & analysis pass", cmd: "bloodhound-python -u user -p pass -d domain.local -c All\n# upload the .zip into BloodHound CE\n# run \"Shortest Paths to Domain Admins\"\n# pivot on the first edge in the path and repeat for that node" }
-            ]
-          },
-          {
-            title: "Notes & Tips",
+            title: "OPSEC & notes",
             type: "notes",
             items: [
-              "Refresh collection periodically on longer engagements — group memberships and ACLs change, and a stale graph shows paths that no longer exist.",
-              "SharpHound generates a real amount of LDAP and SMB traffic — expect it to be noisy on a monitored network.",
-              "Prefer -c DCOnly on a monitored network: it only talks LDAP to the DC and never connects to member hosts, so it avoids the Session/LoggedOn/LocalGroup SMB sweep that -c All performs across every machine.",
-              "The loudest signal is one account LDAP-enumerating the whole directory in seconds — run collection as a normal user, from a non-DC host, during business hours, and use --throttle/--jitter to blend in.",
-              "BloodHound CE replaced the legacy Neo4j-desktop-based community edition — collector output format is the same .zip either way.",
-              "Treat every edge as a lead to verify, not a guarantee — confirm a path manually (e.g. with NetExec) before relying on it during an engagement."
+              "Prefer -c DCOnly: it only talks LDAP to the DC and never connects to member hosts, avoiding the Session/LoggedOn/LocalGroup SMB sweep that -c All runs against every machine.",
+              "The loudest signal is one account LDAP-enumerating the whole directory in seconds — run as a normal user, from a non-DC host, in business hours. SharpHound can --throttle/--jitter; bloodhound-python and nxc cannot, so pace those yourself and keep them to DCOnly.",
+              "Don't leave collector output on the target — exfil the .zip off-host and delete it; the JSON is sensitive loot.",
+              "Refresh collection periodically on long engagements — ACLs and memberships change, and a stale graph shows paths that no longer exist.",
+              "BloodHound CE replaced the legacy Neo4j-desktop edition; all three collectors here feed the same CE .zip format (nxc defaults to the CE collector).",
+              "Treat every edge as a lead to verify — confirm a path (e.g. with NetExec) before relying on it during an engagement."
             ]
           }
         ]
