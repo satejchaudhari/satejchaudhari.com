@@ -33,6 +33,32 @@ MAX_AGE_HOURS = 72
 MAX_ITEMS = 90
 OUT = "assets/js/news-data.js"
 
+# Sources whose feeds mix in general (non-cybersecurity) news. Items from these
+# are kept only if their title/summary matches CYBER_RE below. The dedicated
+# cybersecurity outlets above are trusted as-is. Add a source name here if it
+# starts bringing in off-topic stories.
+FILTER_SOURCES = {"The420"}
+
+# A story counts as cybersecurity if any of these appears in its title/summary.
+_CYBER_TERMS = [
+    r"cyber", r"\bhack", r"malware", r"ransomware", r"phish", r"spyware", r"trojan",
+    r"botnet", r"ddos", r"exploit", r"vulnerab", r"zero[-\s]?day", r"0-?day",
+    r"\bbreach", r"infostealer", r"stealer", r"keylogger", r"rootkit", r"backdoor",
+    r"credential", r"password", r"encrypt", r"decrypt", r"\bspoof", r"deepfake",
+    r"sextortion", r"dark\s?web", r"sim[-\s]?box", r"sim[-\s]?swap", r"digital arrest",
+    r"data\s+(?:breach|leak|theft|privacy|protection)", r"identity theft",
+    r"surveillance", r"espionage", r"pegasus", r"firewall", r"antivirus",
+    r"cert-in", r"owasp", r"supply[-\s]chain", r"misconfig", r"zero[-\s]?trust",
+    r"sql injection", r"threat actor", r"nation-state", r"hacktivist",
+    r"compromis", r"intrusion", r"cyber\s?crime", r"cyber\s?security", r"cyberattack",
+    r"infosec", r"information security", r"\bscam", r"fraudster", r"phishing",
+    r"online (?:fraud|scam|betting|gambling)", r"upi[-\s]?fraud", r"whatsapp",
+    r"telegram", r"\bcve\b", r"\bapt\b", r"\brce\b", r"\bxss\b", r"\bvpn\b",
+    r"\bmfa\b", r"\b2fa\b", r"\botp\b", r"\bupi\b", r"\bedr\b", r"\bsiem\b",
+    r"\bciso\b", r"\bnist\b", r"\biot\b", r"zero-click", r"\bpatch", r"data protection",
+]
+CYBER_RE = re.compile("|".join(_CYBER_TERMS), re.I)
+
 TAG_RE = re.compile(r"<[^>]+>")
 WS_RE = re.compile(r"\s+")
 
@@ -134,6 +160,8 @@ def main():
             when = parse_date(it["published"])
             if when is None or when < cutoff or it["link"] in seen:
                 continue
+            if source in FILTER_SOURCES and not CYBER_RE.search(it["title"] + " " + it["summary"]):
+                continue  # drop non-cybersecurity stories from mixed-content sources
             seen.add(it["link"])
             items.append(it)
             kept += 1
