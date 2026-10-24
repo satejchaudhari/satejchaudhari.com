@@ -103,9 +103,9 @@ var WEB_MAP = {
             { text: "Check DMARC / SPF / DKIM email policies", desc: "Weak or missing email-authentication records let an attacker spoof mail from the organisation's own domain.", tools: [{ n: "spoofcheck", id: "spoofcheck" }], vulns: [{ n: "Spoofable Email (SPF/DKIM/DMARC)", id: "email-spoofing" }] },
             { text: "Review open ports via Shodan", desc: "Shodan's existing scan data shows exposed ports and services without you generating any traffic.", tools: [{ n: "Shodan", id: "shodan" }] },
             { text: "Full TCP port scan of all ports", desc: "Scanning all 65,535 ports catches services hiding on non-standard ports that a top-ports scan skips.", tools: [{ n: "Nmap", id: "nmap" }] },
-            { text: "Scan the common UDP ports", desc: "UDP services such as DNS, SNMP, and VPN are easy to overlook but often expose sensitive functionality.", tools: [{ n: "Nmap", id: "nmap" }, { n: "udp-proto-scanner", id: "udp-proto-scanner" }] },
+            { text: "Scan the common UDP ports", desc: "UDP services such as DNS, SNMP, and VPN are easy to overlook but often expose sensitive functionality.", tools: [{ n: "Nmap", id: "nmap" }, { n: "udp-proto-scanner" }] },
             { text: "Test the SSL/TLS configuration", desc: "Auditing the TLS setup flags weak ciphers, outdated protocols, and certificate problems.", tools: [{ n: "testssl.sh", id: "testssl" }], vulns: [{ n: "Weak TLS / SSL Configuration", id: "weak-tls" }] },
-            { text: "Password-spray discovered services (if you have creds)", desc: "With a valid credential and a service list, a slow spray of common passwords can find reused logins without tripping lockouts.", tools: [{ n: "brutespray", id: "brutespray" }] }
+            { text: "Password-spray discovered services (if you have creds)", desc: "With a valid credential and a service list, a slow spray of common passwords can find reused logins without tripping lockouts.", tools: [{ n: "brutespray" }] }
           ]
         },
         {
