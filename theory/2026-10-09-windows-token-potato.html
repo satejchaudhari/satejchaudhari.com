@@ -109,6 +109,7 @@
             <tr><td><strong>SeRestorePrivilege</strong></td><td>Write any file — overwrite a service binary or a DLL a SYSTEM process loads.</td></tr>
             <tr><td><strong>SeTakeOwnershipPrivilege</strong></td><td>Take ownership of any object, then grant yourself access.</td></tr>
             <tr><td><strong>SeLoadDriverPrivilege</strong></td><td>Load a (vulnerable) driver &rarr; kernel code execution (BYOVD).</td></tr>
+            <tr><td><strong>SeManageVolumePrivilege</strong></td><td>"Perform volume maintenance tasks" — abuse the volume primitive to grant yourself write access over <code>C:\Windows</code>, then DLL-hijack a SYSTEM process to run code as SYSTEM. Default to Administrators, so it is an over-grant/service-account misconfig.</td></tr>
           </tbody>
         </table>
 
@@ -151,6 +152,7 @@ GodPotato.exe -cmd "cmd /c whoami"   # should return nt authority\system</code><
           <li><strong>SeBackup/SeRestore</strong> &rarr; read the SAM &amp; SYSTEM hives (or NTDS.dit on a DC) and extract hashes offline.</li>
           <li><strong>SeDebug</strong> &rarr; dump LSASS (see <a href="2026-08-18-windows-credential-storage.html">Windows Credential Storage</a>) or inject into a SYSTEM process.</li>
           <li><strong>SeLoadDriver</strong> &rarr; load a known-vulnerable signed driver and execute in the kernel (BYOVD) — also a path to disabling EDR.</li>
+          <li><strong>SeManageVolume</strong> &rarr; the volume-maintenance primitive (public <em>SeManageVolumeExploit</em>) can set the DACL on <code>C:\Windows</code> to give <code>BUILTIN\Users</code> full control; from there drop a hijackable DLL that a SYSTEM service loads (a classic is a missing <code>C:\Windows\WptsExtensions.dll</code> loaded by Task Scheduler at boot) for SYSTEM execution.</li>
           <li><strong>Token theft / impersonation</strong> &rarr; already-SYSTEM/admin? Duplicate another logged-on user's token to act as them, including for lateral movement.</li>
         </ul>
 
