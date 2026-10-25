@@ -28,7 +28,9 @@ window.PRIVMAP_DATA = {
             { section: "token-privs", note: "if whoami /priv shows SeImpersonate/SeBackup/SeDebug" },
             { section: "services", note: "if services have weak permissions/paths" },
             { section: "scheduled", note: "if there are modifiable tasks/autoruns" },
-            { section: "stored-creds", note: "always hunt stored credentials" }
+            { section: "stored-creds", note: "always hunt stored credentials" },
+            { section: "uac", note: "if you are a local admin stuck at medium integrity" },
+            { section: "kernel", note: "if the host is behind on patches" }
           ] }
       ]
     },
