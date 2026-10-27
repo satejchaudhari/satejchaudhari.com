@@ -31,7 +31,13 @@ window.PRIVMAP_DATA = {
             { section: "stored-creds", note: "always hunt stored credentials" },
             { section: "uac", note: "if you are a local admin stuck at medium integrity" },
             { section: "kernel", note: "if the host is behind on patches" }
-          ] }
+          ] },
+        { id: "lotl", title: "Living off the land (native enumeration)",
+          theory: { label: "BloodHound & AD Enumeration", url: "theory/2026-10-09-bloodhound-ad-enumeration.html" },
+          vuln: { label: "Toolkit — Windows built-ins", url: "tool-detail.html?tool=windows-builtins" },
+          desc: "No uploads needed: enumerate the host, domain and defenses with signed built-ins (net/net1, dsquery LDAP filters, wmic, PowerShell) — quieter, and works on isolated hosts where tooling can't be staged.",
+          cmds: ["systeminfo", "net group \"Domain Admins\" /domain", "dsquery * -filter \"(userAccountControl:1.2.840.113556.1.4.803:=8192)\" -attr sAMAccountName", "Get-MpComputerStatus   # check Defender before acting"],
+          outcomes: [{ label: "Enumeration done", color: "#94a3b8" }] }
       ]
     },
     {
@@ -46,8 +52,9 @@ window.PRIVMAP_DATA = {
           moveTo: [{ section: "system", note: "potato → SYSTEM" }] },
         { id: "backup", title: "SeBackup / SeRestore",
           theory: { label: "Windows Credential Storage", url: "theory/2026-08-18-windows-credential-storage.html" },
-          desc: "Read any file (SeBackup) — dump the SAM/SYSTEM hives or SYSTEM-only files, then extract credentials offline.",
-          cmds: ["whoami /priv | findstr /i backup", "reg save hklm\\sam sam; reg save hklm\\system system"],
+          vuln: { label: "SeBackup / SeRestore Abuse", url: "vuln-detail.html?vuln=sebackup-serestore" },
+          desc: "Read any file (SeBackup) — dump the SAM/SYSTEM hives (or NTDS.dit on a DC), then extract credentials offline; SeRestore overwrites any file.",
+          cmds: ["whoami /priv | findstr /i backup", "reg save hklm\\sam sam.hive /y; reg save hklm\\system system.hive /y"],
           outcomes: [{ label: "SYSTEM creds", color: "#f59e0b" }],
           moveTo: [{ section: "system", note: "dump SAM → crack/pass the admin hash" }] },
         { id: "debug", title: "SeDebug",
@@ -55,7 +62,13 @@ window.PRIVMAP_DATA = {
           desc: "Open any process — including LSASS — to dump credentials.",
           cmds: ["whoami /priv | findstr /i debug"],
           outcomes: [{ label: "SYSTEM creds", color: "#f59e0b" }],
-          moveTo: [{ section: "system", note: "dump LSASS for SYSTEM/other creds" }] }
+          moveTo: [{ section: "system", note: "dump LSASS for SYSTEM/other creds" }] },
+        { id: "managevolume", title: "SeManageVolume",
+          theory: { label: "Windows Token Abuse & Potato Attacks", url: "theory/2026-10-09-windows-token-potato.html" },
+          desc: "'Perform volume maintenance tasks' — abuse the volume primitive to grant yourself write over C:\\Windows, then DLL-hijack a SYSTEM process (public SeManageVolumeExploit).",
+          cmds: ["whoami /priv | findstr /i managevolume"],
+          outcomes: [{ label: "SYSTEM", color: "#4ade80" }],
+          moveTo: [{ section: "system", note: "write C:\\Windows → hijack a SYSTEM-loaded DLL → SYSTEM" }] }
       ]
     },
     {
@@ -127,7 +140,8 @@ window.PRIVMAP_DATA = {
       techniques: [
         { id: "uac-bypass", title: "UAC bypass to high integrity",
           theory: { label: "Windows Access Tokens & UAC", url: "theory/2026-08-18-windows-tokens-uac.html" },
-          desc: "Admin-group users run at medium integrity until elevated; auto-elevating binaries and hijacks reach high integrity without a prompt.",
+          vuln: { label: "UAC Bypass (registry, COM & GUI/msconfig)", url: "vuln-detail.html?vuln=uac-bypass" },
+          desc: "Admin-group users run at medium integrity until elevated; auto-elevating binaries, registry/COM hijacks, and GUI tricks (msconfig Tools→Launch) reach high integrity without a prompt.",
           cmds: ["whoami /groups | findstr /i \"High Medium\"   # current integrity"],
           outcomes: [{ label: "high integrity", color: "#4ade80" }],
           moveTo: [{ section: "system", note: "high integrity → SYSTEM routes open up" }] }
