@@ -331,7 +331,7 @@ whois $TARGET | grep -iE 'registrar|registrant|admin|tech|name server|creation|e
       <p>
         Historical WHOIS is where the value actually is. Domains registered before privacy
         proxies became standard often have a real name, email, and address in the archive,
-        and <a href="../tool-detail.html?tool=securitytrails">SecurityTrails</a> keeps those
+        and SecurityTrails keeps those
         snapshots.
       </p>
 
@@ -363,8 +363,8 @@ curl -s -H "APIKEY: $ST_KEY" -X POST \
 
       <p>
         Full reference for these:
-        <a href="../tool-detail.html?tool=viewdns">ViewDNS</a> and
-        <a href="../tool-detail.html?tool=securitytrails">SecurityTrails</a>.
+        ViewDNS and
+        SecurityTrails.
       </p>
 
       <h3>1.3 Map the netblocks and ASNs</h3>
@@ -384,7 +384,7 @@ amass intel -asn 64500 -dir ./amass-graph | tee 01-domains/asn-64500.txt
 whois -h whois.radb.net -- '-i origin AS64500' | grep -E '^route:'</code></pre>
 
       <p>
-        See <a href="../tool-detail.html?tool=amass">Amass</a> for the full subcommand set.
+        See Amass for the full subcommand set.
       </p>
 
       <h3>1.4 Corporate structure</h3>
@@ -455,7 +455,7 @@ gau --subs $TARGET | unfurl domains | sort -u &gt; 02-subdomains/archive.txt</co
       <p>
         References:
         <a href="../tool-detail.html?tool=subfinder">Subfinder</a>,
-        <a href="../tool-detail.html?tool=amass">Amass</a>,
+        Amass,
         <a href="../tool-detail.html?tool=theharvester">theHarvester</a>,
         <a href="../tool-detail.html?tool=wayback-machine">Wayback Machine</a>.
       </p>
@@ -997,9 +997,9 @@ maigret &lt;handle&gt; --top-sites 500 --print-found --html \
 
       <p>
         References:
-        <a href="../tool-detail.html?tool=sherlock">Sherlock</a>,
-        <a href="../tool-detail.html?tool=maigret">Maigret</a>,
-        <a href="../tool-detail.html?tool=whatsmyname">WhatsMyName</a>.
+        Sherlock,
+        Maigret,
+        WhatsMyName.
       </p>
 
       <p>
@@ -1020,8 +1020,8 @@ holehe john.doe@$TARGET --only-used --csv
 
       <p>
         References:
-        <a href="../tool-detail.html?tool=holehe">Holehe</a>,
-        <a href="../tool-detail.html?tool=epieos">Epieos</a>.
+        Holehe,
+        Epieos.
       </p>
 
       <p>

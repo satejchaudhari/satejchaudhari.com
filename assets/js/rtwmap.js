@@ -41,7 +41,7 @@ var RTW_MAP = {
             { text: "Query passive DNS", desc: "Historical resolutions reveal old IPs and related hostnames.", tools: [ { n: "SecurityTrails", url: "https://securitytrails.com/" } ] }
           ]},
           { id: "rd-subs", title: "Subdomains & certificates", scenario: "to widen the attack surface.", items: [
-            { text: "Enumerate subdomains passively", desc: "Aggregate from many passive sources.", tools: [ { n: "amass", id: "amass" }, { n: "subfinder", id: "subfinder" }, { n: "theHarvester", id: "theharvester" } ] },
+            { text: "Enumerate subdomains passively", desc: "Aggregate from many passive sources.", tools: [ { n: "amass" }, { n: "subfinder", id: "subfinder" }, { n: "theHarvester", id: "theharvester" } ] },
             { text: "Mine Certificate Transparency logs", desc: "CT logs list hostnames on issued certs.", tools: [ { n: "crt.sh", url: "https://crt.sh/" } ] },
             { text: "Flag dangling / unclaimed subdomains", desc: "CNAMEs to deprovisioned services are takeover candidates (see Initial Access).", tools: [ { n: "whatweb", id: "whatweb" } ] }
           ]}
@@ -68,8 +68,8 @@ var RTW_MAP = {
             { text: "Identify the help desk and IT process", desc: "Who resets passwords/MFA and how — the pretext for vishing." }
           ]},
           { id: "rpe-id", title: "Usernames & email", scenario: "with a handle, email or name in hand.", items: [
-            { text: "Enumerate usernames across platforms", desc: "A reused handle links accounts everywhere.", tools: [ { n: "Sherlock", id: "sherlock" }, { n: "Maigret", id: "maigret" } ] },
-            { text: "Check which services an email is registered on", desc: "Account-existence checks with no password attempts.", tools: [ { n: "Holehe", id: "holehe" } ] },
+            { text: "Enumerate usernames across platforms", desc: "A reused handle links accounts everywhere.", tools: [ { n: "Sherlock" }, { n: "Maigret" } ] },
+            { text: "Check which services an email is registered on", desc: "Account-existence checks with no password attempts.", tools: [ { n: "Holehe" } ] },
             { text: "Enrich with people-search aggregators", desc: "Addresses, relatives and past locations (region-specific).", tools: [ { n: "IntelTechniques", url: "https://inteltechniques.com/tools/" } ] }
           ]}
         ]

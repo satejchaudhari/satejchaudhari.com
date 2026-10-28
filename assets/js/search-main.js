@@ -31,22 +31,8 @@
   });
   // Posts / writeups
   if (typeof POSTS !== "undefined") POSTS.forEach(function (p) { add(p.type === "writeup" ? "Writeup" : "Post", p.title, p.description, p.tag, p.url); });
-  // ATT&CK techniques (so an ID or technique name finds the matrix)
-  if (typeof ATTACK !== "undefined") {
-    var seenTid = {};
-    ATTACK.tactics.forEach(function (tac) {
-      (tac.techniques || []).forEach(function (t) {
-        var tid = t.id.replace(/[a-z]$/, "");
-        var key = tid + "|" + t.name;
-        if (seenTid[key]) return;
-        seenTid[key] = 1;
-        add("Technique", tid + " " + t.name, "Mapped under " + tac.name, "ATT&CK", "attack.html");
-      });
-    });
-  }
   // Static interactive / reference pages
   [
-    ["Map", "Red Team ATT&CK Matrix", "Site content mapped to MITRE ATT&CK tactics & techniques", "Interactive", "attack.html"],
     ["Map", "AD Attack Path Explorer", "Guided Active Directory attack playbook", "Interactive", "ad-map.html"],
     ["Map", "Cloud Attack Path Explorer", "Entra/Azure, AWS & Kubernetes attack paths", "Interactive", "cloud-map.html"],
     ["Map", "Linux Privesc Explorer", "Guided Linux privilege-escalation playbook", "Interactive", "linux-privesc-map.html"],
