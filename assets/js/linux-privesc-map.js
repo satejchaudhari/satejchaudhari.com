@@ -32,7 +32,9 @@ window.PRIVMAP_DATA = {
             { section: "sudo", note: "if sudo -l shows allowed commands" },
             { section: "suid-caps", note: "if there are unusual SUID bins / capabilities" },
             { section: "cron-path", note: "if cron jobs or writable PATH entries exist" },
-            { section: "creds", note: "if you find keys/passwords lying around" }
+            { section: "writable", note: "if sensitive files or service units are writable" },
+            { section: "creds", note: "if you find keys/passwords lying around" },
+            { section: "kernel", note: "if the kernel or a privileged component is unpatched" }
           ] }
       ]
     },
