@@ -135,6 +135,50 @@ enumeration to find the overlap; the fix is to remove it. That is why privesc
 hygiene is mostly about <strong>permissions and least privilege</strong>, not
 patching.</p>
 
+<h2>GUI &amp; interactive escalation</h2>
+<p>Not every escalation is a command line. In an <em>interactive</em> session —
+console, RDP, a kiosk, or a Citrix/RDS published app — a graphical surface that
+already runs at a higher integrity can be walked into a shell. The mechanism is
+always the same: <strong>a child process inherits its parent's token</strong>, so
+if you can make a High- or SYSTEM-integrity GUI launch <em>anything</em>, that
+thing runs at the parent's level.</p>
+
+<table>
+  <thead><tr><th>Surface</th><th>How you reach a shell</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td>Auto-elevating GUI (UAC bypass)</td><td>msconfig Tools&nbsp;&rarr;&nbsp;Launch, an MMC snap-in's Help&nbsp;Topics / Export-List / file dialog (azman.msc), or a &ldquo;highest privileges&rdquo; scheduled task</td><td>Medium admin &rarr; High integrity, no prompt (see <a href="../vuln-detail.html?vuln=uac-bypass">UAC Bypass</a>)</td></tr>
+    <tr><td>A GUI process already running as SYSTEM/admin</td><td>Vendor updaters, installers, &ldquo;repair&rdquo; wizards and setup UIs sitting on the interactive desktop — use their Open / Save&nbsp;As / Browse / Print / Help dialog to spawn a shell</td><td>Child inherits SYSTEM/admin</td></tr>
+    <tr><td>Accessibility at the logon/lock screen</td><td><code>sethc.exe</code> (Shift&nbsp;&times;5) or <code>utilman.exe</code> (Win+U) replaced or IFEO-hijacked to <code>cmd.exe</code></td><td>SYSTEM shell before any login (see <a href="2026-10-09-windows-persistence.html">Persistence</a>)</td></tr>
+    <tr><td>Kiosk / Citrix / RDS published app</td><td>Break out of the one allowed app through common dialogs, hyperlinks, embedded browsers, or a Save-As address bar to reach Explorer/cmd on the host</td><td>A full shell as the session, then escalate as normal</td></tr>
+  </tbody>
+</table>
+
+<p>The <strong>file dialog</strong> is the workhorse. Almost every Windows GUI
+exposes a common Open/Save dialog, and its filename and address boxes accept a
+program name or path. Typing <code>cmd.exe</code> (or
+<code>\\attacker\share\x.exe</code>, or a <code>file://</code> URL) and pressing
+Enter launches it as a child of the dialog's owner — set &ldquo;Files of
+type&rdquo; to <em>All Files</em> and you can also right-click an <code>.exe</code>
+&rarr; Open. This is exactly the UAC-bypass GUI trick; the only difference for
+full privesc is that the parent already holds a SYSTEM or admin token rather than
+a filtered one, so the shell you get is SYSTEM, not merely High.</p>
+
+<p>Kiosk and published-application breakout is the classic &ldquo;GUI
+privesc&rdquo; on locked-down terminals and Citrix/RDS farms: Print &rarr;
+&ldquo;Find a printer&rdquo; or &ldquo;Print to file&rdquo;, Help &rarr; &ldquo;Jump
+to URL&rdquo; into a browser, an embedded file picker, or a right-click
+&ldquo;Open file location&rdquo; each reach a shell the kiosk policy never meant
+to expose.</p>
+
+<blockquote>
+Defence is the same token logic in reverse: keep interactive-desktop software
+from running as SYSTEM (split it into a service plus a least-privilege UI), set
+UAC to <strong>Always Notify</strong>, lock kiosk/published apps down with their
+own allow-lists (no file dialogs, no Help, no child processes), and protect the
+accessibility binaries — see <a href="2026-10-09-windows-persistence.html">Persistence</a>
+for detection.
+</blockquote>
+
 <h2>Credentials left lying around</h2>
 <p>Separately from misconfigurations, Windows hosts accumulate secrets that skip
 escalation entirely by handing you a higher-privileged account:</p>
