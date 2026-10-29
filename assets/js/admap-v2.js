@@ -61,7 +61,7 @@ var AD_MAP_V2 = {
           desc: "Sweep the subnet and fingerprint hosts/services to find domain controllers and vulnerable targets.",
           cmds: [
             "nxc smb <ip_range>",
-            "nmap -sP -p <ip>",
+            "nmap -sn <ip_range>                 # ping sweep — live hosts",
             "nmap -Pn -sV --top-ports 50 --open <ip>",
             "nmap -Pn --script smb-vuln* -p139,445 <ip>",
             "nmap -Pn -sC -sV -oA <output> <ip>",
@@ -408,8 +408,8 @@ var AD_MAP_V2 = {
           desc: "NetNTLMv1 challenge/response. Can also be submitted to crack.sh, which recovers the NT hash from the DES keys.",
           cmds: [
             "john --format=netntlm hash.txt --wordlist=<rockyou.txt>",
-            "hashcat -m 1000 -a 0 hash.txt <rockyou.txt>",
-            "crack.sh"
+            "hashcat -m 5500 -a 0 hash.txt <rockyou.txt>",
+            "crack.sh   # NTLMv1 with a known challenge -> DES brute -> NT hash in ~hours"
           ],
           outcomes: [{ label: "Clear text password / NT hash", color: "#4ade80" }],
           moveTo: []
