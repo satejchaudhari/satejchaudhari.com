@@ -8522,6 +8522,10 @@ var TOOLKIT = [
               {
                 "label": "Theory — BloodHound & AD Enumeration",
                 "url": "theory/2026-10-09-bloodhound-ad-enumeration.html"
+              },
+              {
+                "label": "Map — Windows Privilege Escalation",
+                "url": "windows-privesc-map.html#foothold"
               }
             ]
           }

@@ -5970,7 +5970,8 @@ var VULNS = [
               { label: "Microsoft — NTLM overview", url: "https://learn.microsoft.com/en-us/windows-server/security/kerberos/ntlm-overview" },
               { label: "SpecterOps — Pass-the-Hash Is Dead: Long Live LocalAccountTokenFilterPolicy", url: "https://posts.specterops.io/pass-the-hash-is-dead-long-live-localaccounttokenfilterpolicy-506c25a7c167" },
               { label: "Invoke-TheHash — PowerShell PtH (SMB/WMI)", url: "https://github.com/Kevin-Robertson/Invoke-TheHash" },
-              { label: "The Hacker Recipes — Pass-the-hash / ticket", url: "https://www.thehacker.recipes/ad/movement/ntlm/pth" }
+              { label: "The Hacker Recipes — Pass-the-hash / ticket", url: "https://www.thehacker.recipes/ad/movement/ntlm/pth" },
+              { label: "Map — AD Attack Path Explorer", url: "ad-map.html" }
             ]
           },
           {
@@ -6357,7 +6358,8 @@ var VULNS = [
               { label: "UACME — UAC bypass collection (70+ methods)", url: "https://github.com/hfiref0x/UACME" },
               { label: "MITRE ATT&CK T1574.012 — COR_PROFILER", url: "https://attack.mitre.org/techniques/T1574/012/" },
               { label: "HackTricks — UAC bypass", url: "https://book.hacktricks.xyz/windows-hardening/authentication-credentials-uac-and-efs/uac-user-account-control" },
-              { label: "Irfan Bhat — Bypassing UAC by GUI-based bypasses (msconfig)", url: "https://medium.com/@irfanbhat3/bypassing-uac-by-gui-based-bypasses-a1a53e8ee8f2" }
+              { label: "Irfan Bhat — Bypassing UAC by GUI-based bypasses (msconfig)", url: "https://medium.com/@irfanbhat3/bypassing-uac-by-gui-based-bypasses-a1a53e8ee8f2" },
+              { label: "Map — Windows Privilege Escalation", url: "windows-privesc-map.html#uac" }
             ]
           },
           {
@@ -6446,7 +6448,8 @@ var VULNS = [
             items: [
               { label: "MITRE ATT&CK T1003.002 — Security Account Manager", url: "https://attack.mitre.org/techniques/T1003/002/" },
               { label: "Microsoft — Privilege Constants", url: "https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants" },
-              { label: "Priv2Admin — exploiting Windows privileges", url: "https://github.com/gtworek/Priv2Admin" }
+              { label: "Priv2Admin — exploiting Windows privileges", url: "https://github.com/gtworek/Priv2Admin" },
+              { label: "Map — Windows Privilege Escalation", url: "windows-privesc-map.html#token-privs" }
             ]
           },
           {
@@ -6528,7 +6531,8 @@ var VULNS = [
             type: "references",
             items: [
               { label: "MITRE ATT&CK T1543.003 — Windows Service", url: "https://attack.mitre.org/techniques/T1543/003/" },
-              { label: "HackTricks — Windows local privilege escalation", url: "https://book.hacktricks.xyz/windows-hardening/windows-local-privilege-escalation" }
+              { label: "HackTricks — Windows local privilege escalation", url: "https://book.hacktricks.xyz/windows-hardening/windows-local-privilege-escalation" },
+              { label: "Map — Windows Privilege Escalation", url: "windows-privesc-map.html#services" }
             ]
           },
           {
@@ -6609,7 +6613,8 @@ var VULNS = [
             type: "references",
             items: [
               { label: "MITRE ATT&CK T1134.001 — Token Impersonation/Theft", url: "https://attack.mitre.org/techniques/T1134/001/" },
-              { label: "The Hacker Recipes — Abusing tokens", url: "https://www.thehacker.recipes/ad/movement/access-tokens" }
+              { label: "The Hacker Recipes — Abusing tokens", url: "https://www.thehacker.recipes/ad/movement/access-tokens" },
+              { label: "Map — Windows Privilege Escalation", url: "windows-privesc-map.html#token-privs" }
             ]
           },
           {
