@@ -2172,12 +2172,12 @@ var AD_MAP_V2 = {
           title: "Grab backup keys",
           theory: null,
           cve: null,
-          desc: "Fetch the domain DPAPI backup key (PVK) to decrypt any user's DPAPI secrets domain-wide.",
+          desc: "Fetch the domain DPAPI backup key (PVK) to decrypt any user's DPAPI secrets domain-wide. With Domain Admin in hand, move on to planting durable persistence.",
           cmds: [
             "donpapi collect -H ':<hash>' <domain>/<user>@<ip_range> -t ALL --fetch-pvk"
           ],
           outcomes: [{ label: "Credentials", color: "#4ade80" }],
-          moveTo: []
+          moveTo: [{ section: "persistence", note: "plant durable domain persistence (Golden/Diamond, DCSync, AdminSDHolder, certs)" }]
         }
       ]
     },
