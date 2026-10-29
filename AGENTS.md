@@ -22,6 +22,29 @@ Quick orientation:
   locally (`python3 -m http.server 8099`), and confirm the list page **and** the
   detail/page render and every link resolves. See `CONTENT_SPEC.md` §2.
 
+**Always meet the quality bar.** New content is measured against the richest
+existing entry of its type (`CONTENT_SPEC.md` §2a) — match or beat it; never ship
+a thin stub next to a deep neighbour.
+
+**Always keep the maps in sync (do not skip this, even after compaction).**
+Whenever you add or materially change a tool, a vuln/misconfig, a theory
+technique, or a new **bypass / privilege-escalation / GUI method**, you MUST — in
+the same change — surface it in the relevant interactive map **and** link the
+page back to that map:
+
+- web tool/technique → `assets/js/webmap.js`
+- AD technique → `assets/js/admap-v2.js`
+- Windows/Linux privesc primitive, token privilege, service/kernel abuse, or
+  GUI/bypass method → `assets/js/windows-privesc-map.js` /
+  `assets/js/linux-privesc-map.js`
+- cloud technique → `assets/js/cloudmap.js`
+
+A feature that exists only on its detail page but nowhere in the maps is **not
+done**. Maps navigate only via `moveTo`, so every stage except the first needs an
+incoming `moveTo` (no orphans), and each stage should stay broad enough to guide a
+stuck operator (several techniques, an "Out of ideas?" checklist node). Full
+schema and rules: `CONTENT_SPEC.md` §9a.
+
 When a request conflicts with `CONTENT_SPEC.md`, follow the spec or flag the
 conflict. When the spec is silent, match the nearest existing high-quality entry
 in the same data file.

@@ -85,6 +85,31 @@ the prose is correct and proof-read.
 
 ---
 
+## 2a. The quality bar — gold-standard exemplars
+
+New content is measured against the **richest existing entry of its type**. Match
+or beat it for depth, structure, and accuracy; never ship a thin stub next to a
+deep neighbour. When in doubt, open the benchmark page and mirror its shape.
+Current benchmarks (refresh this table when something richer lands):
+
+| Type | Structural template (copy its shape) | Depth benchmark (match this bar) |
+|---|---|---|
+| Toolkit tool | `nmap` — clean, task-organised `sections` | `adaptix-c2`, `netexec`, `windows-builtins` |
+| Vuln / misconfig | `xss`, `sqli` — the full lifecycle | `uac-bypass`, `pass-the-hash` |
+| Theory page | `2026-10-08-applocker-bypass.html` | `2026-10-08-amsi-bypass-modern.html`, `2026-10-02-security-stack-end-to-end.html` |
+| Writeup / post | `2026-08-18-osint-methodology.html` | machine writeup: `2026-10-02-htb-monitorfour.html` |
+| Interactive map | **AD Attack Path (`admap-v2.js`)** | the Windows & Linux privesc maps now match it |
+
+At the bar, a **tool/vuln** entry carries a real `brief`, a 3–5 line
+`quickReference`, and the full expected `sections` (§4/§5). A **theory/writeup**
+page carries the mandatory structure (§6b/§7b) with tables + command blocks, a
+Detection/Remediation angle where relevant, and a Related-reading block. An
+**interactive map** is broad enough to **guide a stuck operator**: every stage
+has several techniques (not one), each with a command, an outcome and a
+"Move to", plus an "Out of ideas? run the full checklist" entry point (see §9a).
+
+---
+
 ## 3. Shared section schema (Toolkit + Vulns)
 
 Both `toolkit.js` and `vulns.js` entries carry a `sections: []` array. The detail
@@ -354,6 +379,52 @@ AD_MAP_V2 = {
 
 ---
 
+## 9a. Guided maps + keeping them in sync (MANDATORY)
+
+The **AD** (`admap-v2.js`), **Cloud** (`cloudmap.js`), and **Windows / Linux
+privesc** (`windows-privesc-map.js`, `linux-privesc-map.js`) explorers share one
+engine (`privmap-main.js` / `admap-v2-main.js`). A map is
+`{ meta, palette, sections[] }`; each section is
+`{ id, title, color, tag, desc, techniques[] }`; each technique:
+
+```js
+{ id, title, desc,
+  cmds: ["..."],                              // ready-to-run; "# comments" dim
+  outcomes: [{ label, color }],               // what success looks like
+  moveTo: [{ section, tech?, note }],          // next stage(s) — DRIVES navigation
+  theory: { label, url }, vuln: { label, url }, // chips (ids/paths must resolve)
+  cve: { label, id, url },                      // optional CVE bar
+  branches: [{ label, note, cve?, warn?, cmds[], outcomes[] }] } // decision sub-tree
+```
+
+Map rules: every `moveTo.section` must exist; **every section except the first
+must have an incoming `moveTo`** (the renderer navigates only via `moveTo`, so an
+unreferenced stage is unreachable — a defect); every `theory`/`vuln` chip must
+resolve. Keep one **"Out of ideas? run the full checklist"** technique in the
+first stage that branches to every stage, so a stuck operator always has a next
+step. Chips use `tool-detail.html?tool=<id>` / `vuln-detail.html?vuln=<id>` /
+`theory/<file>.html` — never a bare tool id in a `theory`/`vuln` chip.
+
+> **MANDATORY — new content must be reflected in the maps.** Whenever you add or
+> materially change a tool, a vuln/misconfig, a theory technique, or a **new
+> bypass / escalation / GUI method**, you MUST, in the *same* change, surface it
+> in the relevant map **and** link the page back to that map:
+> - new **web** tool/technique → `webmap.js`
+> - new **AD** technique → `admap-v2.js`
+> - new **Windows/Linux privesc** primitive, token privilege, service/kernel
+>   abuse, or **GUI/bypass method** → `windows-privesc-map.js` /
+>   `linux-privesc-map.js` (as a technique or a `branch`, with a `theory`/`vuln`
+>   chip back to the page you wrote)
+> - new **cloud** technique → `cloudmap.js`
+>
+> A feature that exists only on its detail page but nowhere in the maps is **not
+> done**. After editing a map, re-run the map checks in §11.
+>
+> This rule is mirrored in **`AGENTS.md`** so it stays in context across
+> conversation compaction — keep the two in agreement if you change either.
+
+---
+
 ## 10. Cross-linking rules (the web of the site)
 
 - **Theory ↔ Vulns:** a vuln may link to a theory page via `theory:`; a theory
@@ -364,6 +435,10 @@ AD_MAP_V2 = {
   placeholder, wire up the `id`.
 - **Theory → Theory:** the Related-reading block (§6b.6) is the standard
   mechanism; prefer it over scattering links only in prose.
+- **Content ↔ Maps (both directions, MANDATORY — see §9a):** a new tool / vuln /
+  theory technique / bypass method must be surfaced in its relevant map (web, AD,
+  cloud, or Windows/Linux privesc), and that page must link back to the map
+  (a map chip, a References entry, or a prose link). Neither direction is optional.
 - Before publishing, confirm **every** id you referenced resolves to a real
   entry, and every relative path points at a real file.
 
@@ -373,14 +448,18 @@ AD_MAP_V2 = {
 
 1. Identify the content type and its model (§1). Open the right data file / copy
    the right template.
-2. Build the object/page against the schema here, matching the nearest existing
-   high-quality example for depth and tone.
+2. Build the object/page against the schema here, matching the **gold-standard
+   exemplar** for its type (§2a) for depth and tone — meet or beat that bar.
 3. Fill **every required field**; add the expected optional depth (`brief`,
    `sections`, Related-reading, references).
 4. For hand-written pages, do **both** edits (HTML **and** registry) and include
    `main.js`.
-5. Verify all ids and links resolve; verify external URLs.
-6. Run validation (§2): `node --check` all JS, serve locally, open the list page
-   **and** the detail/page.
-7. Proof-read the prose (correctness + house-style English).
-8. Commit with a clear, scoped message and push to `main`.
+5. **Reflect it in the relevant map and link the page back to it** (§9a / §10) —
+   this is part of the same change, not a follow-up. For a map edit, confirm all
+   `moveTo.section` targets exist, no stage is orphaned (every non-first section
+   has an incoming `moveTo`), and every chip resolves.
+6. Verify all ids and links resolve; verify external URLs.
+7. Run validation (§2): `node --check` all JS, serve locally, open the list page
+   **and** the detail/page (and the map, if you touched one).
+8. Proof-read the prose (correctness + house-style English).
+9. Commit with a clear, scoped message and push to `main`.
