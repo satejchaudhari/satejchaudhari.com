@@ -129,6 +129,19 @@
           whenever you're evaluating a benchmark item.
         </p>
 
+        <h2>The attacker's inverse: the DAD triad</h2>
+        <p>
+          Every CIA property has an attacker-side opposite, sometimes called the
+          <strong>DAD triad</strong> &mdash; <strong>Disclosure</strong> breaks
+          confidentiality, <strong>Alteration</strong> breaks integrity, and
+          <strong>Destruction</strong> (or denial) breaks availability. It is a useful
+          habit on an offensive engagement: for each access you gain, ask which of the
+          three you could demonstrate, because that is exactly how the finding gets
+          written up as business risk. A readable file share is <em>disclosure</em>; a
+          writable deployment pipeline is <em>alteration</em>; a reachable backup you
+          could wipe is <em>destruction</em>.
+        </p>
+
         <h2>Beyond the three — authentication, authorisation, and non-repudiation</h2>
         <p>
           The triad is the core, but three supporting properties come up constantly in findings,
