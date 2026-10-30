@@ -6779,18 +6779,128 @@ var TOOLKIT = [
         "description": "Fast, multi-purpose HTTP toolkit for probing hosts at scale.",
         "brief": "httpx (ProjectDiscovery) takes a list of hosts or subdomains and quickly reports which are alive, with status code, title, technologies, CNAME, and more. It is the standard 'is it live?' stage that sits between subdomain enumeration and active testing.",
         "quickReference": [
-          { "label": "Probe a subdomain list", "cmd": "httpx -l subs.txt -silent" },
-          { "label": "Rich output for triage", "cmd": "httpx -l subs.txt -title -sc -tech-detect -cname" },
-          { "label": "Pipe straight from subfinder", "cmd": "subfinder -d target.com -silent | httpx -silent" }
+          {
+            "label": "Probe a subdomain list",
+            "cmd": "httpx -l subs.txt -silent"
+          },
+          {
+            "label": "Rich output for triage",
+            "cmd": "httpx -l subs.txt -title -sc -tech-detect -cname"
+          },
+          {
+            "label": "Pipe straight from subfinder",
+            "cmd": "subfinder -d target.com -silent | httpx -silent"
+          }
         ],
-        "sections": [ { "title": "Useful Flags", "type": "table", "columns": ["Flag", "Description"], "rows": [
-          ["-sc", "Show HTTP status code"],
-          ["-title", "Grab the page title"],
-          ["-tech-detect", "Fingerprint technologies (Wappalyzer)"],
-          ["-cname", "Print the CNAME (spot takeover candidates)"],
-          ["-location", "Follow and show redirects"],
-          ["-mc / -fc", "Match / filter by status code"]
-        ] } ]
+        "sections": [
+          {
+            "title": "Useful flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-u <t> / -l <file>",
+                "Single target / list of hosts (also reads stdin)"
+              ],
+              [
+                "-sc / -title / -td",
+                "Status code, page title, technology detection"
+              ],
+              [
+                "-server / -cl / -location",
+                "Server header, content-length, redirect Location"
+              ],
+              [
+                "-ip / -cname / -cdn",
+                "Resolved IP, CNAME (subdomain-takeover hints), CDN detection"
+              ],
+              [
+                "-favicon / -jarm / -hash <algo>",
+                "favicon mmh3 hash, JARM TLS fingerprint, response-body hash"
+              ],
+              [
+                "-mc / -fc <codes>",
+                "Match / filter by HTTP status code"
+              ],
+              [
+                "-ms / -fs <str>",
+                "Match / filter by a string in the response"
+              ],
+              [
+                "-path <p> / -ports <list>",
+                "Probe specific path(s) / additional ports"
+              ],
+              [
+                "-fr / -H <hdr>",
+                "Follow redirects / send a custom header"
+              ],
+              [
+                "-t <n> / -rl <n>",
+                "Concurrency (threads) / rate limit (requests per second)"
+              ],
+              [
+                "-json / -o <file> / -silent",
+                "JSON output / write to file / results only (clean piping)"
+              ],
+              [
+                "-sr",
+                "Store the full responses to disk (evidence)"
+              ]
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Probe a subdomain list",
+                "cmd": "subfinder -d target.com -silent | httpx -silent -sc -title -td"
+              },
+              {
+                "label": "Live hosts + takeover hints",
+                "cmd": "httpx -l subs.txt -sc -cname -ip -silent"
+              },
+              {
+                "label": "Keep only interesting responses",
+                "cmd": "httpx -l hosts.txt -mc 200,301,302,401,403 -title -silent"
+              },
+              {
+                "label": "Fingerprint / favicon + JARM to JSON",
+                "cmd": "httpx -l hosts.txt -favicon -jarm -td -json -o probe.json"
+              },
+              {
+                "label": "Feed a crawler",
+                "cmd": "httpx -l subs.txt -silent | katana -silent     # or | gau"
+              }
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Two different tools are called \"httpx\": this is ProjectDiscovery's HTTP probing toolkit (a Go binary), not the Python httpx HTTP client library.",
+              "-silent gives clean, pipeable output — the usual bridge from subfinder to a crawler (katana / gau) or nuclei.",
+              "Respect the target: cap throughput with -rl on production, and use -sr to keep full responses as evidence."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "httpx — GitHub (ProjectDiscovery)",
+                "url": "https://github.com/projectdiscovery/httpx"
+              },
+              {
+                "label": "Map — Web Pentest Checklist",
+                "url": "web-map.html"
+              }
+            ]
+          }
+        ]
       },
       {
         "id": "wafw00f",
@@ -6799,32 +6909,108 @@ var TOOLKIT = [
         "description": "Identify and fingerprint the WAF protecting a website.",
         "brief": "wafw00f sends a series of normal and deliberately malicious requests and analyses the responses — status codes, headers, cookies, block pages — to identify which Web Application Firewall (if any) sits in front of a site. Knowing the WAF and its vendor tells you what is likely to block your payloads and how to shape or encode them to slip through.",
         "quickReference": [
-          { "label": "Fingerprint a site", "cmd": "wafw00f https://target.com" },
-          { "label": "List detectable WAFs", "cmd": "wafw00f -l" },
-          { "label": "From a URL list", "cmd": "wafw00f -i urls.txt" },
-          { "label": "Find every matching WAF, verbose", "cmd": "wafw00f https://target.com -a -v" }
+          {
+            "label": "Fingerprint a site",
+            "cmd": "wafw00f https://target.com"
+          },
+          {
+            "label": "List detectable WAFs",
+            "cmd": "wafw00f -l"
+          },
+          {
+            "label": "From a URL list",
+            "cmd": "wafw00f -i urls.txt"
+          },
+          {
+            "label": "Find every matching WAF, verbose",
+            "cmd": "wafw00f https://target.com -a -v"
+          }
         ],
         "sections": [
-          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+          {
+            "title": "Options",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
             "rows": [
-              ["-l", "List all WAFs wafw00f can detect"],
-              ["-a", "Find ALL matching WAFs, not just the first"],
-              ["-i <file>", "Read targets from a file (one per line)"],
-              ["-p <proxy>", "Send traffic through an HTTP(S)/SOCKS proxy"],
-              ["-o <file>", "Write results to a file"],
-              ["-f <json|csv|text>", "Output format"],
-              ["-v", "Verbose output (show the reasoning)"],
-              ["-H <file>", "Use custom headers from a file"]
-            ] },
-          { "title": "Notes & Tips", "type": "notes", "items": [
-            "Run it early in recon — the identified WAF guides every later payload (encoding, casing, parameter pollution, etc.).",
-            "Use -a: some stacks sit behind more than one layer (e.g. a CDN WAF plus an app WAF) and only -a reveals both.",
-            "A 'no WAF detected' result is not a guarantee — a silent or custom WAF may still be present; confirm by behaviour when payloads are dropped.",
-            "Route through Burp with -p to log exactly what each probe sent and received."
-          ] },
-          { "title": "References", "type": "references", "items": [
-            { "label": "wafw00f — GitHub", "url": "https://github.com/EnableSecurity/wafw00f" }
-          ] }
+              [
+                "-l",
+                "List all WAFs wafw00f can detect"
+              ],
+              [
+                "-a",
+                "Find ALL matching WAFs, not just the first"
+              ],
+              [
+                "-i <file>",
+                "Read targets from a file (one per line)"
+              ],
+              [
+                "-p <proxy>",
+                "Send traffic through an HTTP(S)/SOCKS proxy"
+              ],
+              [
+                "-o <file>",
+                "Write results to a file"
+              ],
+              [
+                "-f <json|csv|text>",
+                "Output format"
+              ],
+              [
+                "-v",
+                "Verbose output (show the reasoning)"
+              ],
+              [
+                "-H <file>",
+                "Use custom headers from a file"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Run it early in recon — the identified WAF guides every later payload (encoding, casing, parameter pollution, etc.).",
+              "Use -a: some stacks sit behind more than one layer (e.g. a CDN WAF plus an app WAF) and only -a reveals both.",
+              "A 'no WAF detected' result is not a guarantee — a silent or custom WAF may still be present; confirm by behaviour when payloads are dropped.",
+              "Route through Burp with -p to log exactly what each probe sent and received."
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Fingerprint the WAF",
+                "cmd": "wafw00f https://target.com"
+              },
+              {
+                "label": "Find every matching product (don't stop at the first)",
+                "cmd": "wafw00f -a -v https://target.com"
+              },
+              {
+                "label": "From a list, machine-readable output",
+                "cmd": "wafw00f -i urls.txt -o waf.json -f json"
+              },
+              {
+                "label": "Through an intercepting proxy",
+                "cmd": "wafw00f https://target.com -p http://127.0.0.1:8080"
+              }
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "wafw00f — GitHub",
+                "url": "https://github.com/EnableSecurity/wafw00f"
+              }
+            ]
+          }
         ]
       },
       {
@@ -6834,31 +7020,107 @@ var TOOLKIT = [
         "description": "Detect WAFs/IPS and suggest tamper-based bypasses.",
         "brief": "WhatWaf detects firewalls and intrusion-protection systems and, unlike wafw00f, also proposes tamper techniques that may bypass the detected protection — making it useful the moment a WAF starts blocking your test payloads. It can read a list of targets, route through a proxy, and suggest the encodings/mutations most likely to evade the identified product.",
         "quickReference": [
-          { "label": "Detect on a URL", "cmd": "whatwaf -u https://target.com" },
-          { "label": "With a random user-agent", "cmd": "whatwaf -u https://target.com --ra" },
-          { "label": "Scan a list of URLs", "cmd": "whatwaf -l urls.txt" },
-          { "label": "Through a proxy", "cmd": "whatwaf -u https://target.com --proxy http://127.0.0.1:8080" }
+          {
+            "label": "Detect on a URL",
+            "cmd": "whatwaf -u https://target.com"
+          },
+          {
+            "label": "With a random user-agent",
+            "cmd": "whatwaf -u https://target.com --ra"
+          },
+          {
+            "label": "Scan a list of URLs",
+            "cmd": "whatwaf -l urls.txt"
+          },
+          {
+            "label": "Through a proxy",
+            "cmd": "whatwaf -u https://target.com --proxy http://127.0.0.1:8080"
+          }
         ],
         "sections": [
-          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+          {
+            "title": "Options",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
             "rows": [
-              ["-u <url>", "Single target URL"],
-              ["-l <file>", "File of URLs to test"],
-              ["--ra", "Use a random user-agent per request"],
-              ["--proxy <url>", "Route traffic through a proxy (e.g. Burp)"],
-              ["-p <payloads>", "Use custom payloads to trigger the WAF"],
-              ["--throttle <sec>", "Delay between requests to avoid rate limits"],
-              ["-F", "Force testing even if no WAF is detected"],
-              ["--tamper / --encode", "Show/apply tamper and encoding suggestions"]
-            ] },
-          { "title": "Notes & Tips", "type": "notes", "items": [
-            "Reach for WhatWaf over wafw00f when you specifically want bypass guidance rather than just identification.",
-            "Its tamper suggestions are a starting point — confirm each one manually against the live WAF, as detection is heuristic.",
-            "Throttle and randomise the user-agent on sensitive targets so the fingerprinting probes do not themselves trip rate limiting."
-          ] },
-          { "title": "References", "type": "references", "items": [
-            { "label": "WhatWaf — GitHub", "url": "https://github.com/Ekultek/WhatWaf" }
-          ] }
+              [
+                "-u <url>",
+                "Single target URL"
+              ],
+              [
+                "-l <file>",
+                "File of URLs to test"
+              ],
+              [
+                "--ra",
+                "Use a random user-agent per request"
+              ],
+              [
+                "--proxy <url>",
+                "Route traffic through a proxy (e.g. Burp)"
+              ],
+              [
+                "-p <payloads>",
+                "Use custom payloads to trigger the WAF"
+              ],
+              [
+                "--throttle <sec>",
+                "Delay between requests to avoid rate limits"
+              ],
+              [
+                "-F",
+                "Force testing even if no WAF is detected"
+              ],
+              [
+                "--tamper / --encode",
+                "Show/apply tamper and encoding suggestions"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Reach for WhatWaf over wafw00f when you specifically want bypass guidance rather than just identification.",
+              "Its tamper suggestions are a starting point — confirm each one manually against the live WAF, as detection is heuristic.",
+              "Throttle and randomise the user-agent on sensitive targets so the fingerprinting probes do not themselves trip rate limiting."
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Detect + suggest tamper bypasses",
+                "cmd": "whatwaf -u https://target.com"
+              },
+              {
+                "label": "Evade basic blocking with a random UA",
+                "cmd": "whatwaf -u https://target.com --ra"
+              },
+              {
+                "label": "Scan a list of URLs",
+                "cmd": "whatwaf -l urls.txt"
+              },
+              {
+                "label": "Route through Burp",
+                "cmd": "whatwaf -u https://target.com --proxy http://127.0.0.1:8080"
+              }
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "WhatWaf — GitHub",
+                "url": "https://github.com/Ekultek/WhatWaf"
+              }
+            ]
+          }
         ]
       },
       {
@@ -6868,33 +7130,112 @@ var TOOLKIT = [
         "description": "Fetch known URLs for a domain from Wayback, Common Crawl, OTX, and URLScan.",
         "brief": "gau pulls every URL that public archives already know about for a domain — old endpoints, parameters, and files that may still work but are no longer linked anywhere. It is the fastest way to build a large URL corpus for parameter and pattern analysis (feed it into gf, qsreplace, and your fuzzers), and it complements an active crawler like gospider or katana.",
         "quickReference": [
-          { "label": "All URLs for a domain", "cmd": "gau target.com" },
-          { "label": "Include subdomains", "cmd": "gau --subs target.com" },
-          { "label": "From a domain list", "cmd": "cat domains.txt | gau --threads 5 | tee urls.txt" },
-          { "label": "Drop static assets", "cmd": "gau --subs --blacklist png,jpg,gif,svg,woff,ttf,css target.com" }
+          {
+            "label": "All URLs for a domain",
+            "cmd": "gau target.com"
+          },
+          {
+            "label": "Include subdomains",
+            "cmd": "gau --subs target.com"
+          },
+          {
+            "label": "From a domain list",
+            "cmd": "cat domains.txt | gau --threads 5 | tee urls.txt"
+          },
+          {
+            "label": "Drop static assets",
+            "cmd": "gau --subs --blacklist png,jpg,gif,svg,woff,ttf,css target.com"
+          }
         ],
         "sections": [
-          { "title": "Flags", "type": "table", "columns": ["Flag", "Description"],
+          {
+            "title": "Flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
             "rows": [
-              ["--subs", "Include subdomains of the target"],
-              ["--providers <list>", "Sources to query: wayback,commoncrawl,otx,urlscan"],
-              ["--threads <n>", "Number of worker threads"],
-              ["--blacklist <exts>", "Comma-separated extensions to skip (png,jpg,css,...)"],
-              ["--from / --to <YYYYMM>", "Restrict results to a date range"],
-              ["--o <file>", "Write results to a file"],
-              ["--json", "Output as JSON (with source/date metadata)"],
-              ["--fc <codes> / --mc <codes>", "Filter/match by HTTP status (when known)"],
-              ["--config <file>", "Alternate TOML config (API keys for providers)"]
-            ] },
-          { "title": "Notes & Tips", "type": "notes", "items": [
-            "Archive data is historical, so expect dead URLs — pipe the output through httpx to keep only live ones before testing.",
-            "Blacklist static extensions to cut the list down to endpoints that actually take parameters.",
-            "gau pairs naturally with gf: gau --subs target.com | gf ssrf  (or xss/lfi/sqli) to surface likely-vulnerable parameters.",
-            "Add URLScan/OTX API keys in the config to widen coverage; sort -u the merged output of gau, katana, and gospider."
-          ] },
-          { "title": "References", "type": "references", "items": [
-            { "label": "gau — GitHub", "url": "https://github.com/lc/gau" }
-          ] }
+              [
+                "--subs",
+                "Include subdomains of the target"
+              ],
+              [
+                "--providers <list>",
+                "Sources to query: wayback,commoncrawl,otx,urlscan"
+              ],
+              [
+                "--threads <n>",
+                "Number of worker threads"
+              ],
+              [
+                "--blacklist <exts>",
+                "Comma-separated extensions to skip (png,jpg,css,...)"
+              ],
+              [
+                "--from / --to <YYYYMM>",
+                "Restrict results to a date range"
+              ],
+              [
+                "--o <file>",
+                "Write results to a file"
+              ],
+              [
+                "--json",
+                "Output as JSON (with source/date metadata)"
+              ],
+              [
+                "--fc <codes> / --mc <codes>",
+                "Filter/match by HTTP status (when known)"
+              ],
+              [
+                "--config <file>",
+                "Alternate TOML config (API keys for providers)"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Archive data is historical, so expect dead URLs — pipe the output through httpx to keep only live ones before testing.",
+              "Blacklist static extensions to cut the list down to endpoints that actually take parameters.",
+              "gau pairs naturally with gf: gau --subs target.com | gf ssrf  (or xss/lfi/sqli) to surface likely-vulnerable parameters.",
+              "Add URLScan/OTX API keys in the config to widen coverage; sort -u the merged output of gau, katana, and gospider."
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "All historical URLs (incl. subdomains)",
+                "cmd": "gau --subs target.com"
+              },
+              {
+                "label": "From a domain list, drop static assets",
+                "cmd": "cat domains.txt | gau --blacklist png,jpg,css,woff,svg --threads 5"
+              },
+              {
+                "label": "Parameterised URLs for fuzzing",
+                "cmd": "gau target.com | grep \"=\" | qsreplace FUZZ | sort -u"
+              },
+              {
+                "label": "Live-check the recovered endpoints",
+                "cmd": "gau target.com | httpx -silent -mc 200"
+              }
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "gau — GitHub",
+                "url": "https://github.com/lc/gau"
+              }
+            ]
+          }
         ]
       },
       {
@@ -6904,33 +7245,112 @@ var TOOLKIT = [
         "description": "Fast web spider that crawls a site and extracts links, JS, and forms.",
         "brief": "gospider actively crawls a target in Go, following links and pulling out URLs, JavaScript files, forms, subdomains, and third-party sources (robots.txt, sitemap, and optionally Wayback/OTX/Common Crawl). Where gau reads archives, gospider walks the live site, so running both and merging the results gives the widest view of the attack surface.",
         "quickReference": [
-          { "label": "Crawl one site", "cmd": "gospider -s https://target.com -d 2 -c 10" },
-          { "label": "Crawl a list with extra sources", "cmd": "gospider -S urls.txt -c 10 -d 1 --other-source" },
-          { "label": "Include subdomains, send to Burp", "cmd": "gospider -s https://target.com --include-subs -p http://127.0.0.1:8080" }
+          {
+            "label": "Crawl one site",
+            "cmd": "gospider -s https://target.com -d 2 -c 10"
+          },
+          {
+            "label": "Crawl a list with extra sources",
+            "cmd": "gospider -S urls.txt -c 10 -d 1 --other-source"
+          },
+          {
+            "label": "Include subdomains, send to Burp",
+            "cmd": "gospider -s https://target.com --include-subs -p http://127.0.0.1:8080"
+          }
         ],
         "sections": [
-          { "title": "Flags", "type": "table", "columns": ["Flag", "Description"],
+          {
+            "title": "Flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
             "rows": [
-              ["-s <url>", "Single site to crawl"],
-              ["-S <file>", "File of sites to crawl"],
-              ["-d <n>", "Maximum crawl depth (0 = unlimited)"],
-              ["-c <n>", "Concurrent requests per domain"],
-              ["-t <n>", "Number of threads (parallel sites)"],
-              ["--other-source", "Also pull URLs from Wayback, OTX, and Common Crawl"],
-              ["--include-subs", "Include subdomains encountered while crawling"],
-              ["-a", "Find URLs from third-party sources (archives) as well"],
-              ["-p <proxy>", "Route through a proxy (e.g. Burp)"],
-              ["--blacklist <regex>", "Skip URLs matching the pattern (e.g. static assets)"]
-            ] },
-          { "title": "Notes & Tips", "type": "notes", "items": [
-            "Keep depth modest (1-2) on large sites or the crawl explodes; raise concurrency (-c) for speed instead.",
-            "--other-source turns gospider into a one-stop collector (live crawl + archives), but gau is faster for archive-only passes.",
-            "Proxy through Burp (-p) to populate the sitemap and capture interesting requests as it crawls.",
-            "Pipe the discovered JS into subjs/xnLinkFinder for deeper endpoint extraction."
-          ] },
-          { "title": "References", "type": "references", "items": [
-            { "label": "gospider — GitHub", "url": "https://github.com/jaeles-project/gospider" }
-          ] }
+              [
+                "-s <url>",
+                "Single site to crawl"
+              ],
+              [
+                "-S <file>",
+                "File of sites to crawl"
+              ],
+              [
+                "-d <n>",
+                "Maximum crawl depth (0 = unlimited)"
+              ],
+              [
+                "-c <n>",
+                "Concurrent requests per domain"
+              ],
+              [
+                "-t <n>",
+                "Number of threads (parallel sites)"
+              ],
+              [
+                "--other-source",
+                "Also pull URLs from Wayback, OTX, and Common Crawl"
+              ],
+              [
+                "--include-subs",
+                "Include subdomains encountered while crawling"
+              ],
+              [
+                "-a",
+                "Find URLs from third-party sources (archives) as well"
+              ],
+              [
+                "-p <proxy>",
+                "Route through a proxy (e.g. Burp)"
+              ],
+              [
+                "--blacklist <regex>",
+                "Skip URLs matching the pattern (e.g. static assets)"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Keep depth modest (1-2) on large sites or the crawl explodes; raise concurrency (-c) for speed instead.",
+              "--other-source turns gospider into a one-stop collector (live crawl + archives), but gau is faster for archive-only passes.",
+              "Proxy through Burp (-p) to populate the sitemap and capture interesting requests as it crawls.",
+              "Pipe the discovered JS into subjs/xnLinkFinder for deeper endpoint extraction."
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Crawl one site (depth 2)",
+                "cmd": "gospider -s https://target.com -d 2 -c 10 -o out/"
+              },
+              {
+                "label": "Crawl a list + pull archive sources",
+                "cmd": "gospider -S urls.txt -c 10 -d 1 --other-source"
+              },
+              {
+                "label": "Include subdomains, route through Burp",
+                "cmd": "gospider -s https://target.com --include-subs -p http://127.0.0.1:8080"
+              },
+              {
+                "label": "Extract just the JS files",
+                "cmd": "gospider -s https://target.com -d 3 | grep -Eo \"https?://\\S+\\.js\" | sort -u"
+              }
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "gospider — GitHub",
+                "url": "https://github.com/jaeles-project/gospider"
+              }
+            ]
+          }
         ]
       },
       {
@@ -6940,26 +7360,87 @@ var TOOLKIT = [
         "description": "Extract JavaScript file URLs from a list of hosts.",
         "brief": "subjs takes URLs or live hosts and returns the JavaScript file URLs they reference. Those JS files are the raw material for endpoint and secret discovery, so subjs is the collection step that comes before analysis with xnLinkFinder, JSA, or a secret scanner.",
         "quickReference": [
-          { "label": "From a URL list", "cmd": "cat urls.txt | subjs" },
-          { "label": "Chain from httpx", "cmd": "cat hosts.txt | httpx -silent | subjs | tee js_files.txt" },
-          { "label": "From a file, more workers", "cmd": "subjs -i urls.txt -c 40" }
+          {
+            "label": "From a URL list",
+            "cmd": "cat urls.txt | subjs"
+          },
+          {
+            "label": "Chain from httpx",
+            "cmd": "cat hosts.txt | httpx -silent | subjs | tee js_files.txt"
+          },
+          {
+            "label": "From a file, more workers",
+            "cmd": "subjs -i urls.txt -c 40"
+          }
         ],
         "sections": [
-          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+          {
+            "title": "Options",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
             "rows": [
-              ["-i <file>", "Input file of URLs/hosts (otherwise reads stdin)"],
-              ["-c <n>", "Concurrency (number of workers)"],
-              ["-t <sec>", "Request timeout"],
-              ["-ua <string>", "Custom user-agent"]
-            ] },
-          { "title": "Notes & Tips", "type": "notes", "items": [
-            "subjs only lists the JS URLs — download and analyse them separately (xnLinkFinder, JSA) to extract endpoints and secrets.",
-            "Feed it live hosts (httpx output) rather than raw domains so it only fetches pages that respond.",
-            "Pipe the collected files through a secrets scanner (trufflehog/gitleaks on downloaded copies) to catch hardcoded keys."
-          ] },
-          { "title": "References", "type": "references", "items": [
-            { "label": "subjs — GitHub", "url": "https://github.com/lc/subjs" }
-          ] }
+              [
+                "-i <file>",
+                "Input file of URLs/hosts (otherwise reads stdin)"
+              ],
+              [
+                "-c <n>",
+                "Concurrency (number of workers)"
+              ],
+              [
+                "-t <sec>",
+                "Request timeout"
+              ],
+              [
+                "-ua <string>",
+                "Custom user-agent"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "subjs only lists the JS URLs — download and analyse them separately (xnLinkFinder, JSA) to extract endpoints and secrets.",
+              "Feed it live hosts (httpx output) rather than raw domains so it only fetches pages that respond.",
+              "Pipe the collected files through a secrets scanner (trufflehog/gitleaks on downloaded copies) to catch hardcoded keys."
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "JS URLs from a list",
+                "cmd": "cat urls.txt | subjs"
+              },
+              {
+                "label": "Chain from live hosts",
+                "cmd": "cat hosts.txt | httpx -silent | subjs | tee js_files.txt"
+              },
+              {
+                "label": "More workers from a file",
+                "cmd": "subjs -i urls.txt -c 40"
+              },
+              {
+                "label": "Hunt secrets/endpoints in the JS",
+                "cmd": "subjs -i urls.txt | nuclei -t http/exposures/     # or feed to a secrets scanner"
+              }
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "subjs — GitHub",
+                "url": "https://github.com/lc/subjs"
+              }
+            ]
+          }
         ]
       },
       {
