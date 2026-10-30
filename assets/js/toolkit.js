@@ -5453,14 +5453,87 @@ var TOOLKIT = [
         "description": "Resolve an organisation to its ASNs and the IP ranges (CIDRs) they announce.",
         "brief": "ASNLookup maps a company name or ASN to the IP ranges it owns, which turns a single organisation into a concrete list of netblocks to scan. It is a fast first step for large-scope recon, before subdomain work.",
         "quickReference": [
-          { "label": "By organisation name", "cmd": "asnlookup -o \"Target Corp\"" },
-          { "label": "By ASN, output CIDRs", "cmd": "asnlookup -a AS12345 -c" },
-          { "label": "Pipe ranges into a scanner", "cmd": "asnlookup -o Target -c | tee ranges.txt" }
+          {
+            "label": "By organisation name",
+            "cmd": "asnlookup -o \"Target Corp\""
+          },
+          {
+            "label": "By ASN, output CIDRs",
+            "cmd": "asnlookup -a AS12345 -c"
+          },
+          {
+            "label": "Pipe ranges into a scanner",
+            "cmd": "asnlookup -o Target -c | tee ranges.txt"
+          }
         ],
-        "sections": [ { "title": "Notes & Tips", "type": "notes", "items": [
-          "Confirm every range actually belongs to the target before scanning — shared hosting and cloud ASNs contain other people's assets.",
-          "Cross-check results against bgp.he.net and metabigor; no single source is complete."
-        ] } ]
+        "sections": [
+          {
+            "title": "Key flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-o \"<org>\"",
+                "Search by organisation name and return its ASNs"
+              ],
+              [
+                "-a <ASN>",
+                "Look up a specific ASN"
+              ],
+              [
+                "-c",
+                "Output the CIDR ranges only (pipe-friendly for scanners)"
+              ]
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Organisation to netblocks",
+                "cmd": "asnlookup -o \"Target Corp\""
+              },
+              {
+                "label": "ASN to CIDR ranges",
+                "cmd": "asnlookup -a AS12345 -c"
+              },
+              {
+                "label": "Feed ranges straight into a scanner",
+                "cmd": "asnlookup -o \"Target Corp\" -c | tee ranges.txt\nnmap -iL ranges.txt -sn        # or naabu -list ranges.txt"
+              }
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Confirm every range actually belongs to the target before scanning — shared hosting and cloud ASNs contain other people's assets.",
+              "Cross-check results against bgp.he.net and metabigor; no single source is complete."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Asnlookup — GitHub (yassineaboukir)",
+                "url": "https://github.com/yassineaboukir/Asnlookup"
+              },
+              {
+                "label": "Toolkit — metabigor (cross-check ranges)",
+                "url": "tool-detail.html?tool=metabigor"
+              },
+              {
+                "label": "External Red Team Workflow",
+                "url": "external-red-team-workflow.html"
+              }
+            ]
+          }
+        ]
       },
       {
         "id": "metabigor",
@@ -5469,29 +5542,103 @@ var TOOLKIT = [
         "description": "OSINT tool that turns organisation names into ASNs and IP ranges with no API keys.",
         "brief": "Metabigor gathers intelligence — ASNs, netblocks, related organisations, and certificate data — from public sources without needing any API keys, which makes it a quick, dependency-light way to expand a target's IP footprint. It reads targets on stdin and is built to chain with other recon tools.",
         "quickReference": [
-          { "label": "Org name to netblocks", "cmd": "echo \"target\" | metabigor net --org" },
-          { "label": "ASN to ranges", "cmd": "echo \"AS12345\" | metabigor net --asn" },
-          { "label": "Search by IP", "cmd": "echo \"1.2.3.4\" | metabigor net --ip" },
-          { "label": "Port/service data for an IP", "cmd": "echo \"1.2.3.4\" | metabigor ip -o result.txt" }
+          {
+            "label": "Org name to netblocks",
+            "cmd": "echo \"target\" | metabigor net --org"
+          },
+          {
+            "label": "ASN to ranges",
+            "cmd": "echo \"AS12345\" | metabigor net --asn"
+          },
+          {
+            "label": "Search by IP",
+            "cmd": "echo \"1.2.3.4\" | metabigor net --ip"
+          },
+          {
+            "label": "Port/service data for an IP",
+            "cmd": "echo \"1.2.3.4\" | metabigor ip -o result.txt"
+          }
         ],
         "sections": [
-          { "title": "Subcommands", "type": "table", "columns": ["Command", "Purpose"],
+          {
+            "title": "Subcommands",
+            "type": "table",
+            "columns": [
+              "Command",
+              "Purpose"
+            ],
             "rows": [
-              ["net --org", "Resolve an organisation name to its announced netblocks"],
-              ["net --asn", "List the IP ranges an ASN announces"],
-              ["net --ip", "Find the ASN/owner that an IP belongs to"],
-              ["related", "Discover related organisations/domains"],
-              ["cert", "Pull certificate-transparency data for a target"],
-              ["ip", "Query open ports/services for an IP (scrapes public scan data)"]
-            ] },
-          { "title": "Notes & Tips", "type": "notes", "items": [
-            "All subcommands read targets on stdin — echo or cat into metabigor and pipe the output onward.",
-            "No API keys are required, which makes it ideal for a fast first pass; cross-check its netblocks against bgp.he.net and asnlookup before scanning.",
-            "Always confirm a discovered range actually belongs to the target — shared and cloud ASNs contain unrelated assets you must not touch."
-          ] },
-          { "title": "References", "type": "references", "items": [
-            { "label": "Metabigor — GitHub", "url": "https://github.com/j3ssie/metabigor" }
-          ] }
+              [
+                "net --org",
+                "Resolve an organisation name to its announced netblocks"
+              ],
+              [
+                "net --asn",
+                "List the IP ranges an ASN announces"
+              ],
+              [
+                "net --ip",
+                "Find the ASN/owner that an IP belongs to"
+              ],
+              [
+                "related",
+                "Discover related organisations/domains"
+              ],
+              [
+                "cert",
+                "Pull certificate-transparency data for a target"
+              ],
+              [
+                "ip",
+                "Query open ports/services for an IP (scrapes public scan data)"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "All subcommands read targets on stdin — echo or cat into metabigor and pipe the output onward.",
+              "No API keys are required, which makes it ideal for a fast first pass; cross-check its netblocks against bgp.he.net and asnlookup before scanning.",
+              "Always confirm a discovered range actually belongs to the target — shared and cloud ASNs contain unrelated assets you must not touch."
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Organisation to netblocks",
+                "cmd": "echo \"Target Corp\" | metabigor net --org"
+              },
+              {
+                "label": "ASN to IP ranges",
+                "cmd": "echo \"AS12345\" | metabigor net --asn"
+              },
+              {
+                "label": "IP to owning ASN / org",
+                "cmd": "echo \"1.2.3.4\" | metabigor net --ip"
+              },
+              {
+                "label": "Related orgs & certificate pivots",
+                "cmd": "echo \"target.com\" | metabigor related -s cert"
+              },
+              {
+                "label": "Ranges straight into a scanner",
+                "cmd": "echo \"Target Corp\" | metabigor net --org | awk '{print $1}' | naabu"
+              }
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Metabigor — GitHub",
+                "url": "https://github.com/j3ssie/metabigor"
+              }
+            ]
+          }
         ]
       },
       {
@@ -5501,30 +5648,100 @@ var TOOLKIT = [
         "description": "Enumerate public AWS, Azure, and GCP assets for a keyword.",
         "brief": "cloud_enum guesses and validates cloud resources — S3 buckets, Azure blobs/containers/websites, and GCP buckets and apps — named after a keyword, flagging which exist and which are publicly readable or writable. Open or listable storage is a common source of leaked files, backups, and credentials, so this is a high-yield check whenever a target uses cloud infrastructure.",
         "quickReference": [
-          { "label": "Scan a keyword across all three clouds", "cmd": "cloud_enum -k targetcompany" },
-          { "label": "Multiple keywords", "cmd": "cloud_enum -k target -k target-corp -k targetapp" },
-          { "label": "From a keyword file, log results", "cmd": "cloud_enum -kf keywords.txt -l results.txt" }
+          {
+            "label": "Scan a keyword across all three clouds",
+            "cmd": "cloud_enum -k targetcompany"
+          },
+          {
+            "label": "Multiple keywords",
+            "cmd": "cloud_enum -k target -k target-corp -k targetapp"
+          },
+          {
+            "label": "From a keyword file, log results",
+            "cmd": "cloud_enum -kf keywords.txt -l results.txt"
+          }
         ],
         "sections": [
-          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+          {
+            "title": "Options",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
             "rows": [
-              ["-k <keyword>", "Keyword to base guesses on (repeatable)"],
-              ["-kf <file>", "Read keywords from a file"],
-              ["-m <file>", "Custom mutation wordlist (appended to each keyword)"],
-              ["-l <file>", "Log output to a file"],
-              ["-t <n>", "Threads"],
-              ["--disable-aws / --disable-azure / --disable-gcp", "Limit which clouds are checked"],
-              ["-qs", "Quick scan (skip the slower extra checks)"]
-            ] },
-          { "title": "Notes & Tips", "type": "notes", "items": [
-            "Seed keywords from the real naming scheme: company, product, and the -assets/-backups/-dev/-prod suffixes teams actually use.",
-            "A found-but-protected bucket is still useful intel; a publicly readable or writable one is a finding — follow up per the Cloud Storage Misconfiguration write-up.",
-            "Pair discovered bucket names with the aws/gsutil/az CLIs (--no-sign-request) to test list/read/write precisely.",
-            "Add a mutation wordlist (-m) to catch environment- and region-suffixed names."
-          ] },
-          { "title": "References", "type": "references", "items": [
-            { "label": "cloud_enum — GitHub", "url": "https://github.com/initstring/cloud_enum" }
-          ] }
+              [
+                "-k <keyword>",
+                "Keyword to base guesses on (repeatable)"
+              ],
+              [
+                "-kf <file>",
+                "Read keywords from a file"
+              ],
+              [
+                "-m <file>",
+                "Custom mutation wordlist (appended to each keyword)"
+              ],
+              [
+                "-l <file>",
+                "Log output to a file"
+              ],
+              [
+                "-t <n>",
+                "Threads"
+              ],
+              [
+                "--disable-aws / --disable-azure / --disable-gcp",
+                "Limit which clouds are checked"
+              ],
+              [
+                "-qs",
+                "Quick scan (skip the slower extra checks)"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Seed keywords from the real naming scheme: company, product, and the -assets/-backups/-dev/-prod suffixes teams actually use.",
+              "A found-but-protected bucket is still useful intel; a publicly readable or writable one is a finding — follow up per the Cloud Storage Misconfiguration write-up.",
+              "Pair discovered bucket names with the aws/gsutil/az CLIs (--no-sign-request) to test list/read/write precisely.",
+              "Add a mutation wordlist (-m) to catch environment- and region-suffixed names."
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "All three clouds for a keyword",
+                "cmd": "cloud_enum -k targetcompany"
+              },
+              {
+                "label": "Multiple keywords + mutations, logged",
+                "cmd": "cloud_enum -k target -k target-corp -m mutations.txt -l out.txt"
+              },
+              {
+                "label": "AWS only (faster)",
+                "cmd": "cloud_enum -k target --disable-azure --disable-gcp"
+              },
+              {
+                "label": "From a keyword file",
+                "cmd": "cloud_enum -kf keywords.txt -t 10 -l results.txt"
+              }
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "cloud_enum — GitHub",
+                "url": "https://github.com/initstring/cloud_enum"
+              }
+            ]
+          }
         ]
       },
       {
@@ -5534,13 +5751,91 @@ var TOOLKIT = [
         "description": "Search leaked-credential dumps for a target's emails or domain (over Tor).",
         "brief": "pwndb queries a leaked-credentials database (reachable through Tor) for accounts belonging to an email or an entire domain, surfacing passwords already exposed in past breaches. Check this before any brute-force — a known password is faster and quieter.",
         "quickReference": [
-          { "label": "Single account", "cmd": "python3 pwndb.py --target user@target.com" },
-          { "label": "Whole domain", "cmd": "python3 pwndb.py --target @target.com" }
+          {
+            "label": "Single account",
+            "cmd": "python3 pwndb.py --target user@target.com"
+          },
+          {
+            "label": "Whole domain",
+            "cmd": "python3 pwndb.py --target @target.com"
+          },
+          {
+            "label": "From a list, save results",
+            "cmd": "python3 pwndb.py --list emails.txt --output creds.txt"
+          }
         ],
-        "sections": [ { "title": "Notes & Tips", "type": "notes", "items": [
-          "Requires Tor running locally (the service is a hidden service).",
-          "Only use recovered credentials against systems you are authorised to test."
-        ] } ]
+        "sections": [
+          {
+            "title": "Options",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "--target <email|@domain>",
+                "Search a single account, or an entire domain with @domain"
+              ],
+              [
+                "--list <file>",
+                "Read many targets from a file"
+              ],
+              [
+                "--output <file>",
+                "Write the recovered records to a file"
+              ],
+              [
+                "--proxy <host:port>",
+                "Tor SOCKS proxy (default 127.0.0.1:9050)"
+              ]
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Single account",
+                "cmd": "python3 pwndb.py --target user@target.com"
+              },
+              {
+                "label": "Whole domain",
+                "cmd": "python3 pwndb.py --target @target.com"
+              },
+              {
+                "label": "From a list, save results",
+                "cmd": "python3 pwndb.py --list emails.txt --output creds.txt"
+              },
+              {
+                "label": "Custom Tor port (e.g. Tor Browser)",
+                "cmd": "python3 pwndb.py --target @target.com --proxy 127.0.0.1:9150"
+              }
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Requires Tor running locally (the service is a hidden service).",
+              "Only use recovered credentials against systems you are authorised to test."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "pwndb — GitHub (davidtavarez)",
+                "url": "https://github.com/davidtavarez/pwndb"
+              },
+              {
+                "label": "Toolkit — Have I Been Pwned (corroborate)",
+                "url": "tool-detail.html?tool=haveibeenpwned"
+              }
+            ]
+          }
+        ]
       },
       {
         "id": "git-hound",
@@ -5549,30 +5844,96 @@ var TOOLKIT = [
         "description": "Find exposed secrets across GitHub with pattern matching.",
         "brief": "git-hound searches GitHub code across the whole platform (not just a single org) for secrets tied to a target, using regex rules plus commit and file digging to catch keys that were committed and later 'removed' but remain in history. It is aimed at surfacing leaked credentials, internal hostnames, and config at scale, and scores results to cut false positives.",
         "quickReference": [
-          { "label": "Search by domain, dig deep", "cmd": "echo \"target.com\" | git-hound --dig-files --dig-commits" },
-          { "label": "From a subdomain list", "cmd": "git-hound --subdomain-file subs.txt" },
-          { "label": "Custom regex rules + results file", "cmd": "git-hound --regex-file rules.txt --results-only results.txt" }
+          {
+            "label": "Search by domain, dig deep",
+            "cmd": "echo \"target.com\" | git-hound --dig-files --dig-commits"
+          },
+          {
+            "label": "From a subdomain list",
+            "cmd": "git-hound --subdomain-file subs.txt"
+          },
+          {
+            "label": "Custom regex rules + results file",
+            "cmd": "git-hound --regex-file rules.txt --results-only results.txt"
+          }
         ],
         "sections": [
-          { "title": "Options", "type": "table", "columns": ["Flag", "Description"],
+          {
+            "title": "Options",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
             "rows": [
-              ["(stdin)", "Query/keyword(s) to search, piped in on stdin"],
-              ["--dig-files", "Also search the full content of matching files"],
-              ["--dig-commits", "Dig through commit history (catches 'removed' secrets)"],
-              ["--regex-file <file>", "Use a custom regex ruleset"],
-              ["--subdomain-file <file>", "Search using a list of subdomains as queries"],
-              ["--many-results", "Page past GitHub's default result cap"],
-              ["--results-only <file>", "Write just the hits to a file"]
-            ] },
-          { "title": "Notes & Tips", "type": "notes", "items": [
-            "Requires a logged-in GitHub session/token — read the repo's current auth setup, as GitHub code-search access has changed over time.",
-            "Run it alongside trufflehog/gitleaks (which scan a known repo/history) — git-hound's strength is DISCOVERING unknown repos across the platform that mention your target.",
-            "Validate every hit by hand and rotate any confirmed live secret immediately; treat exposed keys as compromised.",
-            "Tune the regex file to your target's key formats to cut noise."
-          ] },
-          { "title": "References", "type": "references", "items": [
-            { "label": "git-hound — GitHub", "url": "https://github.com/tillson/git-hound" }
-          ] }
+              [
+                "(stdin)",
+                "Query/keyword(s) to search, piped in on stdin"
+              ],
+              [
+                "--dig-files",
+                "Also search the full content of matching files"
+              ],
+              [
+                "--dig-commits",
+                "Dig through commit history (catches 'removed' secrets)"
+              ],
+              [
+                "--regex-file <file>",
+                "Use a custom regex ruleset"
+              ],
+              [
+                "--subdomain-file <file>",
+                "Search using a list of subdomains as queries"
+              ],
+              [
+                "--many-results",
+                "Page past GitHub's default result cap"
+              ],
+              [
+                "--results-only <file>",
+                "Write just the hits to a file"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Requires a logged-in GitHub session/token — read the repo's current auth setup, as GitHub code-search access has changed over time.",
+              "Run it alongside trufflehog/gitleaks (which scan a known repo/history) — git-hound's strength is DISCOVERING unknown repos across the platform that mention your target.",
+              "Validate every hit by hand and rotate any confirmed live secret immediately; treat exposed keys as compromised.",
+              "Tune the regex file to your target's key formats to cut noise."
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Deep dig a domain",
+                "cmd": "echo \"target.com\" | git-hound --dig-files --dig-commits --many-results"
+              },
+              {
+                "label": "From a subdomain list",
+                "cmd": "git-hound --subdomain-file subs.txt"
+              },
+              {
+                "label": "Custom regex rules to a results file",
+                "cmd": "git-hound --regex-file rules.txt --results-only results.txt"
+              }
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "git-hound — GitHub",
+                "url": "https://github.com/tillson/git-hound"
+              }
+            ]
+          }
         ]
       },
       {
@@ -5582,13 +5943,103 @@ var TOOLKIT = [
         "description": "Automate GitHub dorking with a curated dork list to find leaked info.",
         "brief": "gitdorks_go runs a list of GitHub search dorks against a target org or keyword, automating the tedious manual dorking that turns up credentials, internal hostnames, and config files in public repositories.",
         "quickReference": [
-          { "label": "Dork an organisation", "cmd": "gitdorks_go -gd dorks.txt -nws 20 -target target -tf tokens.txt" },
-          { "label": "Dork a domain", "cmd": "gitdorks_go -gd dorks.txt -target target.com -tf tokens.txt" }
+          {
+            "label": "Dork an organisation",
+            "cmd": "gitdorks_go -gd dorks.txt -nws 20 -target target -tf tokens.txt"
+          },
+          {
+            "label": "Dork a domain",
+            "cmd": "gitdorks_go -gd dorks.txt -target target.com -tf tokens.txt"
+          },
+          {
+            "label": "Broader dork set",
+            "cmd": "gitdorks_go -gd Dorks/medium_dorks.txt -target target.com -tf tokens.txt -ew 3"
+          }
         ],
-        "sections": [ { "title": "Notes & Tips", "type": "notes", "items": [
-          "Needs one or more GitHub personal access tokens to avoid rate limiting.",
-          "Validate every hit by hand — dorks are noisy and produce false positives."
-        ] } ]
+        "sections": [
+          {
+            "title": "Key flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-gd <file>",
+                "GitHub dorks file to run (e.g. Dorks/smalldorks.txt)"
+              ],
+              [
+                "-target <org|domain>",
+                "Target organisation name or domain to search for"
+              ],
+              [
+                "-tf <file>",
+                "File of GitHub API tokens (rotated to beat rate limits)"
+              ],
+              [
+                "-token <t>",
+                "A single GitHub token instead of a file"
+              ],
+              [
+                "-nws <n>",
+                "Number of concurrent searches"
+              ],
+              [
+                "-ew <n>",
+                "Expand the wordlist / dork breadth (level)"
+              ],
+              [
+                "-o <file>",
+                "Write matches to a file"
+              ]
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Dork an organisation",
+                "cmd": "gitdorks_go -gd Dorks/smalldorks.txt -nws 20 -target target -tf tokens.txt"
+              },
+              {
+                "label": "Dork a domain (broader)",
+                "cmd": "gitdorks_go -gd Dorks/medium_dorks.txt -target target.com -tf tokens.txt -ew 3"
+              },
+              {
+                "label": "Triage, then verify a hit",
+                "cmd": "# review each result URL by hand, then confirm the live secret with\n# git-hound --dig-commits  or  trufflehog git <repo> --only-verified"
+              }
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Needs one or more GitHub personal access tokens to avoid rate limiting.",
+              "Validate every hit by hand — dorks are noisy and produce false positives."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "gitdorks_go — GitHub (damit5)",
+                "url": "https://github.com/damit5/gitdorks_go"
+              },
+              {
+                "label": "Toolkit — git-hound (code-search companion)",
+                "url": "tool-detail.html?tool=git-hound"
+              },
+              {
+                "label": "External Red Team Workflow",
+                "url": "external-red-team-workflow.html"
+              }
+            ]
+          }
+        ]
       },
       {
         "id": "spoofcheck",
@@ -5597,26 +6048,84 @@ var TOOLKIT = [
         "description": "Check whether a domain's SPF and DMARC records allow email spoofing.",
         "brief": "spoofcheck evaluates a domain's SPF and DMARC records and reports a clear verdict on whether mail can be spoofed as that domain. A missing SPF, a soft/neutral SPF (~all / ?all), or a DMARC policy of p=none means a forged From: will not be rejected — enabling convincing phishing from the organisation's own name. It is the fast, scriptable complement to a manual dig of the records.",
         "quickReference": [
-          { "label": "Check a domain", "cmd": "python spoofcheck.py target.com" },
-          { "label": "Manual cross-check", "cmd": "dig +short TXT target.com | grep spf1 ; dig +short TXT _dmarc.target.com" }
+          {
+            "label": "Check a domain",
+            "cmd": "python spoofcheck.py target.com"
+          },
+          {
+            "label": "Manual cross-check",
+            "cmd": "dig +short TXT target.com | grep spf1 ; dig +short TXT _dmarc.target.com"
+          },
+          {
+            "label": "Bulk over a list",
+            "cmd": "for d in $(cat domains.txt); do python spoofcheck.py \"$d\"; done"
+          }
         ],
         "sections": [
-          { "title": "What It Checks", "type": "table", "columns": ["Record", "Spoofable when"],
+          {
+            "title": "What It Checks",
+            "type": "table",
+            "columns": [
+              "Record",
+              "Spoofable when"
+            ],
             "rows": [
-              ["SPF", "Missing, or ends in ~all / ?all / +all instead of -all"],
-              ["SPF lookups", "Record is present but broken (10+ DNS lookups, permerror)"],
-              ["DMARC", "Missing, or policy p=none (monitor only)"],
-              ["DMARC subdomain", "sp= is absent/none, leaving subdomains spoofable"]
-            ] },
-          { "title": "Notes & Tips", "type": "notes", "items": [
-            "It is a Python 2 script historically — run with the interpreter the repo specifies, or just cross-check the records manually with dig.",
-            "A 'spoofable' verdict maps directly onto the Spoofable Email (SPF/DKIM/DMARC) write-up — use that for impact and remediation wording.",
-            "Checking is entirely passive (DNS lookups only), so it is safe to run against any in-scope domain.",
-            "Remember DMARC enforcement (quarantine/reject) is what actually blocks spoofing; p=none only reports."
-          ] },
-          { "title": "References", "type": "references", "items": [
-            { "label": "spoofcheck — GitHub", "url": "https://github.com/BishopFox/spoofcheck" }
-          ] }
+              [
+                "SPF",
+                "Missing, or ends in ~all / ?all / +all instead of -all"
+              ],
+              [
+                "SPF lookups",
+                "Record is present but broken (10+ DNS lookups, permerror)"
+              ],
+              [
+                "DMARC",
+                "Missing, or policy p=none (monitor only)"
+              ],
+              [
+                "DMARC subdomain",
+                "sp= is absent/none, leaving subdomains spoofable"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "It is a Python 2 script historically — run with the interpreter the repo specifies, or just cross-check the records manually with dig.",
+              "A 'spoofable' verdict maps directly onto the Spoofable Email (SPF/DKIM/DMARC) write-up — use that for impact and remediation wording.",
+              "Checking is entirely passive (DNS lookups only), so it is safe to run against any in-scope domain.",
+              "Remember DMARC enforcement (quarantine/reject) is what actually blocks spoofing; p=none only reports."
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Check one domain",
+                "cmd": "python spoofcheck.py target.com"
+              },
+              {
+                "label": "Manual cross-check (SPF + DMARC)",
+                "cmd": "dig +short TXT target.com | grep spf1\ndig +short TXT _dmarc.target.com"
+              },
+              {
+                "label": "Bulk over a list",
+                "cmd": "for d in $(cat domains.txt); do echo \"== $d ==\"; python spoofcheck.py \"$d\"; done"
+              }
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "spoofcheck — GitHub",
+                "url": "https://github.com/BishopFox/spoofcheck"
+              }
+            ]
+          }
         ]
       },
       {
