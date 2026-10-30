@@ -116,6 +116,14 @@
           <li><strong>Managed identity abuse</strong> &mdash; from a compromised VM/function, request a token for its managed identity from the metadata endpoint and use its RBAC rights.</li>
           <li><strong>RBAC &rarr; directory bridge</strong> &mdash; a user with User Access Administrator / Owner can elevate themselves over the root management group and reach resources broadly; the Global Admin "elevate access" toggle grants Azure RBAC over everything.</li>
         </ul>
+        <blockquote>
+          <strong>Platform bugs reach Global Admin directly.</strong> CVE-2025-55241
+          (patched 2025) let an undocumented &ldquo;actor token&rdquo; from one tenant
+          impersonate any user &mdash; Global Admins included &mdash; in <em>another</em>
+          tenant, leaving no trace in the victim tenant&rsquo;s logs. Such flaws are
+          rare and get patched quickly, so confirm the tenant&rsquo;s current state
+          before assuming a platform technique still works.
+        </blockquote>
 
         <h2>The hybrid bridge &mdash; both directions</h2>
         <p>
@@ -137,6 +145,7 @@
           <li><strong>AzureHound</strong> &mdash; graph the tenant like <a href="2026-10-09-bloodhound-ad-enumeration.html">BloodHound</a> does AD, to find role and ownership paths.</li>
           <li><strong>ROADtools / AADInternals</strong> &mdash; enumerate and manipulate Entra, abuse PHS/PTA/Seamless SSO, and work with tokens.</li>
           <li><strong>Microsoft Graph &amp; Azure CLI</strong> &mdash; the legitimate APIs, which are also the attacker's primary interface.</li>
+          <li><strong>Mimikatz <code>sekurlsa::cloudap</code> / ROADtoken</strong> &mdash; on an Entra-joined host, extract the Primary Refresh Token to replay SSO as the user with MFA already satisfied.</li>
         </ul>
         <pre><code># enumerate the tenant (ROADtools) and graph role/ownership paths (AzureHound)
 roadrecon auth -u user@corp.com -p '&lt;pass&gt;' ; roadrecon gather ; roadrecon gui

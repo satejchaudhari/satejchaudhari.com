@@ -133,7 +133,15 @@ gcloud functions deploy x --run-service-account &lt;priv-sa&gt; --trigger-http .
 # create a new key for a privileged SA and authenticate as it
 gcloud iam service-accounts keys create k.json --iam-account &lt;priv-sa&gt;</code></pre>
 <p>These map to the well-known GCP privesc research; enumerate which ones you
-hold and walk the chain.</p>
+hold and walk the chain. <code>iam.serviceAccounts.signBlob</code> /
+<code>signJwt</code> are a quieter variant &mdash; forge a token for an SA without
+ever creating a key.</p>
+<blockquote><strong>Check the default service account before assuming Editor.</strong>
+The default Compute/App&nbsp;Engine SAs were historically granted project
+<code>Editor</code>, so a metadata-token read was usually a strong identity.
+Organisations created since ~mid-2024 may switch that off with the
+<code>iam.automaticIamGrantsForDefaultServiceAccounts</code> org policy, so read the
+token&rsquo;s real roles rather than assuming it is Editor.</blockquote>
 
 <h2>Lateral movement, data and persistence</h2>
 <ul>

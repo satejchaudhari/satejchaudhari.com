@@ -143,6 +143,20 @@ kubectl create clusterrolebinding x --clusterrole=cluster-admin --serviceaccount
           token can do &mdash; the first thing to run with any token.
         </blockquote>
 
+        <h2>Exposed control-plane components</h2>
+        <p>
+          Unauthenticated infrastructure is a shortcut past RBAC entirely. An anonymous
+          <strong>kubelet</strong> API (10250) runs commands in any pod on the node; an
+          exposed <strong>etcd</strong> (2379) stores every Secret in plaintext unless
+          encryption-at-rest is enabled; and <strong>ingress-nginx</strong>
+          (&ldquo;IngressNightmare&rdquo;, CVE-2025-1974) gave unauthenticated RCE in a
+          controller pod whose service account can often read cluster-wide Secrets.
+          Three RBAC verbs are worth singling out because each reaches cluster-admin on
+          its own: <code>bind</code> (create a binding to a higher role),
+          <code>escalate</code> (add permissions beyond your own to a role), and
+          <code>impersonate</code> (act as another user/group/SA for a request).
+        </p>
+
         <h2>Cluster &rarr; cloud pivot</h2>
         <p>
           Managed clusters (EKS/AKS/GKE) tie node and pod identities to cloud IAM.
