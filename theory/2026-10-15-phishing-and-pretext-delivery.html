@@ -131,6 +131,13 @@ channels: <strong>smishing</strong> (SMS + short link), <strong>vishing</strong>
 (a call to the help desk — the 2023–24 route to resetting an MFA factor), and
 <strong>chat</strong> (Teams/Slack from a compromised or look-alike tenant, often
 unfiltered). The pretext adapts to the channel; the goal does not.</p>
+<p><strong>ClickFix / paste-and-run</strong> became the dominant execution lure in
+2024&ndash;25: a fake CAPTCHA, a &ldquo;fix this error&rdquo; page, or a
+document-access prompt instructs the victim to paste a pre-copied command into the
+Run dialog or a terminal. It sidesteps attachment detonation and the browser
+download prompt entirely, because the user runs the command themselves &mdash; the
+controls that catch it are EDR on the spawned process and user wariness of any
+&ldquo;paste this to continue&rdquo; step.</p>
 
 <h2>The two payload families</h2>
 <p>Everything downstream is one of two things:</p>

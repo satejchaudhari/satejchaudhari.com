@@ -149,6 +149,17 @@ socat TCP4-LISTEN:443,fork TCP4:TEAMSERVER:443</code></pre>
           kill-dates and guardrails so stray implants do not beacon forever.
         </blockquote>
 
+        <h2>Internal topology: egress + P2P</h2>
+        <p>
+          Not every implant should talk to the internet. Mature operations let one
+          host egress and chain the rest to it with <strong>peer-to-peer</strong> links
+          &mdash; SMB named-pipe or TCP beacons &mdash; so a ten-host foothold shows one
+          outbound channel, not ten. It also reaches segments with no route out: an
+          internal box beacons over a named pipe to a peer that does have egress, which
+          both shrinks the network footprint and lets you operate where direct C2 is
+          impossible.
+        </p>
+
         <h2>OPSEC discipline</h2>
         <ul>
           <li>Never reuse infrastructure across engagements or clients; rotate domains and redirectors.</li>

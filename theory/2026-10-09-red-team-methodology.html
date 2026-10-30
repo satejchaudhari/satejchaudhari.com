@@ -114,6 +114,19 @@
           <li><strong>Reporting &amp; retest</strong> &mdash; narrative of the path, the detections that did and did not fire, remediation, and a replay to confirm fixes.</li>
         </ol>
 
+        <h2>Engagement start postures</h2>
+        <p>Where the operation begins is a scoping choice that trades realism for
+        coverage &mdash; and most modern engagements no longer start from zero:</p>
+        <table>
+          <thead><tr><th>Posture</th><th>Starts from</th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td>External / black-box</td><td>Only the company name</td><td>Test the whole chain including initial access; slowest, most realistic</td></tr>
+            <tr><td>Assumed breach</td><td>A planted implant or a standard user&rsquo;s laptop/creds</td><td>The common default &mdash; spend the budget on post-access detection, not weeks of phishing</td></tr>
+            <tr><td>Assumed compromise</td><td>A specific foothold (a server, a role)</td><td>Exercise a particular scenario or blast radius</td></tr>
+            <tr><td>Scenario / threat-led</td><td>A named actor&rsquo;s typical entry point</td><td>Emulate a specific adversary end-to-end (CBEST/TIBER-style)</td></tr>
+          </tbody>
+        </table>
+
         <h2>ATT&amp;CK as the common language</h2>
         <p>
           Mapping every action to <a href="2026-10-02-detection-engineering-attack.html">MITRE
