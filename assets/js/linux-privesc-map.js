@@ -43,6 +43,7 @@ window.PRIVMAP_DATA = {
           ] },
         { id: "enum-manual", title: "Manual quick-wins (SUID, caps, writable, groups)",
           theory: { label: "Linux Privilege Escalation", url: "theory/2026-10-09-linux-privilege-escalation.html" },
+          vuln: { label: "Toolkit — Linux built-ins", url: "tool-detail.html?tool=linux-builtins" },
           desc: "The handful of commands that cover most boxes. Cross-reference every SUID bin and capability against GTFOBins.",
           cmds: ["find / -perm -4000 -type f 2>/dev/null       # SUID", "getcap -r / 2>/dev/null                        # capabilities", "id                                            # docker/lxd/disk/adm groups?", "find / -writable -not -path '/proc/*' 2>/dev/null | grep -vE '^/(tmp|dev|run|sys)'"],
           outcomes: [{ label: "Quick-win surface", color: "#94a3b8" }],

