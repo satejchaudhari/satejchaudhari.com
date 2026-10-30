@@ -107,6 +107,25 @@ SharpHound.exe -c All                     # from a Windows foothold
 bloodhound-python -d corp.local -u user -p '&lt;pass&gt;' -ns &lt;dc-ip&gt; -c all
 # the resulting .json imports into the BloodHound UI / graph database for querying</code></pre>
 
+        <h2>Collectors &amp; editions</h2>
+        <p>
+          BloodHound <strong>Community Edition</strong> (the current line) runs on a
+          Neo4j + PostgreSQL backend brought up with <code>bloodhound-cli</code> and
+          ingests data from <strong>SharpHound CE</strong> or the Python collector. The
+          legacy GUI still works, but new edge types &mdash; notably the AD&nbsp;CS and
+          dMSA families &mdash; land in CE first.
+        </p>
+        <p>Collection method is an OPSEC dial &mdash; pull everything, or scope it:</p>
+        <table>
+          <thead><tr><th>Collection</th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td><code>-c All</code></td><td>Full graph in one noisy pass</td></tr>
+            <tr><td><code>-c DCOnly</code></td><td>LDAP-only against the DC &mdash; no host touch, far quieter</td></tr>
+            <tr><td><code>-c Session,LoggedOn</code> (looped)</td><td>Just the session graph, repeated over time to catch admins logging in</td></tr>
+            <tr><td><code>--stealth</code></td><td>Avoid the heaviest enumeration (one connection per host)</td></tr>
+          </tbody>
+        </table>
+
         <h2>Nodes &amp; edges &mdash; the mental model</h2>
         <p>
           Every attack technique on the site is an <em>edge</em> in this graph. A few
@@ -121,6 +140,7 @@ bloodhound-python -d corp.local -u user -p '&lt;pass&gt;' -ns &lt;dc-ip&gt; -c a
             <tr><td><code>GenericAll</code> / <code>WriteDACL</code> / <code>GenericWrite</code></td><td>Control over an object &mdash; <a href="2026-08-18-acls-dacls.html">ACL abuse</a> to take it over.</td></tr>
             <tr><td><code>CanPSRemote</code>, <code>ForceChangePassword</code>, <code>AddMember</code></td><td>Specific abusable rights with known techniques.</td></tr>
             <tr><td>Delegation / cert edges</td><td><a href="2026-08-18-delegation.html">Kerberos delegation</a> and <a href="2026-08-18-adcs.html">AD CS</a> paths.</td></tr>
+            <tr><td><code>ADCSESC1</code>&hellip;<code>ESC16</code>, <code>DCSync</code>, <code>SyncLAPSPassword</code></td><td>Certificate-template escalation, replication rights, and LAPS read &mdash; modelled directly as abusable edges in CE.</td></tr>
           </tbody>
         </table>
 
@@ -146,6 +166,15 @@ bloodhound-python -d corp.local -u user -p '&lt;pass&gt;' -ns &lt;dc-ip&gt; -c a
           users to high value". Writing good queries is what separates a quick win
           from hours of clicking.
         </p>
+        <pre><code>// kerberoastable users whose shortest path reaches Domain Admins
+MATCH p=shortestPath((u:User {hasspn:true})-[*1..]-&gt;(g:Group))
+WHERE g.name STARTS WITH 'DOMAIN ADMINS@' RETURN p
+
+// computers trusted for unconstrained delegation
+MATCH (c:Computer {unconstraineddelegation:true}) RETURN c.name
+
+// everything your owned principals can reach
+MATCH p=shortestPath((n {owned:true})-[*1..]-&gt;(m)) RETURN p</code></pre>
 
         <h2>OPSEC &amp; detection</h2>
         <ul>

@@ -136,6 +136,46 @@ SharpDPAPI.exe masterkeys /pvk:domain-backup.pvk
 #   mimikatz:  dpapi::masterkey /in:&lt;masterkey&gt; /pvk:domain-backup.pvk
 #              dpapi::cred /in:&lt;credential_blob&gt;</code></pre>
 
+        <h2>Where the secrets live on disk</h2>
+        <p>
+          Decryption is a two-step chain &mdash; find the masterkey, then use it on the
+          blob &mdash; so it helps to know where each piece sits. All of it can be
+          copied off the host and decrypted offline.
+        </p>
+        <table>
+          <thead><tr><th>Artefact</th><th>Location</th></tr></thead>
+          <tbody>
+            <tr><td>User masterkeys</td><td><code>%APPDATA%\Microsoft\Protect\&lt;SID&gt;\&lt;GUID&gt;</code></td></tr>
+            <tr><td>Machine masterkeys</td><td><code>C:\Windows\System32\Microsoft\Protect\S-1-5-18</code> (SYSTEM scope)</td></tr>
+            <tr><td>Credential Manager blobs</td><td><code>%APPDATA%\Microsoft\Credentials\</code> and <code>%LOCALAPPDATA%\...\Credentials\</code></td></tr>
+            <tr><td>Windows Vault</td><td><code>%APPDATA%\Microsoft\Vault\</code> / <code>%LOCALAPPDATA%\Microsoft\Vault\</code></td></tr>
+            <tr><td>Chrome / Edge</td><td><code>%LOCALAPPDATA%\Google\Chrome\User Data\Default\{Login Data, Network\Cookies}</code></td></tr>
+          </tbody>
+        </table>
+        <p>
+          Each blob names the masterkey GUID it needs, so the flow is: read the
+          blob&rsquo;s GUID, decrypt that masterkey (with the user&rsquo;s password/hash,
+          as the user, or with the domain backup key), then decrypt the blob.
+        </p>
+
+        <h2>Collecting at scale</h2>
+        <p>
+          On an engagement you rarely stop at one user&rsquo;s blobs &mdash; several
+          tools automate the sweep across a host or the whole domain:
+        </p>
+        <ul>
+          <li><strong>NetExec</strong> &mdash; <code>nxc smb &lt;targets&gt; -u user -p pass --dpapi</code> pulls and decrypts masterkeys and blobs across many hosts in one run.</li>
+          <li><strong>donPAPI / SharpDPAPI triage</strong> &mdash; harvest and decrypt everything reachable for the current user (or, as SYSTEM, machine-scope) in a single pass.</li>
+          <li><strong>Domain backup key</strong> &mdash; as Domain Admin, extract it once (<code>SharpDPAPI backupkey /server:&lt;dc&gt;</code> or mimikatz <code>lsadump::backupkeys</code>); it then decrypts every user&rsquo;s masterkeys indefinitely.</li>
+        </ul>
+        <blockquote>
+          <strong>Chrome App-Bound Encryption changed the browser story.</strong> Since
+          Chrome&nbsp;127 (July 2024) cookies are wrapped by an extra key held by a
+          SYSTEM elevation service, so a plain DPAPI decrypt no longer returns them.
+          Saved passwords still decrypt with DPAPI, but cookies now need an ABE bypass
+          (see <a href="2026-10-15-browser-credential-theft.html">Browser Credential &amp; Token Theft</a>).
+        </blockquote>
+
         <h2>Why it is high value</h2>
         <p>
           DPAPI loot is often credentials the victim actively uses &mdash; a saved
