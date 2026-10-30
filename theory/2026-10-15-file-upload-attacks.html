@@ -111,6 +111,16 @@ GET /uploads/shell.php?c=id      →  runs `id` on the server</code></pre>
 <p>Because each individual filter can be fooled, robust upload security relies on
 <em>architecture</em>, not one check.</p>
 
+<h3>Make the server execute it</h3>
+<p>If the upload directory will not run your file by default, you can sometimes
+change that from within the upload itself. On Apache with
+<code>AllowOverride</code> enabled, an uploaded <code>.htaccess</code> can map an
+innocuous extension to the PHP handler (<code>AddType application/x-httpd-php
+.xyz</code>); on IIS, an uploaded <code>web.config</code> can register a handler
+or run inline code. The follow-up upload with that extension then executes &mdash;
+which is why write access to a <em>served</em> directory is dangerous even when
+the obvious script extensions are blocked.</p>
+
 <h2>Beyond RCE</h2>
 <ul>
   <li><strong>Stored XSS</strong> — an uploaded <code>.html</code>/<code>.svg</code>

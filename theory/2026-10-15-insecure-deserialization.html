@@ -114,6 +114,14 @@ phpggc Laravel/RCE1 system id</code></pre>
 <p>The key point: the vulnerability is <em>deserialising untrusted data at
 all</em>. The gadgets are just the libraries you already ship.</p>
 
+<h3>Confirming it blind</h3>
+<p>Often nothing comes back, so confirm the sink is live before chasing RCE: send
+a gadget whose only effect is an outbound callback. Java&rsquo;s <code>URLDNS</code>
+chain triggers a DNS lookup when the bytes are deserialised, so a hit on your
+listener proves the sink fired even with no code execution &mdash; the
+deserialisation analogue of confirming blind SSRF. A sleep/timing gadget serves
+the same confirm-first purpose where even DNS is blocked.</p>
+
 <h2>Where serialized data shows up</h2>
 <table>
   <thead><tr><th>Location</th><th>Example</th></tr></thead>

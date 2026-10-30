@@ -141,6 +141,15 @@ http://169.254.169.254.nip.io/      # DNS name that resolves to the target
 http://allowed-host/redirect?to=http://169.254.169.254/   # 302 to the real target
 gopher://127.0.0.1:6379/_&lt;redis-protocol&gt;   # reach non-HTTP services</code></pre>
 
+<h2>DNS rebinding &amp; TOCTOU</h2>
+<p>Even a correct allow-list can be beaten by timing. The app resolves the
+hostname, sees a public IP and allows it &mdash; then makes the real request a
+moment later, by which point a short-TTL attacker domain has re-resolved to
+<code>169.254.169.254</code>. The check and the use saw different answers
+(time-of-check / time-of-use). The defence is specific: resolve the name
+<em>once</em>, then connect to that exact IP rather than re-resolving &mdash; and
+validate the address actually connected to, not just the one you looked up.</p>
+
 <h2>Impact</h2>
 <table>
   <thead><tr><th>Target reached</th><th>Result</th></tr></thead>

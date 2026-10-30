@@ -127,6 +127,21 @@ cause: the server lets the <em>token</em> dictate how it is verified. The fix is
 that the server pins the expected algorithm and key and ignores the header's
 claims about them.</p>
 
+<h3>Header-injection variants</h3>
+<p>Several attacks live entirely in the header, steering which key the server
+trusts:</p>
+<ul>
+  <li><code>kid</code> (key id) &mdash; if the server reads a file or DB row named
+      by <code>kid</code>, point it at a predictable constant (a path-traversal to
+      a known/empty file makes the HMAC key known), or inject SQL/command payloads
+      where <code>kid</code> is concatenated unsafely.</li>
+  <li><code>jku</code> / <code>x5u</code> &mdash; a URL to the JWKS / certificate
+      the server fetches to verify; host your own and sign with its key unless the
+      URL is allow-listed.</li>
+  <li><code>x5c</code> &mdash; an embedded certificate chain; a server that trusts
+      it without pinning verifies against your self-signed cert.</li>
+</ul>
+
 <h2>What attackers change</h2>
 <p>Once verification is defeated, the valuable claims are identity and authority
 — flip <code>role: user</code> to <code>role: admin</code>, change
