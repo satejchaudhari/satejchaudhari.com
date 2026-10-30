@@ -9315,22 +9315,103 @@ var TOOLKIT = [
         "description": "Crawl a target site to build a custom wordlist from its own content.",
         "brief": "CeWL (Custom Word List generator) spiders a website to a chosen depth and harvests the unique words it finds, producing a wordlist tuned to that organisation — product names, jargon, employee names, locations. Because people build passwords from words they see every day, a CeWL list frequently beats a generic dictionary for targeted spraying and cracking. It can also collect email addresses and file metadata along the way.",
         "quickReference": [
-          { "label": "Build a wordlist", "cmd": "cewl -d 2 -m 5 -w wordlist.txt https://target.com" },
-          { "label": "Also harvest emails", "cmd": "cewl -e --email_file emails.txt https://target.com" },
-          { "label": "Pull metadata (authors, software)", "cmd": "cewl -a --meta_file meta.txt https://target.com" }
+          {
+            "label": "Build a wordlist",
+            "cmd": "cewl -d 2 -m 5 -w wordlist.txt https://target.com"
+          },
+          {
+            "label": "Also harvest emails",
+            "cmd": "cewl -e --email_file emails.txt https://target.com"
+          },
+          {
+            "label": "Pull metadata (authors, software)",
+            "cmd": "cewl -a --meta_file meta.txt https://target.com"
+          }
         ],
-        "sections": [ { "title": "Useful Flags", "type": "table", "columns": ["Flag", "Description"], "rows": [
-          ["-d <n>", "Crawl depth (default 2)"],
-          ["-m <n>", "Minimum word length to keep"],
-          ["-w <file>", "Write the wordlist to a file"],
-          ["-e / --email_file", "Extract email addresses too"],
-          ["-a / --meta_file", "Extract document metadata (authors, software)"],
-          ["--lowercase", "Force words to lowercase"],
-          ["-c", "Show a count of each word (rank by frequency)"]
-        ] }, { "title": "Notes & Tips", "type": "notes", "items": [
-          "Feed the output to hashcat rules or a password sprayer — combine with mangling (e.g. hashcat -r best64.rule) for real-world variants.",
-          "Respect scope and rate limits; deep crawls of a live site generate noticeable traffic."
-        ] } ]
+        "sections": [
+          {
+            "title": "Useful Flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-d <n>",
+                "Crawl depth (default 2)"
+              ],
+              [
+                "-m <n>",
+                "Minimum word length to keep"
+              ],
+              [
+                "-w <file>",
+                "Write the wordlist to a file"
+              ],
+              [
+                "-e / --email_file",
+                "Extract email addresses too"
+              ],
+              [
+                "-a / --meta_file",
+                "Extract document metadata (authors, software)"
+              ],
+              [
+                "--lowercase",
+                "Force words to lowercase"
+              ],
+              [
+                "-c",
+                "Show a count of each word (rank by frequency)"
+              ]
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Feed the output to hashcat rules or a password sprayer — combine with mangling (e.g. hashcat -r best64.rule) for real-world variants.",
+              "Respect scope and rate limits; deep crawls of a live site generate noticeable traffic."
+            ]
+          },
+          {
+            "title": "Common workflows",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Targeted wordlist",
+                "cmd": "cewl -d 2 -m 5 -w words.txt https://target.com"
+              },
+              {
+                "label": "Harvest emails + metadata",
+                "cmd": "cewl -e --email_file emails.txt -a --meta_file meta.txt https://target.com"
+              },
+              {
+                "label": "With counts, through a proxy",
+                "cmd": "cewl -d 3 -c --proxy_host 127.0.0.1 --proxy_port 8080 https://target.com"
+              },
+              {
+                "label": "Feed a rule-based crack",
+                "cmd": "cewl -d 2 -m 6 https://target.com -w words.txt   # then use words.txt with your rules"
+              }
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "CeWL — GitHub (digininja)",
+                "url": "https://github.com/digininja/CeWL"
+              },
+              {
+                "label": "Toolkit — SecLists",
+                "url": "tool-detail.html?tool=seclists"
+              }
+            ]
+          }
+        ]
       },
       {
         id: "seclists",
@@ -11049,92 +11130,268 @@ var TOOLKIT = [
         ]
       },
       {
-        id: "sharpup",
-        name: "SharpUp",
-        url: "https://github.com/GhostPack/SharpUp",
-        description: "C# port of PowerUp that audits a Windows host for common local privilege-escalation misconfigurations.",
-        brief: "SharpUp is GhostPack's C# port of PowerUp — it audits the local host for the classic Windows privilege-escalation vectors and reports the ones that are actionable: unquoted service paths, modifiable service binaries and service configurations, writable directories on %PATH%, AlwaysInstallElevated, modifiable scheduled tasks, and cached credentials. Run in memory via execute-assembly, it gives an operator a fast triage of how a low-privileged foothold can become SYSTEM.",
-        quickReference: [
-          { label: "Audit for privesc vectors", cmd: "SharpUp.exe audit" }
-        ],
-        sections: [
+        "id": "sharpup",
+        "name": "SharpUp",
+        "url": "https://github.com/GhostPack/SharpUp",
+        "description": "C# port of PowerUp that audits a Windows host for common local privilege-escalation misconfigurations.",
+        "brief": "SharpUp is GhostPack's C# port of PowerUp — it audits the local host for the classic Windows privilege-escalation vectors and reports the ones that are actionable: unquoted service paths, modifiable service binaries and service configurations, writable directories on %PATH%, AlwaysInstallElevated, modifiable scheduled tasks, and cached credentials. Run in memory via execute-assembly, it gives an operator a fast triage of how a low-privileged foothold can become SYSTEM.",
+        "quickReference": [
           {
-            title: "Usage (via Sliver execute-assembly)",
-            type: "commands",
-            commands: [
-              { label: "Run the audit", cmd: "execute-assembly -p explorer.exe -t 180 '/path/SharpUp.exe' 'audit'\n# flags e.g. an unquoted service path, a modifiable service binary/config,\n# writable %PATH% dirs, AlwaysInstallElevated, modifiable scheduled tasks\n# (exploiting a flagged vector is covered in Vulns -> Windows Service Privilege Escalation)" }
+            "label": "Audit for privesc vectors",
+            "cmd": "SharpUp.exe audit"
+          },
+          {
+            "label": "Run in memory",
+            "cmd": "execute-assembly /path/SharpUp.exe audit"
+          },
+          {
+            "label": "Confirm a hit",
+            "cmd": "accesschk.exe -uwcqv \"Everyone\" <service> /accepteula"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Checks run by audit",
+            "type": "table",
+            "columns": [
+              "Vector",
+              "What it flags"
+            ],
+            "rows": [
+              [
+                "Modifiable services / binaries",
+                "A service you can reconfigure or whose binary you can overwrite"
+              ],
+              [
+                "Unquoted service paths",
+                "A path with a space that resolves an earlier token first"
+              ],
+              [
+                "Modifiable scheduled tasks",
+                "A task whose target script/binary is writable"
+              ],
+              [
+                "AlwaysInstallElevated",
+                "Both policy keys set, so an MSI installs with high privilege"
+              ],
+              [
+                "Modifiable %PATH% / DLL paths",
+                "A writable PATH dir a privileged process resolves first"
+              ],
+              [
+                "Autorun registry keys",
+                "A writable Run/Winlogon value used at logon"
+              ],
+              [
+                "Cached credentials",
+                "GPP cpassword, unattend.xml, McAfee SiteList and similar files"
+              ]
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "SharpUp — GitHub (GhostPack)", url: "https://github.com/GhostPack/SharpUp" },
-              { label: "Vulns — Windows Service Privilege Escalation", url: "vulns.html" }
+            "title": "Usage (via Sliver execute-assembly)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Run the audit",
+                "cmd": "execute-assembly -p explorer.exe -t 180 '/path/SharpUp.exe' 'audit'\n# flags e.g. an unquoted service path, a modifiable service binary/config,\n# writable %PATH% dirs, AlwaysInstallElevated, modifiable scheduled tasks\n# (exploiting a flagged vector is covered in Vulns -> Windows Service Privilege Escalation)"
+              }
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Read-only: it reports vectors, it does not change anything. Confirm each hit by hand (accesschk / icacls) before relying on it.",
+              "Each finding lines up with a stage of the Windows Privilege Escalation map; pair with winPEAS or PrivescCheck for breadth."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "SharpUp — GitHub (GhostPack)",
+                "url": "https://github.com/GhostPack/SharpUp"
+              },
+              {
+                "label": "Vulns — Windows Service Privilege Escalation",
+                "url": "vulns.html"
+              }
             ]
           }
         ]
       },
       {
-        id: "seatbelt",
-        name: "Seatbelt",
-        url: "https://github.com/GhostPack/Seatbelt",
-        description: "C# host-survey tool that gathers security-relevant system and user configuration for situational awareness.",
-        brief: "Seatbelt is GhostPack's C# situational-awareness tool. It runs a large set of host survey checks — security products and their configuration, patch level, logging and AMSI state, network configuration, credentials in files and the registry, browser data, and more — grouped so an operator can pull just what they need (-group=system, -group=user, -group=remote). It is the standard first look at a new host, run in memory via execute-assembly.",
-        quickReference: [
-          { label: "System survey", cmd: "Seatbelt.exe -group=system" },
-          { label: "User survey", cmd: "Seatbelt.exe -group=user" },
-          { label: "Everything", cmd: "Seatbelt.exe -group=all" }
-        ],
-        sections: [
+        "id": "seatbelt",
+        "name": "Seatbelt",
+        "url": "https://github.com/GhostPack/Seatbelt",
+        "description": "C# host-survey tool that gathers security-relevant system and user configuration for situational awareness.",
+        "brief": "Seatbelt is GhostPack's C# situational-awareness tool. It runs a large set of host survey checks — security products and their configuration, patch level, logging and AMSI state, network configuration, credentials in files and the registry, browser data, and more — grouped so an operator can pull just what they need (-group=system, -group=user, -group=remote). It is the standard first look at a new host, run in memory via execute-assembly.",
+        "quickReference": [
           {
-            title: "Usage (via Sliver execute-assembly)",
-            type: "commands",
-            commands: [
-              { label: "Run grouped host surveys", cmd: "execute-assembly -p explorer.exe -t 180 '/path/Seatbelt.exe' '-group=system'\nexecute-assembly -p explorer.exe -t 180 '/path/Seatbelt.exe' '-group=user'\n# individual checks are also callable by name, e.g. 'AMSIProviders' 'PowerShell' 'TokenPrivileges'" }
+            "label": "System survey",
+            "cmd": "Seatbelt.exe -group=system"
+          },
+          {
+            "label": "User survey",
+            "cmd": "Seatbelt.exe -group=user"
+          },
+          {
+            "label": "Everything",
+            "cmd": "Seatbelt.exe -group=all"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Key groups & flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-group=all",
+                "Every check (thorough, noisier)"
+              ],
+              [
+                "-group=system",
+                "OS/security posture: patches, AV, UAC, LSA, firewall, AppLocker"
+              ],
+              [
+                "-group=user",
+                "Current user's artefacts: saved sessions, history, tokens"
+              ],
+              [
+                "-group=remote",
+                "Only checks meaningful against a remote host"
+              ],
+              [
+                "+<Command>",
+                "Run one check, e.g. +TokenPrivileges, +LAPS, +Hotfixes"
+              ],
+              [
+                "-full",
+                "Don't truncate long results"
+              ],
+              [
+                "-outputfile=\"C:\\Temp\\sb.txt\"",
+                "Write results to a file"
+              ],
+              [
+                "-computername= -username= -password=",
+                "Target a remote host with explicit creds"
+              ]
             ]
           },
           {
-            title: "Notes",
-            type: "notes",
-            items: [
+            "title": "Usage (via Sliver execute-assembly)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Run grouped host surveys",
+                "cmd": "execute-assembly -p explorer.exe -t 180 '/path/Seatbelt.exe' '-group=system'\nexecute-assembly -p explorer.exe -t 180 '/path/Seatbelt.exe' '-group=user'\n# individual checks are also callable by name, e.g. 'AMSIProviders' 'PowerShell' 'TokenPrivileges'"
+              }
+            ]
+          },
+          {
+            "title": "Notes",
+            "type": "notes",
+            "items": [
               "Reads AMSI/logging configuration among much else — useful for confirming what host telemetry is in play before running noisier tools.",
               "For PowerShell-based checks under heavy logging, Stracciatella can run equivalent scripts with AMSI/script-block logging patched."
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "Seatbelt — GitHub (GhostPack)", url: "https://github.com/GhostPack/Seatbelt" }
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Seatbelt — GitHub (GhostPack)",
+                "url": "https://github.com/GhostPack/Seatbelt"
+              }
             ]
           }
         ]
       },
       {
-        id: "lacheck",
-        name: "LACheck",
-        url: "https://github.com/vivami/LACheck",
-        description: "Multithreaded C# local-admin and session checker for mapping where an account has admin rights across many hosts.",
-        brief: "LACheck is a multithreaded C# tool that checks, across a list of hosts, where the current (or a specified) account has local administrator access, and can surface logged-on sessions — including hunting for a Domain Admin session to target. It feeds the 'derivative local admin' picture that BloodHound builds on and is used in memory via execute-assembly to plan lateral movement and privilege escalation.",
-        quickReference: [
-          { label: "Check local admin across hosts", cmd: "LACheck.exe smb /targets:hosts.txt /threads:20" },
-          { label: "Find logged-on (DA) sessions", cmd: "LACheck.exe smb /targets:hosts.txt /loggedon" }
-        ],
-        sections: [
+        "id": "lacheck",
+        "name": "LACheck",
+        "url": "https://github.com/vivami/LACheck",
+        "description": "Multithreaded C# local-admin and session checker for mapping where an account has admin rights across many hosts.",
+        "brief": "LACheck is a multithreaded C# tool that checks, across a list of hosts, where the current (or a specified) account has local administrator access, and can surface logged-on sessions — including hunting for a Domain Admin session to target. It feeds the 'derivative local admin' picture that BloodHound builds on and is used in memory via execute-assembly to plan lateral movement and privilege escalation.",
+        "quickReference": [
           {
-            title: "Usage (via Sliver execute-assembly)",
-            type: "commands",
-            commands: [
-              { label: "Map local-admin access and sessions", cmd: "execute-assembly -p explorer.exe -t 120 '/path/LACheck.exe' 'smb /targets:hosts.txt /threads:20'\nexecute-assembly -p explorer.exe -t 120 '/path/LACheck.exe' 'smb /targets:hosts.txt /loggedon'" }
+            "label": "Check local admin across hosts",
+            "cmd": "LACheck.exe smb /targets:hosts.txt /threads:20"
+          },
+          {
+            "label": "Find logged-on (DA) sessions",
+            "cmd": "LACheck.exe smb /targets:hosts.txt /loggedon"
+          },
+          {
+            "label": "Scan a host list, more threads",
+            "cmd": "LACheck.exe smb /targets:hosts.txt /threads:50"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Usage",
+            "type": "table",
+            "columns": [
+              "Token",
+              "Description"
+            ],
+            "rows": [
+              [
+                "<method> (e.g. smb)",
+                "Check method used to test for local-admin rights"
+              ],
+              [
+                "/targets:<file>",
+                "File of hosts to test"
+              ],
+              [
+                "/threads:<n>",
+                "Concurrency"
+              ],
+              [
+                "/loggedon",
+                "Also report logged-on users / sessions on each host"
+              ]
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "LACheck — GitHub", url: "https://github.com/vivami/LACheck" },
-              { label: "Toolkit — BloodHound", url: "toolkit.html" }
+            "title": "Usage (via Sliver execute-assembly)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Map local-admin access and sessions",
+                "cmd": "execute-assembly -p explorer.exe -t 120 '/path/LACheck.exe' 'smb /targets:hosts.txt /threads:20'\nexecute-assembly -p explorer.exe -t 120 '/path/LACheck.exe' 'smb /targets:hosts.txt /loggedon'"
+              }
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Quickly maps where your current credentials already have local admin across many hosts — read the wins off a host list without full BloodHound collection.",
+              "/loggedon highlights where a high-privilege user is signed in: the box worth targeting next."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "LACheck — GitHub",
+                "url": "https://github.com/vivami/LACheck"
+              },
+              {
+                "label": "Toolkit — BloodHound",
+                "url": "toolkit.html"
+              }
             ]
           }
         ]
@@ -11347,27 +11604,90 @@ var TOOLKIT = [
         ]
       },
       {
-        id: "ps2exe",
-        name: "PS2EXE",
-        url: "https://github.com/MScholtes/PS2EXE",
-        description: "Compiles a PowerShell script into a .NET executable — used to bridge PowerShell-only tools into execute-assembly.",
-        brief: "PS2EXE compiles a PowerShell script into a self-contained .NET executable. On a Sliver engagement its value is as a bridge: techniques that only exist as PowerShell (PowerUpSQL's link crawl, the RACE toolkit) are turned into .NET assemblies that execute-assembly can run in memory, so the operator keeps the in-memory, no-PowerShell.exe workflow even for script-only tooling. The script is usually made 'executable' first by appending the function call that does the work.",
-        quickReference: [
-          { label: "Compile a script to EXE", cmd: "ps2exe.ps1 -inputFile <in.ps1> -outputFile <out.exe> -x64 -sta" }
-        ],
-        sections: [
+        "id": "ps2exe",
+        "name": "PS2EXE",
+        "url": "https://github.com/MScholtes/PS2EXE",
+        "description": "Compiles a PowerShell script into a .NET executable — used to bridge PowerShell-only tools into execute-assembly.",
+        "brief": "PS2EXE compiles a PowerShell script into a self-contained .NET executable. On a Sliver engagement its value is as a bridge: techniques that only exist as PowerShell (PowerUpSQL's link crawl, the RACE toolkit) are turned into .NET assemblies that execute-assembly can run in memory, so the operator keeps the in-memory, no-PowerShell.exe workflow even for script-only tooling. The script is usually made 'executable' first by appending the function call that does the work.",
+        "quickReference": [
           {
-            title: "Usage",
-            type: "commands",
-            commands: [
-              { label: "Turn a PowerShell tool into a .NET EXE", cmd: "C:\\Tools\\ps2exe.ps1 -inputFile RACEEx.ps1 -outputFile RACEEx.exe -x64 -sta\n# then run in memory:\nexecute-assembly -p explorer.exe -t 120 '/path/RACEEx.exe'" }
+            "label": "Compile a script to EXE",
+            "cmd": "ps2exe.ps1 -inputFile <in.ps1> -outputFile <out.exe> -x64 -sta"
+          },
+          {
+            "label": "GUI, no console",
+            "cmd": "ps2exe.ps1 -inputFile t.ps1 -outputFile t.exe -noConsole -x64"
+          },
+          {
+            "label": "Run it in memory",
+            "cmd": "execute-assembly /path/t.exe"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Key flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-inputFile <in.ps1> -outputFile <out.exe>",
+                "Source script and compiled output"
+              ],
+              [
+                "-x64 / -x86",
+                "Target architecture"
+              ],
+              [
+                "-sta / -mta",
+                "Apartment threading model"
+              ],
+              [
+                "-noConsole",
+                "Build a GUI app with no console window"
+              ],
+              [
+                "-requireAdmin",
+                "Embed a UAC manifest requesting elevation"
+              ],
+              [
+                "-icon <f> / -title / -company / -version",
+                "Executable metadata"
+              ],
+              [
+                "-credentialGUI",
+                "Prompt for credentials via a GUI dialog"
+              ]
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "PS2EXE — GitHub (MScholtes)", url: "https://github.com/MScholtes/PS2EXE" }
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Turn a PowerShell tool into a .NET EXE",
+                "cmd": "C:\\Tools\\ps2exe.ps1 -inputFile RACEEx.ps1 -outputFile RACEEx.exe -x64 -sta\n# then run in memory:\nexecute-assembly -p explorer.exe -t 120 '/path/RACEEx.exe'"
+              }
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "Mainly used to wrap a PowerShell-only tool into an EXE so it runs through execute-assembly.",
+              "The EXE still hosts PowerShell internally, so AMSI and script-block logging still apply — combine with an AMSI bypass on monitored hosts."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "PS2EXE — GitHub (MScholtes)",
+                "url": "https://github.com/MScholtes/PS2EXE"
+              }
             ]
           }
         ]
