@@ -128,7 +128,7 @@ env | grep -i kube     # API server address, and sometimes cloud creds</code></p
           <li><code>create pods</code> / <code>exec</code> &mdash; schedule a privileged pod or exec into others; a path to any node.</li>
           <li><code>get/list secrets</code> &mdash; read every secret in the namespace (database creds, cloud keys, other tokens).</li>
           <li><code>create</code> on roles/bindings &mdash; grant yourself cluster-admin.</li>
-          <li>Access to the <strong>kubelet</strong> API or an exposed <strong>etcd</strong> &mdash; read all cluster state and secrets directly.</li>
+          <li><code>bind</code> / <code>escalate</code> / <code>impersonate</code> verbs &mdash; each reaches cluster-admin on its own: bind a RoleBinding to a higher role, add permissions beyond your own to a role, or act as another user/group/SA for a request.</li>
         </ul>
         <pre><code># what can this token do? then act on it
 kubectl auth can-i --list
@@ -151,10 +151,9 @@ kubectl create clusterrolebinding x --clusterrole=cluster-admin --serviceaccount
           encryption-at-rest is enabled; and <strong>ingress-nginx</strong>
           (&ldquo;IngressNightmare&rdquo;, CVE-2025-1974) gave unauthenticated RCE in a
           controller pod whose service account can often read cluster-wide Secrets.
-          Three RBAC verbs are worth singling out because each reaches cluster-admin on
-          its own: <code>bind</code> (create a binding to a higher role),
-          <code>escalate</code> (add permissions beyond your own to a role), and
-          <code>impersonate</code> (act as another user/group/SA for a request).
+          None of these needs a service-account token at all &mdash; they are reachable
+          from the network, which is why segmenting the control plane matters as much as
+          tight RBAC.
         </p>
 
         <h2>Cluster &rarr; cloud pivot</h2>

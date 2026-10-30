@@ -154,8 +154,8 @@ SharpDPAPI.exe masterkeys /pvk:domain-backup.pvk
         </table>
         <p>
           Each blob names the masterkey GUID it needs, so the flow is: read the
-          blob&rsquo;s GUID, decrypt that masterkey (with the user&rsquo;s password/hash,
-          as the user, or with the domain backup key), then decrypt the blob.
+          blob&rsquo;s GUID, decrypt that masterkey by one of the paths above, then
+          decrypt the blob.
         </p>
 
         <h2>Collecting at scale</h2>
@@ -166,7 +166,7 @@ SharpDPAPI.exe masterkeys /pvk:domain-backup.pvk
         <ul>
           <li><strong>NetExec</strong> &mdash; <code>nxc smb &lt;targets&gt; -u user -p pass --dpapi</code> pulls and decrypts masterkeys and blobs across many hosts in one run.</li>
           <li><strong>donPAPI / SharpDPAPI triage</strong> &mdash; harvest and decrypt everything reachable for the current user (or, as SYSTEM, machine-scope) in a single pass.</li>
-          <li><strong>Domain backup key</strong> &mdash; as Domain Admin, extract it once (<code>SharpDPAPI backupkey /server:&lt;dc&gt;</code> or mimikatz <code>lsadump::backupkeys</code>); it then decrypts every user&rsquo;s masterkeys indefinitely.</li>
+          <li><strong>Domain backup key</strong> &mdash; as Domain Admin, extract it once with <code>SharpDPAPI backupkey /server:&lt;dc&gt;</code> or mimikatz <code>lsadump::backupkeys</code> (the access-paths row above covers what it then unlocks).</li>
         </ul>
         <blockquote>
           <strong>Chrome App-Bound Encryption changed the browser story.</strong> Since
