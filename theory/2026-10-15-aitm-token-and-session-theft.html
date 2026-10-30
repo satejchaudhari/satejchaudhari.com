@@ -142,7 +142,10 @@ Theft</a>.</p>
 <ul>
   <li><strong>Phishing-resistant MFA (FIDO2 / WebAuthn / passkeys)</strong> — the
       authenticator is bound to the real origin, so an AiTM proxy on another
-      domain cannot complete the ceremony. The one control that breaks the class.</li>
+      domain cannot complete the ceremony. The one control that breaks the class
+      &mdash; but only if <em>every</em> registered method is phishing-resistant: a
+      leftover OTP/push factor lets the attacker steer the victim to that weaker
+      method, so the downgrade paths must be removed too.</li>
   <li><strong>Token binding &amp; conditional access</strong> — bind sessions to a
       compliant/managed device and known network so a stolen cookie replayed from
       attacker infrastructure fails; shorten lifetimes.</li>
